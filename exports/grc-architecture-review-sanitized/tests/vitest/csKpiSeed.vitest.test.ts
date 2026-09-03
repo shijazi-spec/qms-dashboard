@@ -114,10 +114,10 @@ describe("which ones compute", () => {
   });
 
   it("records WHY the three auto ones are proxies", () => {
-    // §8 sources them from Client-Hub with QA sampling; QMS measures the Zoho
+    // §8 sources them from Client-Hub with QA sampling; QMS measures the CRMProvider
     // mirror. An auditor must see the substitution in the definition itself.
     for (const code of ["CS-KPI-23", "CS-KPI-25", "CS-KPI-30"]) {
-      expect(ROWS.find((r) => r.code === code)!.line).toMatch(/proxy|Zoho mirror/);
+      expect(ROWS.find((r) => r.code === code)!.line).toMatch(/proxy|CRMProvider mirror/);
     }
   });
 

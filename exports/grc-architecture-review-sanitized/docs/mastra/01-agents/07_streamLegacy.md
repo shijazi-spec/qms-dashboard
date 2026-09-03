@@ -300,14 +300,14 @@ await agent.streamLegacy("message for agent");
       name: "providerOptions",
       type: "Record<string, Record<string, JSONValue>>",
       isOptional: true,
-      description: "Additional provider-specific options that are passed through to the underlying LLM provider. The structure is `{ providerName: { optionKey: value } }`. For example: `{ openai: { reasoningEffort: 'high' }, anthropic: { maxTokens: 1000 } }`.",
+      description: "Additional provider-specific options that are passed through to the underlying LLM provider. The structure is `{ providerName: { optionKey: value } }`. For example: `{ LLMProvider: { reasoningEffort: 'high' }, anthropic: { maxTokens: 1000 } }`.",
       properties: [
         {
           parameters: [{
-            name: "openai",
+            name: "LLMProvider",
             type: "Record<string, JSONValue>",
             isOptional: true,
-            description: "OpenAI-specific options. Example: `{ reasoningEffort: 'high' }`"
+            description: "LLMProvider-specific options. Example: `{ reasoningEffort: 'high' }`"
           }]
         },
         {
@@ -320,10 +320,10 @@ await agent.streamLegacy("message for agent");
         },
         {
           parameters: [{
-            name: "google",
+            name: "IdentityProvider",
             type: "Record<string, JSONValue>",
             isOptional: true,
-            description: "Google-specific options. Example: `{ safetySettings: [...] }`"
+            description: "IdentityProvider-specific options. Example: `{ safetySettings: [...] }`"
           }]
         },
         {

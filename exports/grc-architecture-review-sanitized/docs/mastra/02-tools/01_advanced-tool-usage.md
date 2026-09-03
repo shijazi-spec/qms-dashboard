@@ -111,14 +111,14 @@ You can then add this tool to your Mastra agent just like any other tool:
 
 ```typescript filename="src/mastra/agents/mixedToolsAgent.ts"
 import { Agent } from "@mastra/core/agent";
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 import { vercelWeatherTool } from "../tools/vercelWeatherTool"; // Vercel AI SDK tool
 import { mastraTool } from "../tools/mastraTool"; // Mastra createTool tool
 
 export const mixedToolsAgent = new Agent({
   name: "Mixed Tools Agent",
   instructions: "You can use tools defined in different formats.",
-  model: openai("gpt-4o-mini"),
+  model: LLMProvider("gpt-4o-mini"),
   tools: {
     weatherVercel: vercelWeatherTool,
     someMastraTool: mastraTool,

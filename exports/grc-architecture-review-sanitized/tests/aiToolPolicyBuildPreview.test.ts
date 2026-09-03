@@ -151,7 +151,7 @@ aiApprovalPool.query = stubQuery as typeof aiApprovalPool.query;
 const SECRETS = {
   // sk-key regex requires:  sk[-_](live|test|proj|ant)?[-_]?[A-Za-z0-9_-]{20,}
   apiKey: "<REDACTED_SECRET>",
-  // github regex requires:  gh[porsu]_[A-Za-z0-9]{30,}
+  // SourceControlProvider regex requires:  gh[porsu]_[A-Za-z0-9]{30,}
   ghPat: "<REDACTED_TOKEN>",
   // bcrypt regex requires:  $2[aby]$NN$ + exactly 53 [./A-Za-z0-9] chars
   bcrypt: "$2b$12$abcdefghijklmnopqrstuv1234567890ABCDEFGHIJKLMNOPQRSTU",

@@ -162,7 +162,7 @@ async function main(): Promise<void> {
 
     // Run the cron with default deps so the real SQL is exercised, but
     // stub out the side-effect deps so the test cannot:
-    //   • page Slack/email (notifyBreaches / notifyRecovery),
+    //   • page ChatProvider/email (notifyBreaches / notifyRecovery),
     //   • disturb pre-existing prompt_regression alerts owned by other
     //     suites/tenants on a shared DB (listOpenRegressionAlerts → []),
     //   • depend on the prompt_regression_config_overrides table being

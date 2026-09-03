@@ -138,7 +138,7 @@ console.log("\n=== insertSource — nested deny-list keys are scrubbed ===\n");
     initiative_name: "Automation rollout",
     category: "efficiency",
     status: "in_progress",
-    notes: { provider: "zoho", api_key: SECRETS.api_key, account_id: "acct-public-123" },
+    notes: { provider: "CRMProvider", api_key: SECRETS.api_key, account_id: "acct-public-123" },
   });
   const params = lastInsertParams();
   assert(params !== null, "nested-object: pool.query was called with INSERT");

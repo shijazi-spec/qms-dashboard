@@ -34,11 +34,11 @@ export const smokeTestRoutes = [
           checks.database = { status: "fail" };
         }
 
-        checks.zoho = {
+        checks.CRMProvider = {
           status: !!(
-            process.env.ZOHO_CLIENT_ID &&
-            process.env.ZOHO_CLIENT_SECRET &&
-            process.env.ZOHO_REFRESH_TOKEN
+            process.env.CRMProvider_CLIENT_ID &&
+            process.env.CRMProvider_CLIENT_SECRET &&
+            process.env.CRMProvider_REFRESH_TOKEN
           )
             ? "pass"
             : "not_configured",

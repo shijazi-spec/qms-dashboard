@@ -5,7 +5,7 @@
  * transcribe → analyze → SDR-evaluate pipeline inline so a clean upload
  * lands in `evaluated` (or `qa_review_pending`) before the response
  * returns. The downside of inline execution is that if the server is
- * killed mid-request — Replit redeploy, OOM, container restart — the
+ * killed mid-request — HostingPlatform redeploy, OOM, container restart — the
  * call row is stranded mid-pipeline at `transcribing` or `evaluating`
  * and never moves forward without manual intervention.
  *
@@ -154,7 +154,7 @@ export async function runCallPipelineWatchdog(): Promise<WatchdogResult> {
           // transcribing — far less common (Whisper is fast), but
           // possible if the server died mid-transcription. We don't
           // re-attempt transcription inside the watchdog because the
-          // OpenAI call needs the original Audio buffer; the upload
+          // LLMProvider call needs the original Audio buffer; the upload
           // endpoint already discarded the FormData. Mark as failed
           // so the operator can re-upload, with a clear reason in
           // metadata.

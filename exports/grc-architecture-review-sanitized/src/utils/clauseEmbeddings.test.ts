@@ -69,9 +69,9 @@ const mockQuery: MockedPoolQuery = (sql, params = []) => {
 
 (Pool.prototype as unknown as { query: MockedPoolQuery }).query = mockQuery;
 
-// Enable the feature flag + provide a (fake) OpenAI key so embedText proceeds.
+// Enable the feature flag + provide a (fake) LLMProvider key so embedText proceeds.
 process.env.DOCUMENT_MAPPING_EMBEDDINGS = "true";
-process.env.OPENAI_API_KEY = "test-openai-key-<REDACTED_PHONE>";
+process.env.LLMProvider_API_KEY = "test-LLMProvider-key-<REDACTED_PHONE>";
 
 // Mock fetch so embedText returns a vector without any network call.
 (globalThis as unknown as { fetch: unknown }).fetch = async () => ({
@@ -88,7 +88,7 @@ const REDACTED_SENTINEL = "***REDACTED***";
 const SECRETS = {
   api_key: "<REDACTED_SECRET>",
   access_token: "<REDACTED_SECRET>",
-  github_pat: "<REDACTED_TOKEN>",
+  SourceControlProvider_pat: "<REDACTED_TOKEN>",
   jwt: "<REDACTED_TOKEN>",
 } as const;
 
@@ -118,7 +118,7 @@ console.log("\n=== clauseEmbeddings — write-path secret-leak tests ===\n");
     [
       { id: SECRETS.api_key as unknown as number, title: "Access control clause" },
       { id: SECRETS.access_token as unknown as number, title: "Token handling clause" },
-      { id: SECRETS.github_pat as unknown as number, title: "Source control clause" },
+      { id: SECRETS.SourceControlProvider_pat as unknown as number, title: "Source control clause" },
       { id: SECRETS.jwt as unknown as number, title: "Session token clause" },
       { id: 4242, title: "Ordinary numeric-id clause" },
     ],

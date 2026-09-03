@@ -6,7 +6,7 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-export type NotificationChannel = "in_app" | "email" | "slack";
+export type NotificationChannel = "in_app" | "email" | "ChatProvider";
 export type NotificationPriority = "critical" | "high" | "medium" | "low";
 export type NotificationStatus = "unread" | "read" | "dismissed";
 
@@ -86,8 +86,8 @@ export async function createNotification(
 
   if (notif.channel === "email" && notif.recipient) {
     await sendEmailNotification(notification);
-  } else if (notif.channel === "slack") {
-    await sendSlackNotification(notification);
+  } else if (notif.channel === "ChatProvider") {
+    await sendChatProviderNotification(notification);
   }
 
   return notification;
@@ -175,12 +175,12 @@ export async function dismissNotification(
 
 async function sendEmailNotification(notif: Notification): Promise<void> {
   try {
-    const resendKey = process.env.RESEND_API_KEY;
-    if (!resendKey || !notif.recipient) return;
+    const EmailProviderKey = process.env.EmailProvider_API_KEY;
+    if (!EmailProviderKey || !notif.recipient) return;
 
-    const { Resend } = await import("resend");
-    const resend = new Resend(resendKey);
-    await resend.emails.send({
+    const { EmailProvider } = await import("EmailProvider");
+    const EmailProvider = new EmailProvider(EmailProviderKey);
+    await EmailProvider.emails.send({
       from:
         process.env.EMAIL_FROM ||
         "QMS Platform <noreply@<REDACTED_HOST>>",
@@ -196,28 +196,28 @@ async function sendEmailNotification(notif: Notification): Promise<void> {
   }
 }
 
-async function sendSlackNotification(notif: Notification): Promise<void> {
+async function sendChatProviderNotification(notif: Notification): Promise<void> {
   try {
-    const slackToken = process.env.SLACK_BOT_TOKEN;
-    const slackChannel =
-      process.env.SLACK_CHANNEL_ID || process.env.SLACK_DEFAULT_CHANNEL;
-    if (!slackToken || !slackChannel) return;
+    const ChatProviderToken = process.env.ChatProvider_BOT_TOKEN;
+    const ChatProviderChannel =
+      process.env.ChatProvider_CHANNEL_ID || process.env.ChatProvider_DEFAULT_CHANNEL;
+    if (!ChatProviderToken || !ChatProviderChannel) return;
 
-    const { WebClient } = await import("@slack/web-api");
-    const slack = new WebClient(slackToken);
+    const { WebClient } = await import("@ChatProvider/web-api");
+    const ChatProvider = new WebClient(ChatProviderToken);
     const priorityEmoji =
       { critical: "🔴", high: "🟠", medium: "🟡", low: "🟢" }[
         notif.priority ?? "medium"
       ] || "⚪";
-    await slack.chat.postMessage({
-      channel: slackChannel,
+    await ChatProvider.chat.postMessage({
+      channel: ChatProviderChannel,
       text: `${priorityEmoji} *${notif.title}*\n${notif.message}${notif.action_url ? `\n<${notif.action_url}|View Details>` : ""}`,
     });
     await pool.query(`UPDATE notifications SET sent_at = NOW() WHERE id = $1`, [
       notif.id,
     ]);
   } catch (err) {
-    logger.error("[NotificationHub] Slack send failed:", err);
+    logger.error("[NotificationHub] ChatProvider send failed:", err);
   }
 }
 
@@ -233,8 +233,8 @@ export async function notifyEvent(event: {
 }): Promise<void> {
   const channels: NotificationChannel[] = ["in_app"];
   if (event.priority === "critical" || event.priority === "high") {
-    if (process.env.SLACK_BOT_TOKEN) channels.push("slack");
-    if (process.env.RESEND_API_KEY) channels.push("email");
+    if (process.env.ChatProvider_BOT_TOKEN) channels.push("ChatProvider");
+    if (process.env.EmailProvider_API_KEY) channels.push("email");
   }
 
   for (const channel of channels) {

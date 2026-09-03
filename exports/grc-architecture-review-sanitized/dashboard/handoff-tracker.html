@@ -137,7 +137,7 @@
                 actions = `<button data-on-click="act" data-args="[${t.id},&quot;done&quot;]" class="text-xs px-2 py-1 rounded bg-emerald-600 text-white">Done</button>
                            <button data-on-click="act" data-args="[${t.id},&quot;reject&quot;]" class="text-xs px-2 py-1 rounded border text-red-600 ms-1">Return</button>`;
             } else if (!mine && t.status === 'rejected') {
-                actions = `<button data-on-click="act" data-args="[${t.id},&quot;resend&quot;]" class="text-xs px-2 py-1 rounded bg-indigo-600 text-white">Re-send</button>`;
+                actions = `<button data-on-click="act" data-args="[${t.id},&quot;EmailProvider&quot;]" class="text-xs px-2 py-1 rounded bg-indigo-600 text-white">Re-send</button>`;
             }
             const requested = t.created_at ? String(t.created_at).slice(0, 10) : '—';
             return `<tr class="${od ? 'bg-red-50' : ''}">

@@ -3,7 +3,7 @@
  *
  * Sample User a recommendation alongside the created / last-activity dates
  * so the flag to Sales says what to DO, not just what is wrong. This is advice
- * only — nothing is written to Zoho.
+ * only — nothing is written to CRMProvider.
  *
  * Order of preference, each tie broken by the next:
  *   1. furthest along the pipeline

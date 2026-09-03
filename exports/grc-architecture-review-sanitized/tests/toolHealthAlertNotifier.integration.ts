@@ -1,7 +1,7 @@
 /**
  * Integration tests for the tool-health on-call notifier.
  *
- * These tests post to a real Slack channel and/or a real Resend inbox using
+ * These tests post to a real ChatProvider channel and/or a real EmailProvider inbox using
  * the production renderers — NOT stubs — so broken Block Kit shapes, bad
  * subject lines, plaintext truncation, and character-escaping bugs are caught
  * before they page on-call at 3 AM.
@@ -11,25 +11,25 @@
  * The file exits 0 (skip) when none of the required credential pairs are set.
  * At least one of the following pairs must be present to run:
  *
- *   Slack:  SLACK_BOT_TOKEN   — bot token with chat:write scope
- *           SLACK_TEST_CHANNEL — channel id/name to receive the test message
+ *   ChatProvider:  ChatProvider_BOT_TOKEN   — bot token with chat:write scope
+ *           ChatProvider_TEST_CHANNEL — channel id/name to receive the test message
  *
- *   Email:  RESEND_API_KEY    — Resend API key
- *           RESEND_TEST_EMAIL — delivery address (use a Resend test address if
+ *   Email:  EmailProvider_API_KEY    — EmailProvider API key
+ *           EmailProvider_TEST_EMAIL — delivery address (use a EmailProvider test address if
  *                               you don't want real mail, e.g. user@example.invalid)
  *
  * Optional:
- *   TOOL_HEALTH_APP_URL — base origin of the deployed app; when set the Slack
- *                         message will include an "Open AI Operations panel"
+ *   TOOL_HEALTH_APP_URL — base origin of the deployed app; when set the ChatProvider
+ *                         message will include an "LLMProvider Operations panel"
  *                         button with an absolute URL.
  *   TOOL_HEALTH_CONFIG_NOTIFY=1 — opts in to the additional threshold-tuning
- *                         Slack smoke test (`notifyToolHealthConfigChange`).
+ *                         ChatProvider smoke test (`notifyToolHealthConfigChange`).
  *                         Off by default to keep the suite lightweight.
  *
  * Run:
  *   npx tsx tests/toolHealthAlertNotifier.integration.ts
  *
- * No secret leakage:  set the env vars in `.<REDACTED_HOST>` or as Replit secrets;
+ * No secret leakage:  set the env vars in `.<REDACTED_HOST>` or as HostingPlatform secrets;
  * never commit them to source control.
  */
 
@@ -42,21 +42,21 @@ import {
 } from "../src/utils/toolHealthAlertNotifier";
 import type { ToolHealthConfigAuditEntry } from "../src/utils/toolHealthConfigDatabase";
 
-const SLACK_BOT_TOKEN   = process.env.SLACK_BOT_TOKEN;
-const SLACK_TEST_CHANNEL = process.env.SLACK_TEST_CHANNEL;
-const RESEND_API_KEY     = process.env.RESEND_API_KEY;
-const RESEND_TEST_EMAIL  = process.env.RESEND_TEST_EMAIL;
+const ChatProvider_BOT_TOKEN   = process.env.ChatProvider_BOT_TOKEN;
+const ChatProvider_TEST_CHANNEL = process.env.ChatProvider_TEST_CHANNEL;
+const EmailProvider_API_KEY     = process.env.EmailProvider_API_KEY;
+const EmailProvider_TEST_EMAIL  = process.env.EmailProvider_TEST_EMAIL;
 
-const slackReady  = !!(SLACK_BOT_TOKEN && SLACK_TEST_CHANNEL);
-const emailReady  = !!(RESEND_API_KEY && RESEND_TEST_EMAIL);
+const ChatProviderReady  = !!(ChatProvider_BOT_TOKEN && ChatProvider_TEST_CHANNEL);
+const emailReady  = !!(EmailProvider_API_KEY && EmailProvider_TEST_EMAIL);
 const configNotifyOptIn = process.env.TOOL_HEALTH_CONFIG_NOTIFY === "1";
 
-if (!slackReady && !emailReady) {
+if (!ChatProviderReady && !emailReady) {
   console.log(
     "\n⏭  toolHealthAlertNotifier integration tests SKIPPED.\n" +
     "   Set one of the following credential pairs to enable them:\n" +
-    "     Slack: SLACK_BOT_TOKEN + SLACK_TEST_CHANNEL\n" +
-    "     Email: RESEND_API_KEY  + RESEND_TEST_EMAIL\n",
+    "     ChatProvider: ChatProvider_BOT_TOKEN + ChatProvider_TEST_CHANNEL\n" +
+    "     Email: EmailProvider_API_KEY  + EmailProvider_TEST_EMAIL\n",
   );
   process.exit(0);
 }
@@ -119,14 +119,14 @@ function sample(
   };
 }
 
-// ─── Slack integration ───────────────────────────────────────────────────────
+// ─── ChatProvider integration ───────────────────────────────────────────────────────
 
-async function runSlackTests(): Promise<void> {
-  console.log("\n── Slack integration ──\n");
+async function runChatProviderTests(): Promise<void> {
+  console.log("\n── ChatProvider integration ──\n");
 
   const appUrl = process.env.TOOL_HEALTH_APP_URL || "";
   const restoreEnv = patchEnv({
-    TOOL_HEALTH_SLACK_CHANNEL: SLACK_TEST_CHANNEL,
+    TOOL_HEALTH_ChatProvider_CHANNEL: ChatProvider_TEST_CHANNEL,
     TOOL_HEALTH_ALERT_EMAIL: undefined,
     TOOL_HEALTH_NOTIFY_THROTTLE_MIN: "0",
   });
@@ -134,12 +134,12 @@ async function runSlackTests(): Promise<void> {
   _resetToolHealthNotifierThrottleForTests();
 
   try {
-    console.log(`  Sending HIGH/error_rate alert to channel: ${SLACK_TEST_CHANNEL}`);
+    console.log(`  Sending HIGH/error_rate alert to channel: ${ChatProvider_TEST_CHANNEL}`);
 
     const result = await notifyToolHealthBreach(sample(), {});
 
-    assert(result.slackSent === true, "notifyToolHealthBreach returns slackSent=true");
-    assert(result.emailSent === false, "emailSent=false when only Slack is configured");
+    assert(result.ChatProviderSent === true, "notifyToolHealthBreach returns ChatProviderSent=true");
+    assert(result.emailSent === false, "emailSent=false when only ChatProvider is configured");
     assert(result.throttled === false, "not throttled (throttle window set to 0)");
     assert(result.skipped === false, "not skipped");
 
@@ -164,7 +164,7 @@ async function runSlackTests(): Promise<void> {
       {},
     );
     assert(
-      criticalResult.slackSent === true,
+      criticalResult.ChatProviderSent === true,
       "CRITICAL/p95_latency alert also delivered successfully",
     );
   } finally {
@@ -172,12 +172,12 @@ async function runSlackTests(): Promise<void> {
   }
 }
 
-// ─── Threshold-change Slack integration (Task #190 / #287) ───────────────────
+// ─── Threshold-change ChatProvider integration (Task #190 / #287) ───────────────────
 //
-// Exercises `notifyToolHealthConfigChange` against the real Slack API so the
+// Exercises `notifyToolHealthConfigChange` against the real ChatProvider API so the
 // dedicated Block Kit renderer (header, diff section, "Recent changes" list,
 // and primary action button) is validated end-to-end alongside the breach
-// notifier. Gated on the same `slackReady` flag *and* an explicit
+// notifier. Gated on the same `ChatProviderReady` flag *and* an explicit
 // `TOOL_HEALTH_CONFIG_NOTIFY=1` opt-in to match the production gating in
 // `notifyToolHealthConfigChange` itself, so unconfigured CI runs stay silent.
 //
@@ -185,11 +185,11 @@ async function runSlackTests(): Promise<void> {
 // a database connection — the renderer will still produce the "Recent changes"
 // section using the stubbed entries.
 
-async function runConfigChangeSlackTests(): Promise<void> {
-  console.log("\n── Threshold-change Slack integration ──\n");
+async function runConfigChangeChatProviderTests(): Promise<void> {
+  console.log("\n── Threshold-change ChatProvider integration ──\n");
 
   const restoreEnv = patchEnv({
-    TOOL_HEALTH_SLACK_CHANNEL: SLACK_TEST_CHANNEL,
+    TOOL_HEALTH_ChatProvider_CHANNEL: ChatProvider_TEST_CHANNEL,
     TOOL_HEALTH_ALERT_EMAIL: undefined,
     TOOL_HEALTH_CONFIG_NOTIFY: "1",
   });
@@ -211,7 +211,7 @@ async function runConfigChangeSlackTests(): Promise<void> {
     };
 
     console.log(
-      `  Sending threshold-change alert to channel: ${SLACK_TEST_CHANNEL}`,
+      `  Sending threshold-change alert to channel: ${ChatProvider_TEST_CHANNEL}`,
     );
 
     const result = await notifyToolHealthConfigChange(notification, {
@@ -244,19 +244,19 @@ async function runConfigChangeSlackTests(): Promise<void> {
     });
 
     assert(
-      result.slackSent === true,
-      "notifyToolHealthConfigChange returns slackSent=true",
+      result.ChatProviderSent === true,
+      "notifyToolHealthConfigChange returns ChatProviderSent=true",
     );
     assert(
       result.emailSent === false,
-      "emailSent=false when only Slack is configured",
+      "emailSent=false when only ChatProvider is configured",
     );
     assert(result.disabled === false, "not disabled (TOOL_HEALTH_CONFIG_NOTIFY=1)");
     assert(result.skipped === false, "not skipped");
     assert(result.noChanges === false, "diff was non-empty");
 
     // Re-send with a single-field change and no note to verify the renderer
-    // still produces a valid Block Kit payload (Slack rejects empty fields).
+    // still produces a valid Block Kit payload (ChatProvider rejects empty fields).
     const minimalResult = await notifyToolHealthConfigChange(
       {
         changedBy: "user@example.invalid",
@@ -267,7 +267,7 @@ async function runConfigChangeSlackTests(): Promise<void> {
       { getAudit: async () => [] },
     );
     assert(
-      minimalResult.slackSent === true,
+      minimalResult.ChatProviderSent === true,
       "single-field change with no note also delivered successfully",
     );
   } finally {
@@ -281,26 +281,26 @@ async function runEmailTests(): Promise<void> {
   console.log("\n── Email integration ──\n");
 
   const restoreEnv = patchEnv({
-    TOOL_HEALTH_SLACK_CHANNEL: undefined,
-    TOOL_HEALTH_ALERT_EMAIL: RESEND_TEST_EMAIL,
+    TOOL_HEALTH_ChatProvider_CHANNEL: undefined,
+    TOOL_HEALTH_ALERT_EMAIL: EmailProvider_TEST_EMAIL,
     TOOL_HEALTH_NOTIFY_THROTTLE_MIN: "0",
   });
 
   _resetToolHealthNotifierThrottleForTests();
 
   try {
-    console.log(`  Sending HIGH/error_rate email to: ${RESEND_TEST_EMAIL}`);
+    console.log(`  Sending HIGH/error_rate email to: ${EmailProvider_TEST_EMAIL}`);
 
     const result = await notifyToolHealthBreach(sample(), {});
 
     assert(result.emailSent === true, "notifyToolHealthBreach returns emailSent=true");
-    assert(result.slackSent === false, "slackSent=false when only email is configured");
+    assert(result.ChatProviderSent === false, "ChatProviderSent=false when only email is configured");
     assert(result.throttled === false, "not throttled");
     assert(result.skipped === false, "not skipped");
 
-    // Check plaintext body length — Resend has a 100 KB body limit; we want to
+    // Check plaintext body length — EmailProvider has a 100 KB body limit; we want to
     // ensure the plaintext version for a real payload stays well under it.
-    // We indirectly verify this by asserting the send succeeded (Resend would
+    // We indirectly verify this by asserting the send succeeded (EmailProvider would
     // return an error for oversized payloads), but also emit the approximate
     // plaintext length for debugging.
     const approxTextLen =
@@ -331,14 +331,14 @@ async function runEmailTests(): Promise<void> {
   }
 }
 
-// ─── Combined Slack + Email ───────────────────────────────────────────────────
+// ─── Combined ChatProvider + Email ───────────────────────────────────────────────────
 
 async function runCombinedTests(): Promise<void> {
-  console.log("\n── Combined Slack + Email ──\n");
+  console.log("\n── Combined ChatProvider + Email ──\n");
 
   const restoreEnv = patchEnv({
-    TOOL_HEALTH_SLACK_CHANNEL: SLACK_TEST_CHANNEL,
-    TOOL_HEALTH_ALERT_EMAIL: RESEND_TEST_EMAIL,
+    TOOL_HEALTH_ChatProvider_CHANNEL: ChatProvider_TEST_CHANNEL,
+    TOOL_HEALTH_ALERT_EMAIL: EmailProvider_TEST_EMAIL,
     TOOL_HEALTH_NOTIFY_THROTTLE_MIN: "0",
   });
 
@@ -346,7 +346,7 @@ async function runCombinedTests(): Promise<void> {
 
   try {
     console.log(
-      `  Sending to both channel ${SLACK_TEST_CHANNEL} and email ${RESEND_TEST_EMAIL}`,
+      `  Sending to both channel ${ChatProvider_TEST_CHANNEL} and email ${EmailProvider_TEST_EMAIL}`,
     );
 
     const result = await notifyToolHealthBreach(
@@ -354,7 +354,7 @@ async function runCombinedTests(): Promise<void> {
       {},
     );
 
-    assert(result.slackSent === true, "slackSent=true in combined mode");
+    assert(result.ChatProviderSent === true, "ChatProviderSent=true in combined mode");
     assert(result.emailSent === true, "emailSent=true in combined mode");
     assert(result.throttled === false, "not throttled");
     assert(result.skipped === false, "not skipped");
@@ -366,19 +366,19 @@ async function runCombinedTests(): Promise<void> {
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  console.log("\n=== toolHealthAlertNotifier — Slack/Email integration tests ===\n");
+  console.log("\n=== toolHealthAlertNotifier — ChatProvider/Email integration tests ===\n");
   console.log(
-    `Slack ready: ${slackReady ? `yes (channel: ${SLACK_TEST_CHANNEL})` : "no"}\n` +
-    `Email ready: ${emailReady ? `yes (to: ${RESEND_TEST_EMAIL})` : "no"}\n` +
-    `Threshold-change Slack opt-in (TOOL_HEALTH_CONFIG_NOTIFY=1): ${
+    `ChatProvider ready: ${ChatProviderReady ? `yes (channel: ${ChatProvider_TEST_CHANNEL})` : "no"}\n` +
+    `Email ready: ${emailReady ? `yes (to: ${EmailProvider_TEST_EMAIL})` : "no"}\n` +
+    `Threshold-change ChatProvider opt-in (TOOL_HEALTH_CONFIG_NOTIFY=1): ${
       configNotifyOptIn ? "yes" : "no (skipped)"
     }\n`,
   );
 
-  if (slackReady) await runSlackTests();
-  if (slackReady && configNotifyOptIn) await runConfigChangeSlackTests();
+  if (ChatProviderReady) await runChatProviderTests();
+  if (ChatProviderReady && configNotifyOptIn) await runConfigChangeChatProviderTests();
   if (emailReady) await runEmailTests();
-  if (slackReady && emailReady) await runCombinedTests();
+  if (ChatProviderReady && emailReady) await runCombinedTests();
 
   console.log(`\nResults: ${passed} passed, ${failed} failed`);
 

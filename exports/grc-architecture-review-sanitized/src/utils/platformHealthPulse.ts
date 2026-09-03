@@ -157,7 +157,7 @@ const CHECKS: Check[] = [
 
       const moduleCounts: Record<string, number> = {};
       for (const issue of issues) {
-        const m = issue.module || issue.zoho_module || "unknown";
+        const m = issue.module || issue.CRMProvider_module || "unknown";
         moduleCounts[m] = (moduleCounts[m] || 0) + 1;
       }
       const present = Object.keys(moduleCounts);

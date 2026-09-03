@@ -124,7 +124,7 @@ function buildExpiredPage(lang) {
         '<title>' + escapeHtml(strings.title) + '</title>\n' +
         '<style>\n' +
         'html,body{margin:0;padding:0;background:#f8fafc;color:#1f2937;' +
-        "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Tahoma,Arial,sans-serif;}\n" +
+        "font-family:-IdentityProvider-system,BlinkMacSystemFont,'Segoe UI',Tahoma,Arial,sans-serif;}\n" +
         '.wrap{max-width:32rem;margin:4rem auto;padding:1.5rem 1.75rem;background:#fff;' +
         'border:1px solid #e5e7eb;border-radius:.75rem;box-shadow:0 1px 2px rgba(0,0,0,.04);}\n' +
         'h1{font-size:1.125rem;margin:0 0 .75rem;}\n' +

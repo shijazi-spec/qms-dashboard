@@ -95,7 +95,7 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
 
   'tag-records-for-removal': {
     toolId: 'tag-records-for-removal',
-    label: 'Tag Zoho records for removal',
+    label: 'Tag CRMProvider records for removal',
     riskLevel: 'high',
     requiresApproval: true,
     complianceRefs: [
@@ -104,7 +104,7 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
       'ISO 9001:2015 §7.5 (Control of documented information)',
       'PDPL Art. 18 (Data minimization / erasure)',
     ],
-    entityType: 'zoho_tag',
+    entityType: 'CRMProvider_tag',
     buildPreview: (p: any) =>
       [
         `**Module:** ${p?.module ?? 'n/a'}`,
@@ -116,7 +116,7 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
 
   'merge-records': {
     toolId: 'merge-records',
-    label: 'Merge duplicate Zoho records (migrate-then-tag)',
+    label: 'Merge duplicate CRMProvider records (migrate-then-tag)',
     riskLevel: 'high',
     requiresApproval: true,
     complianceRefs: [
@@ -124,18 +124,18 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
       'WP-DOC-004 (AI Adoption Guidelines)',
       'ISO 9001:2015 §7.5 (Control of documented information)',
     ],
-    entityType: 'zoho_merge',
+    entityType: 'CRMProvider_merge',
     buildPreview: (p: any) =>
       [
         `**Module:** ${p?.module ?? 'n/a'}`,
-        `**Survivor (keep):** ${p?.survivorZohoId ?? 'n/a'}`,
-        `**Merge in + tag Duplicate-Delete:** ${(p?.duplicateZohoIds || []).length} record(s)`,
+        `**Survivor (keep):** ${p?.survivorCRMProviderId ?? 'n/a'}`,
+        `**Merge in + tag Duplicate-Delete:** ${(p?.duplicateCRMProviderIds || []).length} record(s)`,
         p?.reason ? `**Reason:** ${trim(p.reason, 200)}` : null,
       ].filter(Boolean).join('\n'),
   },
   'untag-records': {
     toolId: 'untag-records',
-    label: 'Remove a tag from Zoho records (e.g. Duplicate-Delete)',
+    label: 'Remove a tag from CRMProvider records (e.g. Duplicate-Delete)',
     riskLevel: 'medium',
     requiresApproval: true,
     complianceRefs: [
@@ -143,7 +143,7 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
       'WP-DOC-004 (AI Adoption Guidelines)',
       'ISO 9001:2015 §7.5 (Control of documented information)',
     ],
-    entityType: 'zoho_untag',
+    entityType: 'CRMProvider_untag',
     buildPreview: (p: any) =>
       [
         `**Module:** ${p?.module ?? 'n/a'}`,
@@ -162,11 +162,11 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
       'WP-DOC-004 (AI Adoption Guidelines)',
       'ISO 9001:2015 §7.5 (Control of documented information)',
     ],
-    entityType: 'zoho_link',
+    entityType: 'CRMProvider_link',
     buildPreview: (p: any) =>
       [
         `**Module:** ${p?.module ?? 'n/a'}`,
-        `**Link to Account:** ${p?.accountZohoId ?? 'n/a'}`,
+        `**Link to Account:** ${p?.accountCRMProviderId ?? 'n/a'}`,
         `**Records:** ${(p?.recordIds || []).length} record(s) to relink`,
         p?.reason ? `**Reason:** ${trim(p.reason, 200)}` : null,
       ].filter(Boolean).join('\n'),
@@ -183,7 +183,7 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
       'ISO 9001:2015 §7.5 (Control of documented information)',
       'Saudi PDPL Art. 4 (data accuracy) — corrects/updates personal contact data',
     ],
-    entityType: 'zoho_update',
+    entityType: 'CRMProvider_update',
     buildPreview: (p: any) => {
       const pairs: string[] = [];
       const add = (label: string, v: any) => {
@@ -392,10 +392,10 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
         `**Module:** ${p?.module ?? plan.module ?? 'n/a'}`,
         `**Cluster:** #${p?.clusterId ?? plan.clusterId ?? 'n/a'}`,
         `**Survivor:** ${trim(String(plan.masterName ?? 'n/a'), 120)}`,
-        `**Duplicates to tag:** ${Array.isArray(plan.duplicateZohoIds) ? plan.duplicateZohoIds.length : 0}`,
+        `**Duplicates to tag:** ${Array.isArray(plan.duplicateCRMProviderIds) ? plan.duplicateCRMProviderIds.length : 0}`,
         `**Field migrations:** ${Array.isArray(plan.fieldDecisions) ? plan.fieldDecisions.length : 0}`,
       ];
-      if (plan.linkAccountZohoId) lines.push(`**Link to account:** ${trim(String(plan.linkAccountZohoId), 60)}`);
+      if (plan.linkAccountCRMProviderId) lines.push(`**Link to account:** ${trim(String(plan.linkAccountCRMProviderId), 60)}`);
       if (Array.isArray(p?.reasons) && p.reasons.length) {
         lines.push(`**Why escalated:** ${trim(p.reasons.slice(0, 3).join('; '), 240)}`);
       }
@@ -432,7 +432,7 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
     toolId: 'lookup-entity',
     label: 'CRM entity lookup (company/person/domain/email/phone)',
     riskLevel: 'low',
-    requiresApproval: false, // read-only Zoho search across modules
+    requiresApproval: false, // read-only CRMProvider search across modules
     complianceRefs: ['WP-DOC-004 (AI Adoption Guidelines) — read-only CRM lookup; surfaces contact data only to the authorized caller'],
     entityType: 'crm_lookup',
     buildPreview: (p: any) => `Lookup: ${trim(p?.query, 80)}`,
@@ -552,8 +552,8 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
     riskLevel: 'low',
     // Exempt: reads (status/grades/rules/plan-preview) + teaching a learning
     // rule. The only write is to the agent's OWN routing rulebook
-    // (duplicate_resolution_rules) — it never touches Zoho and is fully
-    // reversible from the Rules view. The Zoho-writing path stays gated by
+    // (duplicate_resolution_rules) — it never touches CRMProvider and is fully
+    // reversible from the Rules view. The CRMProvider-writing path stays gated by
     // the separate high-risk 'duplicate-resolution' policy.
     requiresApproval: false,
     complianceRefs: [
@@ -835,7 +835,7 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
 
   'fetch-calendar-events': {
     toolId: 'fetch-calendar-events',
-    label: 'Fetch Google Calendar events (read-only)',
+    label: 'Fetch IdentityProvider Calendar events (read-only)',
     riskLevel: 'low',
     requiresApproval: false,
     complianceRefs: [
@@ -849,7 +849,7 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
 
   'list-calendars': {
     toolId: 'list-calendars',
-    label: 'List Google Calendars (read-only)',
+    label: 'List IdentityProvider Calendars (read-only)',
     riskLevel: 'low',
     requiresApproval: false,
     complianceRefs: [
@@ -865,7 +865,7 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
     riskLevel: 'low',
     requiresApproval: false,
     complianceRefs: [
-      'WP-DOC-004 (AI Adoption Guidelines) — read-only CRM audit, no Zoho write',
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only CRM audit, no CRMProvider write',
     ],
     entityType: 'crm_audit',
     buildPreview: (p: any) =>
@@ -977,11 +977,11 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
   // --- call intelligence / lead matching (read-only) ---
   'match-lead-by-phone': {
     toolId: 'match-lead-by-phone',
-    label: 'Match Zoho CRM leads by phone (read-only)',
+    label: 'Match CRMProvider CRM leads by phone (read-only)',
     riskLevel: 'low',
     requiresApproval: false,
     complianceRefs: [
-      'WP-DOC-004 (AI Adoption Guidelines) — read-only Zoho Leads lookup, no platform write',
+      'WP-DOC-004 (AI Adoption Guidelines) — read-only CRMProvider Leads lookup, no platform write',
     ],
     entityType: 'lead_phone_match',
     buildPreview: (p: any) =>
@@ -1021,13 +1021,13 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
       `Domain: ${trim(p?.domain, 80) || '—'}`,
   },
 
-  // Imports Google Drive audio files as call_records. WRITES platform
+  // Imports IdentityProvider Drive audio files as call_records. WRITES platform
   // data (call_records inserts) — gated. Dry-run mode is supported by
   // the tool itself; the preview surfaces the folder/query so the
   // approver can sanity-check before the agent flips dry_run to false.
   'drive-call-import': {
     toolId: 'drive-call-import',
-    label: 'Import call recordings from Google Drive',
+    label: 'Import call recordings from IdentityProvider Drive',
     riskLevel: 'medium',
     requiresApproval: true,
     complianceRefs: [
@@ -1059,7 +1059,7 @@ export const TOOL_GOVERNANCE_POLICIES: Record<string, ToolGovernancePolicy> = {
     ],
     entityType: 'import_source_catalog',
     buildPreview: () =>
-      'Returns the canonical Five9 / bulk-upload / Google Drive channel catalog plus the SDR↔CRM phone-match scope. No inputs; pure config read.',
+      'Returns the canonical ContactCenterProvider / bulk-upload / IdentityProvider Drive channel catalog plus the SDR↔CRM phone-match scope. No inputs; pure config read.',
   },
 
   // Pure-function evaluator: scores a transcript against the loaded
@@ -1103,7 +1103,7 @@ export function getPolicy(toolId: string): ToolGovernancePolicy | null {
 /**
  * Resolve a tool's policy, synthesizing a SAFE read-only default for any tool
  * that has no explicit entry. This is the "self-registration" guard so a new
- * read-only radar tool (added in the Replit editor, say) never blocks a publish
+ * read-only radar tool (added in the HostingPlatform editor, say) never blocks a publish
  * on the governance-coverage gate.
  *
  * SECURITY: the default is read-only (requiresApproval: false). It is therefore

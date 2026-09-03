@@ -24,7 +24,7 @@ function wordRe(w: string) {
 
 async function rowsForWord(word: string) {
   const q = await pool.query(
-    `SELECT record_type, zoho_record_id,
+    `SELECT record_type, CRMProvider_record_id,
             company_name, account_name, record_name,
             LOWER(domain) AS domain,
             raw_data->>'Phase' AS phase,

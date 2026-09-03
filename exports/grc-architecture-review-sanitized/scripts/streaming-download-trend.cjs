@@ -3,7 +3,7 @@
 /**
  * Streaming-download latency trend reporter.
  *
- * Used by .github/workflows/streaming-download-smoke.yml to turn the
+ * Used by .SourceControlProvider/workflows/streaming-download-smoke.yml to turn the
  * per-run timing artifacts (test-results/streaming-download-timing/<browser>.json)
  * into a cross-build trend so creeping regressions become visible before
  * they breach the hard fail budget enforced in tests/streamingDownload.spec.ts.
@@ -14,9 +14,9 @@
  * (default: `ci-data/streaming-download`) that stores one JSON file per
  * (run, browser) under `data/<browser>/<runNumber>-<shortSha>.json`. The
  * workflow appends to that branch on every successful run on the default
- * branch (see `.github/workflows/streaming-download-smoke.yml`). The
+ * branch (see `.SourceControlProvider/workflows/streaming-download-smoke.yml`). The
  * orphan branch has effectively unlimited retention — unlike the
- * `streaming-download-timing` GitHub Actions artifact, which GitHub
+ * `streaming-download-timing` SourceControlProvider Actions artifact, which SourceControlProvider
  * evicts after 90 days. That eviction would hide a slow creep that takes
  * 4–6 months to develop (precisely the regressions the static fail
  * budget would also miss), so the artifact is now only a fallback.
@@ -43,7 +43,7 @@
  *
  * Persisting this run's records back to the orphan branch is handled by
  * the workflow (a separate step that runs only on pushes to the default
- * branch, where `GITHUB_TOKEN` has `contents: write`). That keeps fork
+ * branch, where `SourceControlProvider_TOKEN` has `contents: write`). That keeps fork
  * PRs — which only get a read-only token — from failing the trend step.
  *
  * Outputs
@@ -51,16 +51,16 @@
  *   - Writes a Markdown report to STREAMING_TREND_OUTPUT (default
  *     `test-results/streaming-trend-summary.md`).
  *   - Prints the same Markdown to stdout so it can be teed into
- *     `$GITHUB_STEP_SUMMARY`.
+ *     `$SourceControlProvider_STEP_SUMMARY`.
  *   - Exit code is always 0; the hard-fail budget is enforced in the
  *     Playwright spec, not here. This script's job is to surface
  *     SLOW-CREEP regressions that the hard budget would miss.
  *
  * Environment
  * ───────────
- *   GITHUB_REPOSITORY    — owner/repo (set by Actions automatically)
- *   GITHUB_WORKFLOW_FILE — workflow filename (e.g. streaming-download-smoke.yml)
- *                          Falls back to GITHUB_WORKFLOW_REF parsing.
+ *   SourceControlProvider_REPOSITORY    — owner/repo (set by Actions automatically)
+ *   SourceControlProvider_WORKFLOW_FILE — workflow filename (e.g. streaming-download-smoke.yml)
+ *                          Falls back to SourceControlProvider_WORKFLOW_REF parsing.
  *   STREAMING_TREND_HISTORY_LIMIT — how many prior runs to fetch (default 20)
  *   STREAMING_TREND_OUTPUT — output Markdown path (default
  *                            test-results/streaming-trend-summary.md)
@@ -136,9 +136,9 @@ function loadCurrentRun() {
     if (rec && rec.browser && typeof rec.durationMs === 'number') {
       out.push({
         ...rec,
-        runId: process.env.GITHUB_RUN_ID || 'local',
-        runNumber: Number(process.env.GITHUB_RUN_NUMBER || 0) || null,
-        sha: process.env.GITHUB_SHA || null,
+        runId: process.env.SourceControlProvider_RUN_ID || 'local',
+        runNumber: Number(process.env.SourceControlProvider_RUN_NUMBER || 0) || null,
+        sha: process.env.SourceControlProvider_SHA || null,
         source: 'current',
       });
     }
@@ -152,12 +152,12 @@ function whichGh() {
 }
 
 function resolveWorkflowFile() {
-  if (process.env.GITHUB_WORKFLOW_FILE) return process.env.GITHUB_WORKFLOW_FILE;
-  // GITHUB_WORKFLOW_REF looks like:
-  //   owner/repo/.github/workflows/streaming-download-smoke.yml@refs/heads/main
-  const ref = process.env.GITHUB_WORKFLOW_REF;
+  if (process.env.SourceControlProvider_WORKFLOW_FILE) return process.env.SourceControlProvider_WORKFLOW_FILE;
+  // SourceControlProvider_WORKFLOW_REF looks like:
+  //   owner/repo/.SourceControlProvider/workflows/streaming-download-smoke.yml@refs/heads/main
+  const ref = process.env.SourceControlProvider_WORKFLOW_REF;
   if (ref) {
-    const m = ref.match(/\.github\/workflows\/([^@]+)/);
+    const m = ref.match(/\.SourceControlProvider\/workflows\/([^@]+)/);
     if (m) return m[1];
   }
   return 'streaming-download-smoke.yml';

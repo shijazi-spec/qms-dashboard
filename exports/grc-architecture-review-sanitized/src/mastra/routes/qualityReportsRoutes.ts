@@ -17,7 +17,7 @@ export const qualityReportsRoutes = [
   {
     // Mirrors the /consultant page route (consultantRoutes.ts:453-471):
     // sync existsSync/readFileSync over the same two candidate paths
-    // (repo-relative cwd + the Replit workspace absolute path fallback).
+    // (repo-relative cwd + the HostingPlatform workspace absolute path fallback).
     path: "/quality-reports",
     method: "GET" as const,
     createHandler: async () => {
@@ -131,15 +131,15 @@ export const qualityReportsRoutes = [
           const body = await c.req.json().catch(() => ({}));
           const mode = String(body?.mode || "");
           const { buildBUReportEmail, resolveEmailRecipient } = await import("../../utils/qualityReportsEmail");
-          const { sendResendEmail } = await import("../../utils/resendMail");
+          const { sendEmailProviderEmail } = await import("../../utils/EmailProviderMail");
           const dateISO = new Date().toISOString().slice(0, 10);
           const built = await buildBUReportEmail(c.req.param("buKey"), dateISO);
           if (!built) return c.json({ error: "Not found" }, 404);
           // Recipient is decided server-side ONLY — never from the request body.
           const recip = resolveEmailRecipient(mode, built.headEmail, user.email || null);
           if ("error" in recip) return c.json({ error: recip.error }, recip.status);
-          const res = await sendResendEmail({ to: recip.to, subject: built.subject, html: built.html });
-          logger.info("[QualityReports] email send", { actor: user.email, buKey: c.req.param("buKey"), to: recip.to, mode, ok: res.success, resendId: res.id, error: res.error });
+          const res = await sendEmailProviderEmail({ to: recip.to, subject: built.subject, html: built.html });
+          logger.info("[QualityReports] email send", { actor: user.email, buKey: c.req.param("buKey"), to: recip.to, mode, ok: res.success, EmailProviderId: res.id, error: res.error });
           if (!res.success) return c.json({ success: false, error: res.error || "Email failed to send." }, 502);
           return c.json({ success: true, id: res.id, to: recip.to });
         } catch (error: any) {

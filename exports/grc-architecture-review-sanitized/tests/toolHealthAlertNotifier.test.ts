@@ -2,12 +2,12 @@
  * Unit tests for the tool-health on-call notifier.
  *
  * Covers the behavior added in Task #128:
- *   • No-op (skipped) when neither Slack channel nor email recipient is
+ *   • No-op (skipped) when neither ChatProvider channel nor email recipient is
  *     configured — so the cron can call us unconditionally in dev/test.
- *   • Slack-only / email-only / both wiring through env vars.
+ *   • ChatProvider-only / email-only / both wiring through env vars.
  *   • In-process throttle keyed on `<tool_name>:<reason>` so a flapping
  *     breach does not double-page within `TOOL_HEALTH_NOTIFY_THROTTLE_MIN`.
- *   • Slack/email transport errors do not throw out of `notifyToolHealthBreach`
+ *   • ChatProvider/email transport errors do not throw out of `notifyToolHealthBreach`
  *     and do not poison the throttle map.
  *   • Multiple comma-separated email recipients are forwarded as an array.
  *   • Built link points to `/dashboard` and honours
@@ -37,7 +37,7 @@ import {
 import type { ToolHealthConfigAuditEntry } from "../src/utils/toolHealthConfigDatabase";
 import { TestSuite } from "./_helpers/runner";
 
-interface SlackCall {
+interface ChatProviderCall {
   channel: string;
   text: string;
   blocks?: any[];
@@ -53,7 +53,7 @@ interface DbClaimCall { key: string; nowMs: number; throttleMs: number }
 interface RecordResultCall { alertId: number | null | undefined; channel: string; whenMs: number }
 
 function makeStubs(opts: {
-  slackResult?: boolean | Error;
+  ChatProviderResult?: boolean | Error;
   emailResult?: { success: boolean; id?: string; error?: string } | Error;
   now?: number;
   /**
@@ -66,20 +66,20 @@ function makeStubs(opts: {
   recordResultThrows?: Error;
 } = {}): {
   deps: ToolHealthNotifierDeps;
-  slackCalls: SlackCall[];
+  ChatProviderCalls: ChatProviderCall[];
   emailCalls: EmailCall[];
   dbClaimCalls: DbClaimCall[];
   recordResultCalls: RecordResultCall[];
 } {
-  const slackCalls: SlackCall[] = [];
+  const ChatProviderCalls: ChatProviderCall[] = [];
   const emailCalls: EmailCall[] = [];
   const dbClaimCalls: DbClaimCall[] = [];
   const recordResultCalls: RecordResultCall[] = [];
   const deps: ToolHealthNotifierDeps = {
-    sendSlack: async (channel, text, blocks) => {
-      slackCalls.push({ channel, text, blocks });
-      if (opts.slackResult instanceof Error) throw opts.slackResult;
-      return opts.slackResult ?? true;
+    sendChatProvider: async (channel, text, blocks) => {
+      ChatProviderCalls.push({ channel, text, blocks });
+      if (opts.ChatProviderResult instanceof Error) throw opts.ChatProviderResult;
+      return opts.ChatProviderResult ?? true;
     },
     sendEmail: async (mailOpts) => {
       emailCalls.push({
@@ -101,7 +101,7 @@ function makeStubs(opts: {
       if (opts.recordResultThrows) throw opts.recordResultThrows;
     },
   };
-  return { deps, slackCalls, emailCalls, dbClaimCalls, recordResultCalls };
+  return { deps, ChatProviderCalls, emailCalls, dbClaimCalls, recordResultCalls };
 }
 
 function sample(
@@ -126,15 +126,15 @@ function sample(
 // cases run in any order.
 // ──────────────────────────────────────────────────────────────────────────────
 const ENV_KEYS = [
-  "TOOL_HEALTH_SLACK_CHANNEL",
-  "TOOL_HEALTH_SLACK_USE_DEFAULT_CHANNEL",
+  "TOOL_HEALTH_ChatProvider_CHANNEL",
+  "TOOL_HEALTH_ChatProvider_USE_DEFAULT_CHANNEL",
   "TOOL_HEALTH_ALERT_EMAIL",
   "TOOL_HEALTH_NOTIFY_THROTTLE_MIN",
   "TOOL_HEALTH_APP_URL",
   "TOOL_HEALTH_CONFIG_NOTIFY",
   "TOOL_HEALTH_RECOVERY_NOTIFY",
   "TOOL_HEALTH_RECOVERY_SKIP_TOOLS",
-  "SLACK_CHANNEL_ID",
+  "ChatProvider_CHANNEL_ID",
 ];
 
 function clearEnv() {
@@ -146,61 +146,61 @@ const suite = new TestSuite("toolHealthAlertNotifier");
 console.log("\n=== toolHealthAlertNotifier tests ===\n");
 
 await suite.test(
-  "no Slack channel, no email recipient → returns { skipped: true } without sending",
+  "no ChatProvider channel, no email recipient → returns { skipped: true } without sending",
   async () => {
     clearEnv();
-    const { deps, slackCalls, emailCalls } = makeStubs();
+    const { deps, ChatProviderCalls, emailCalls } = makeStubs();
     const result = await notifyToolHealthBreach(sample(), deps);
     suite.expectEqual(result.skipped, true, "skipped");
-    suite.expectEqual(result.slackSent, false, "no slack");
+    suite.expectEqual(result.ChatProviderSent, false, "no ChatProvider");
     suite.expectEqual(result.emailSent, false, "no email");
     suite.expectEqual(result.throttled, false, "not throttled");
-    suite.expectEqual(slackCalls.length, 0, "no slack call");
+    suite.expectEqual(ChatProviderCalls.length, 0, "no ChatProvider call");
     suite.expectEqual(emailCalls.length, 0, "no email call");
   },
 );
 
 await suite.test(
-  "Slack channel configured → posts to TOOL_HEALTH_SLACK_CHANNEL with link to AI Ops",
+  "ChatProvider channel configured → posts to TOOL_HEALTH_ChatProvider_CHANNEL with link to AI Ops",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL-CHAN";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL-CHAN";
     process.env.TOOL_HEALTH_APP_URL = "<REDACTED_URL>";
-    const { deps, slackCalls, emailCalls } = makeStubs();
+    const { deps, ChatProviderCalls, emailCalls } = makeStubs();
     const result = await notifyToolHealthBreach(sample(), deps);
-    suite.expectEqual(result.slackSent, true, "slackSent");
+    suite.expectEqual(result.ChatProviderSent, true, "ChatProviderSent");
     suite.expectEqual(result.emailSent, false, "no email when not configured");
     suite.expectEqual(result.skipped, false, "not skipped");
-    suite.expectEqual(slackCalls.length, 1, "one slack call");
-    suite.expectEqual(slackCalls[0]?.channel, "C-ONCALL-CHAN", "channel");
+    suite.expectEqual(ChatProviderCalls.length, 1, "one ChatProvider call");
+    suite.expectEqual(ChatProviderCalls[0]?.channel, "C-ONCALL-CHAN", "channel");
     suite.expect(
-      slackCalls[0]?.text.includes("qms_create_nc"),
+      ChatProviderCalls[0]?.text.includes("qms_create_nc"),
       "fallback text mentions tool",
     );
     // Link button must point at the AI Ops panel under the configured base URL.
-    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    const blocks = JSON.stringify(ChatProviderCalls[0]?.blocks ?? []);
     suite.expect(
       blocks.includes("<REDACTED_URL>"),
-      `slack blocks contain link to AI Ops panel (got: ${blocks.slice(0, 200)}...)`,
+      `ChatProvider blocks contain link to AI Ops panel (got: ${blocks.slice(0, 200)}...)`,
     );
     // Dedupe key should appear in the context footer for traceability.
     suite.expect(
       blocks.includes("qms_create_nc:error_rate"),
-      "slack blocks reference the dedupe key",
+      "ChatProvider blocks reference the dedupe key",
     );
     suite.expectEqual(emailCalls.length, 0, "no email call");
   },
 );
 
 await suite.test(
-  "email recipient configured → posts via Resend with severity-prefixed subject",
+  "email recipient configured → posts via EmailProvider with severity-prefixed subject",
   async () => {
     clearEnv();
     process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
-    const { deps, slackCalls, emailCalls } = makeStubs();
+    const { deps, ChatProviderCalls, emailCalls } = makeStubs();
     const result = await notifyToolHealthBreach(sample(), deps);
     suite.expectEqual(result.emailSent, true, "emailSent");
-    suite.expectEqual(result.slackSent, false, "slack not sent");
+    suite.expectEqual(result.ChatProviderSent, false, "ChatProvider not sent");
     suite.expectEqual(emailCalls.length, 1, "one email call");
     const call = emailCalls[0]!;
     suite.expect(
@@ -221,7 +221,7 @@ await suite.test(
       (call.text ?? "").includes("/dashboard"),
       "email plaintext links to AI Operations panel",
     );
-    suite.expectEqual(slackCalls.length, 0, "no slack");
+    suite.expectEqual(ChatProviderCalls.length, 0, "no ChatProvider");
   },
 );
 
@@ -244,16 +244,16 @@ await suite.test(
 );
 
 await suite.test(
-  "both Slack and email configured → both senders are invoked",
+  "both ChatProvider and email configured → both senders are invoked",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
-    const { deps, slackCalls, emailCalls } = makeStubs();
+    const { deps, ChatProviderCalls, emailCalls } = makeStubs();
     const result = await notifyToolHealthBreach(sample(), deps);
-    suite.expectEqual(result.slackSent, true, "slackSent");
+    suite.expectEqual(result.ChatProviderSent, true, "ChatProviderSent");
     suite.expectEqual(result.emailSent, true, "emailSent");
-    suite.expectEqual(slackCalls.length, 1, "one slack call");
+    suite.expectEqual(ChatProviderCalls.length, 1, "one ChatProvider call");
     suite.expectEqual(emailCalls.length, 1, "one email call");
   },
 );
@@ -262,16 +262,16 @@ await suite.test(
   "throttle: same dedupe key called twice in window → second call short-circuits",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
     let now = 1_000_000;
-    const { deps, slackCalls } = makeStubs({ now });
+    const { deps, ChatProviderCalls } = makeStubs({ now });
 
     const first = await notifyToolHealthBreach(sample(), {
       ...deps,
       now: () => now,
     });
-    suite.expectEqual(first.slackSent, true, "first send goes through");
+    suite.expectEqual(first.ChatProviderSent, true, "first send goes through");
     suite.expectEqual(first.throttled, false, "first not throttled");
 
     // 30 minutes later, well inside the 60-min window
@@ -281,8 +281,8 @@ await suite.test(
       now: () => now,
     });
     suite.expectEqual(second.throttled, true, "second is throttled");
-    suite.expectEqual(second.slackSent, false, "no slack send on throttle");
-    suite.expectEqual(slackCalls.length, 1, "still only one slack call total");
+    suite.expectEqual(second.ChatProviderSent, false, "no ChatProvider send on throttle");
+    suite.expectEqual(ChatProviderCalls.length, 1, "still only one ChatProvider call total");
   },
 );
 
@@ -290,10 +290,10 @@ await suite.test(
   "throttle: past window → key is paged again",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
     let now = 1_000_000;
-    const { deps, slackCalls } = makeStubs();
+    const { deps, ChatProviderCalls } = makeStubs();
 
     await notifyToolHealthBreach(sample(), { ...deps, now: () => now });
 
@@ -303,8 +303,8 @@ await suite.test(
       now: () => now,
     });
     suite.expectEqual(second.throttled, false, "second NOT throttled past window");
-    suite.expectEqual(second.slackSent, true, "second slack send goes through");
-    suite.expectEqual(slackCalls.length, 2, "two slack calls total");
+    suite.expectEqual(second.ChatProviderSent, true, "second ChatProvider send goes through");
+    suite.expectEqual(ChatProviderCalls.length, 2, "two ChatProvider calls total");
   },
 );
 
@@ -312,10 +312,10 @@ await suite.test(
   "throttle: distinct dedupe keys are independent",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
     const now = 1_000_000;
-    const { deps, slackCalls } = makeStubs();
+    const { deps, ChatProviderCalls } = makeStubs();
     const a = sample({
       tool_name: "tool_a",
       reason: "error_rate",
@@ -335,7 +335,7 @@ await suite.test(
     await notifyToolHealthBreach(b, { ...deps, now: () => now });
     await notifyToolHealthBreach(c, { ...deps, now: () => now });
     suite.expectEqual(
-      slackCalls.length,
+      ChatProviderCalls.length,
       3,
       "all three keys page independently",
     );
@@ -343,46 +343,46 @@ await suite.test(
 );
 
 await suite.test(
-  "throttle: failed Slack send still consumes throttle slot (atomic claim happens before send)",
+  "throttle: failed ChatProvider send still consumes throttle slot (atomic claim happens before send)",
   // With the DB-backed atomic claim design, the slot is claimed in the DB
-  // BEFORE any Slack/email call is attempted. A failed send therefore still
+  // BEFORE any ChatProvider/email call is attempted. A failed send therefore still
   // consumes the throttle window — this prevents a sibling instance from
   // paging again within the same window if the first pod's send failed.
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
     const now = 1_000_000;
-    const { deps: failingDeps, slackCalls } = makeStubs({ slackResult: false });
+    const { deps: failingDeps, ChatProviderCalls } = makeStubs({ ChatProviderResult: false });
 
     const first = await notifyToolHealthBreach(sample(), {
       ...failingDeps,
       now: () => now,
     });
-    suite.expectEqual(first.slackSent, false, "send reported as failed");
+    suite.expectEqual(first.ChatProviderSent, false, "send reported as failed");
     suite.expectEqual(first.throttled, false, "first attempt not throttled");
-    suite.expectEqual(slackCalls.length, 1, "one slack attempt was made");
+    suite.expectEqual(ChatProviderCalls.length, 1, "one ChatProvider attempt was made");
 
     // In-window retry IS throttled — the slot was claimed before the failed send.
-    const { deps: okDeps, slackCalls: okCalls } = makeStubs();
+    const { deps: okDeps, ChatProviderCalls: okCalls } = makeStubs();
     const second = await notifyToolHealthBreach(sample(), {
       ...okDeps,
       now: () => now,
     });
     suite.expectEqual(second.throttled, true, "in-window retry IS throttled — slot was claimed before failed send");
-    suite.expectEqual(second.slackSent, false, "no slack send on throttled retry");
-    suite.expectEqual(okCalls.length, 0, "no retry slack call made within throttle window");
+    suite.expectEqual(second.ChatProviderSent, false, "no ChatProvider send on throttled retry");
+    suite.expectEqual(okCalls.length, 0, "no retry ChatProvider call made within throttle window");
   },
 );
 
 await suite.test(
-  "Slack send throws → swallowed; email still attempted; result reflects failure",
+  "ChatProvider send throws → swallowed; email still attempted; result reflects failure",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
     const { deps, emailCalls } = makeStubs({
-      slackResult: new Error("slack down"),
+      ChatProviderResult: new Error("ChatProvider down"),
     });
 
     // Silence the expected error log.
@@ -390,7 +390,7 @@ await suite.test(
     console.error = () => {};
     try {
       const result = await notifyToolHealthBreach(sample(), deps);
-      suite.expectEqual(result.slackSent, false, "slack failed");
+      suite.expectEqual(result.ChatProviderSent, false, "ChatProvider failed");
       suite.expectEqual(result.emailSent, true, "email still went through");
       suite.expectEqual(emailCalls.length, 1, "email attempted");
     } finally {
@@ -410,7 +410,7 @@ await suite.test(
   "DB persistence: claimDb is called when in-process map is empty (simulates restart)",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
     const now = 1_000_000;
     const { deps, dbClaimCalls } = makeStubs({ now });
@@ -434,14 +434,14 @@ await suite.test(
   "DB persistence: claimDb returns false → throttled even with empty in-process map (sibling already paged)",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
     const now = 1_000_000;
-    const { deps, slackCalls } = makeStubs({ now, claimDbResult: false });
+    const { deps, ChatProviderCalls } = makeStubs({ now, claimDbResult: false });
     const result = await notifyToolHealthBreach(sample(), { ...deps, now: () => now });
     suite.expectEqual(result.throttled, true, "throttled — sibling holds the slot");
-    suite.expectEqual(result.slackSent, false, "no slack sent");
-    suite.expectEqual(slackCalls.length, 0, "no slack calls made");
+    suite.expectEqual(result.ChatProviderSent, false, "no ChatProvider sent");
+    suite.expectEqual(ChatProviderCalls.length, 0, "no ChatProvider calls made");
   },
 );
 
@@ -449,14 +449,14 @@ await suite.test(
   "DB persistence: claimDb returns true → send goes through",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
     const now = 1_000_000;
-    const { deps, slackCalls } = makeStubs({ now, claimDbResult: true });
+    const { deps, ChatProviderCalls } = makeStubs({ now, claimDbResult: true });
     const result = await notifyToolHealthBreach(sample(), { ...deps, now: () => now });
     suite.expectEqual(result.throttled, false, "not throttled — slot successfully claimed");
-    suite.expectEqual(result.slackSent, true, "slack sent after successful claim");
-    suite.expectEqual(slackCalls.length, 1, "one slack call");
+    suite.expectEqual(result.ChatProviderSent, true, "ChatProvider sent after successful claim");
+    suite.expectEqual(ChatProviderCalls.length, 1, "one ChatProvider call");
   },
 );
 
@@ -464,7 +464,7 @@ await suite.test(
   "DB persistence: in-process cache is fast path — claimDb NOT called on second call within window",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
     let now = 1_000_000;
     const { deps, dbClaimCalls } = makeStubs({ now });
@@ -487,10 +487,10 @@ await suite.test(
   "DB persistence: claimDb throws → swallowed; send still goes through (DB unavailable fallback)",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
     const now = 1_000_000;
-    const { deps, slackCalls } = makeStubs({ now });
+    const { deps, ChatProviderCalls } = makeStubs({ now });
     const throwingDeps = {
       ...deps,
       claimDb: async (_key: string, _nowMs: number, _throttleMs: number): Promise<boolean> => {
@@ -502,9 +502,9 @@ await suite.test(
     console.error = () => {};
     try {
       const result = await notifyToolHealthBreach(sample(), throwingDeps);
-      suite.expectEqual(result.slackSent, true, "slack sent despite claimDb failure");
+      suite.expectEqual(result.ChatProviderSent, true, "ChatProvider sent despite claimDb failure");
       suite.expectEqual(result.throttled, false, "not throttled");
-      suite.expectEqual(slackCalls.length, 1, "one slack call");
+      suite.expectEqual(ChatProviderCalls.length, 1, "one ChatProvider call");
     } finally {
       console.error = origErr;
     }
@@ -513,18 +513,18 @@ await suite.test(
 
 await suite.test(
   "DB persistence: slot is claimed before sending — DB slot consumed even if send fails (atomic guarantee)",
-  // With the atomic-claim design, the DB slot is claimed BEFORE Slack/email is
+  // With the atomic-claim design, the DB slot is claimed BEFORE ChatProvider/email is
   // attempted. A failed send means the slot is consumed for the rest of the
   // throttle window. This is intentional: it prevents double-paging by a
   // sibling or restart-recovering instance even when the network call fails.
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
     const now = 1_000_000;
-    const { deps, dbClaimCalls } = makeStubs({ now, slackResult: false });
+    const { deps, dbClaimCalls } = makeStubs({ now, ChatProviderResult: false });
     const result = await notifyToolHealthBreach(sample(), { ...deps, now: () => now });
-    suite.expectEqual(result.slackSent, false, "slack send failed");
+    suite.expectEqual(result.ChatProviderSent, false, "ChatProvider send failed");
     suite.expectEqual(dbClaimCalls.length, 1, "claimDb WAS called before send attempt");
     // Second call within window must be throttled (in-process cache was set after claim)
     const secondNow = now + 30 * 60_000;
@@ -537,57 +537,57 @@ await suite.test(
   "DB persistence: TOOL_HEALTH_NOTIFY_THROTTLE_MIN=0 → claimDb is never called (throttle disabled)",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "0";
     const now = 1_000_000;
-    const { deps, dbClaimCalls, slackCalls } = makeStubs({ now });
+    const { deps, dbClaimCalls, ChatProviderCalls } = makeStubs({ now });
     const result = await notifyToolHealthBreach(sample(), { ...deps, now: () => now });
-    suite.expectEqual(result.slackSent, true, "slack sent when throttle is disabled");
+    suite.expectEqual(result.ChatProviderSent, true, "ChatProvider sent when throttle is disabled");
     suite.expectEqual(dbClaimCalls.length, 0, "claimDb not called when throttleMs=0");
-    suite.expectEqual(slackCalls.length, 1, "one slack call");
+    suite.expectEqual(ChatProviderCalls.length, 1, "one ChatProvider call");
   },
 );
 
 await suite.test(
-  "TOOL_HEALTH_SLACK_USE_DEFAULT_CHANNEL=1 falls back to SLACK_CHANNEL_ID",
+  "TOOL_HEALTH_ChatProvider_USE_DEFAULT_CHANNEL=1 falls back to ChatProvider_CHANNEL_ID",
   async () => {
     clearEnv();
-    process.env.SLACK_CHANNEL_ID = "C-DEFAULT";
-    process.env.TOOL_HEALTH_SLACK_USE_DEFAULT_CHANNEL = "1";
-    const { deps, slackCalls } = makeStubs();
+    process.env.ChatProvider_CHANNEL_ID = "C-DEFAULT";
+    process.env.TOOL_HEALTH_ChatProvider_USE_DEFAULT_CHANNEL = "1";
+    const { deps, ChatProviderCalls } = makeStubs();
     const result = await notifyToolHealthBreach(sample(), deps);
-    suite.expectEqual(result.slackSent, true, "slackSent");
-    suite.expectEqual(slackCalls[0]?.channel, "C-DEFAULT", "fell back to default channel");
+    suite.expectEqual(result.ChatProviderSent, true, "ChatProviderSent");
+    suite.expectEqual(ChatProviderCalls[0]?.channel, "C-DEFAULT", "fell back to default channel");
   },
 );
 
 await suite.test(
-  "SLACK_CHANNEL_ID alone (without opt-in) does NOT page tool-health",
+  "ChatProvider_CHANNEL_ID alone (without opt-in) does NOT page tool-health",
   // Guards against accidentally posting tool-health alerts to whatever
-  // channel another module is using as its general Slack target.
+  // channel another module is using as its general ChatProvider target.
   async () => {
     clearEnv();
-    process.env.SLACK_CHANNEL_ID = "C-QMS";
-    const { deps, slackCalls } = makeStubs();
+    process.env.ChatProvider_CHANNEL_ID = "C-QMS";
+    const { deps, ChatProviderCalls } = makeStubs();
     const result = await notifyToolHealthBreach(sample(), deps);
     suite.expectEqual(result.skipped, true, "skipped");
-    suite.expectEqual(slackCalls.length, 0, "no slack call");
+    suite.expectEqual(ChatProviderCalls.length, 0, "no ChatProvider call");
   },
 );
 
 await suite.test(
-  "no TOOL_HEALTH_APP_URL → no Slack action button (Slack rejects relative urls)",
-  // Slack's blocks API requires `actions.button.url` to be an absolute URL;
+  "no TOOL_HEALTH_APP_URL → no ChatProvider action button (ChatProvider rejects relative urls)",
+  // ChatProvider's blocks API requires `actions.button.url` to be an absolute URL;
   // posting a relative path causes the entire message to be rejected with
   // `invalid_blocks`. The notifier must degrade gracefully to a plain
   // mrkdwn-link section so dev/test environments still get a valid (if
   // unclickable) message.
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
-    const { deps, slackCalls } = makeStubs();
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
+    const { deps, ChatProviderCalls } = makeStubs();
     await notifyToolHealthBreach(sample(), deps);
-    const blocks = slackCalls[0]?.blocks ?? [];
+    const blocks = ChatProviderCalls[0]?.blocks ?? [];
     const hasButton = blocks.some(
       (b: any) =>
         b?.type === "actions" &&
@@ -612,14 +612,14 @@ await suite.test(
 );
 
 await suite.test(
-  "TOOL_HEALTH_APP_URL set → Slack action button is rendered with absolute URL",
+  "TOOL_HEALTH_APP_URL set → ChatProvider action button is rendered with absolute URL",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_APP_URL = "<REDACTED_URL>";
-    const { deps, slackCalls } = makeStubs();
+    const { deps, ChatProviderCalls } = makeStubs();
     await notifyToolHealthBreach(sample(), deps);
-    const blocks = slackCalls[0]?.blocks ?? [];
+    const blocks = ChatProviderCalls[0]?.blocks ?? [];
     const button = blocks
       .find((b: any) => b?.type === "actions")
       ?.elements?.find((e: any) => e?.type === "button");
@@ -648,32 +648,32 @@ function makeSampleAuditEntries(count: number = 2): ToolHealthConfigAuditEntry[]
     note: i === 0 ? "Sev-2 incident #4321" : null,
     // `breach_diff` is added by the breach-context enricher (Task #205);
     // these fixtures predate that field and don't exercise it, so leaving it
-    // null keeps the test focused on the email/Slack rendering it's meant to
+    // null keeps the test focused on the email/ChatProvider rendering it's meant to
     // verify without forcing every test author to hand-stub a breach diff.
     breach_diff: null,
   }));
 }
 
 function makeConfigChangeStubs(opts: {
-  slackResult?: boolean | Error;
+  ChatProviderResult?: boolean | Error;
   auditEntries?: ToolHealthConfigAuditEntry[];
   auditError?: Error;
   emailResult?: boolean | Error;
 } = {}): {
   deps: ToolHealthConfigChangeNotifierDeps;
-  slackCalls: SlackCall[];
+  ChatProviderCalls: ChatProviderCall[];
   emailCalls: EmailCall[];
 } {
-  const slackCalls: SlackCall[] = [];
+  const ChatProviderCalls: ChatProviderCall[] = [];
   const emailCalls: EmailCall[] = [];
   return {
-    slackCalls,
+    ChatProviderCalls,
     emailCalls,
     deps: {
-      sendSlack: async (channel, text, blocks) => {
-        slackCalls.push({ channel, text, blocks });
-        if (opts.slackResult instanceof Error) throw opts.slackResult;
-        return opts.slackResult ?? true;
+      sendChatProvider: async (channel, text, blocks) => {
+        ChatProviderCalls.push({ channel, text, blocks });
+        if (opts.ChatProviderResult instanceof Error) throw opts.ChatProviderResult;
+        return opts.ChatProviderResult ?? true;
       },
       getAudit: async (_limit) => {
         if (opts.auditError) throw opts.auditError;
@@ -702,51 +702,51 @@ function sampleConfigChange(
 }
 
 await suite.test(
-  "config change: TOOL_HEALTH_CONFIG_NOTIFY unset → disabled, no slack call",
+  "config change: TOOL_HEALTH_CONFIG_NOTIFY unset → disabled, no ChatProvider call",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
-    const { deps, slackCalls } = makeConfigChangeStubs();
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
+    const { deps, ChatProviderCalls } = makeConfigChangeStubs();
     const result = await notifyToolHealthConfigChange(sampleConfigChange(), deps);
     suite.expectEqual(result.disabled, true, "disabled");
-    suite.expectEqual(result.slackSent, false, "no slack");
-    suite.expectEqual(slackCalls.length, 0, "no slack call");
+    suite.expectEqual(result.ChatProviderSent, false, "no ChatProvider");
+    suite.expectEqual(ChatProviderCalls.length, 0, "no ChatProvider call");
   },
 );
 
 await suite.test(
-  "config change: TOOL_HEALTH_CONFIG_NOTIFY=0 → disabled, no slack call",
+  "config change: TOOL_HEALTH_CONFIG_NOTIFY=0 → disabled, no ChatProvider call",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_CONFIG_NOTIFY = "0";
-    const { deps, slackCalls } = makeConfigChangeStubs();
+    const { deps, ChatProviderCalls } = makeConfigChangeStubs();
     const result = await notifyToolHealthConfigChange(sampleConfigChange(), deps);
     suite.expectEqual(result.disabled, true, "disabled");
-    suite.expectEqual(slackCalls.length, 0, "no slack call");
+    suite.expectEqual(ChatProviderCalls.length, 0, "no ChatProvider call");
   },
 );
 
 await suite.test(
-  "config change: opted in but no Slack channel → skipped, no slack call",
+  "config change: opted in but no ChatProvider channel → skipped, no ChatProvider call",
   async () => {
     clearEnv();
     process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-    const { deps, slackCalls } = makeConfigChangeStubs();
+    const { deps, ChatProviderCalls } = makeConfigChangeStubs();
     const result = await notifyToolHealthConfigChange(sampleConfigChange(), deps);
     suite.expectEqual(result.skipped, true, "skipped");
     suite.expectEqual(result.disabled, false, "not disabled");
-    suite.expectEqual(slackCalls.length, 0, "no slack call");
+    suite.expectEqual(ChatProviderCalls.length, 0, "no ChatProvider call");
   },
 );
 
 await suite.test(
-  "config change: identical before/after → noChanges, no slack call",
+  "config change: identical before/after → noChanges, no ChatProvider call",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-    const { deps, slackCalls } = makeConfigChangeStubs();
+    const { deps, ChatProviderCalls } = makeConfigChangeStubs();
     const result = await notifyToolHealthConfigChange(
       sampleConfigChange({
         before: { errorRateHighPct: 20 },
@@ -755,26 +755,26 @@ await suite.test(
       deps,
     );
     suite.expectEqual(result.noChanges, true, "noChanges");
-    suite.expectEqual(result.slackSent, false, "no slack send");
-    suite.expectEqual(slackCalls.length, 0, "no slack call");
+    suite.expectEqual(result.ChatProviderSent, false, "no ChatProvider send");
+    suite.expectEqual(ChatProviderCalls.length, 0, "no ChatProvider call");
   },
 );
 
 await suite.test(
-  "config change: opted in with channel → posts diff to Slack with deep-link",
+  "config change: opted in with channel → posts diff to ChatProvider with deep-link",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
     process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
     process.env.TOOL_HEALTH_APP_URL = "<REDACTED_URL>";
-    const { deps, slackCalls } = makeConfigChangeStubs();
+    const { deps, ChatProviderCalls } = makeConfigChangeStubs();
     const result = await notifyToolHealthConfigChange(sampleConfigChange(), deps);
-    suite.expectEqual(result.slackSent, true, "slackSent");
+    suite.expectEqual(result.ChatProviderSent, true, "ChatProviderSent");
     suite.expectEqual(result.disabled, false, "not disabled");
     suite.expectEqual(result.skipped, false, "not skipped");
-    suite.expectEqual(slackCalls.length, 1, "one slack call");
-    suite.expectEqual(slackCalls[0]?.channel, "C-ONCALL", "channel");
-    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    suite.expectEqual(ChatProviderCalls.length, 1, "one ChatProvider call");
+    suite.expectEqual(ChatProviderCalls[0]?.channel, "C-ONCALL", "channel");
+    const blocks = JSON.stringify(ChatProviderCalls[0]?.blocks ?? []);
     suite.expect(
       blocks.includes("Alice Admin"),
       "blocks mention operator name",
@@ -796,7 +796,7 @@ await suite.test(
       `blocks include deep-link to Alert Thresholds tab (got: ${blocks.slice(0, 200)}...)`,
     );
     suite.expect(
-      slackCalls[0]?.text.includes("thresholds"),
+      ChatProviderCalls[0]?.text.includes("thresholds"),
       "fallback text mentions thresholds",
     );
   },
@@ -806,11 +806,11 @@ await suite.test(
   "config change: no TOOL_HEALTH_APP_URL → no actions button, still surfaces relative path",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-    const { deps, slackCalls } = makeConfigChangeStubs();
+    const { deps, ChatProviderCalls } = makeConfigChangeStubs();
     await notifyToolHealthConfigChange(sampleConfigChange(), deps);
-    const blocks = slackCalls[0]?.blocks ?? [];
+    const blocks = ChatProviderCalls[0]?.blocks ?? [];
     const hasButton = blocks.some(
       (b: any) =>
         b?.type === "actions" &&
@@ -831,17 +831,17 @@ await suite.test(
 );
 
 await suite.test(
-  "config change: Slack send throws → swallowed, slackSent=false (does not crash caller)",
+  "config change: ChatProvider send throws → swallowed, ChatProviderSent=false (does not crash caller)",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-    const { deps } = makeConfigChangeStubs({ slackResult: new Error("slack down") });
+    const { deps } = makeConfigChangeStubs({ ChatProviderResult: new Error("ChatProvider down") });
     const origErr = console.error;
     console.error = () => {};
     try {
       const result = await notifyToolHealthConfigChange(sampleConfigChange(), deps);
-      suite.expectEqual(result.slackSent, false, "slack failed");
+      suite.expectEqual(result.ChatProviderSent, false, "ChatProvider failed");
       suite.expectEqual(result.disabled, false, "not disabled");
     } finally {
       console.error = origErr;
@@ -853,9 +853,9 @@ await suite.test(
   "config change: clearing an override is rendered as 'default (env baseline)'",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-    const { deps, slackCalls } = makeConfigChangeStubs();
+    const { deps, ChatProviderCalls } = makeConfigChangeStubs();
     await notifyToolHealthConfigChange(
       sampleConfigChange({
         before: { errorRateHighPct: 25 },
@@ -864,7 +864,7 @@ await suite.test(
       }),
       deps,
     );
-    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    const blocks = JSON.stringify(ChatProviderCalls[0]?.blocks ?? []);
     suite.expect(
       blocks.includes("default (env baseline)"),
       `cleared override rendered with baseline label (got: ${blocks.slice(0, 200)}...)`,
@@ -880,12 +880,12 @@ await suite.test(
   "config change: recent audit entries surface in 'Recent changes' block (Task #205)",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
     process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
     const auditEntries = makeSampleAuditEntries(2);
-    const { deps, slackCalls } = makeConfigChangeStubs({ auditEntries });
+    const { deps, ChatProviderCalls } = makeConfigChangeStubs({ auditEntries });
     await notifyToolHealthConfigChange(sampleConfigChange(), deps);
-    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    const blocks = JSON.stringify(ChatProviderCalls[0]?.blocks ?? []);
     suite.expect(
       blocks.includes("Recent changes"),
       `blocks include 'Recent changes' heading (got: ${blocks.slice(0, 300)}...)`,
@@ -909,11 +909,11 @@ await suite.test(
   "config change: no audit entries → no 'Recent changes' block posted",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
     process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-    const { deps, slackCalls } = makeConfigChangeStubs({ auditEntries: [] });
+    const { deps, ChatProviderCalls } = makeConfigChangeStubs({ auditEntries: [] });
     await notifyToolHealthConfigChange(sampleConfigChange(), deps);
-    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    const blocks = JSON.stringify(ChatProviderCalls[0]?.blocks ?? []);
     suite.expect(
       !blocks.includes("Recent changes"),
       "no 'Recent changes' block when audit is empty",
@@ -922,12 +922,12 @@ await suite.test(
 );
 
 await suite.test(
-  "config change: audit fetch error is swallowed, Slack still sends (Task #205)",
+  "config change: audit fetch error is swallowed, ChatProvider still sends (Task #205)",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
     process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-    const { deps, slackCalls } = makeConfigChangeStubs({
+    const { deps, ChatProviderCalls } = makeConfigChangeStubs({
       auditError: new Error("DB unavailable"),
     });
     const origErr = console.error;
@@ -935,8 +935,8 @@ await suite.test(
     console.error = (...args: any[]) => { errorLogs.push(String(args[0])); };
     try {
       const result = await notifyToolHealthConfigChange(sampleConfigChange(), deps);
-      suite.expectEqual(result.slackSent, true, "Slack still sent despite audit error");
-      suite.expect(slackCalls.length === 1, "exactly one Slack call was made");
+      suite.expectEqual(result.ChatProviderSent, true, "ChatProvider still sent despite audit error");
+      suite.expect(ChatProviderCalls.length === 1, "exactly one ChatProvider call was made");
       suite.expect(
         errorLogs.some((l) => l.includes("Failed to load recent audit")),
         "audit fetch error was logged",
@@ -979,13 +979,13 @@ await suite.test(
     process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
     process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid,user@example.invalid";
     process.env.TOOL_HEALTH_APP_URL = "<REDACTED_URL>";
-    const { deps, emailCalls, slackCalls } = makeConfigChangeStubs();
+    const { deps, emailCalls, ChatProviderCalls } = makeConfigChangeStubs();
     const result = await notifyToolHealthConfigChange(sampleConfigChange(), deps);
     suite.expectEqual(result.emailSent, true, "emailSent");
-    suite.expectEqual(result.slackSent, false, "slackSent false (no slack channel)");
+    suite.expectEqual(result.ChatProviderSent, false, "ChatProviderSent false (no ChatProvider channel)");
     suite.expectEqual(result.skipped, false, "not skipped");
     suite.expectEqual(result.disabled, false, "not disabled");
-    suite.expectEqual(slackCalls.length, 0, "no slack call");
+    suite.expectEqual(ChatProviderCalls.length, 0, "no ChatProvider call");
     suite.expectEqual(emailCalls.length, 1, "one email call");
     suite.expect(
       JSON.stringify(emailCalls[0]?.to) === JSON.stringify(["user@example.invalid", "user@example.invalid"]),
@@ -1019,49 +1019,49 @@ await suite.test(
 );
 
 await suite.test(
-  "config change email: opted in with no Slack channel and no email → skipped",
+  "config change email: opted in with no ChatProvider channel and no email → skipped",
   async () => {
     clearEnv();
     process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-    const { deps, emailCalls, slackCalls } = makeConfigChangeStubs();
+    const { deps, emailCalls, ChatProviderCalls } = makeConfigChangeStubs();
     const result = await notifyToolHealthConfigChange(sampleConfigChange(), deps);
     suite.expectEqual(result.skipped, true, "skipped");
     suite.expectEqual(emailCalls.length, 0, "no email");
-    suite.expectEqual(slackCalls.length, 0, "no slack");
+    suite.expectEqual(ChatProviderCalls.length, 0, "no ChatProvider");
   },
 );
 
 await suite.test(
-  "config change email: opted in with both Slack and email → both sent",
+  "config change email: opted in with both ChatProvider and email → both sent",
   async () => {
     clearEnv();
     process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
     process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
-    const { deps, emailCalls, slackCalls } = makeConfigChangeStubs();
+    const { deps, emailCalls, ChatProviderCalls } = makeConfigChangeStubs();
     const result = await notifyToolHealthConfigChange(sampleConfigChange(), deps);
-    suite.expectEqual(result.slackSent, true, "slackSent");
+    suite.expectEqual(result.ChatProviderSent, true, "ChatProviderSent");
     suite.expectEqual(result.emailSent, true, "emailSent");
-    suite.expectEqual(slackCalls.length, 1, "one slack call");
+    suite.expectEqual(ChatProviderCalls.length, 1, "one ChatProvider call");
     suite.expectEqual(emailCalls.length, 1, "one email call");
   },
 );
 
 await suite.test(
-  "config change email: email send throws → swallowed, emailSent=false, does not block Slack",
+  "config change email: email send throws → swallowed, emailSent=false, does not block ChatProvider",
   async () => {
     clearEnv();
     process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
     process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
-    const { deps, slackCalls } = makeConfigChangeStubs({ emailResult: new Error("resend down") });
+    const { deps, ChatProviderCalls } = makeConfigChangeStubs({ emailResult: new Error("EmailProvider down") });
     const origErr = console.error;
     console.error = () => {};
     try {
       const result = await notifyToolHealthConfigChange(sampleConfigChange(), deps);
       suite.expectEqual(result.emailSent, false, "emailSent false");
-      suite.expectEqual(result.slackSent, true, "slackSent still succeeds");
-      suite.expectEqual(slackCalls.length, 1, "slack still called");
+      suite.expectEqual(result.ChatProviderSent, true, "ChatProviderSent still succeeds");
+      suite.expectEqual(ChatProviderCalls.length, 1, "ChatProvider still called");
     } finally {
       console.error = origErr;
     }
@@ -1099,25 +1099,25 @@ await suite.test(
 );
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Task #213 — override auto-revert Slack notification
+// Task #213 — override auto-revert ChatProvider notification
 // ──────────────────────────────────────────────────────────────────────────────
 function makeOverrideStubs(opts: {
-  slackResult?: boolean | Error;
+  ChatProviderResult?: boolean | Error;
   auditEntries?: ToolHealthConfigAuditEntry[];
   auditError?: Error;
 } = {}): {
   deps: ToolHealthOverrideNotifierDeps;
-  slackCalls: SlackCall[];
+  ChatProviderCalls: ChatProviderCall[];
   auditCalls: number[];
 } {
-  const slackCalls: SlackCall[] = [];
+  const ChatProviderCalls: ChatProviderCall[] = [];
   const auditCalls: number[] = [];
   return {
     deps: {
-      sendSlack: async (channel, text, blocks) => {
-        slackCalls.push({ channel, text, blocks });
-        if (opts.slackResult instanceof Error) throw opts.slackResult;
-        return opts.slackResult ?? true;
+      sendChatProvider: async (channel, text, blocks) => {
+        ChatProviderCalls.push({ channel, text, blocks });
+        if (opts.ChatProviderResult instanceof Error) throw opts.ChatProviderResult;
+        return opts.ChatProviderResult ?? true;
       },
       getAudit: async (limit) => {
         auditCalls.push(limit);
@@ -1125,7 +1125,7 @@ function makeOverrideStubs(opts: {
         return opts.auditEntries ?? [];
       },
     },
-    slackCalls,
+    ChatProviderCalls,
     auditCalls,
   };
 }
@@ -1143,38 +1143,38 @@ function sampleOverride(
 }
 
 await suite.test(
-  "override-expired: no Slack channel configured → skipped without sending",
+  "override-expired: no ChatProvider channel configured → skipped without sending",
   async () => {
     clearEnv();
-    const { deps, slackCalls } = makeOverrideStubs();
+    const { deps, ChatProviderCalls } = makeOverrideStubs();
     const result = await notifyToolHealthOverrideExpired(sampleOverride(), deps);
     suite.expectEqual(result.skipped, true, "skipped");
-    suite.expectEqual(result.slackSent, false, "no slack sent");
-    suite.expectEqual(slackCalls.length, 0, "no slack call");
+    suite.expectEqual(result.ChatProviderSent, false, "no ChatProvider sent");
+    suite.expectEqual(ChatProviderCalls.length, 0, "no ChatProvider call");
   },
 );
 
 await suite.test(
-  "override-expired: posts to TOOL_HEALTH_SLACK_CHANNEL with operator + cleared fields + audit deep-link",
+  "override-expired: posts to TOOL_HEALTH_ChatProvider_CHANNEL with operator + cleared fields + audit deep-link",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL-CHAN";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL-CHAN";
     process.env.TOOL_HEALTH_APP_URL = "<REDACTED_URL>";
-    const { deps, slackCalls } = makeOverrideStubs();
+    const { deps, ChatProviderCalls } = makeOverrideStubs();
     const result = await notifyToolHealthOverrideExpired(sampleOverride(), deps);
-    suite.expectEqual(result.slackSent, true, "slackSent");
+    suite.expectEqual(result.ChatProviderSent, true, "ChatProviderSent");
     suite.expectEqual(result.skipped, false, "not skipped");
-    suite.expectEqual(slackCalls.length, 1, "one slack call");
-    suite.expectEqual(slackCalls[0]?.channel, "C-ONCALL-CHAN", "channel");
+    suite.expectEqual(ChatProviderCalls.length, 1, "one ChatProvider call");
+    suite.expectEqual(ChatProviderCalls[0]?.channel, "C-ONCALL-CHAN", "channel");
     suite.expect(
-      slackCalls[0]?.text.includes("user@example.invalid"),
+      ChatProviderCalls[0]?.text.includes("user@example.invalid"),
       "fallback text mentions the operator who set the override",
     );
     suite.expect(
-      slackCalls[0]?.text.includes("auto-reverted"),
+      ChatProviderCalls[0]?.text.includes("auto-reverted"),
       "fallback text describes the revert",
     );
-    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    const blocks = JSON.stringify(ChatProviderCalls[0]?.blocks ?? []);
     suite.expect(
       blocks.includes("user@example.invalid"),
       "blocks attribute the override to the operator",
@@ -1208,27 +1208,27 @@ await suite.test(
   "override-expired: missing previous_updated_by falls back to 'unknown'",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
-    const { deps, slackCalls } = makeOverrideStubs();
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
+    const { deps, ChatProviderCalls } = makeOverrideStubs();
     await notifyToolHealthOverrideExpired(
       sampleOverride({ previous_updated_by: null }),
       deps,
     );
     suite.expect(
-      slackCalls[0]?.text.includes("unknown"),
-      `fallback text uses 'unknown' (got: ${slackCalls[0]?.text})`,
+      ChatProviderCalls[0]?.text.includes("unknown"),
+      `fallback text uses 'unknown' (got: ${ChatProviderCalls[0]?.text})`,
     );
   },
 );
 
 await suite.test(
-  "override-expired: no TOOL_HEALTH_APP_URL → no actions button (Slack rejects relative urls)",
+  "override-expired: no TOOL_HEALTH_APP_URL → no actions button (ChatProvider rejects relative urls)",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
-    const { deps, slackCalls } = makeOverrideStubs();
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
+    const { deps, ChatProviderCalls } = makeOverrideStubs();
     await notifyToolHealthOverrideExpired(sampleOverride(), deps);
-    const blocks = slackCalls[0]?.blocks ?? [];
+    const blocks = ChatProviderCalls[0]?.blocks ?? [];
     const hasButton = blocks.some(
       (b: any) =>
         b?.type === "actions" &&
@@ -1249,17 +1249,17 @@ await suite.test(
 );
 
 await suite.test(
-  "override-expired: Slack send throws → swallowed; result reflects failure",
+  "override-expired: ChatProvider send throws → swallowed; result reflects failure",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
-    const { deps } = makeOverrideStubs({ slackResult: new Error("slack down") });
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
+    const { deps } = makeOverrideStubs({ ChatProviderResult: new Error("ChatProvider down") });
     const origErr = console.error;
     console.error = () => {};
     try {
       const result = await notifyToolHealthOverrideExpired(sampleOverride(), deps);
-      suite.expectEqual(result.slackSent, false, "slack failed");
-      suite.expectEqual(result.skipped, false, "not skipped — Slack channel was set");
+      suite.expectEqual(result.ChatProviderSent, false, "ChatProvider failed");
+      suite.expectEqual(result.skipped, false, "not skipped — ChatProvider channel was set");
     } finally {
       console.error = origErr;
     }
@@ -1270,15 +1270,15 @@ await suite.test(
   "override-expired: appends 'Recent changes' block from getAudit (Task #384)",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
-    const { deps, slackCalls, auditCalls } = makeOverrideStubs({
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
+    const { deps, ChatProviderCalls, auditCalls } = makeOverrideStubs({
       auditEntries: makeSampleAuditEntries(3),
     });
     const result = await notifyToolHealthOverrideExpired(sampleOverride(), deps);
-    suite.expectEqual(result.slackSent, true, "slackSent");
+    suite.expectEqual(result.ChatProviderSent, true, "ChatProviderSent");
     suite.expectEqual(auditCalls.length, 1, "getAudit called exactly once");
     suite.expectEqual(auditCalls[0], 3, "getAudit called with limit=3");
-    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    const blocks = JSON.stringify(ChatProviderCalls[0]?.blocks ?? []);
     suite.expect(
       blocks.includes("Recent changes (last 3)"),
       `blocks include the Recent changes header (got: ${blocks.slice(0, 400)}...)`,
@@ -1291,20 +1291,20 @@ await suite.test(
 );
 
 await suite.test(
-  "override-expired: getAudit error is swallowed; Slack still posts without the block (Task #384)",
+  "override-expired: getAudit error is swallowed; ChatProvider still posts without the block (Task #384)",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
-    const { deps, slackCalls } = makeOverrideStubs({
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
+    const { deps, ChatProviderCalls } = makeOverrideStubs({
       auditError: new Error("db down"),
     });
     const origErr = console.error;
     console.error = () => {};
     try {
       const result = await notifyToolHealthOverrideExpired(sampleOverride(), deps);
-      suite.expectEqual(result.slackSent, true, "slack still posts");
-      suite.expectEqual(slackCalls.length, 1, "one slack call");
-      const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+      suite.expectEqual(result.ChatProviderSent, true, "ChatProvider still posts");
+      suite.expectEqual(ChatProviderCalls.length, 1, "one ChatProvider call");
+      const blocks = JSON.stringify(ChatProviderCalls[0]?.blocks ?? []);
       suite.expect(
         !blocks.includes("Recent changes"),
         "no Recent changes block when audit fetch failed",
@@ -1319,10 +1319,10 @@ await suite.test(
   "override-expired: empty audit list → no Recent changes block",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
-    const { deps, slackCalls } = makeOverrideStubs({ auditEntries: [] });
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
+    const { deps, ChatProviderCalls } = makeOverrideStubs({ auditEntries: [] });
     await notifyToolHealthOverrideExpired(sampleOverride(), deps);
-    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    const blocks = JSON.stringify(ChatProviderCalls[0]?.blocks ?? []);
     suite.expect(
       !blocks.includes("Recent changes"),
       "no Recent changes block when audit list is empty",
@@ -1335,20 +1335,20 @@ await suite.test(
 // ──────────────────────────────────────────────────────────────────────────────
 
 function makeRecoveryStubs(opts: {
-  slackResult?: boolean | Error;
+  ChatProviderResult?: boolean | Error;
   emailResult?: { success: boolean; id?: string; error?: string } | Error;
 } = {}): {
   deps: ToolHealthRecoveryNotifierDeps;
-  slackCalls: SlackCall[];
+  ChatProviderCalls: ChatProviderCall[];
   emailCalls: EmailCall[];
 } {
-  const slackCalls: SlackCall[] = [];
+  const ChatProviderCalls: ChatProviderCall[] = [];
   const emailCalls: EmailCall[] = [];
   const deps: ToolHealthRecoveryNotifierDeps = {
-    sendSlack: async (channel, text, blocks) => {
-      slackCalls.push({ channel, text, blocks });
-      if (opts.slackResult instanceof Error) throw opts.slackResult;
-      return opts.slackResult ?? true;
+    sendChatProvider: async (channel, text, blocks) => {
+      ChatProviderCalls.push({ channel, text, blocks });
+      if (opts.ChatProviderResult instanceof Error) throw opts.ChatProviderResult;
+      return opts.ChatProviderResult ?? true;
     },
     sendEmail: async (mailOpts) => {
       emailCalls.push({
@@ -1361,7 +1361,7 @@ function makeRecoveryStubs(opts: {
       return opts.emailResult ?? { success: true, id: "stub-id" };
     },
   };
-  return { deps, slackCalls, emailCalls };
+  return { deps, ChatProviderCalls, emailCalls };
 }
 
 function sampleRecovery(
@@ -1378,40 +1378,40 @@ function sampleRecovery(
 }
 
 await suite.test(
-  "recovery: no Slack channel, no email → returns { skipped: true } without sending",
+  "recovery: no ChatProvider channel, no email → returns { skipped: true } without sending",
   async () => {
     clearEnv();
-    const { deps, slackCalls, emailCalls } = makeRecoveryStubs();
+    const { deps, ChatProviderCalls, emailCalls } = makeRecoveryStubs();
     const result = await notifyToolHealthRecovery(sampleRecovery(), deps);
     suite.expectEqual(result.skipped, true, "skipped");
-    suite.expectEqual(result.slackSent, false, "no slack");
+    suite.expectEqual(result.ChatProviderSent, false, "no ChatProvider");
     suite.expectEqual(result.emailSent, false, "no email");
-    suite.expectEqual(slackCalls.length, 0, "no slack call");
+    suite.expectEqual(ChatProviderCalls.length, 0, "no ChatProvider call");
     suite.expectEqual(emailCalls.length, 0, "no email call");
   },
 );
 
 await suite.test(
-  "recovery: Slack channel configured → posts recovery message to channel with tool name and alert id",
+  "recovery: ChatProvider channel configured → posts recovery message to channel with tool name and alert id",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL-CHAN";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL-CHAN";
     process.env.TOOL_HEALTH_APP_URL = "<REDACTED_URL>";
-    const { deps, slackCalls } = makeRecoveryStubs();
+    const { deps, ChatProviderCalls } = makeRecoveryStubs();
     const result = await notifyToolHealthRecovery(sampleRecovery(), deps);
-    suite.expectEqual(result.slackSent, true, "slackSent");
+    suite.expectEqual(result.ChatProviderSent, true, "ChatProviderSent");
     suite.expectEqual(result.skipped, false, "not skipped");
-    suite.expectEqual(slackCalls.length, 1, "one slack call");
-    suite.expectEqual(slackCalls[0]?.channel, "C-ONCALL-CHAN", "channel");
+    suite.expectEqual(ChatProviderCalls.length, 1, "one ChatProvider call");
+    suite.expectEqual(ChatProviderCalls[0]?.channel, "C-ONCALL-CHAN", "channel");
     suite.expect(
-      slackCalls[0]?.text.includes("qms_create_nc"),
+      ChatProviderCalls[0]?.text.includes("qms_create_nc"),
       "fallback text mentions tool",
     );
     suite.expect(
-      slackCalls[0]?.text.includes("456"),
+      ChatProviderCalls[0]?.text.includes("456"),
       "fallback text includes alert id",
     );
-    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    const blocks = JSON.stringify(ChatProviderCalls[0]?.blocks ?? []);
     suite.expect(
       blocks.includes("qms_create_nc"),
       "blocks mention tool name",
@@ -1439,7 +1439,7 @@ await suite.test(
     const { deps, emailCalls } = makeRecoveryStubs();
     const result = await notifyToolHealthRecovery(sampleRecovery(), deps);
     suite.expectEqual(result.emailSent, true, "emailSent");
-    suite.expectEqual(result.slackSent, false, "no slack when not configured");
+    suite.expectEqual(result.ChatProviderSent, false, "no ChatProvider when not configured");
     suite.expectEqual(emailCalls.length, 1, "one email call");
     const call = emailCalls[0]!;
     suite.expect(
@@ -1466,32 +1466,32 @@ await suite.test(
 );
 
 await suite.test(
-  "recovery: both Slack and email configured → both senders are invoked",
+  "recovery: both ChatProvider and email configured → both senders are invoked",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
-    const { deps, slackCalls, emailCalls } = makeRecoveryStubs();
+    const { deps, ChatProviderCalls, emailCalls } = makeRecoveryStubs();
     const result = await notifyToolHealthRecovery(sampleRecovery(), deps);
-    suite.expectEqual(result.slackSent, true, "slackSent");
+    suite.expectEqual(result.ChatProviderSent, true, "ChatProviderSent");
     suite.expectEqual(result.emailSent, true, "emailSent");
-    suite.expectEqual(slackCalls.length, 1, "one slack call");
+    suite.expectEqual(ChatProviderCalls.length, 1, "one ChatProvider call");
     suite.expectEqual(emailCalls.length, 1, "one email call");
   },
 );
 
 await suite.test(
-  "recovery: Slack send throws → swallowed; email still attempted; result reflects failure",
+  "recovery: ChatProvider send throws → swallowed; email still attempted; result reflects failure",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
-    const { deps, emailCalls } = makeRecoveryStubs({ slackResult: new Error("slack down") });
+    const { deps, emailCalls } = makeRecoveryStubs({ ChatProviderResult: new Error("ChatProvider down") });
     const origErr = console.error;
     console.error = () => {};
     try {
       const result = await notifyToolHealthRecovery(sampleRecovery(), deps);
-      suite.expectEqual(result.slackSent, false, "slack failed");
+      suite.expectEqual(result.ChatProviderSent, false, "ChatProvider failed");
       suite.expectEqual(result.emailSent, true, "email still went through");
       suite.expectEqual(emailCalls.length, 1, "email attempted");
     } finally {
@@ -1504,13 +1504,13 @@ await suite.test(
   "recovery: p95_latency reason → renders 'P95 latency' in message",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
-    const { deps, slackCalls } = makeRecoveryStubs();
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
+    const { deps, ChatProviderCalls } = makeRecoveryStubs();
     await notifyToolHealthRecovery(
       sampleRecovery({ reason: "p95_latency", detail: "auto-resolved: p95 latency back below threshold" }),
       deps,
     );
-    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    const blocks = JSON.stringify(ChatProviderCalls[0]?.blocks ?? []);
     suite.expect(
       blocks.includes("P95 latency"),
       `blocks reference p95 latency metric (got: ${blocks.slice(0, 200)}...)`,
@@ -1519,22 +1519,22 @@ await suite.test(
 );
 
 await suite.test(
-  "recovery: alert_created_at present → Slack message renders 'Open for: …' duration",
+  "recovery: alert_created_at present → ChatProvider message renders 'Open for: …' duration",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
-    const { deps, slackCalls, emailCalls } = makeRecoveryStubs();
+    const { deps, ChatProviderCalls, emailCalls } = makeRecoveryStubs();
     const created = new Date("2026-04-25T10:00:00Z");
     const resolved = new Date("2026-04-25T12:15:00Z"); // 2h 15m later
     await notifyToolHealthRecovery(
       sampleRecovery({ alert_created_at: created, resolved_at: resolved }),
       deps,
     );
-    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    const blocks = JSON.stringify(ChatProviderCalls[0]?.blocks ?? []);
     suite.expect(
       blocks.includes("Open for") && blocks.includes("2h 15m"),
-      `Slack blocks include duration "2h 15m" (got: ${blocks.slice(0, 400)})`,
+      `ChatProvider blocks include duration "2h 15m" (got: ${blocks.slice(0, 400)})`,
     );
     const emailText = emailCalls[0]?.text ?? "";
     const emailHtml = emailCalls[0]?.html ?? "";
@@ -1553,13 +1553,13 @@ await suite.test(
   "recovery: alert_created_at omitted → 'Open for' field is hidden (back-compat)",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
-    const { deps, slackCalls } = makeRecoveryStubs();
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
+    const { deps, ChatProviderCalls } = makeRecoveryStubs();
     await notifyToolHealthRecovery(sampleRecovery(), deps);
-    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    const blocks = JSON.stringify(ChatProviderCalls[0]?.blocks ?? []);
     suite.expect(
       !blocks.includes("Open for"),
-      `Slack blocks omit duration when alert_created_at is missing (got: ${blocks.slice(0, 400)})`,
+      `ChatProvider blocks omit duration when alert_created_at is missing (got: ${blocks.slice(0, 400)})`,
     );
   },
 );
@@ -1623,8 +1623,8 @@ await suite.test(
   "recovery: alert_created_at as ISO string (DB-row shape) still renders duration",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
-    const { deps, slackCalls } = makeRecoveryStubs();
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
+    const { deps, ChatProviderCalls } = makeRecoveryStubs();
     await notifyToolHealthRecovery(
       sampleRecovery({
         alert_created_at: "2026-04-25T10:00:00.000Z",
@@ -1632,7 +1632,7 @@ await suite.test(
       }),
       deps,
     );
-    const blocks = JSON.stringify(slackCalls[0]?.blocks ?? []);
+    const blocks = JSON.stringify(ChatProviderCalls[0]?.blocks ?? []);
     suite.expect(
       blocks.includes("Open for") && blocks.includes("1h 30m"),
       `string-typed timestamps still render duration "1h 30m" (got: ${blocks.slice(0, 400)})`,
@@ -1641,13 +1641,13 @@ await suite.test(
 );
 
 await suite.test(
-  "recovery: no TOOL_HEALTH_APP_URL → no Slack action button; relative path surfaced as text",
+  "recovery: no TOOL_HEALTH_APP_URL → no ChatProvider action button; relative path surfaced as text",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
-    const { deps, slackCalls } = makeRecoveryStubs();
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
+    const { deps, ChatProviderCalls } = makeRecoveryStubs();
     await notifyToolHealthRecovery(sampleRecovery(), deps);
-    const blocks = slackCalls[0]?.blocks ?? [];
+    const blocks = ChatProviderCalls[0]?.blocks ?? [];
     const hasButton = blocks.some(
       (b: any) =>
         b?.type === "actions" &&
@@ -1669,12 +1669,12 @@ await suite.test(
 // Each terminal state of the breach notifier must call recordResult() with
 // the matching channel label so the AI Ops dashboard can render a "Notified"
 // column. Verified per outcome:
-//   • not_configured (Slack + email both unset)
+//   • not_configured (ChatProvider + email both unset)
 //   • throttled (in-process and DB claim paths)
-//   • slack-only success
+//   • ChatProvider-only success
 //   • email-only success
-//   • slack+email success
-//   • slack_only / email_only when one side fails
+//   • ChatProvider+email success
+//   • ChatProvider_only / email_only when one side fails
 //   • failed (both sides fail)
 //   • alert_id missing → recordResult is still called (notifier no-ops the
 //     alertId-null case downstream so the call is harmless)
@@ -1700,7 +1700,7 @@ await suite.test(
   "task#284: in-process throttle → recordResult called with 'throttled'",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
     let now = 1_000_000;
     const { deps, recordResultCalls } = makeStubs();
@@ -1712,9 +1712,9 @@ await suite.test(
       now: () => now,
     });
     suite.expectEqual(second.throttled, true, "second call is throttled");
-    // First call -> 'slack', second call -> 'throttled'
+    // First call -> 'ChatProvider', second call -> 'throttled'
     suite.expectEqual(recordResultCalls.length, 2, "two persist calls");
-    suite.expectEqual(recordResultCalls[0]?.channel, "slack", "first persists slack");
+    suite.expectEqual(recordResultCalls[0]?.channel, "ChatProvider", "first persists ChatProvider");
     suite.expectEqual(recordResultCalls[1]?.channel, "throttled", "second persists throttled");
     suite.expectEqual(recordResultCalls[1]?.whenMs, now, "throttled timestamp uses fresh clock");
   },
@@ -1724,29 +1724,29 @@ await suite.test(
   "task#284: DB-claim throttle → recordResult called with 'throttled'",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
-    const { deps, recordResultCalls, slackCalls } = makeStubs({
+    const { deps, recordResultCalls, ChatProviderCalls } = makeStubs({
       claimDbResult: false, // a sibling instance already paged
     });
     const result = await notifyToolHealthBreach(sample(), deps);
     suite.expectEqual(result.throttled, true, "throttled");
-    suite.expectEqual(slackCalls.length, 0, "no Slack send when DB-throttled");
+    suite.expectEqual(ChatProviderCalls.length, 0, "no ChatProvider send when DB-throttled");
     suite.expectEqual(recordResultCalls.length, 1, "persist called once");
     suite.expectEqual(recordResultCalls[0]?.channel, "throttled", "channel");
   },
 );
 
 await suite.test(
-  "task#284: Slack-only configured + send ok → recordResult called with 'slack'",
+  "task#284: ChatProvider-only configured + send ok → recordResult called with 'ChatProvider'",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     const { deps, recordResultCalls } = makeStubs();
     const result = await notifyToolHealthBreach(sample(), deps);
-    suite.expectEqual(result.slackSent, true, "slack sent");
+    suite.expectEqual(result.ChatProviderSent, true, "ChatProvider sent");
     suite.expectEqual(recordResultCalls.length, 1, "one persist call");
-    suite.expectEqual(recordResultCalls[0]?.channel, "slack", "channel");
+    suite.expectEqual(recordResultCalls[0]?.channel, "ChatProvider", "channel");
   },
 );
 
@@ -1764,43 +1764,43 @@ await suite.test(
 );
 
 await suite.test(
-  "task#284: Slack+email both ok → recordResult called with 'slack+email'",
+  "task#284: ChatProvider+email both ok → recordResult called with 'ChatProvider+email'",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
     const { deps, recordResultCalls } = makeStubs();
     await notifyToolHealthBreach(sample(), deps);
     suite.expectEqual(recordResultCalls.length, 1, "one persist call");
-    suite.expectEqual(recordResultCalls[0]?.channel, "slack+email", "channel");
+    suite.expectEqual(recordResultCalls[0]?.channel, "ChatProvider+email", "channel");
   },
 );
 
 await suite.test(
-  "task#284: Slack ok + email fails (configured) → 'slack_only' surfaces the asymmetric outcome",
+  "task#284: ChatProvider ok + email fails (configured) → 'ChatProvider_only' surfaces the asymmetric outcome",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
     const { deps, recordResultCalls } = makeStubs({
       emailResult: { success: false, error: "rate-limited" },
     });
     await notifyToolHealthBreach(sample(), deps);
-    suite.expectEqual(recordResultCalls[0]?.channel, "slack_only", "slack_only when email fails");
+    suite.expectEqual(recordResultCalls[0]?.channel, "ChatProvider_only", "ChatProvider_only when email fails");
   },
 );
 
 await suite.test(
-  "task#284: Email ok + Slack fails (configured) → 'email_only' surfaces the asymmetric outcome",
+  "task#284: Email ok + ChatProvider fails (configured) → 'email_only' surfaces the asymmetric outcome",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
     const { deps, recordResultCalls } = makeStubs({
-      slackResult: false,
+      ChatProviderResult: false,
     });
     await notifyToolHealthBreach(sample(), deps);
-    suite.expectEqual(recordResultCalls[0]?.channel, "email_only", "email_only when Slack fails");
+    suite.expectEqual(recordResultCalls[0]?.channel, "email_only", "email_only when ChatProvider fails");
   },
 );
 
@@ -1808,14 +1808,14 @@ await suite.test(
   "task#284: both senders fail (both configured) → 'failed'",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
     const { deps, recordResultCalls } = makeStubs({
-      slackResult: false,
+      ChatProviderResult: false,
       emailResult: { success: false },
     });
     const result = await notifyToolHealthBreach(sample(), deps);
-    suite.expectEqual(result.slackSent, false, "slack failed");
+    suite.expectEqual(result.ChatProviderSent, false, "ChatProvider failed");
     suite.expectEqual(result.emailSent, false, "email failed");
     suite.expectEqual(recordResultCalls[0]?.channel, "failed", "failed channel");
   },
@@ -1825,13 +1825,13 @@ await suite.test(
   "task#284: recordResult throwing does NOT escape — notifier still returns its result",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     const { deps } = makeStubs({
       recordResultThrows: new Error("boom"),
     });
     // Must not throw out — the cron relies on this contract.
     const result = await notifyToolHealthBreach(sample(), deps);
-    suite.expectEqual(result.slackSent, true, "send still succeeded");
+    suite.expectEqual(result.ChatProviderSent, true, "send still succeeded");
   },
 );
 
@@ -1839,12 +1839,12 @@ await suite.test(
   "task#284: missing alert_id still calls recordResult (recorder is responsible for the no-op)",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     const { deps, recordResultCalls } = makeStubs();
     await notifyToolHealthBreach(sample({ alert_id: undefined }), deps);
     suite.expectEqual(recordResultCalls.length, 1, "still called");
     suite.expectEqual(recordResultCalls[0]?.alertId, null, "alert_id forwarded as null");
-    suite.expectEqual(recordResultCalls[0]?.channel, "slack", "channel reflects the send");
+    suite.expectEqual(recordResultCalls[0]?.channel, "ChatProvider", "channel reflects the send");
   },
 );
 
@@ -1856,16 +1856,16 @@ await suite.test(
   "recovery opt-out: TOOL_HEALTH_RECOVERY_NOTIFY=0 silences ALL recoveries (returns skipped+disabled)",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
     process.env.TOOL_HEALTH_RECOVERY_NOTIFY = "0";
-    const { deps, slackCalls, emailCalls } = makeRecoveryStubs();
+    const { deps, ChatProviderCalls, emailCalls } = makeRecoveryStubs();
     const result = await notifyToolHealthRecovery(sampleRecovery(), deps);
     suite.expectEqual(result.skipped, true, "skipped");
     suite.expectEqual(result.disabled, true, "disabled flag set");
-    suite.expectEqual(result.slackSent, false, "no slack");
+    suite.expectEqual(result.ChatProviderSent, false, "no ChatProvider");
     suite.expectEqual(result.emailSent, false, "no email");
-    suite.expectEqual(slackCalls.length, 0, "no slack call");
+    suite.expectEqual(ChatProviderCalls.length, 0, "no ChatProvider call");
     suite.expectEqual(emailCalls.length, 0, "no email call");
   },
 );
@@ -1875,12 +1875,12 @@ await suite.test(
   async () => {
     for (const off of ["false", "FALSE", "no", "Off"]) {
       clearEnv();
-      process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+      process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
       process.env.TOOL_HEALTH_RECOVERY_NOTIFY = off;
-      const { deps, slackCalls } = makeRecoveryStubs();
+      const { deps, ChatProviderCalls } = makeRecoveryStubs();
       const result = await notifyToolHealthRecovery(sampleRecovery(), deps);
       suite.expectEqual(result.disabled, true, `disabled for value '${off}'`);
-      suite.expectEqual(slackCalls.length, 0, `no slack call for '${off}'`);
+      suite.expectEqual(ChatProviderCalls.length, 0, `no ChatProvider call for '${off}'`);
     }
   },
 );
@@ -1889,13 +1889,13 @@ await suite.test(
   "recovery opt-out: TOOL_HEALTH_RECOVERY_NOTIFY=1 (or unset) leaves recoveries enabled",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_RECOVERY_NOTIFY = "1";
-    const { deps, slackCalls } = makeRecoveryStubs();
+    const { deps, ChatProviderCalls } = makeRecoveryStubs();
     const result = await notifyToolHealthRecovery(sampleRecovery(), deps);
     suite.expectEqual(result.disabled, false, "not disabled");
-    suite.expectEqual(result.slackSent, true, "slack sent");
-    suite.expectEqual(slackCalls.length, 1, "one slack call");
+    suite.expectEqual(result.ChatProviderSent, true, "ChatProvider sent");
+    suite.expectEqual(ChatProviderCalls.length, 1, "one ChatProvider call");
   },
 );
 
@@ -1903,29 +1903,29 @@ await suite.test(
   "recovery opt-out: TOOL_HEALTH_RECOVERY_SKIP_TOOLS silences only the listed tools",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_RECOVERY_SKIP_TOOLS =
       "qms_create_nc, other_noisy_tool";
 
     // Listed tool → suppressed.
-    const { deps: depsA, slackCalls: slackA } = makeRecoveryStubs();
+    const { deps: depsA, ChatProviderCalls: ChatProviderA } = makeRecoveryStubs();
     const a = await notifyToolHealthRecovery(
       sampleRecovery({ tool_name: "qms_create_nc" }),
       depsA,
     );
     suite.expectEqual(a.disabled, true, "listed tool disabled");
     suite.expectEqual(a.skipped, true, "listed tool skipped");
-    suite.expectEqual(slackA.length, 0, "no slack for listed tool");
+    suite.expectEqual(ChatProviderA.length, 0, "no ChatProvider for listed tool");
 
     // Unlisted tool → still pages.
-    const { deps: depsB, slackCalls: slackB } = makeRecoveryStubs();
+    const { deps: depsB, ChatProviderCalls: ChatProviderB } = makeRecoveryStubs();
     const b = await notifyToolHealthRecovery(
       sampleRecovery({ tool_name: "quiet_tool" }),
       depsB,
     );
     suite.expectEqual(b.disabled, false, "unlisted tool not disabled");
-    suite.expectEqual(b.slackSent, true, "unlisted tool still pages");
-    suite.expectEqual(slackB.length, 1, "one slack for unlisted tool");
+    suite.expectEqual(b.ChatProviderSent, true, "unlisted tool still pages");
+    suite.expectEqual(ChatProviderB.length, 1, "one ChatProvider for unlisted tool");
   },
 );
 
@@ -1933,26 +1933,26 @@ await suite.test(
   "recovery opt-out: TOOL_HEALTH_RECOVERY_SKIP_TOOLS matches case-insensitively",
   async () => {
     clearEnv();
-    process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-OPS";
+    process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-OPS";
     process.env.TOOL_HEALTH_RECOVERY_SKIP_TOOLS = "QMS_Create_NC";
-    const { deps, slackCalls } = makeRecoveryStubs();
+    const { deps, ChatProviderCalls } = makeRecoveryStubs();
     const result = await notifyToolHealthRecovery(
       sampleRecovery({ tool_name: "qms_create_nc" }),
       deps,
     );
     suite.expectEqual(result.disabled, true, "case-insensitive match");
-    suite.expectEqual(slackCalls.length, 0, "no slack call");
+    suite.expectEqual(ChatProviderCalls.length, 0, "no ChatProvider call");
   },
 );
 
 await suite.test(
   "recovery opt-out: opt-out short-circuits BEFORE the no-transport-configured check",
   // When the operator explicitly opted out we want `disabled: true` rather
-  // than masquerading as "no Slack/email configured" — dashboards rely on
+  // than masquerading as "no ChatProvider/email configured" — dashboards rely on
   // that distinction to decide whether to nag ops to wire up a transport.
   async () => {
     clearEnv();
-    // Note: NO Slack channel and NO email recipient configured.
+    // Note: NO ChatProvider channel and NO email recipient configured.
     process.env.TOOL_HEALTH_RECOVERY_NOTIFY = "0";
     const { deps } = makeRecoveryStubs();
     const result = await notifyToolHealthRecovery(sampleRecovery(), deps);

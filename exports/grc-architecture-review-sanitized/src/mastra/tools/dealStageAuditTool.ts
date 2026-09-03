@@ -5,20 +5,20 @@ import { z } from "zod";
  * DEAL STAGE AUDIT — READ-ONLY (Sample User 2026-07-21).
  *
  * A preflight run surfaced deals sitting on BOTH "On Hold" and "Hold", i.e. the
- * Zoho Stage picklist holds near-duplicate values. That sample covered only 41
+ * CRMProvider Stage picklist holds near-duplicate values. That sample covered only 41
  * rows, so it could not show the real scale. This tool reports every distinct
  * Stage value across ALL deals so the true variant picture is visible before
  * anyone edits the picklist.
  *
  * Writes nothing. Re-staging records and deleting a dead picklist option are
- * deliberate manual steps in Zoho — and in that order, because removing an
+ * deliberate manual steps in CRMProvider — and in that order, because removing an
  * option still in use leaves those deals on an invalid stage.
  */
 export const dealStageAuditTool = createTool({
   id: "deal-stage-audit",
 
   description:
-    "Audit the Zoho Deal STAGE picklist: every distinct stage value with its deal count, a corporate vs marketplace split, the pipelines it appears on, and suspected near-duplicate values (e.g. 'Hold' vs 'On Hold' — the same stage stored two ways). Read-only, changes nothing. Use when asked which deal stages exist, how many deals are in a stage, whether the stage picklist has duplicates/typos, or before cleaning up stage values.",
+    "Audit the CRMProvider Deal STAGE picklist: every distinct stage value with its deal count, a corporate vs marketplace split, the pipelines it appears on, and suspected near-duplicate values (e.g. 'Hold' vs 'On Hold' — the same stage stored two ways). Read-only, changes nothing. Use when asked which deal stages exist, how many deals are in a stage, whether the stage picklist has duplicates/typos, or before cleaning up stage values.",
 
   inputSchema: z.object({}),
 

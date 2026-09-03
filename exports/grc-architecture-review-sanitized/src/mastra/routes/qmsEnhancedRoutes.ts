@@ -1567,7 +1567,7 @@ const _qmsEnhancedRoutesRaw = [
           // user-supplied status value BEFORE it touches the SQL UPDATE.
           // `status` is meant to be a short enum like "open"/"closed", but
           // the endpoint never validated it, so a misbehaving client could
-          // otherwise paste a JWT, GitHub PAT (`ghp_…`), bcrypt hash, etc.
+          // otherwise paste a JWT, SourceControlProvider PAT (`ghp_…`), bcrypt hash, etc.
           // straight into nonconformance_records.status.
           const { redactSensitiveDeep: redact } = await import(
             "../../utils/sensitiveRedaction"

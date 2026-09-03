@@ -10,7 +10,7 @@
  *   3. runExportTimingAlertCheck — the cron entry point with every external
  *      dep stubbed: disabled, no samples, below threshold, above threshold
  *      + no recent emissions, above threshold + recent emission (per-route
- *      dedupe), countRecent throws (proceed anyway), emit throws (Slack +
+ *      dedupe), countRecent throws (proceed anyway), emit throws (ChatProvider +
  *      email still attempted).
  *
  * Pure / no DB needed — every dep is stubbed. Run via:
@@ -53,7 +53,7 @@ interface StubInvocations {
   }>;
   emittedDescriptions: string[];
   emittedMetadata: Array<Record<string, unknown>>;
-  slackCalls: string[];
+  ChatProviderCalls: string[];
   emailCalls: Array<{ subject: string; text: string }>;
 }
 
@@ -63,7 +63,7 @@ function makeStubs(
     recentEmissions: number;
     countThrows: boolean;
     emitThrows: boolean;
-    slackReturns: boolean;
+    ChatProviderReturns: boolean;
     emailReturns: boolean;
   }> = {},
 ): { deps: ExportTimingAlertDeps; invocations: StubInvocations } {
@@ -71,7 +71,7 @@ function makeStubs(
     countRecentArgs: [],
     emittedDescriptions: [],
     emittedMetadata: [],
-    slackCalls: [],
+    ChatProviderCalls: [],
     emailCalls: [],
   };
   const deps: ExportTimingAlertDeps = {
@@ -86,9 +86,9 @@ function makeStubs(
       invocations.emittedMetadata.push(metadata);
       if (overrides.emitThrows) throw new Error("synthetic-emit-failure");
     },
-    postSlack: async (text) => {
-      invocations.slackCalls.push(text);
-      return overrides.slackReturns ?? false;
+    postChatProvider: async (text) => {
+      invocations.ChatProviderCalls.push(text);
+      return overrides.ChatProviderReturns ?? false;
     },
     sendEmail: async (subject, _html, text) => {
       invocations.emailCalls.push({ subject, text });
@@ -273,7 +273,7 @@ async function main(): Promise<void> {
       const r = await runExportTimingAlertCheck(deps);
       check("disabled → reason=disabled", r.reason === "disabled", r);
       check("disabled → no events emitted", invocations.emittedDescriptions.length === 0);
-      check("disabled → no slack", invocations.slackCalls.length === 0);
+      check("disabled → no ChatProvider", invocations.ChatProviderCalls.length === 0);
       check("disabled → no email", invocations.emailCalls.length === 0);
     } finally {
       delete process.env.EXPORT_TIMING_ALERT_DISABLED;
@@ -305,7 +305,7 @@ async function main(): Promise<void> {
     const r = await runExportTimingAlertCheck(deps);
     check("healthy snapshot → reason=below_threshold", r.reason === "below_threshold", r);
     check("healthy snapshot → no emit", invocations.emittedDescriptions.length === 0);
-    check("healthy snapshot → no slack", invocations.slackCalls.length === 0);
+    check("healthy snapshot → no ChatProvider", invocations.ChatProviderCalls.length === 0);
   }
 
   console.log("=== runExportTimingAlertCheck — above threshold, fresh, fans out ===");
@@ -322,7 +322,7 @@ async function main(): Promise<void> {
         },
       ],
       recentEmissions: 0,
-      slackReturns: true,
+      ChatProviderReturns: true,
       emailReturns: true,
     });
     const r = await runExportTimingAlertCheck({
@@ -338,14 +338,14 @@ async function main(): Promise<void> {
       invocations.countRecentArgs.every((a) => a.withinHours === 1),
       invocations.countRecentArgs,
     );
-    check("Slack POSTed once (combined message)", invocations.slackCalls.length === 1);
+    check("ChatProvider POSTed once (combined message)", invocations.ChatProviderCalls.length === 1);
     check(
-      "Slack text mentions slow route",
-      invocations.slackCalls[0].includes("/api/slow/export"),
+      "ChatProvider text mentions slow route",
+      invocations.ChatProviderCalls[0].includes("/api/slow/export"),
     );
     check(
-      "Slack text mentions runbook",
-      invocations.slackCalls[0].includes("docs/runbook-export-timing-alert.md"),
+      "ChatProvider text mentions runbook",
+      invocations.ChatProviderCalls[0].includes("docs/runbook-export-timing-alert.md"),
     );
     check("Email sent once", invocations.emailCalls.length === 1);
     check(
@@ -354,7 +354,7 @@ async function main(): Promise<void> {
         invocations.emailCalls[0].subject.includes("2 breach(es)"),
       invocations.emailCalls[0].subject,
     );
-    check("result.slackSent reflects stub", r.slackSent === true);
+    check("result.ChatProviderSent reflects stub", r.ChatProviderSent === true);
     check("result.emailSent reflects stub", r.emailSent === true);
     // Verify metadata includes the route label so SQL dedupe later finds it.
     const md = invocations.emittedMetadata[0];
@@ -380,7 +380,7 @@ async function main(): Promise<void> {
         },
       ],
       recentEmissions: 1,
-      slackReturns: true,
+      ChatProviderReturns: true,
       emailReturns: true,
     });
     const r = await runExportTimingAlertCheck({
@@ -395,7 +395,7 @@ async function main(): Promise<void> {
       r.suppressedBreaches.length === 1 && r.emittedBreaches.length === 0,
       r,
     );
-    check("no Slack on full suppression", invocations.slackCalls.length === 0);
+    check("no ChatProvider on full suppression", invocations.ChatProviderCalls.length === 0);
     check("no email on full suppression", invocations.emailCalls.length === 0);
   }
 
@@ -413,7 +413,7 @@ async function main(): Promise<void> {
         },
       ],
       countThrows: true,
-      slackReturns: true,
+      ChatProviderReturns: true,
     });
     const r = await runExportTimingAlertCheck({
       ...deps,
@@ -425,10 +425,10 @@ async function main(): Promise<void> {
       "alert still emitted despite countRecent failure",
       invocations.emittedDescriptions.length === 1,
     );
-    check("Slack still attempted", invocations.slackCalls.length === 1);
+    check("ChatProvider still attempted", invocations.ChatProviderCalls.length === 1);
   }
 
-  console.log("=== runExportTimingAlertCheck — emit throws → Slack/email still attempted ===");
+  console.log("=== runExportTimingAlertCheck — emit throws → ChatProvider/email still attempted ===");
   {
     const { deps, invocations } = makeStubs({
       snapshot: [
@@ -442,7 +442,7 @@ async function main(): Promise<void> {
         },
       ],
       emitThrows: true,
-      slackReturns: true,
+      ChatProviderReturns: true,
       emailReturns: false,
     });
     const r = await runExportTimingAlertCheck({
@@ -452,9 +452,9 @@ async function main(): Promise<void> {
     });
     check("active=true", r.active === true);
     check("emittedBreaches empty (emit threw)", r.emittedBreaches.length === 0);
-    check("Slack attempted", invocations.slackCalls.length === 1);
+    check("ChatProvider attempted", invocations.ChatProviderCalls.length === 1);
     check("Email attempted", invocations.emailCalls.length === 1);
-    check("result.slackSent = true (stub)", r.slackSent === true);
+    check("result.ChatProviderSent = true (stub)", r.ChatProviderSent === true);
     check("result.emailSent = false (stub)", r.emailSent === false);
   }
 

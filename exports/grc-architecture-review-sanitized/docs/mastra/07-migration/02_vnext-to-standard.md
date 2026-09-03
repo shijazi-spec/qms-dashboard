@@ -159,7 +159,7 @@ The following options are available in the standard `.stream()` and `generate()`
           name: z.string(),
           age: z.number()
         }),
-        model: "openai/gpt-4o-mini", // Optional model override for structuring
+        model: "LLMProvider/gpt-4o-mini", // Optional model override for structuring
         errorStrategy: 'fallback',
         fallbackValue: { name: 'unknown', age: 0 },
         instructions: 'Extract user information' // Override default structuring instructions
@@ -175,12 +175,12 @@ The following options are available in the standard `.stream()` and `generate()`
     });
     ```
 
-- `providerOptions` - Provider-specific options (e.g., OpenAI-specific settings)
+- `providerOptions` - Provider-specific options (e.g., LLMProvider-specific settings)
 
     ```typescript showLineNumbers copy
     const result = await agent.stream(messages, {
       providerOptions: {
-        openai: {
+        LLMProvider: {
           store: true,
           metadata: { userId: '123' }
         }
@@ -297,7 +297,7 @@ The following options are available in the standard `.stream()` and `generate()`
         schema: z.object({
           summary: z.string(),
         }),
-        model: "openai/gpt-4o"
+        model: "LLMProvider/gpt-4o"
       }
     });
     ```

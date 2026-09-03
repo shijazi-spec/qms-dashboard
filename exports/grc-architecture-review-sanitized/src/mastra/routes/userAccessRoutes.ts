@@ -1,5 +1,5 @@
 import * as userDb from "../../utils/userAccessDatabase";
-import { sendResendEmail } from "../../utils/resendMail";
+import { sendEmailProviderEmail } from "../../utils/EmailProviderMail";
 import { logger as safeLogger } from "../../utils/logger";
 import {
   requireAdminOrKey,
@@ -79,7 +79,7 @@ export const userAccessRoutes = [
           const PII_FIELDS = [
             "password_hash",
             "mfa_secret",
-            "google_id",
+            "IdentityProvider_id",
             "invitation_id",
             "access_reason",
             "denied_by",
@@ -312,14 +312,14 @@ export const userAccessRoutes = [
             used: false,
           });
 
-          const domain = process.env.REPLIT_DEV_DOMAIN
+          const domain = process.env.HostingPlatform_DEV_DOMAIN
             ? `<REDACTED_URL>`
             : "<REDACTED_URL>";
           const inviteLink = `${domain}/accept-invite?token=${invitation.token}`;
 
           let emailStatus = { sent: false, error: "" };
           try {
-            const emailResult = await sendResendEmail({
+            const emailResult = await sendEmailProviderEmail({
               to: body.email,
               subject: "You are invited to ExampleOrg QMS Platform",
               html: `
@@ -515,7 +515,7 @@ export const userAccessRoutes = [
           }
 
           try {
-            await sendResendEmail({
+            await sendEmailProviderEmail({
               to: user.email,
               subject: "Your ExampleOrg Access Has Been Approved",
               html: `
@@ -527,14 +527,14 @@ export const userAccessRoutes = [
                     <p>Hello ${user.full_name},</p>
                     <p>Your access to the ExampleOrg QMS Platform has been approved. You can now log in and start using the platform.</p>
                     <p style="margin: 20px 0;">
-                      <a href="${process.env.REPLIT_DEV_DOMAIN ? "https://" + process.env.REPLIT_DEV_DOMAIN : "<REDACTED_URL>"}" style="background: #047857; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; display: inline-block;">
+                      <a href="${process.env.HostingPlatform_DEV_DOMAIN ? "<REDACTED_URL_SCHEME>" + process.env.HostingPlatform_DEV_DOMAIN : "<REDACTED_URL>"}" style="background: #047857; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; display: inline-block;">
                         Go to Platform
                       </a>
                     </p>
                   </div>
                 </div>
               `,
-              text: `Your ExampleOrg access has been approved. You can now log in at ${process.env.REPLIT_DEV_DOMAIN ? "https://" + process.env.REPLIT_DEV_DOMAIN : "<REDACTED_URL>"}`,
+              text: `Your ExampleOrg access has been approved. You can now log in at ${process.env.HostingPlatform_DEV_DOMAIN ? "<REDACTED_URL_SCHEME>" + process.env.HostingPlatform_DEV_DOMAIN : "<REDACTED_URL>"}`,
             });
           } catch (emailError) {
             logger?.warn("⚠️ Could not send approval email");
@@ -578,7 +578,7 @@ export const userAccessRoutes = [
           }
 
           try {
-            await sendResendEmail({
+            await sendEmailProviderEmail({
               to: user.email,
               subject: "ExampleOrg Access Request Update",
               html: `

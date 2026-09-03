@@ -248,11 +248,11 @@
 
             <!-- Bulk-clear the autonomous SHADOW proposals — shown only when the
                  Source filter is set to Autonomous (Sample User 2026-06-18). These were
-                 never applied to Zoho (shadow), so this only empties the review
+                 never applied to CRMProvider (shadow), so this only empties the review
                  backlog; no CRM change. -->
             <button id="btnClearShadow" type="button"
                     class="hidden ms-2 px-3 py-2 bg-gray-700 text-white rounded text-sm hover:bg-gray-800"
-                    title="Reject all pending shadow proposals — they were never applied to Zoho; this only clears the review backlog.">🧹 Clear shadow proposals</button>
+                    title="Reject all pending shadow proposals — they were never applied to CRMProvider; this only clears the review backlog.">🧹 Clear shadow proposals</button>
 
             <div id="summaryCounts" class="ms-auto text-xs text-gray-600 flex gap-3">
                 <span><span data-i18n="ai_approvals.pending">Pending</span>: <b id="cntPending">—</b></span>
@@ -1221,7 +1221,7 @@
             var s = String(id);
             if (/^(test_|LEAD_|DEAL_|CONTACT_|ACCOUNT_)/.test(s)) return '';
             return ' <a href="<REDACTED_URL>' + tab + '/' + encodeURIComponent(s) +
-                '" target="_blank" class="text-blue-600 hover:underline text-[11px]">↗ Zoho</a>';
+                '" target="_blank" class="text-blue-600 hover:underline text-[11px]">↗ CRMProvider</a>';
         }
         var reasons = Array.isArray(p.reasons) ? p.reasons : [];
         var records = Array.isArray(plan.records) ? plan.records : [];
@@ -1241,7 +1241,7 @@
             if (r.accountName) meta.push('acct ' + escapeHtml(r.accountName));
             if (typeof r.completeness === 'number') meta.push(Math.round(r.completeness * 100) + '% complete');
             return '<tr class="border-t border-gray-100"><td class="px-2 py-1">' +
-                escapeHtml(r.name || '(no name)') + zlink(r.zohoId) + '</td>' +
+                escapeHtml(r.name || '(no name)') + zlink(r.CRMProviderId) + '</td>' +
                 '<td class="px-2 py-1 text-xs whitespace-nowrap">' + role + '</td>' +
                 '<td class="px-2 py-1 text-[11px] text-gray-500">' + meta.join(' · ') + '</td></tr>';
         }).join('');
@@ -1262,8 +1262,8 @@
         if (plan.rationale) html += '<p class="text-xs text-gray-700 mb-2">' + escapeHtml(plan.rationale) + '</p>';
         html += '<div class="text-xs text-gray-600 mb-2">Module: <strong>' + escapeHtml(module) + '</strong>' +
             ' · cluster #' + escapeHtml(String(p.clusterId || plan.clusterId || '')) +
-            ' · survivor kept, ' + (Array.isArray(plan.duplicateZohoIds) ? plan.duplicateZohoIds.length : 0) + ' tagged Duplicate-Delete' +
-            (plan.linkAccountZohoId ? ' · link to account ' + escapeHtml(String(plan.linkAccountZohoId)) : '') +
+            ' · survivor kept, ' + (Array.isArray(plan.duplicateCRMProviderIds) ? plan.duplicateCRMProviderIds.length : 0) + ' tagged Duplicate-Delete' +
+            (plan.linkAccountCRMProviderId ? ' · link to account ' + escapeHtml(String(plan.linkAccountCRMProviderId)) : '') +
             '</div>';
         if (recRows) html += '<div class="overflow-x-auto mb-3"><table class="min-w-full text-xs border border-gray-200"><thead class="bg-gray-50"><tr>' +
             '<th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Record</th>' +
@@ -1465,9 +1465,9 @@
     //   Autonomous → Clear shadow proposals.
     function _clearScope() {
         var v = fltSource ? fltSource.value : '';
-        if (v === 'adam') return { group: 'adam', label: '🧹 Clear Adam requests', confirm: 'Reject ALL pending Adam (chat) requests?\n\nThis empties the review backlog. Nothing here was applied to Zoho, so no CRM changes.' };
-        if (v === 'autonomous') return { group: 'autonomous', label: '🧹 Clear shadow proposals', confirm: 'Reject ALL pending shadow proposals?\n\nThese were never applied to Zoho (shadow mode) — this only empties the review backlog. No CRM changes.' };
-        return { group: 'all', label: '🧹 Clear ALL pending', confirm: 'Reject EVERY pending request in the queue (all sources)?\n\nFull backlog reset. Nothing here was applied to Zoho, so no CRM changes are made. The agent re-evaluates clusters fresh on its next run.' };
+        if (v === 'adam') return { group: 'adam', label: '🧹 Clear Adam requests', confirm: 'Reject ALL pending Adam (chat) requests?\n\nThis empties the review backlog. Nothing here was applied to CRMProvider, so no CRM changes.' };
+        if (v === 'autonomous') return { group: 'autonomous', label: '🧹 Clear shadow proposals', confirm: 'Reject ALL pending shadow proposals?\n\nThese were never applied to CRMProvider (shadow mode) — this only empties the review backlog. No CRM changes.' };
+        return { group: 'all', label: '🧹 Clear ALL pending', confirm: 'Reject EVERY pending request in the queue (all sources)?\n\nFull backlog reset. Nothing here was applied to CRMProvider, so no CRM changes are made. The agent re-evaluates clusters fresh on its next run.' };
     }
     function syncClearShadowBtn() {
         if (!btnClearShadow) return;
@@ -1530,7 +1530,7 @@
      *  Deep link handling (Task #485)
      *
      *  The security-reviewer notifier (`securityApprovalNotifier.ts`)
-     *  pages Slack/email with a link of the form
+     *  pages ChatProvider/email with a link of the form
      *      <SECURITY_REVIEWER_APP_URL>/ai-approvals?code=APR-...
      *  so a reviewer who clicks the page lands directly on the flagged
      *  approval card. We honour that ?code= parameter once the queue

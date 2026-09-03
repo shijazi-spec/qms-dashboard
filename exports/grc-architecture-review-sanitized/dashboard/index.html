@@ -644,14 +644,14 @@
                         </div>
                     </div>
 
-                    <!-- Row 2a: Enterprise GRC Snapshot (mirrors Slack/email digest) -->
+                    <!-- Row 2a: Enterprise GRC Snapshot (mirrors ChatProvider/email digest) -->
                     <div class="widget-row" data-row="2a">
                         <div class="widget bg-white rounded-2xl shadow-lg overflow-hidden" data-widget="grc-snapshot" data-name="Enterprise GRC Snapshot">
                             <div class="widget-handle bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
                                 <span class="text-xs font-medium text-gray-500 uppercase flex items-center gap-1.5">
                                     Enterprise GRC Snapshot
                                     <span class="info-icon inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold cursor-help"
-                                          data-tip="System-wide nonconformance, CAPA, risk, KPI, and compliance counts. Same numbers powering the Slack/email digest."
+                                          data-tip="System-wide nonconformance, CAPA, risk, KPI, and compliance counts. Same numbers powering the ChatProvider/email digest."
                                           data-testid="info-grc-snapshot">i</span>
                                 </span>
                                 <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -861,7 +861,7 @@
                                 </span>
                                 <div class="flex items-center gap-2">
                                     <span class="text-xs text-gray-600" id="recordsLayoutSubtitle">Loading…</span>
-                                    <button data-on-click="loadLayoutsBreakdown" data-args="[true]" class="text-xs text-gray-500 hover:text-gray-800" title="Force refresh from Zoho (~80s)" data-testid="button-refresh-layouts">↻</button>
+                                    <button data-on-click="loadLayoutsBreakdown" data-args="[true]" class="text-xs text-gray-500 hover:text-gray-800" title="Force refresh from CRMProvider (~80s)" data-testid="button-refresh-layouts">↻</button>
                                 </div>
                             </div>
                             <div class="p-6">
@@ -1210,9 +1210,9 @@
             } catch(e) { return isoStr; }
         }
 
-        function zohoLink(id, module) {
+        function CRMProviderLink(id, module) {
             if (!id || id.startsWith('test_') || id.startsWith('LEAD_') || id.startsWith('DEAL_') || id.startsWith('summary_') || id.startsWith('issue_')) return `<span class="text-xs font-mono text-gray-400">${id || '-'}</span>`;
-            return `<a href="<REDACTED_URL>" target="_blank" class="text-blue-600 hover:underline text-xs font-mono" data-testid="link-zoho-${id}">${id}</a>`;
+            return `<a href="<REDACTED_URL>" target="_blank" class="text-blue-600 hover:underline text-xs font-mono" data-testid="link-CRMProvider-${id}">${id}</a>`;
         }
 
         function groupIssuesByRecord(issues) {
@@ -1233,7 +1233,7 @@
                 try { parsed = JSON.parse(rawData); } catch(e) { parsed = {}; }
             }
             // Pull moduleBreakdown if available — it carries per-module
-            // recordsWithIssues even when an individual Zoho fetch failed
+            // recordsWithIssues even when an individual CRMProvider fetch failed
             // (recordCountsByModule may be missing that module entirely).
             let dim = dimensionDetails;
             if (typeof dim === 'string') {
@@ -1249,7 +1249,7 @@
                     truthful[mod] = Number(n) || 0;
                 });
                 // Safety net: if a module is missing from recordCountsByModule
-                // (e.g. its Zoho fetch failed mid-audit), fall back to the
+                // (e.g. its CRMProvider fetch failed mid-audit), fall back to the
                 // moduleBreakdown row so the dashboard doesn't render "0".
                 moduleBreakdown.forEach(mb => {
                     const name = mb?.module;
@@ -1627,7 +1627,7 @@
                 ).join('');
                 return `
                 <tr class="hover:bg-gray-50 align-top">
-                    <td class="px-4 py-3">${zohoLink(record.id, record.module)}</td>
+                    <td class="px-4 py-3">${CRMProviderLink(record.id, record.module)}</td>
                     <td class="px-4 py-3 text-sm text-gray-600">${record.module}</td>
                     <td class="px-4 py-3 text-sm text-gray-600">${record.stage || '-'}</td>
                     <td class="px-4 py-3 text-sm text-gray-600">${record.leadStatus || '-'}</td>
@@ -1898,7 +1898,7 @@
                     container.innerHTML = `<div class="col-span-4 text-center py-12">
                         <div class="inline-flex items-center gap-3 mb-3">
                             <svg class="animate-spin h-6 w-6 text-indigo-500" xmlns="<REDACTED_URL>" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.<REDACTED_PHONE> 12h4z"></path></svg>
-                            <span class="text-indigo-600 font-semibold text-sm">Fetching CRM data from Zoho...</span>
+                            <span class="text-indigo-600 font-semibold text-sm">Fetching CRM data from CRMProvider...</span>
                         </div>
                         <div class="text-gray-600 text-xs">This takes 3-4 minutes on first load (scanning 66,000+ records)</div>
                     </div>`;
@@ -1923,7 +1923,7 @@
                             container.innerHTML = `<div class="col-span-4 text-center py-12">
                                 <div class="inline-flex items-center gap-3 mb-3">
                                     <svg class="animate-spin h-6 w-6 text-indigo-500" xmlns="<REDACTED_URL>" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.<REDACTED_PHONE> 12h4z"></path></svg>
-                                    <span class="text-indigo-600 font-semibold text-sm">Fetching CRM data from Zoho...</span>
+                                    <span class="text-indigo-600 font-semibold text-sm">Fetching CRM data from CRMProvider...</span>
                                 </div>
                                 <div class="text-gray-600 text-xs">This takes 3-4 minutes on first load (scanning 66,000+ records)</div>
                                 <div class="text-gray-400 text-xs mt-1">Elapsed: ~${elapsed}s — Auto-refreshing every 15s</div>
@@ -1947,7 +1947,7 @@
                         container.innerHTML = `<div class="col-span-4 text-center py-12">
                             <div class="inline-flex items-center gap-3 mb-3">
                                 <svg class="animate-spin h-6 w-6 text-indigo-500" xmlns="<REDACTED_URL>" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.<REDACTED_PHONE> 12h4z"></path></svg>
-                                <span class="text-indigo-600 font-semibold text-sm">Connecting to Zoho CRM...</span>
+                                <span class="text-indigo-600 font-semibold text-sm">Connecting to CRMProvider CRM...</span>
                             </div>
                             <div class="text-gray-400 text-xs">Elapsed: ~${elapsed}s — Retrying automatically</div>
                         </div>`;
@@ -2448,7 +2448,7 @@
             // on failure. The caller distinguishes "the server answered with no
             // audits" (show the original "No audit data yet" empty state) from
             // "the request failed / timed out" (show the "Database is waking up"
-            // state with a retry button) — a fresh Replit deploy can take 30-60s
+            // state with a retry button) — a fresh HostingPlatform deploy can take 30-60s
             // for its serverless Postgres to authenticate the first connection,
             // and during that window /api/dashboard returns 5xx or times out.
             try {
@@ -2827,7 +2827,7 @@
             const empty = document.getElementById('recordsLayoutEmpty');
             const attempt = _attempt || 1;
             try {
-                if (subtitle) subtitle.textContent = force ? 'Refreshing from Zoho…' : 'Loading…';
+                if (subtitle) subtitle.textContent = force ? 'Refreshing from CRMProvider…' : 'Loading…';
                 if (empty) empty.style.display = 'none';
                 const res = await fetch('/api/dashboard/layouts-breakdown' + (force ? '?force=1' : ''));
                 if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -2874,7 +2874,7 @@
 
                 const counts = {};
                 for (const it of allIssues) {
-                    // Older audits did not capture a Layout for Tasks records (Zoho doesn't
+                    // Older audits did not capture a Layout for Tasks records (CRMProvider doesn't
                     // return that field for Tasks). Fall back to "Standard" so the chart no
                     // longer shows a "(No Layout)" bucket for legacy audit data.
                     let key = ((it.layouts || it.layout || '') + '').trim() || 'Standard Contacts';

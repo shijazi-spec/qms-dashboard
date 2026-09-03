@@ -17,11 +17,11 @@ Concrete slippage vectors:
 
 | Vector | Where it bites | Probability |
 |---|---|---|
-| Speaker diarization spike (W5-6) — pyannote vs AssemblyAI vs Deepgram | The Business Case treats it as "Phase 1 deliverable" with a `$50-100/mo Whisper bump`. That number is wishful. Diarization is either (a) a vendor switch (re-instrumenting `/api/calls/upload-audio`, `/api/calls/bulk-upload`, transcript persistence, `call_transcripts` schema, plus rebackfilling 199 historical records) or (b) a pyannote in-process integration that will eat memory on Replit. Either is 2+ weeks alone. | HIGH |
+| Speaker diarization spike (W5-6) — pyannote vs AssemblyAI vs Deepgram | The Business Case treats it as "Phase 1 deliverable" with a `$50-100/mo Whisper bump`. That number is wishful. Diarization is either (a) a vendor switch (re-instrumenting `/api/calls/upload-audio`, `/api/calls/bulk-upload`, transcript persistence, `call_transcripts` schema, plus rebackfilling 199 historical records) or (b) a pyannote in-process integration that will eat memory on HostingPlatform. Either is 2+ weeks alone. | HIGH |
 | Cohen's κ measurement (W7) — requires inter-rater calibration data which doesn't exist yet | The plan assumes Sample User's manager-override stream is the second rater. It isn't — it's a single rater. κ measures agreement between two independent humans, or one human and the AI. To produce κ ≥ 0.6 you need ≥ 30 dual-coded calls. That dataset doesn't exist on 2026-05-25. | HIGH |
 | Backfilling talk-time on 199 historical records | Talk-time without diarization is impossible; talk-time WITH diarization on the full back-catalog is a re-Whisper pass at non-trivial cost. The plan implicitly defers this but the Overview KPIs will be skewed for 4-6 weeks until enough new diarized calls exist. | MEDIUM |
 | SDR script rollout dependency (W2-3 pilot, W4-5 full) | If pilot doesn't start until CTO approves, and approval is "pending" per business case, every script-dependent metric slips with it. | MEDIUM |
-| Replit deployment loop | The `DMAIC_Post_Republish_Audit` doc shows that yesterday's republish broke 11 endpoints from one missing `ROUTE_PERMISSION_MAP` entry. The same class of bug will recur during 7 weeks of feature additions. Expect 1-2 days lost per phase to RBAC catch-up. | HIGH |
+| HostingPlatform deployment loop | The `DMAIC_Post_Republish_Audit` doc shows that yesterday's republish broke 11 endpoints from one missing `ROUTE_PERMISSION_MAP` entry. The same class of bug will recur during 7 weeks of feature additions. Expect 1-2 days lost per phase to RBAC catch-up. | HIGH |
 
 **Realistic timeline: 10-12 weeks calendar at 1 FTE.** The Revamp Plan's own internal estimate was "28 days of work over 6 calendar weeks" — and that explicitly excluded diarization, PII redaction, and the compliance engine. The Business Case re-added diarization but kept the same 7-week envelope. Math doesn't reconcile.
 
@@ -33,7 +33,7 @@ The amendment in `Decision_Record_Amend_Skip_P0_P15_2026_05_25.md` is honest abo
 - Step 9 talks about a monthly "DMAIC Control metric" rollup
 - The Closing section describes a workflow the SDR Manager runs every week
 
-That is **not** an "internal GRQ tool." It's an operations system that processes hundreds of customer voice recordings, derives behavioral analytics about employees, and feeds a coaching loop that determines what training they get. PDPL Article 18 (data minimisation) and Article 26 (purpose limitation) apply regardless of which Slack workspace the dashboard is in.
+That is **not** an "internal GRQ tool." It's an operations system that processes hundreds of customer voice recordings, derives behavioral analytics about employees, and feeds a coaching loop that determines what training they get. PDPL Article 18 (data minimisation) and Article 26 (purpose limitation) apply regardless of which ChatProvider workspace the dashboard is in.
 
 The amendment essentially says: "we'll accept the PDPL risk because nobody is auditing us right now." That is operationally true but strategically fragile. Sample User's Nov 26 email to Velents specifically cited "long-term governance direction" as the *reason* for going internal. Going internal *and* then dropping the governance controls is the opposite of that direction.
 
@@ -120,16 +120,16 @@ Sample User reviewing from a desktop now, but the Coaching board, Critical Issue
 
 This isn't a "mobile app" deliverable. It's "render legibly at 375px viewport for screenshot-friendliness." 1-2 days of CSS work, should be in scope.
 
-### 2.5 No Whisper/OpenAI outage path
+### 2.5 No Whisper/LLMProvider outage path
 
-What happens when OpenAI returns 503 for an hour? The plan has no answer. No retry policy. No queued-vs-failed indicator. No circuit breaker. No backfill/replay if Whisper was down overnight.
+What happens when LLMProvider returns 503 for an hour? The plan has no answer. No retry policy. No queued-vs-failed indicator. No circuit breaker. No backfill/replay if Whisper was down overnight.
 
-### 2.6 Cost control — unbounded OpenAI spend
+### 2.6 Cost control — unbounded LLMProvider spend
 
 A confused admin re-uploading the 199-call backlog = full re-Whisper pass at unbounded cost. Nothing stops it.
 
 **Required:**
-- Daily Whisper-spend cap (`OPENAI_DAILY_BUDGET_USD` env var, checked before each call)
+- Daily Whisper-spend cap (`LLMProvider_DAILY_BUDGET_USD` env var, checked before each call)
 - Per-user upload rate limit (10 bulk uploads/hour)
 - Idempotency on bulk-upload (hash the audio bytes; reject duplicate within last 30 days)
 
@@ -243,7 +243,7 @@ Three foundational assumptions (SDR team size, 1-FTE engineering availability, 7
 
 ### 4.1 How mature platforms actually work
 
-The Business Case treats "AI rubric scoring on every call" as the central capability. That is *one* of three modes mature platforms (Gong, Chorus, ExecVision, Salesforce Einstein) actually use:
+The Business Case treats "AI rubric scoring on every call" as the central capability. That is *one* of three modes mature platforms (Gong, Chorus, ExecVision, CRMProvider Einstein) actually use:
 
 | Mode | What it is | How mature platforms use it |
 |---|---|---|
@@ -278,7 +278,7 @@ ExampleOrg's auto-trigger (3 fails in 14 days) is unusual. Real risks:
 
 **Should NOT copy from mature platforms:**
 - Forecast/pipeline integration — Gong's moat, but requires years of CRM training data
-- Real-time on-call coaching — needs dialler integration; defer until Five9 webhook works
+- Real-time on-call coaching — needs dialler integration; defer until ContactCenterProvider webhook works
 - Cross-account "buyer pattern" analytics — needs scale ExampleOrg doesn't have yet
 
 ### Section 4 TL;DR
@@ -305,7 +305,7 @@ Why: the inline-drill leaderboard *alone* delivers 60% of the case-study value w
 | Fast-follow | Effort | Owner | Trigger |
 |---|---|---|---|
 | 1-year retention auto-delete job | 1 day | Eng | Before any non-GRQ stakeholder is shown the dashboard |
-| OpenAI cost cap + bulk-upload rate limit | 1 day | Eng | Before Five9 webhook ingest is enabled |
+| LLMProvider cost cap + bulk-upload rate limit | 1 day | Eng | Before ContactCenterProvider webhook ingest is enabled |
 | Server-side leaderboard aggregation | 2 days | Eng | Before dataset crosses 500 calls |
 | Inter-rater calibration session (3 reviewers × 10 calls) | 0.5 day | Quality | Before κ is reported anywhere |
 
@@ -338,7 +338,7 @@ Strip the Phase 1 plan to:
 4. Critical Issues banner: pending plans + plans aged > 7 days + any call flagged below 40% (2 days)
 5. CSV export per agent (1 day)
 6. 1-year retention deletion job (1 day)
-7. OpenAI cost cap (0.5 day)
+7. LLMProvider cost cap (0.5 day)
 
 That's ~14 dev-days = 3 weeks at 1 FTE. Zero new infrastructure. No diarization, no κ, no compliance engine, no QA Inbox.
 
@@ -370,7 +370,7 @@ Don't run the 7-week plan as written. Split into 1a (3-week MVP cockpit) + 1b (5
 | 1 | Run a 5-day timesheet of Sample User's actual QA hours | 5 days, ~5 min/day | The "70% reduction" metric needs a real baseline. |
 | 2 | Schedule a 90-min inter-rater calibration session | 90 min one session | Establishes whether rubric ambiguity is the actual problem before measuring AI-vs-Sample User κ. |
 | 3 | Ship the 1-year retention auto-delete cron job | 1 day | Closes SDAIA Article 18 hole today. |
-| 4 | Ship OpenAI daily spend cap + bulk-upload rate limit | 0.5 day | Closes unbounded-cost risk. |
+| 4 | Ship LLMProvider daily spend cap + bulk-upload rate limit | 0.5 day | Closes unbounded-cost risk. |
 | 5 | Consolidate the 4 plan docs into 1 canonical + amendments-log | 2 hours | Makes the CTO briefing reviewable in one read. |
 
 ### 6.2 Questions to ask Sample User Week 2
@@ -386,7 +386,7 @@ Don't run the 7-week plan as written. Split into 1a (3-week MVP cockpit) + 1b (5
 ### 6.3 Questions to ask CTO Sample User requesting approval
 
 1. **What is the audit posture on PDPL Article 18 (data minimisation) for raw transcripts?** Is GRQ-internal-only defensible, or does he want PII redaction in Phase 1?
-2. **What's the budget guardrail on OpenAI spend?**
+2. **What's the budget guardrail on LLMProvider spend?**
 3. **What's the team's actual definition of "1 FTE"?** Is Sample User this 100%, 50%, or evenings/weekends?
 4. **If Phase 1a (3-week MVP) ships, does Phase 1b get funded automatically, or is it a separate approval?**
 5. **The Aug 2025 CTO sign-off was for the Velents-equivalent scope.** Is the 68% delivery against that scope acceptable, and is the explicit framing of "we deferred PII redaction and deterministic compliance because manual spot-check is sufficient" what he'd want in writing?
@@ -422,6 +422,6 @@ Do five concrete things this week before any new feature code. Ask Sample User q
 
 The plan is the product of a serious, disciplined day of thinking. The user understands the problem domain better than most product managers I've reviewed. The amendments are evidence of pragmatic scope management, not indecision.
 
-The core risk isn't *what's being built* — it's *what's not being measured*: baseline QA hours, inter-rater agreement, OpenAI cost trajectory, dashboard access cadence, retention enforcement. Most of those gaps close in under a day of work each, all this week, before any feature engineering begins. Do those things and the 7-week plan becomes credible. Skip them and the 7-week plan ships a polished cockpit that nobody can prove improved anything.
+The core risk isn't *what's being built* — it's *what's not being measured*: baseline QA hours, inter-rater agreement, LLMProvider cost trajectory, dashboard access cadence, retention enforcement. Most of those gaps close in under a day of work each, all this week, before any feature engineering begins. Do those things and the 7-week plan becomes credible. Skip them and the 7-week plan ships a polished cockpit that nobody can prove improved anything.
 
 The recommended best approach is: ship a 3-week MVP cockpit first (date filter + leaderboard + inline drill + critical-issues banner + retention job + cost cap), measure adoption for 2 weeks, then commit Phase 1b based on telemetry. That collapses the 7-week timeline into a 5-week one with checkpoints and converts the project from "build a thing and hope it gets used" to "build a thing, measure use, build more."

@@ -22,7 +22,7 @@
 
 import { sharedPool as pool } from "./sharedPool";
 import { logger } from "./logger";
-import { generateChatText } from "./openaiChatHelper";
+import { generateChatText } from "./LLMProviderChatHelper";
 import { redactSensitiveDeep } from "./eventLogsDatabase";
 
 export const WEB_SEARCH_MODEL =

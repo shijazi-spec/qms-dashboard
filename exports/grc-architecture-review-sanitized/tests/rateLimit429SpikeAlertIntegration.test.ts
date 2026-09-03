@@ -20,7 +20,7 @@
  * Skips on missing DATABASE_URL (matching the project convention used by
  * tests/aiTelemetryChildCallIndex.test.ts and tests/toolHealthConfigDatabase.test.ts).
  *
- * Slack/email side-effect deps are stubbed so the test cannot page on-call
+ * ChatProvider/email side-effect deps are stubbed so the test cannot page on-call
  * even if the runner happens to have a webhook configured.
  *
  * Run:   npx tsx tests/rateLimit429SpikeAlertIntegration.test.ts
@@ -175,9 +175,9 @@ async function main(): Promise<void> {
       threshold: THRESHOLD,
       repeatHours: REPEAT_HOURS,
       emitSystemEvent: taggedEmit,
-      // Stub Slack/email so the test cannot page even if the runner has
+      // Stub ChatProvider/email so the test cannot page even if the runner has
       // a webhook configured.
-      postSlack: async () => false,
+      postChatProvider: async () => false,
       sendEmail: async () => false,
     });
 
@@ -209,7 +209,7 @@ async function main(): Promise<void> {
       threshold: THRESHOLD,
       repeatHours: REPEAT_HOURS,
       emitSystemEvent: taggedEmit,
-      postSlack: async () => false,
+      postChatProvider: async () => false,
       sendEmail: async () => false,
     });
 

@@ -292,7 +292,7 @@ async function main(): Promise<void> {
       toolId: 'rotate_api_key',
       toolLabel: 'Rotate API Key (integration leak guard)',
       payload: {
-        target_integration: 'zoho_books',
+        target_integration: 'CRMProvider_books',
         api_key: PAYLOAD_API_KEY,
         refresh_token: PAYLOAD_REFRESH,
         nested: {
@@ -301,7 +301,7 @@ async function main(): Promise<void> {
         },
         reason: 'integration-leak-guard',
       },
-      payloadPreview: 'Rotate API key for zoho_books (integration test)',
+      payloadPreview: 'Rotate API key for CRMProvider_books (integration test)',
       riskLevel: 'high',
       // No WP-* codes -> route skips the controlled-document join, keeping
       // the test independent of the policies registry contents.
@@ -343,7 +343,7 @@ async function main(): Promise<void> {
         'GET /api/ai/approvals seeded row contains the redaction sentinel',
       );
       assert(
-        seededInList.payload?.target_integration === 'zoho_books',
+        seededInList.payload?.target_integration === 'CRMProvider_books',
         'GET /api/ai/approvals preserves non-sensitive payload fields',
       );
     }
@@ -387,7 +387,7 @@ async function main(): Promise<void> {
     await recordExecutionResult(actionCode, {
       success: true,
       entityType: 'integration',
-      entityId: 'zoho_books',
+      entityId: 'CRMProvider_books',
       data: {
         rotated: true,
         new_api_key: RESULT_API_KEY,

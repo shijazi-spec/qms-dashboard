@@ -11,7 +11,7 @@ import {
 } from "./emptyRecordsDetection";
 
 export interface EmptyRecordRow {
-  zohoId: string;
+  CRMProviderId: string;
   name: string;
   owner: string | null;
   reason: "orphaned" | "empty" | "test" | "junk";
@@ -24,7 +24,7 @@ const CAP = 500;
 const LIKES = testKeywordLikePatterns();
 const EMPTY_DELETE_TAG = process.env.EMPTY_DELETE_TAG || "Empty-Delete";
 
-// Delete tags that mean "this record is already queued for the Zoho admin to
+// Delete tags that mean "this record is already queued for the CRMProvider admin to
 // delete" — showing them in the cleanup list is double work (Sample User 2026-06-26).
 // EMPTY_DELETE_TAG (Empty-Delete) is set by this tab; Duplicate-Delete is set by
 // the duplicate-resolution flow. Extend without code via env EMPTY_DELETE_EXCLUDE_TAGS.
@@ -39,22 +39,22 @@ const DELETE_TAGS = [
 
 // SQL fragment shared by all three queries: drop any record the operator has
 // already tagged for deletion — via the in-platform ledger (immediate effect)
-// OR whose freshly-synced Zoho Tag array already carries a delete tag
+// OR whose freshly-synced CRMProvider Tag array already carries a delete tag
 // (Empty-Delete / Duplicate-Delete). Either way a tagged record never shows.
 //
 // The last clause closes the STALE-MIRROR gap (Sample User 2026-06-27): a record just
 // tagged Duplicate-Delete by the merge/resolution flow won't have its synced Tag
 // updated until the next full sync, so the Tag check above can't see it. But the
-// merge flow writes the duplicate's Zoho id to duplicate_resolution_ledger at
+// merge flow writes the duplicate's CRMProvider id to duplicate_resolution_ledger at
 // apply time (sync-independent), so we also exclude anything listed there. This
 // removes Duplicate-Delete accounts/deals/contacts from the cleansing list the
 // moment they're merged, not a sync later.
 const NOT_ALREADY_TAGGED = `
-  AND %ALIAS%zoho_record_id NOT IN (SELECT zoho_record_id FROM empty_delete_ledger)
-  AND %ALIAS%zoho_record_id NOT IN (SELECT zoho_record_id FROM empty_records_dismissed)
-  AND %ALIAS%zoho_record_id NOT IN (
+  AND %ALIAS%CRMProvider_record_id NOT IN (SELECT CRMProvider_record_id FROM empty_delete_ledger)
+  AND %ALIAS%CRMProvider_record_id NOT IN (SELECT CRMProvider_record_id FROM empty_records_dismissed)
+  AND %ALIAS%CRMProvider_record_id NOT IN (
     SELECT dz FROM duplicate_resolution_ledger drl
-    CROSS JOIN LATERAL jsonb_array_elements_text(drl.duplicate_zoho_ids) AS dz
+    CROSS JOIN LATERAL jsonb_array_elements_text(drl.duplicate_CRMProvider_ids) AS dz
     WHERE dz IS NOT NULL
   )
   AND NOT EXISTS (
@@ -71,25 +71,25 @@ const excl = (alias: string) => NOT_ALREADY_TAGGED.replace(/%ALIAS%/g, alias);
  * Idempotent. */
 export async function markEmptyRecordsDismissed(
   module: string,
-  zohoIds: string[],
+  CRMProviderIds: string[],
   by: string | null,
 ): Promise<void> {
-  const ids = (zohoIds || []).map((s) => String(s)).filter(Boolean);
+  const ids = (CRMProviderIds || []).map((s) => String(s)).filter(Boolean);
   if (!ids.length) return;
   await pool.query(
-    `INSERT INTO empty_records_dismissed (zoho_record_id, module, dismissed_by)
+    `INSERT INTO empty_records_dismissed (CRMProvider_record_id, module, dismissed_by)
        SELECT UNNEST($1::text[]), $2, $3
-       ON CONFLICT (zoho_record_id) DO NOTHING`,
+       ON CONFLICT (CRMProvider_record_id) DO NOTHING`,
     [ids, module, by],
   );
 }
 
 /** Undo a dismissal (the record returns to the cleanup list on next load). */
-export async function undismissEmptyRecords(zohoIds: string[]): Promise<void> {
-  const ids = (zohoIds || []).map((s) => String(s)).filter(Boolean);
+export async function undismissEmptyRecords(CRMProviderIds: string[]): Promise<void> {
+  const ids = (CRMProviderIds || []).map((s) => String(s)).filter(Boolean);
   if (!ids.length) return;
   await pool.query(
-    `DELETE FROM empty_records_dismissed WHERE zoho_record_id = ANY($1::text[])`,
+    `DELETE FROM empty_records_dismissed WHERE CRMProvider_record_id = ANY($1::text[])`,
     [ids],
   );
 }
@@ -98,34 +98,34 @@ export async function undismissEmptyRecords(zohoIds: string[]): Promise<void> {
  * immediately (before the slow full sync catches up). Idempotent. */
 export async function markEmptyDeleteTagged(
   module: string,
-  zohoIds: string[],
+  CRMProviderIds: string[],
   by: string | null,
 ): Promise<void> {
-  const ids = (zohoIds || []).map((s) => String(s)).filter(Boolean);
+  const ids = (CRMProviderIds || []).map((s) => String(s)).filter(Boolean);
   if (!ids.length) return;
   await pool.query(
-    `INSERT INTO empty_delete_ledger (zoho_record_id, module, tagged_by, status)
+    `INSERT INTO empty_delete_ledger (CRMProvider_record_id, module, tagged_by, status)
        SELECT UNNEST($1::text[]), $2, $3, 'pending_delete'
-       ON CONFLICT (zoho_record_id) DO UPDATE SET status='pending_delete', deleted_at=NULL`,
+       ON CONFLICT (CRMProvider_record_id) DO UPDATE SET status='pending_delete', deleted_at=NULL`,
     [ids, module, by],
   );
 }
 
 /** Undo the local mark (operator removed the Empty-Delete tag). */
-export async function unmarkEmptyDeleteTagged(zohoIds: string[]): Promise<void> {
-  const ids = (zohoIds || []).map((s) => String(s)).filter(Boolean);
+export async function unmarkEmptyDeleteTagged(CRMProviderIds: string[]): Promise<void> {
+  const ids = (CRMProviderIds || []).map((s) => String(s)).filter(Boolean);
   if (!ids.length) return;
   await pool.query(
-    `DELETE FROM empty_delete_ledger WHERE zoho_record_id = ANY($1::text[])`,
+    `DELETE FROM empty_delete_ledger WHERE CRMProvider_record_id = ANY($1::text[])`,
     [ids],
   );
 }
 
-/** Zoho signals a record is already gone via a not-found, an INVALID_DATA code,
+/** CRMProvider signals a record is already gone via a not-found, an INVALID_DATA code,
  * or the "related id given seems to be invalid" message on a by-id/attachments
- * fetch. Any of those means the record was deleted in Zoho → it's a ghost in our
+ * fetch. Any of those means the record was deleted in CRMProvider → it's a ghost in our
  * mirror and should be pruned, not surfaced as a red error. */
-export function isZohoGhostError(x: unknown): boolean {
+export function isCRMProviderGhostError(x: unknown): boolean {
   const s = (x instanceof Error ? x.message : String(x ?? "")).toLowerCase();
   return (
     s.includes("record not found") ||
@@ -134,13 +134,13 @@ export function isZohoGhostError(x: unknown): boolean {
   );
 }
 
-/** Remove ghost records (deleted in Zoho) from the local mirror + the
+/** Remove ghost records (deleted in CRMProvider) from the local mirror + the
  * Empty-Delete ledger so they disappear from every Radar view. The platform
- * never deletes in Zoho — this only cleans up our copy of already-gone records. */
+ * never deletes in CRMProvider — this only cleans up our copy of already-gone records. */
 /**
- * Drop our mirror copy of records Zoho no longer has. Never deletes in Zoho.
+ * Drop our mirror copy of records CRMProvider no longer has. Never deletes in CRMProvider.
  *
- * Two bugs lived here, and together they produced "Already deleted in Zoho —
+ * Two bugs lived here, and together they produced "Already deleted in CRMProvider —
  * removed. (Mirror prune did not confirm; it may reappear until the next
  * sweep.)" on records that had genuinely been deleted (2026-08-19):
  *
@@ -167,8 +167,8 @@ export function isZohoGhostError(x: unknown): boolean {
  *    stale counter keeps a cluster in the money figure after its duplicate
  *    deals are gone. The counters are recomputed from the surviving rows below.
  */
-export async function pruneGhostRecords(zohoIds: string[]): Promise<void> {
-  const ids = (zohoIds || []).map(String).filter(Boolean);
+export async function pruneGhostRecords(CRMProviderIds: string[]): Promise<void> {
+  const ids = (CRMProviderIds || []).map(String).filter(Boolean);
   if (!ids.length) return;
 
   await deleteMirrorRecords(ids);
@@ -179,13 +179,13 @@ export async function pruneGhostRecords(zohoIds: string[]): Promise<void> {
         SET status = 'deleted',
             deleted_at = COALESCE(deleted_at, NOW()),
             last_checked_at = NOW()
-      WHERE zoho_record_id = ANY($1::text[])`,
+      WHERE CRMProvider_record_id = ANY($1::text[])`,
     [ids],
   );
 }
 
 /**
- * Drop mirror rows for records Zoho no longer has, keeping the cluster counters
+ * Drop mirror rows for records CRMProvider no longer has, keeping the cluster counters
  * honest. Shared by every prune path — pruneGhostRecords and the two
  * reconcileEmptyDeleteDeletions branches, which previously ran a bare DELETE and
  * so skipped BOTH the foreign-key detach (the "record reappears forever" bug)
@@ -199,7 +199,7 @@ async function deleteMirrorRecords(ids: string[]): Promise<void> {
   // afterwards there is nothing left to join back to.
   const affected = await pool.query<{ cluster_id: number }>(
     `SELECT DISTINCT cluster_id FROM duplicate_records
-      WHERE zoho_record_id = ANY($1::text[]) AND cluster_id IS NOT NULL`,
+      WHERE CRMProvider_record_id = ANY($1::text[]) AND cluster_id IS NOT NULL`,
     [ids],
   );
   const clusterIds = affected.rows
@@ -210,13 +210,13 @@ async function deleteMirrorRecords(ids: string[]): Promise<void> {
   await pool.query(
     `UPDATE duplicate_merge_actions SET primary_record_id = NULL
       WHERE primary_record_id IN (
-        SELECT id FROM duplicate_records WHERE zoho_record_id = ANY($1::text[])
+        SELECT id FROM duplicate_records WHERE CRMProvider_record_id = ANY($1::text[])
       )`,
     [ids],
   );
 
   await pool.query(
-    `DELETE FROM duplicate_records WHERE zoho_record_id = ANY($1::text[])`,
+    `DELETE FROM duplicate_records WHERE CRMProvider_record_id = ANY($1::text[])`,
     [ids],
   );
 
@@ -253,7 +253,7 @@ async function deleteMirrorRecords(ids: string[]): Promise<void> {
 // Deals: orphaned (no Account) OR a coarse test-name match. JS classifier refines.
 export async function getEmptyDeals(): Promise<EmptyRecordRow[]> {
   const q = await pool.query(
-    `SELECT zoho_record_id, record_name, owner_name,
+    `SELECT CRMProvider_record_id, record_name, owner_name,
             COALESCE(deal_value, 0) AS amount,
             raw_data->'Account_Name'->>'id' AS account_id,
             raw_data->'Contact_Name'->>'id' AS contact_id,
@@ -290,7 +290,7 @@ export async function getEmptyDeals(): Promise<EmptyRecordRow[]> {
     // contact, no amount) and TEST deals stay on the cleanup tab.
     if (c.reason === "orphaned") continue;
     out.push({
-      zohoId: r.zoho_record_id,
+      CRMProviderId: r.CRMProvider_record_id,
       name: r.record_name || "",
       owner: r.owner_name || null,
       reason: c.reason,
@@ -321,12 +321,12 @@ export async function getEmptyAccounts(): Promise<EmptyRecordRow[]> {
            AND raw_data->'Account_Name'->>'id' IS NOT NULL
            AND raw_data->'Account_Name'->>'id' <> ''
      )
-     SELECT a.zoho_record_id, a.record_name, a.account_name, a.owner_name,
-            (a.zoho_record_id NOT IN (SELECT aid FROM linked)) AS structurally_empty,
+     SELECT a.CRMProvider_record_id, a.record_name, a.account_name, a.owner_name,
+            (a.CRMProvider_record_id NOT IN (SELECT aid FROM linked)) AS structurally_empty,
             COALESCE(NULLIF(a.email,''), a.raw_data->>'Email') AS email
        FROM duplicate_records a
       WHERE a.record_type='account'
-        AND ( a.zoho_record_id NOT IN (SELECT aid FROM linked)
+        AND ( a.CRMProvider_record_id NOT IN (SELECT aid FROM linked)
               OR a.record_name ILIKE ANY($1::text[])
               OR a.account_name ILIKE ANY($1::text[]) )
         ${excl("a.")}
@@ -346,7 +346,7 @@ export async function getEmptyAccounts(): Promise<EmptyRecordRow[]> {
     });
     if (!c.reason) continue;
     out.push({
-      zohoId: r.zoho_record_id,
+      CRMProviderId: r.CRMProvider_record_id,
       name,
       owner: r.owner_name || null,
       reason: c.reason,
@@ -361,14 +361,14 @@ export async function getEmptyAccounts(): Promise<EmptyRecordRow[]> {
 }
 
 /**
- * SINGLE SOURCE OF TRUTH for "is this live Zoho record actually empty?". Returns
+ * SINGLE SOURCE OF TRUTH for "is this live CRMProvider record actually empty?". Returns
  * a non-null reason when the record has REAL data (so it must NOT be tagged), or
  * null when it is genuinely empty. Both `aiApplyEmptyDelete` (the bulk tagger) and
  * `verifyEmptyCandidates` (the per-page CRM verifier) call this, so their safety
- * gate can never drift. May THROW on a Zoho API error (incl. ghost) — callers
+ * gate can never drift. May THROW on a CRMProvider API error (incl. ghost) — callers
  * decide whether to prune (ghost) or fail-safe-skip (other).
  *
- * `data` is the already-fetched live record body (`fetchZohoRecordById(...).data`).
+ * `data` is the already-fetched live record body (`fetchCRMProviderRecordById(...).data`).
  * Reasons: "contact_info" | "deals" | "contacts" | "email" | "account" |
  * "documents".  NOTE: a Deal's protected-stage check is intentionally NOT here —
  * it is a "skip" but not a "has data" signal; callers handle it separately.
@@ -378,7 +378,7 @@ async function liveDataReason(
   id: string,
   data: any,
 ): Promise<string | null> {
-  const { fetchZohoRelatedRecords, fetchRecordAttachments } = await import("./zohoCRM");
+  const { fetchCRMProviderRelatedRecords, fetchRecordAttachments } = await import("./CRMProviderCRM");
   const d: any = data || {};
   if (module === "Contacts") {
     if (
@@ -391,7 +391,7 @@ async function liveDataReason(
       return "contact_info";
     // A contact linked to ANY deal (including a partner/marketplace deal, or one
     // linked via Contact Roles rather than the deal's Contact_Name) is NOT empty.
-    const cDeals = await fetchZohoRelatedRecords("Contacts", id, "Deals", { perPage: 1 });
+    const cDeals = await fetchCRMProviderRelatedRecords("Contacts", id, "Deals", { perPage: 1 });
     if (Array.isArray(cDeals) && cDeals.length > 0) return "deals";
     return null;
   }
@@ -404,12 +404,12 @@ async function liveDataReason(
   }
   // Accounts
   if (d.Email || d.email) return "email";
-  // The decisive check: does Zoho show ANY live deal or contact on this account
+  // The decisive check: does CRMProvider show ANY live deal or contact on this account
   // right now? Catches the "account has deals inside" false positive the synced
   // mirror missed (Sample User 2026-06-26/27).
-  const aDeals = await fetchZohoRelatedRecords("Accounts", id, "Deals", { perPage: 1 });
+  const aDeals = await fetchCRMProviderRelatedRecords("Accounts", id, "Deals", { perPage: 1 });
   if (Array.isArray(aDeals) && aDeals.length > 0) return "deals";
-  const aContacts = await fetchZohoRelatedRecords("Accounts", id, "Contacts", { perPage: 1 });
+  const aContacts = await fetchCRMProviderRelatedRecords("Accounts", id, "Contacts", { perPage: 1 });
   if (Array.isArray(aContacts) && aContacts.length > 0) return "contacts";
   const atts = await fetchRecordAttachments("Accounts", id);
   if (Array.isArray(atts) && atts.length > 0) return "documents";
@@ -418,11 +418,11 @@ async function liveDataReason(
 
 /**
  * AI-Apply: for each genuinely-empty candidate in the given module, verify it
- * is still live in Zoho, prune any already-deleted ghosts from the local
+ * is still live in CRMProvider, prune any already-deleted ghosts from the local
  * mirror, skip records holding attachments or in protected Deal stages, then
  * bulk-tag survivors with the Empty-Delete tag and record them in the ledger.
  *
- * The platform NEVER deletes in Zoho — it only tags; the admin is the final gate.
+ * The platform NEVER deletes in CRMProvider — it only tags; the admin is the final gate.
  */
 export async function aiApplyEmptyDelete(
   module: "Deals" | "Accounts" | "Contacts",
@@ -436,7 +436,7 @@ export async function aiApplyEmptyDelete(
   <REDACTED_TOKEN>: number;
   remaining: number;
 }> {
-  const { fetchZohoRecordById, addZohoTags } = await import("./zohoCRM");
+  const { fetchCRMProviderRecordById, addCRMProviderTags } = await import("./CRMProviderCRM");
 
   // 1. Pull candidates and keep only delete-eligible non-orphaned records.
   let allCandidates: EmptyRecordRow[];
@@ -463,16 +463,16 @@ export async function aiApplyEmptyDelete(
   // instead of the same not-empty rows clogging the front of the queue).
   const toDismiss: string[] = [];
 
-  // 2. Per-candidate bounded sequential loop (live Zoho calls — pace them).
+  // 2. Per-candidate bounded sequential loop (live CRMProvider calls — pace them).
   for (const candidate of slice) {
-    const id = candidate.zohoId;
+    const id = candidate.CRMProviderId;
 
-    // Verify the record still exists in Zoho + read its live Tag (and Stage).
-    let liveRec: Awaited<ReturnType<typeof fetchZohoRecordById>> | null = null;
+    // Verify the record still exists in CRMProvider + read its live Tag (and Stage).
+    let liveRec: Awaited<ReturnType<typeof fetchCRMProviderRecordById>> | null = null;
     try {
-      liveRec = await fetchZohoRecordById(module, id);
+      liveRec = await fetchCRMProviderRecordById(module, id);
     } catch (e) {
-      if (isZohoGhostError(e)) {
+      if (isCRMProviderGhostError(e)) {
         await pruneGhostRecords([id]);
         prunedGhosts++;
         continue;
@@ -514,7 +514,7 @@ export async function aiApplyEmptyDelete(
     try {
       reason = await liveDataReason(module, id, ld);
     } catch (e) {
-      if (isZohoGhostError(e)) {
+      if (isCRMProviderGhostError(e)) {
         await pruneGhostRecords([id]);
         prunedGhosts++;
         continue;
@@ -538,7 +538,7 @@ export async function aiApplyEmptyDelete(
   }
 
   // Drop the confirmed-not-empty records off the cleanup list (durable Dismiss;
-  // Zoho is never modified — un-dismiss restores them).
+  // CRMProvider is never modified — un-dismiss restores them).
   if (toDismiss.length) await markEmptyRecordsDismissed(module, toDismiss, opts.by);
 
   // 3. Batch-tag survivors in chunks of ≤100.
@@ -548,19 +548,19 @@ export async function aiApplyEmptyDelete(
     const chunk = toTag.slice(i, i + CHUNK);
     let result: any;
     try {
-      result = await addZohoTags(module, chunk, [EMPTY_DELETE_TAG]);
+      result = await addCRMProviderTags(module, chunk, [EMPTY_DELETE_TAG]);
     } catch (e) {
-      if (isZohoGhostError(e)) {
+      if (isCRMProviderGhostError(e)) {
         // Batch failed with a ghost-like error — prune the whole chunk conservatively.
         await pruneGhostRecords(chunk);
         prunedGhosts += chunk.length;
         continue;
       }
-      logger.error(`[aiApplyEmptyDelete] addZohoTags failed for ${module} chunk`, e);
+      logger.error(`[aiApplyEmptyDelete] addCRMProviderTags failed for ${module} chunk`, e);
       continue;
     }
 
-    // Zoho v2 add_tags returns HTTP 200 even when a record is REJECTED —
+    // CRMProvider v2 add_tags returns HTTP 200 even when a record is REJECTED —
     // the truth is in each element's code/status field.
     const perRecord: any[] = Array.isArray(result) ? result : [];
     for (const rec of perRecord) {
@@ -575,9 +575,9 @@ export async function aiApplyEmptyDelete(
           String(rec?.message || ""),
         )
       ) {
-        // Ghost detected during tag — the record was deleted in Zoho between our
+        // Ghost detected during tag — the record was deleted in CRMProvider between our
         // live-verify and this tag call. Prune the local mirror. NOTE: we gate on
-        // the MESSAGE, not a bare INVALID_DATA code — Zoho returns INVALID_DATA for
+        // the MESSAGE, not a bare INVALID_DATA code — CRMProvider returns INVALID_DATA for
         // ordinary validation failures too, and pruning a just-verified-live record
         // on a non-deletion error would wrongly drop its mirror row.
         await pruneGhostRecords([recId]);
@@ -587,15 +587,15 @@ export async function aiApplyEmptyDelete(
       }
     }
 
-    // If Zoho returned no per-record array (empty/ambiguous response), do NOT
+    // If CRMProvider returned no per-record array (empty/ambiguous response), do NOT
     // optimistically assume success — that would write the ledger for records
     // that may never have been tagged, dropping them off the list forever.
     // Leave them on the list; this self-heals on the next AI-Apply run: if the
     // tag DID apply, the live-tag check sees Empty-Delete and records it
-    // idempotently; if it didn't, they get re-tagged. (Zoho add_tags reliably
+    // idempotently; if it didn't, they get re-tagged. (CRMProvider add_tags reliably
     // returns one SUCCESS element per valid id, so empty is genuinely unusual.)
     if (perRecord.length === 0) {
-      logger.warn(`[aiApplyEmptyDelete] addZohoTags returned no per-record results for ${module} chunk of ${chunk.length}; leaving on list for next run`);
+      logger.warn(`[aiApplyEmptyDelete] addCRMProviderTags returned no per-record results for ${module} chunk of ${chunk.length}; leaving on list for next run`);
     }
   }
 
@@ -617,20 +617,20 @@ export async function aiApplyEmptyDelete(
 
 /**
  * Live-verify a SET of candidate ids (the rows the operator currently sees on a
- * page) against Zoho — WITHOUT tagging anything. For each id it asks Zoho the same
+ * page) against CRMProvider — WITHOUT tagging anything. For each id it asks CRMProvider the same
  * question `aiApplyEmptyDelete` asks before tagging (via the shared `liveDataReason`
  * gate) and sorts the id into one of:
  *   - `empty`  — genuinely empty (confirmed: stays a delete candidate)
  *   - `keep`   — has real data (deals/contacts/email/docs) → auto-Dismissed so it
  *                drops off the cleanup list and never returns
- *   - `ghost`  — already deleted in Zoho → pruned from the local mirror
+ *   - `ghost`  — already deleted in CRMProvider → pruned from the local mirror
  *   - `tagged` — already carries Empty-Delete / Duplicate-Delete → dropped
  * Bounded by the caller (one visible page, ≤ a few dozen ids). The platform never
- * deletes in Zoho; "keep" only writes a local Dismiss, "ghost" only prunes our copy.
+ * deletes in CRMProvider; "keep" only writes a local Dismiss, "ghost" only prunes our copy.
  */
 export async function verifyEmptyCandidates(
   module: "Deals" | "Accounts" | "Contacts",
-  zohoIds: string[],
+  CRMProviderIds: string[],
   by: string | null,
 ): Promise<{
   empty: string[];
@@ -638,8 +638,8 @@ export async function verifyEmptyCandidates(
   ghosts: string[];
   tagged: string[];
 }> {
-  const { fetchZohoRecordById } = await import("./zohoCRM");
-  const ids = (zohoIds || []).map(String).filter(Boolean);
+  const { fetchCRMProviderRecordById } = await import("./CRMProviderCRM");
+  const ids = (CRMProviderIds || []).map(String).filter(Boolean);
   const empty: string[] = [];
   const keep: Array<{ id: string; reason: string }> = [];
   const ghosts: string[] = [];
@@ -648,11 +648,11 @@ export async function verifyEmptyCandidates(
   const dupAlreadyTagged: string[] = []; // live Duplicate-Delete → merge flow owns it → dismiss
 
   for (const id of ids) {
-    let liveRec: Awaited<ReturnType<typeof fetchZohoRecordById>> | null = null;
+    let liveRec: Awaited<ReturnType<typeof fetchCRMProviderRecordById>> | null = null;
     try {
-      liveRec = await fetchZohoRecordById(module, id);
+      liveRec = await fetchCRMProviderRecordById(module, id);
     } catch (e) {
-      if (isZohoGhostError(e)) {
+      if (isCRMProviderGhostError(e)) {
         ghosts.push(id);
         continue;
       }
@@ -683,7 +683,7 @@ export async function verifyEmptyCandidates(
     try {
       reason = await liveDataReason(module, id, ld);
     } catch (e) {
-      if (isZohoGhostError(e)) {
+      if (isCRMProviderGhostError(e)) {
         ghosts.push(id);
         continue;
       }
@@ -694,14 +694,14 @@ export async function verifyEmptyCandidates(
     else empty.push(id);
   }
 
-  // Persist the verdicts on our side (Zoho is never modified here):
+  // Persist the verdicts on our side (CRMProvider is never modified here):
   //  - ghosts → prune from the mirror so they vanish everywhere
   //  - keep   → Dismiss ("reviewed — not empty") so they don't reappear
   if (ghosts.length) await pruneGhostRecords(ghosts);
   if (keep.length) {
     await markEmptyRecordsDismissed(module, keep.map((k) => k.id), by);
   }
-  // Records already carrying Empty-Delete in LIVE Zoho (the synced mirror was
+  // Records already carrying Empty-Delete in LIVE CRMProvider (the synced mirror was
   // stale, so they slipped into the active list): record them in the ledger so
   // they MOVE to "Tagged · pending delete" and drop off this cleanup list —
   // instead of lingering here as "already tagged — keep" (Sample User 2026-06-30).
@@ -716,7 +716,7 @@ export async function verifyEmptyCandidates(
  * "Check documents" button (Accounts + Deals) — the same gate AI-Apply uses,
  * via the shared `liveDataReason`. Makes NO changes (no tag, no dismiss, no
  * prune); the caller decides what to do with the verdict.
- *   - ghost  → the record is deleted in Zoho (caller prunes the row)
+ *   - ghost  → the record is deleted in CRMProvider (caller prunes the row)
  *   - tagged → already carries Empty-Delete / Duplicate-Delete
  *   - empty:true  → genuinely empty (caller marks it delete-eligible)
  *   - empty:false + reason → has data / documents / a protected stage
@@ -725,12 +725,12 @@ export async function checkRecordEmptiness(
   module: "Deals" | "Accounts" | "Contacts",
   id: string,
 ): Promise<{ empty: boolean; reason: string | null; ghost: boolean; tagged: boolean }> {
-  const { fetchZohoRecordById } = await import("./zohoCRM");
-  let liveRec: Awaited<ReturnType<typeof fetchZohoRecordById>> | null = null;
+  const { fetchCRMProviderRecordById } = await import("./CRMProviderCRM");
+  let liveRec: Awaited<ReturnType<typeof fetchCRMProviderRecordById>> | null = null;
   try {
-    liveRec = await fetchZohoRecordById(module, id);
+    liveRec = await fetchCRMProviderRecordById(module, id);
   } catch (e) {
-    if (isZohoGhostError(e)) return { empty: false, reason: null, ghost: true, tagged: false };
+    if (isCRMProviderGhostError(e)) return { empty: false, reason: null, ghost: true, tagged: false };
     throw e;
   }
   if (!liveRec) return { empty: false, reason: null, ghost: true, tagged: false };
@@ -746,7 +746,7 @@ export async function checkRecordEmptiness(
   try {
     reason = await liveDataReason(module, id, ld);
   } catch (e) {
-    if (isZohoGhostError(e)) return { empty: false, reason: null, ghost: true, tagged: false };
+    if (isCRMProviderGhostError(e)) return { empty: false, reason: null, ghost: true, tagged: false };
     throw e;
   }
   return { empty: !reason, reason: reason || null, ghost: false, tagged: false };
@@ -761,9 +761,9 @@ export async function checkRecordEmptiness(
  */
 export async function getEmptinessBatch(
   module: "Deals" | "Accounts" | "Contacts",
-  zohoIds: string[],
+  CRMProviderIds: string[],
 ): Promise<Array<{ id: string; empty: boolean; reason: string | null; ghost: boolean; tagged: boolean }>> {
-  const ids = (zohoIds || []).map(String).filter(Boolean).slice(0, 60);
+  const ids = (CRMProviderIds || []).map(String).filter(Boolean).slice(0, 60);
   const out: Array<{ id: string; empty: boolean; reason: string | null; ghost: boolean; tagged: boolean }> = [];
   const CONCURRENCY = 4;
   for (let i = 0; i < ids.length; i += CONCURRENCY) {
@@ -789,7 +789,7 @@ export async function getEmptinessBatch(
  * plus aggregate counts. Used by the "Tagged · pending delete" sub-section. */
 export async function getTaggedStatus(module?: string): Promise<{
   rows: Array<{
-    zohoId: string;
+    CRMProviderId: string;
     module: string;
     status: string;
     taggedBy: string | null;
@@ -801,14 +801,14 @@ export async function getTaggedStatus(module?: string): Promise<{
   const mod = module || null;
   const [rowsRes, countsRes] = await Promise.all([
     pool.query<{
-      zoho_record_id: string;
+      CRMProvider_record_id: string;
       module: string;
       status: string;
       tagged_by: string | null;
       created_at: Date | null;
       deleted_at: Date | null;
     }>(
-      `SELECT zoho_record_id, module, status, tagged_by, created_at, deleted_at
+      `SELECT CRMProvider_record_id, module, status, tagged_by, created_at, deleted_at
          FROM empty_delete_ledger
         WHERE ($1::text IS NULL OR module = $1)
         ORDER BY created_at DESC
@@ -828,7 +828,7 @@ export async function getTaggedStatus(module?: string): Promise<{
   ]);
 
   const rows = rowsRes.rows.map((r) => ({
-    zohoId: r.zoho_record_id,
+    CRMProviderId: r.CRMProvider_record_id,
     module: r.module,
     status: r.status,
     taggedBy: r.tagged_by ?? null,
@@ -848,16 +848,16 @@ export async function getTaggedStatus(module?: string): Promise<{
 }
 
 /** Manually move ONE tagged record from the pending-delete queue to 'dismissed'
- * — a local ledger disposition only; it does NOT touch the Zoho tag. Used by the
+ * — a local ledger disposition only; it does NOT touch the CRMProvider tag. Used by the
  * per-row Dismiss button so the operator can drop a record off the pending list
- * without a Zoho round-trip. Only affects a row that is currently pending. */
-export async function dismissTaggedRecord(zohoId: string): Promise<void> {
-  const id = String(zohoId || "").trim();
+ * without a CRMProvider round-trip. Only affects a row that is currently pending. */
+export async function dismissTaggedRecord(CRMProviderId: string): Promise<void> {
+  const id = String(CRMProviderId || "").trim();
   if (!id) return;
   await pool.query(
     `UPDATE empty_delete_ledger
         SET status = 'dismissed', last_checked_at = NOW(), deleted_at = NULL
-      WHERE zoho_record_id = $1 AND status = 'pending_delete'`,
+      WHERE CRMProvider_record_id = $1 AND status = 'pending_delete'`,
     [id],
   );
 }
@@ -867,21 +867,21 @@ export async function dismissTaggedRecord(zohoId: string): Promise<void> {
  * operator can clear a whole page at once instead of firing one request per
  * row (which trips the API rate limiter → the 429 "Too many requests" error).
  * Returns how many rows actually moved (only pending_delete rows change). */
-export async function dismissTaggedRecords(zohoIds: string[]): Promise<number> {
+export async function dismissTaggedRecords(CRMProviderIds: string[]): Promise<number> {
   const ids = Array.from(
-    new Set((zohoIds || []).map((x) => String(x || "").trim()).filter(Boolean)),
+    new Set((CRMProviderIds || []).map((x) => String(x || "").trim()).filter(Boolean)),
   );
   if (ids.length === 0) return 0;
   const res = await pool.query(
     `UPDATE empty_delete_ledger
         SET status = 'dismissed', last_checked_at = NOW(), deleted_at = NULL
-      WHERE zoho_record_id = ANY($1::text[]) AND status = 'pending_delete'`,
+      WHERE CRMProvider_record_id = ANY($1::text[]) AND status = 'pending_delete'`,
     [ids],
   );
   return res.rowCount || 0;
 }
 
-/** Check up to 300 pending_delete ledger rows against live Zoho.
+/** Check up to 300 pending_delete ledger rows against live CRMProvider.
  * Records no longer found → stamp as 'deleted' in the ledger + prune from
  * the local duplicate_records mirror.  Records still present → update
  * last_checked_at.  Individual errors are swallowed (best-effort).
@@ -893,11 +893,11 @@ export async function dismissTaggedRecords(zohoIds: string[]): Promise<number> {
 export async function reconcileEmptyDeleteDeletions(
   module?: string,
 ): Promise<{ checked: number; nowDeleted: number; nowDismissed: number }> {
-  const { fetchZohoRecordById } = await import("./zohoCRM");
+  const { fetchCRMProviderRecordById } = await import("./CRMProviderCRM");
   const mod = module || null;
 
-  const pending = await pool.query<{ zoho_record_id: string; module: string }>(
-    `SELECT zoho_record_id, module
+  const pending = await pool.query<{ CRMProvider_record_id: string; module: string }>(
+    `SELECT CRMProvider_record_id, module
        FROM empty_delete_ledger
       WHERE status = 'pending_delete'
         AND ($1::text IS NULL OR module = $1)
@@ -911,19 +911,19 @@ export async function reconcileEmptyDeleteDeletions(
   let nowDismissed = 0;
 
   for (const row of pending.rows) {
-    const id = row.zoho_record_id;
+    const id = row.CRMProvider_record_id;
     const rowModule = row.module;
     try {
-      let rec: Awaited<ReturnType<typeof fetchZohoRecordById>>;
+      let rec: Awaited<ReturnType<typeof fetchCRMProviderRecordById>>;
       try {
-        rec = await fetchZohoRecordById(rowModule, id);
+        rec = await fetchCRMProviderRecordById(rowModule, id);
       } catch (e) {
-        if (isZohoGhostError(e)) {
+        if (isCRMProviderGhostError(e)) {
           // Ghost error → record is gone
           await pool.query(
             `UPDATE empty_delete_ledger
                 SET status = 'deleted', deleted_at = NOW(), last_checked_at = NOW()
-              WHERE zoho_record_id = $1`,
+              WHERE CRMProvider_record_id = $1`,
             [id],
           );
           // Mirror-only delete — the ledger row is written above and MUST be
@@ -946,11 +946,11 @@ export async function reconcileEmptyDeleteDeletions(
       }
 
       if (!rec) {
-        // null = 404/204 — record is gone from Zoho
+        // null = 404/204 — record is gone from CRMProvider
         await pool.query(
           `UPDATE empty_delete_ledger
               SET status = 'deleted', deleted_at = NOW(), last_checked_at = NOW()
-            WHERE zoho_record_id = $1`,
+            WHERE CRMProvider_record_id = $1`,
           [id],
         );
         // Mirror-only delete — ledger row written above and kept; see the note
@@ -958,7 +958,7 @@ export async function reconcileEmptyDeleteDeletions(
         await deleteMirrorRecords([id]);
         nowDeleted++;
       } else {
-        // Still present in Zoho. Did the operator REMOVE the delete tag there?
+        // Still present in CRMProvider. Did the operator REMOVE the delete tag there?
         // If the record no longer carries ANY delete tag, the admin will never
         // delete it → move it OUT of pending into 'dismissed' (drops off the
         // pending queue; the ledger row is kept so it still excludes the record
@@ -971,14 +971,14 @@ export async function reconcileEmptyDeleteDeletions(
           await pool.query(
             `UPDATE empty_delete_ledger
                 SET status = 'dismissed', last_checked_at = NOW(), deleted_at = NULL
-              WHERE zoho_record_id = $1`,
+              WHERE CRMProvider_record_id = $1`,
             [id],
           );
           nowDismissed++;
         } else {
           // Still tagged — just refresh last_checked_at
           await pool.query(
-            `UPDATE empty_delete_ledger SET last_checked_at = NOW() WHERE zoho_record_id = $1`,
+            `UPDATE empty_delete_ledger SET last_checked_at = NOW() WHERE CRMProvider_record_id = $1`,
             [id],
           );
         }
@@ -998,11 +998,11 @@ export async function reconcileEmptyDeleteDeletions(
 }
 
 /** General deletion-reconcile: verify a ROTATING batch of duplicate_records
- * against LIVE Zoho and PRUNE the ones that are gone (deleted or merged in the
+ * against LIVE CRMProvider and PRUNE the ones that are gone (deleted or merged in the
  * CRM). Incremental sync (If-Modified-Since) never reports deletions, so without
- * this a record deleted in Zoho lingers in the mirror and keeps its cluster
+ * this a record deleted in CRMProvider lingers in the mirror and keeps its cluster
  * showing on every tab. Rotates by last_verified_at so repeated runs sweep the
- * whole table; bounded batch + small concurrency to stay polite with Zoho.
+ * whole table; bounded batch + small concurrency to stay polite with CRMProvider.
  * Best-effort: individual fetch errors are swallowed. */
 export async function reconcileDeletedRecords(
   opts: {
@@ -1012,7 +1012,7 @@ export async function reconcileDeletedRecords(
     clusterIds?: number[];
   } = {},
 ): Promise<{ checked: number; pruned: number; converted: number }> {
-  const { fetchZohoRecordById } = await import("./zohoCRM");
+  const { fetchCRMProviderRecordById } = await import("./CRMProviderCRM");
   const mod = opts.module || null;
   const limit = Math.min(2000, Math.max(1, Math.floor(opts.limit ?? 300)));
 
@@ -1029,11 +1029,11 @@ export async function reconcileDeletedRecords(
   const cids = Array.isArray(opts.clusterIds)
     ? opts.clusterIds.map(Number).filter((n) => Number.isFinite(n))
     : null;
-  const batch = await pool.query<{ zoho_record_id: string; record_type: string | null; zoho_module: string | null }>(
-    `SELECT dr.zoho_record_id, dr.record_type, dr.zoho_module
+  const batch = await pool.query<{ CRMProvider_record_id: string; record_type: string | null; CRMProvider_module: string | null }>(
+    `SELECT dr.CRMProvider_record_id, dr.record_type, dr.CRMProvider_module
        FROM duplicate_records dr
        ${activeOnly ? "JOIN duplicate_clusters dc ON dc.id = dr.cluster_id" : ""}
-      WHERE dr.zoho_record_id IS NOT NULL AND dr.zoho_record_id <> ''
+      WHERE dr.CRMProvider_record_id IS NOT NULL AND dr.CRMProvider_record_id <> ''
         AND ($1::text IS NULL OR dr.record_type = $1)
         ${cids && cids.length ? "AND dr.cluster_id = ANY($3::int[])" : ""}
         ${activeOnly ? "AND COALESCE(dc.status, 'active') NOT IN ('resolved', 'ignored', 'dismissed') AND dc.total_records > 1" : ""}
@@ -1058,14 +1058,14 @@ export async function reconcileDeletedRecords(
   for (let i = 0; i < batch.rows.length; i += CONCURRENCY) {
     const chunk = batch.rows.slice(i, i + CONCURRENCY);
     await Promise.all(chunk.map(async (row) => {
-      const id = row.zoho_record_id;
-      const module = moduleOf(row.record_type, row.zoho_module);
+      const id = row.CRMProvider_record_id;
+      const module = moduleOf(row.record_type, row.CRMProvider_module);
       try {
-        let rec: Awaited<ReturnType<typeof fetchZohoRecordById>> = null;
+        let rec: Awaited<ReturnType<typeof fetchCRMProviderRecordById>> = null;
         try {
-          rec = await fetchZohoRecordById(module, id);
+          rec = await fetchCRMProviderRecordById(module, id);
         } catch (e) {
-          if (isZohoGhostError(e)) {
+          if (isCRMProviderGhostError(e)) {
             await pruneGhostRecords([id]);
             pruned++; checked++;
             return;
@@ -1074,7 +1074,7 @@ export async function reconcileDeletedRecords(
           return;
         }
         if (!rec) {
-          await pruneGhostRecords([id]); // 204/404 — gone from Zoho
+          await pruneGhostRecords([id]); // 204/404 — gone from CRMProvider
           pruned++;
         } else if (
           module === "Leads" &&
@@ -1095,13 +1095,13 @@ export async function reconcileDeletedRecords(
                 SET status = 'Converted',
                     raw_data = jsonb_set(COALESCE(raw_data, '{}'::jsonb), '{Lead_Status}', '"Converted"'::jsonb, true),
                     last_verified_at = NOW()
-              WHERE zoho_record_id = $1`,
+              WHERE CRMProvider_record_id = $1`,
             [id],
           );
           converted++;
         } else {
           await pool.query(
-            `UPDATE duplicate_records SET last_verified_at = NOW() WHERE zoho_record_id = $1`,
+            `UPDATE duplicate_records SET last_verified_at = NOW() WHERE CRMProvider_record_id = $1`,
             [id],
           );
         }
@@ -1126,17 +1126,17 @@ export async function reconcileDeletedRecords(
 
 /**
  * COMPREHENSIVE deletion sweep (Sample User 2026-07-13): purge EVERYTHING deleted in
- * Zoho — any module, any type — so the WEEKLY automatic-audit / Slack brief
+ * CRMProvider — any module, any type — so the WEEKLY automatic-audit / ChatProvider brief
  * reflects clean data. Runs once, right before postWeeklyExecBrief (Sunday),
  * not just monthly. Two passes:
- *   1) Zoho's /deleted feed for every module over a WIDE window (default 180
+ *   1) CRMProvider's /deleted feed for every module over a WIDE window (default 180
  *      days, RADAR_WEEKLY_DELETION_LOOKBACK_DAYS) — bulk-paginated and cheap;
  *      catches everything still in the recycle bin regardless of which 6h sync
- *      missed it. removeRecordsByZohoIds is idempotent.
+ *      missed it. removeRecordsByCRMProviderIds is idempotent.
  *   2) A large live-verify of active-cluster records across all modules — the
  *      only signal for records HARD-purged from the recycle bin (gone from the
  *      /deleted feed), which the bounded per-sync sweep may not have reached.
- * The platform NEVER deletes in Zoho — it only prunes its own mirror of
+ * The platform NEVER deletes in CRMProvider — it only prunes its own mirror of
  * already-gone records. Env: RADAR_WEEKLY_DELETION_LOOKBACK_DAYS (180),
  * RADAR_WEEKLY_GHOST_VERIFY (5000); either =0 disables that pass.
  */
@@ -1150,8 +1150,8 @@ export async function runComprehensiveDeletionSweep(
   idsetPruned: number;
   perModuleFeed: Record<string, number>;
 }> {
-  const { fetchDeletedZohoRecords } = await import("./zohoCRM");
-  const { removeRecordsByZohoIds, cleanupSingletonClusters } = await import(
+  const { fetchDeletedCRMProviderRecords } = await import("./CRMProviderCRM");
+  const { removeRecordsByCRMProviderIds, cleanupSingletonClusters } = await import(
     "./duplicateRadarDatabase"
   );
   const modules = ["Leads", "Deals", "Contacts", "Accounts"];
@@ -1168,13 +1168,13 @@ export async function runComprehensiveDeletionSweep(
   let feedRemoved = 0;
   for (const m of modules) {
     try {
-      const deleted = await fetchDeletedZohoRecords(m, {
+      const deleted = await fetchDeletedCRMProviderRecords(m, {
         type: "all",
         modifiedSince: since,
       });
       const ids = deleted.map((d: any) => d.id).filter(Boolean);
       if (ids.length) {
-        const { removedCount } = await removeRecordsByZohoIds(ids, {
+        const { removedCount } = await removeRecordsByCRMProviderIds(ids, {
           module: m,
         });
         perModuleFeed[m] = removedCount;
@@ -1228,7 +1228,7 @@ export async function runComprehensiveDeletionSweep(
   // THE definitive layer (Sample User 2026-07-15): full id-set reconciliation. The
   // /deleted feed above misses HARD-deleted records (recycle bin emptied) and
   // deletions older than its window; per-record live-verify only rotates a slice.
-  // This diffs our whole mirror against Zoho's LIVE id set and prunes anything
+  // This diffs our whole mirror against CRMProvider's LIVE id set and prunes anything
   // absent — the ONLY method that catches every deletion deterministically.
   let idsetPruned = 0;
   try {
@@ -1257,10 +1257,10 @@ export async function runComprehensiveDeletionSweep(
  * DEFINITIVE deletion detector (Sample User 2026-07-15). Incremental sync never
  * returns deletions, the /deleted feed can't see HARD-deleted or long-ago
  * deletions, and per-record verify only rotates a slice — so ghosts survive.
- * This fetches Zoho's COMPLETE live id set for a module (id-only, cheap) and
+ * This fetches CRMProvider's COMPLETE live id set for a module (id-only, cheap) and
  * prunes every record in our mirror whose id is NOT in it. Catches deletions,
  * merges, and converted leads (converted leads leave the Leads list) in one
- * deterministic pass, regardless of when/how they left Zoho.
+ * deterministic pass, regardless of when/how they left CRMProvider.
  *
  * SAFETY (critical): pruning-by-absence is only safe when the live fetch is
  * COMPLETE. A partial/rate-limited/failed fetch would otherwise nuke live
@@ -1268,15 +1268,15 @@ export async function runComprehensiveDeletionSweep(
  * (3) if the diff would prune more than RADAR_IDSET_MAX_PRUNE_FRAC (default 40%)
  * of our records for that module → abort + error-log (a legit mass-delete that
  * large is rare; a truncated fetch is the likely cause). Matches our rows by
- * zoho_module OR (null zoho_module AND record_type) so legacy rows are covered.
+ * CRMProvider_module OR (null CRMProvider_module AND record_type) so legacy rows are covered.
  */
 export async function reconcileDeletedByIdSet(
   module: "Leads" | "Deals" | "Contacts" | "Accounts",
 ): Promise<{ liveIds: number; ourIds: number; pruned: number; aborted: boolean }> {
-  const { fetchAllZohoRecords } = await import("./zohoCRM");
+  const { fetchAllCRMProviderRecords } = await import("./CRMProviderCRM");
   let live: Array<{ id?: string }>;
   try {
-    live = (await fetchAllZohoRecords(module, { fields: ["id"] })) as any[];
+    live = (await fetchAllCRMProviderRecords(module, { fields: ["id"] })) as any[];
   } catch (e: any) {
     logger.warn(
       `[id-set-reconcile] ${module} live id fetch FAILED — abort (no prune): ${e?.message || e}`,
@@ -1300,19 +1300,19 @@ export async function reconcileDeletedByIdSet(
         : module === "Contacts"
           ? "contact"
           : "account";
-  const ours = await pool.query<{ zoho_record_id: string }>(
-    `SELECT zoho_record_id FROM duplicate_records
-      WHERE zoho_record_id IS NOT NULL AND btrim(zoho_record_id) <> ''
-        AND (zoho_module = $1 OR (zoho_module IS NULL AND record_type = $2))`,
+  const ours = await pool.query<{ CRMProvider_record_id: string }>(
+    `SELECT CRMProvider_record_id FROM duplicate_records
+      WHERE CRMProvider_record_id IS NOT NULL AND btrim(CRMProvider_record_id) <> ''
+        AND (CRMProvider_module = $1 OR (CRMProvider_module IS NULL AND record_type = $2))`,
     [module, rt],
   );
   const ghosts = ours.rows
-    .map((r) => String(r.zoho_record_id))
+    .map((r) => String(r.CRMProvider_record_id))
     .filter((id) => !liveSet.has(id));
   const maxFrac = parseFloat(process.env.RADAR_IDSET_MAX_PRUNE_FRAC || "0.4");
   if (ours.rows.length > 200 && ghosts.length > ours.rows.length * maxFrac) {
     logger.error(
-      `[id-set-reconcile] ${module}: would prune ${ghosts.length}/${ours.rows.length} (> ${Math.round(maxFrac * 100)}%) — ABORT as a likely incomplete Zoho fetch (live=${liveSet.size}). Override with RADAR_IDSET_MAX_PRUNE_FRAC.`,
+      `[id-set-reconcile] ${module}: would prune ${ghosts.length}/${ours.rows.length} (> ${Math.round(maxFrac * 100)}%) — ABORT as a likely incomplete CRMProvider fetch (live=${liveSet.size}). Override with RADAR_IDSET_MAX_PRUNE_FRAC.`,
     );
     return {
       liveIds: liveSet.size,
@@ -1343,7 +1343,7 @@ export async function reconcileDeletedByIdSet(
 }
 
 /** Run the id-set reconcile across all four modules (sequential — one heavy
- * Zoho id-fetch at a time). Returns per-module { ourIds, pruned, aborted }. */
+ * CRMProvider id-fetch at a time). Returns per-module { ourIds, pruned, aborted }. */
 export async function reconcileAllDeletedByIdSet(): Promise<
   Record<string, { ourIds: number; pruned: number; aborted: boolean }>
 > {
@@ -1366,17 +1366,17 @@ export async function reconcileAllDeletedByIdSet(): Promise<
 }
 
 /**
- * AUTHORITATIVE DELETION SWEEP via Zoho's /deleted feed (Sample User 2026-07-23).
+ * AUTHORITATIVE DELETION SWEEP via CRMProvider's /deleted feed (Sample User 2026-07-23).
  *
  * WHY: the id-set reconcile ABORTS whenever it can't fetch the COMPLETE live id
- * set for a module (Zoho pagination limits on 38k+ leads / 70k contacts, or a
+ * set for a module (CRMProvider pagination limits on 38k+ leads / 70k contacts, or a
  * running sync) — the 40% safety guard fires, so a bulk "uploaded then removed"
  * batch (e.g. 1,193 Mawsool leads) is NEVER pruned and lingers as fake
  * duplicates + inflation + stuck "pending delete" rows. The "Verify & prune
  * deleted" button therefore couldn't catch it.
  *
- * This asks Zoho DIRECTLY which records it deleted (the /deleted?type=all feed —
- * bulk-paginated, cheap, and AUTHORITATIVE: Zoho is telling us these are gone),
+ * This asks CRMProvider DIRECTLY which records it deleted (the /deleted?type=all feed —
+ * bulk-paginated, cheap, and AUTHORITATIVE: CRMProvider is telling us these are gone),
  * over a wide lookback, and prunes exactly those ids from the mirror + the
  * empty-delete ledger. No id-set to fetch, so no incomplete-fetch abort — this
  * catches bulk deletions the id-set reconcile can't. Idempotent (re-seeing an
@@ -1384,37 +1384,37 @@ export async function reconcileAllDeletedByIdSet(): Promise<
  */
 export async function sweepDeletedByFeed(opts: { lookbackDays?: number } = {}): Promise<{
   totalPruned: number;
-  perModule: Record<string, { deletedInZoho: number; pruned: number }>;
+  perModule: Record<string, { deletedInCRMProvider: number; pruned: number }>;
 }> {
   const lookbackDays = Math.min(
     365,
     Math.max(1, Math.floor(Number(opts.lookbackDays ?? 90) || 90)),
   );
   const since = new Date(Date.now() - lookbackDays * 86400000).toISOString();
-  const { fetchDeletedZohoRecords } = await import("./zohoCRM");
-  const { removeRecordsByZohoIds } = await import("./duplicateRadarDatabase");
-  const perModule: Record<string, { deletedInZoho: number; pruned: number }> = {};
+  const { fetchDeletedCRMProviderRecords } = await import("./CRMProviderCRM");
+  const { removeRecordsByCRMProviderIds } = await import("./duplicateRadarDatabase");
+  const perModule: Record<string, { deletedInCRMProvider: number; pruned: number }> = {};
   let totalPruned = 0;
 
   for (const module of ["Leads", "Deals", "Contacts", "Accounts"] as const) {
     try {
-      const deleted = await fetchDeletedZohoRecords(module, {
+      const deleted = await fetchDeletedCRMProviderRecords(module, {
         type: "all",
         modifiedSince: since,
       });
       const ids = (deleted || []).map((d) => String(d?.id ?? "")).filter(Boolean);
       if (ids.length === 0) {
-        perModule[module] = { deletedInZoho: 0, pruned: 0 };
+        perModule[module] = { deletedInCRMProvider: 0, pruned: 0 };
         continue;
       }
       // Prune the mirror copies (by id alone — the feed already scoped them to
-      // this module, and a NULL zoho_module must not shield a ghost).
+      // this module, and a NULL CRMProvider_module must not shield a ghost).
       let pruned = 0;
       const CHUNK = 500;
       for (let i = 0; i < ids.length; i += CHUNK) {
         const slice = ids.slice(i, i + CHUNK);
         try {
-          const { removedCount } = await removeRecordsByZohoIds(slice);
+          const { removedCount } = await removeRecordsByCRMProviderIds(slice);
           pruned += removedCount || 0;
         } catch {
           /* fall back to the ghost-pruner (also clears the empty-delete ledger) */
@@ -1423,14 +1423,14 @@ export async function sweepDeletedByFeed(opts: { lookbackDays?: number } = {}): 
         // Always clear these ids from the empty-delete ledger so a record the
         // admin actually deleted stops showing as "Tagged · pending delete".
         await pool
-          .query(`DELETE FROM empty_delete_ledger WHERE zoho_record_id = ANY($1::text[])`, [slice])
+          .query(`DELETE FROM empty_delete_ledger WHERE CRMProvider_record_id = ANY($1::text[])`, [slice])
           .catch(() => {});
       }
-      perModule[module] = { deletedInZoho: ids.length, pruned };
+      perModule[module] = { deletedInCRMProvider: ids.length, pruned };
       totalPruned += pruned;
     } catch (e: any) {
       logger.warn(`[deletion-feed-sweep] ${module} failed (non-fatal): ${e?.message || e}`);
-      perModule[module] = { deletedInZoho: 0, pruned: 0 };
+      perModule[module] = { deletedInCRMProvider: 0, pruned: 0 };
     }
   }
   // Drop clusters left with a single record after the prune.
@@ -1445,7 +1445,7 @@ export async function sweepDeletedByFeed(opts: { lookbackDays?: number } = {}): 
   }
   logger.info(
     `🧹 [deletion-feed-sweep] lookback=${lookbackDays}d, pruned=${totalPruned}: ${Object.entries(perModule)
-      .map(([m, r]) => `${m}=${r.pruned}/${r.deletedInZoho}`)
+      .map(([m, r]) => `${m}=${r.pruned}/${r.deletedInCRMProvider}`)
       .join(", ")}`,
   );
   return { totalPruned, perModule };
@@ -1461,19 +1461,19 @@ export async function getEmptyContacts(): Promise<EmptyRecordRow[]> {
            AND raw_data->'Contact_Name'->>'id' IS NOT NULL
            AND raw_data->'Contact_Name'->>'id' <> ''
      )
-     SELECT c.zoho_record_id, c.record_name, c.owner_name,
+     SELECT c.CRMProvider_record_id, c.record_name, c.owner_name,
             (c.email IS NOT NULL AND c.email <> '') AS has_email,
             ((c.phone_normalized IS NOT NULL AND c.phone_normalized <> '')
              OR (c.mobile_normalized IS NOT NULL AND c.mobile_normalized <> '')) AS has_phone,
             (c.raw_data->'Account_Name'->>'id' IS NOT NULL AND c.raw_data->'Account_Name'->>'id' <> '') AS has_account,
-            (c.zoho_record_id IN (SELECT cid FROM deal_contacts)) AS has_deals
+            (c.CRMProvider_record_id IN (SELECT cid FROM deal_contacts)) AS has_deals
        FROM duplicate_records c
       WHERE c.record_type='contact'
         AND ( ( (c.email IS NULL OR c.email='')
                 AND (c.phone_normalized IS NULL OR c.phone_normalized='')
                 AND (c.mobile_normalized IS NULL OR c.mobile_normalized='')
                 AND (c.raw_data->'Account_Name'->>'id' IS NULL OR c.raw_data->'Account_Name'->>'id'='')
-                AND c.zoho_record_id NOT IN (SELECT cid FROM deal_contacts) )
+                AND c.CRMProvider_record_id NOT IN (SELECT cid FROM deal_contacts) )
               OR c.record_name ILIKE ANY($1::text[]) )
         ${excl("c.")}
       ORDER BY c.modified_date DESC NULLS LAST
@@ -1491,7 +1491,7 @@ export async function getEmptyContacts(): Promise<EmptyRecordRow[]> {
     });
     if (!c.reason) continue;
     out.push({
-      zohoId: r.zoho_record_id,
+      CRMProviderId: r.CRMProvider_record_id,
       name: r.record_name || "",
       owner: r.owner_name || null,
       reason: c.reason,
@@ -1505,9 +1505,9 @@ export async function getEmptyContacts(): Promise<EmptyRecordRow[]> {
 // --- Post-scan cleanup_class persistence (Sample User 2026-07-01) ---------------
 //
 // Recomputes `duplicate_records.cleanup_class` for every deal/account/contact
-// row from the SYNCED SNAPSHOT ONLY (no live Zoho calls — this runs on every
+// row from the SYNCED SNAPSHOT ONLY (no live CRMProvider calls — this runs on every
 // scan and must stay cheap even at 100k+ records). Values:
-//   'tagged'   — already queued for the Zoho admin to delete (ledger or a
+//   'tagged'   — already queued for the CRMProvider admin to delete (ledger or a
 //                synced Empty-Delete/Duplicate-Delete tag)
 //   'empty'    — structurally empty (reuses the exact WHERE shape
 //                getEmptyDeals/getEmptyAccounts/getEmptyContacts use)
@@ -1539,7 +1539,7 @@ export async function classifyCleanupRecords(): Promise<number> {
     `UPDATE duplicate_records dr
         SET cleanup_class = 'tagged'
       WHERE dr.record_type IN ('deal','account','contact')
-        AND ( dr.zoho_record_id IN (SELECT zoho_record_id FROM empty_delete_ledger)
+        AND ( dr.CRMProvider_record_id IN (SELECT CRMProvider_record_id FROM empty_delete_ledger)
               OR EXISTS (
                 SELECT 1 FROM jsonb_array_elements(
                   CASE WHEN jsonb_typeof(dr.raw_data->'Tag') = 'array'
@@ -1587,7 +1587,7 @@ export async function classifyCleanupRecords(): Promise<number> {
         SET cleanup_class = 'empty'
       WHERE a.record_type = 'account'
         AND a.cleanup_class IS NULL
-        AND a.zoho_record_id NOT IN (SELECT aid FROM linked)
+        AND a.CRMProvider_record_id NOT IN (SELECT aid FROM linked)
         AND COALESCE(NULLIF(a.email,''), a.raw_data->>'Email') IS NULL`,
   );
 
@@ -1610,7 +1610,7 @@ export async function classifyCleanupRecords(): Promise<number> {
         AND (c.phone_normalized IS NULL OR c.phone_normalized = '')
         AND (c.mobile_normalized IS NULL OR c.mobile_normalized = '')
         AND (c.raw_data->'Account_Name'->>'id' IS NULL OR c.raw_data->'Account_Name'->>'id' = '')
-        AND c.zoho_record_id NOT IN (SELECT cid FROM deal_contacts)`,
+        AND c.CRMProvider_record_id NOT IN (SELECT cid FROM deal_contacts)`,
   );
 
   // 3. Name-based test/junk refinement — JS-only classifiers, so pull just the

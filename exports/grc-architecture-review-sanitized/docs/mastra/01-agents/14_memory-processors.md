@@ -22,10 +22,10 @@ This processor is used to prevent errors caused by exceeding the LLM's context w
 import { Memory } from "@mastra/memory";
 import { TokenLimiter } from "@mastra/memory/processors";
 import { Agent } from "@mastra/core/agent";
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 
 const agent = new Agent({
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   memory: new Memory({
     processors: [
       // Ensure the total tokens from memory don't exceed ~127k
@@ -38,7 +38,7 @@ const agent = new Agent({
 The `TokenLimiter` uses the `o200k_base` encoding by default (suitable for GPT-4o). You can specify other encodings if needed for different models:
 
 ```typescript copy showLineNumbers {6-9}
-// Import the encoding you need (e.g., for older OpenAI models)
+// Import the encoding you need (e.g., for older LLMProvider models)
 import cl100k_base from "js-tiktoken/ranks/cl100k_base";
 
 const memoryForOlderModel = new Memory({
@@ -51,7 +51,7 @@ const memoryForOlderModel = new Memory({
 });
 ```
 
-See the [OpenAI cookbook](<REDACTED_URL> or [`js-tiktoken` repo](<REDACTED_URL> for more on encodings.
+See the [LLMProvider cookbook](<REDACTED_URL> or [`js-tiktoken` repo](<REDACTED_URL> for more on encodings.
 
 ### `ToolCallFilter`
 

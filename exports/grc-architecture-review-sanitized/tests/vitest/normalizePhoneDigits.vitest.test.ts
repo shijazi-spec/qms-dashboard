@@ -1,7 +1,7 @@
 /**
  * Unit tests for normalizePhoneDigits — the function that decides
  * whether two phone numbers represent the same subscriber when one
- * came from Five9/the dialer and the other came from Zoho.
+ * came from ContactCenterProvider/the dialer and the other came from CRMProvider.
  *
  * Run: npx vitest run tests/vitest/normalizePhoneDigits.vitest.test.ts
  *

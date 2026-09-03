@@ -92,7 +92,7 @@ export interface AiCallFeedbackMetadata {
   step?: string;
   /** Where the rating was captured (e.g. `inline_thumbs`, `detail_modal`). */
   rating_source?: string;
-  /** Surface that produced the rating (e.g. `web`, `mobile`, `slack`). */
+  /** Surface that produced the rating (e.g. `web`, `mobile`, `ChatProvider`). */
   client_surface?: string;
 }
 
@@ -433,7 +433,7 @@ export async function getFeedbackStats(
   // sentinel handling as the prompt-version breakdown above so the
   // dashboard table can reuse the same rendering pattern. Cap at 12 rows
   // — in practice we only ship a handful of surfaces (web / mobile /
-  // slack / unknown), but the limit guards against a malformed metadata
+  // ChatProvider / unknown), but the limit guards against a malformed metadata
   // value flooding the payload.
   const surfaces = await pool.query(
     `SELECT
@@ -454,7 +454,7 @@ export async function getFeedbackStats(
   // green ratio fan-out as the one-dimensional rollups above. Cap at 60
   // rows (≈ 12 prompt versions × 5 surfaces) so a long tail can't blow up
   // the dashboard payload while still leaving plenty of headroom for the
-  // realistic web/slack/mobile/unknown × handful-of-revisions matrix.
+  // realistic web/ChatProvider/mobile/unknown × handful-of-revisions matrix.
   const versionSurfaces = await pool.query(
     `SELECT
        COALESCE(NULLIF(TRIM(metadata->>'prompt_version'),  ''), 'unknown') AS prompt_version,
@@ -570,7 +570,7 @@ export interface RecentThumbsDown {
  * provided value exactly. Used by the AI Operations dashboard so an operator
  * triaging a regression can pivot from the "all recent thumbs-down" list to
  * the rows tied to a specific prompt revision, feature-flag bucket, or client
- * surface (web / slack / mobile). Empty / whitespace-only strings are treated
+ * surface (web / ChatProvider / mobile). Empty / whitespace-only strings are treated
  * as "no filter" so the dashboard can blindly forward the input/select value
  * without trimming.
  */

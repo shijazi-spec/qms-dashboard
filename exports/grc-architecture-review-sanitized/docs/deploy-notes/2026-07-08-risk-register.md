@@ -43,7 +43,7 @@ The AI background scanner was additionally gated on `schemaSupports("risks")` (a
 - ✅ **Risk appetite/tolerance** settable in the add form and shown in the detail popup; until a value is set, Adam reports appetite as "not configured."
 
 ## Deploy steps
-1. Sync all 9 files to Replit (standing rule: **commit + push to `origin/QMS` first**, then Republish — local-only edits rebuild stale code).
+1. Sync all 9 files to HostingPlatform (standing rule: **commit + push to `origin/QMS` first**, then Republish — local-only edits rebuild stale code).
 2. Republish.
 3. **Schema auto-migrates** — `initRiskTables()` runs the `ALTER…IF NOT EXISTS` on the first risk-API hit (or first "Review Risk Register"). No manual SQL.
 4. ⛔ **In the publish schema diff, do NOT approve any `DROP TABLE`** — approve code-only, as always.

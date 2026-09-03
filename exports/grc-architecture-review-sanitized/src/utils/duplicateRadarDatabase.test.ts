@@ -29,7 +29,7 @@ await exerciseAllKeys(h, "addRecordToCluster", async (secret, key, payload) => {
   return mod.addRecordToCluster({
     cluster_id: 1,
     record_type: "lead" as never,
-    zoho_record_id: `Z-${key}`,
+    CRMProvider_record_id: `Z-${key}`,
     record_name: NON_SENSITIVE_MARKER,
     company_name: NON_SENSITIVE_MARKER,
     email: "user@example.invalid",

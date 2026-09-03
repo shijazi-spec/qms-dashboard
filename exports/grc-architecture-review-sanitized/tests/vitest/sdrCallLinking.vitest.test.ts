@@ -15,25 +15,25 @@ import { autoLinkCallToCrm } from "../../src/utils/sdrCallLinking";
 
 describe("autoLinkCallToCrm phase-1", () => {
   const saved = {
-    token: process.env.ZOHO_ACCESS_TOKEN,
-    id: process.env.ZOHO_CLIENT_ID,
-    secret: process.env.ZOHO_CLIENT_SECRET,
-    refresh: process.env.ZOHO_REFRESH_TOKEN,
+    token: process.env.CRMProvider_ACCESS_TOKEN,
+    id: process.env.CRMProvider_CLIENT_ID,
+    secret: process.env.CRMProvider_CLIENT_SECRET,
+    refresh: process.env.CRMProvider_REFRESH_TOKEN,
   };
   beforeEach(() => {
-    // Deterministic: force the "no Zoho" path so we exercise the threshold
+    // Deterministic: force the "no CRMProvider" path so we exercise the threshold
     // branch without a live CRM, isolating the import/threshold regression.
-    delete process.env.ZOHO_ACCESS_TOKEN;
-    delete process.env.ZOHO_CLIENT_ID;
-    delete process.env.ZOHO_CLIENT_SECRET;
-    delete process.env.ZOHO_REFRESH_TOKEN;
+    delete process.env.CRMProvider_ACCESS_TOKEN;
+    delete process.env.CRMProvider_CLIENT_ID;
+    delete process.env.CRMProvider_CLIENT_SECRET;
+    delete process.env.CRMProvider_REFRESH_TOKEN;
   });
   afterEach(() => {
     for (const [k, v] of Object.entries({
-      ZOHO_ACCESS_TOKEN: saved.token,
-      ZOHO_CLIENT_ID: saved.id,
-      ZOHO_CLIENT_SECRET: saved.secret,
-      ZOHO_REFRESH_TOKEN: saved.refresh,
+      CRMProvider_ACCESS_TOKEN: saved.token,
+      CRMProvider_CLIENT_ID: saved.id,
+      CRMProvider_CLIENT_SECRET: saved.secret,
+      CRMProvider_REFRESH_TOKEN: saved.refresh,
     })) {
       if (v === undefined) delete process.env[k];
       else process.env[k] = v;
@@ -43,7 +43,7 @@ describe("autoLinkCallToCrm phase-1", () => {
   test("a full 9-digit candidate runs phase-1 without throwing", async () => {
     const noop = async () => {};
     const res = await autoLinkCallToCrm(1, ["<REDACTED_PHONE>"], noop, noop, {});
-    // Without Zoho creds the matcher bails gracefully; the point is that the
+    // Without CRMProvider creds the matcher bails gracefully; the point is that the
     // MIN_PHONE_OVERLAP_DIGITS reference resolved (no ReferenceError).
     expect(res).toBeTruthy();
     expect(typeof res.reason).toBe("string");

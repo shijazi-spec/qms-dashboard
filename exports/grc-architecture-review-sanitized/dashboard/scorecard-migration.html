@@ -24,12 +24,12 @@
     <!--
       Admin migration console for the DMAIC Scorecard Consolidation
       operations. Reaches the /api/admin/scorecard/* endpoints WITH
-      the browser's session cookies, so it works through Replit Shield
+      the browser's session cookies, so it works through HostingPlatform Shield
       AND through the platform's own admin-role check without any
       X-Admin-Key handling in JS.
 
       How to use:
-        1. Sign into Replit (if Shield is on, you'll be prompted)
+        1. Sign into HostingPlatform (if Shield is on, you'll be prompted)
         2. Sign into the platform with an admin-role account
         3. Open this page
         4. Click "Refresh status" first to see current state
@@ -56,7 +56,7 @@
         <section id="key-card" class="bg-amber-50 rounded-xl shadow-sm border-2 border-amber-300 p-4 mb-4">
             <h2 class="font-semibold text-amber-900">🔑 Step 0 — Paste your admin API key</h2>
             <p class="text-xs text-amber-800 mt-1 mb-3">
-                Get the value of <code>ADMIN_API_KEY</code> from Replit Secrets (Tools → Secrets) and paste below.
+                Get the value of <code>ADMIN_API_KEY</code> from HostingPlatform Secrets (Tools → Secrets) and paste below.
                 The page stores it in this tab's sessionStorage only — never in localStorage, never sent anywhere except as the X-Admin-Key header on this page's API calls.
             </p>
             <div class="flex gap-2 items-center">
@@ -197,7 +197,7 @@
                     catch { body = { _raw: await res.text() }; }
 
                     if (res.status === 307 || res.status === 401 || res.status === 403) {
-                        log(`✗ HTTP ${res.status} — auth/redirect issue. Make sure you're signed into Replit AND the platform with an admin account.`);
+                        log(`✗ HTTP ${res.status} — auth/redirect issue. Make sure you're signed into HostingPlatform AND the platform with an admin account.`);
                         logJson('Response:', body);
                         return null;
                     }
@@ -279,7 +279,7 @@
                     if (!confirm(
                         'APPLY ALL\n\n' +
                         '1) Activate COPC scorecard (archives the current one)\n' +
-                        '2) Score every unevaluated call against COPC v2 (~10 min for 199 calls, ~$0.10 in OpenAI)\n' +
+                        '2) Score every unevaluated call against COPC v2 (~10 min for 199 calls, ~$0.10 in LLMProvider)\n' +
                         '3) Generate the efficiency report\n\n' +
                         'Stops if any step fails. Continue?'
                     )) return;

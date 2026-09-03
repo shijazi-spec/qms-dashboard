@@ -1,10 +1,10 @@
 declare module "mastra";
 
-// The `openai` package is dynamically imported in a few places but not
+// The `LLMProvider` package is dynamically imported in a few places but not
 // listed in package.json — declare a minimal shape so the import type-checks.
-declare module "openai" {
-  const OpenAI: any;
-  export default OpenAI;
+declare module "LLMProvider" {
+  const LLMProvider: any;
+  export default LLMProvider;
 }
 
 // pdfkit and pdf-parse ship JS only.

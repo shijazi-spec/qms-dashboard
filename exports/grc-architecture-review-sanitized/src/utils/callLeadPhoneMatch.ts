@@ -1,9 +1,9 @@
 import {
-  fetchAllZohoRecords,
-  searchZohoRecords,
-  searchZohoRecordsByWord,
-  type ZohoCRMRecord,
-} from "./zohoCRM";
+  fetchAllCRMProviderRecords,
+  searchCRMProviderRecords,
+  searchCRMProviderRecordsByWord,
+  type CRMProviderCRMRecord,
+} from "./CRMProviderCRM";
 import { normalizePhoneDigits } from "./callMcpReconciliation";
 import {
   CRM_PHONE_MATCH_SCOPE,
@@ -17,9 +17,9 @@ export interface AutoLinkLeadResult {
   lead_id: string | null;
   // 2026-05-29: also surface a deal_id when the auto-linker walks
   // through a Contact and finds the Deal it belongs to (the common
-  // post-conversion case where the original Lead is gone from Zoho).
+  // post-conversion case where the original Lead is gone from CRMProvider).
   deal_id?: string | null;
-  // Which Zoho module the linker actually matched against. "Leads" is
+  // Which CRMProvider module the linker actually matched against. "Leads" is
   // the original path; "Deals_via_Contact" is the new fallback.
   matched_via?: "Leads" | "Deals_via_Contact";
   matches_count: number;
@@ -30,7 +30,7 @@ export interface AutoLinkLeadResult {
     | "no_match"
     | "ambiguous"
     | "already_linked"
-    | "no_zoho"
+    | "no_CRMProvider"
     | "persist_failed";
   match?: LeadPhoneMatch;
   // When matched via the Contact → Deal fallback, expose the underlying
@@ -88,7 +88,7 @@ export interface LeadPhoneMatch {
 // country code (e.g. <REDACTED_PHONE>, so requiring a 9-digit overlap means
 // the whole subscriber number must agree — preventing area-code-only or
 // junk-suffix collisions while still tolerating "+966" vs leading-0
-// prefix differences between Zoho and the call provider.
+// prefix differences between CRMProvider and the call provider.
 export const MIN_PHONE_OVERLAP_DIGITS = 9;
 
 /**
@@ -118,7 +118,7 @@ export function phonesShareSubscriberNumber(a: string, b: string): boolean {
   return false;
 }
 
-function readPhone(r: ZohoCRMRecord): string {
+function readPhone(r: CRMProviderCRMRecord): string {
   const d = r.data || {};
   const raw =
     (typeof d.Phone === "object" && d.Phone?.name) ||
@@ -130,7 +130,7 @@ function readPhone(r: ZohoCRMRecord): string {
 }
 
 /**
- * Best-effort: scan **all Leads fetched** from Zoho (bounded by `maxRecords`)
+ * Best-effort: scan **all Leads fetched** from CRMProvider (bounded by `maxRecords`)
  * and return those whose Phone/Mobile normalizes to the same digit string as `phone`.
  * Product scope: **Leads module only** — no Contacts, Deals, or Activities.
  * See `CRM_PHONE_MATCH_SCOPE_DESCRIPTION`.
@@ -142,7 +142,7 @@ export async function findLeadsByPhoneMatch(
   normalized_query: string;
   matches: LeadPhoneMatch[];
   scanned: number;
-  zoho_connected?: boolean;
+  CRMProvider_connected?: boolean;
   note?: string;
 }> {
   const normalized_query = normalizePhoneDigits(phone);
@@ -167,23 +167,23 @@ export async function findLeadsByPhoneMatch(
     };
   }
 
-  const hasZoho =
-    process.env.ZOHO_ACCESS_TOKEN ||
-    (process.env.ZOHO_CLIENT_ID &&
-      process.env.ZOHO_CLIENT_SECRET &&
-      process.env.ZOHO_REFRESH_TOKEN);
-  if (!hasZoho) {
+  const hasCRMProvider =
+    process.env.CRMProvider_ACCESS_TOKEN ||
+    (process.env.CRMProvider_CLIENT_ID &&
+      process.env.CRMProvider_CLIENT_SECRET &&
+      process.env.CRMProvider_REFRESH_TOKEN);
+  if (!hasCRMProvider) {
     return {
       normalized_query,
       matches: [],
       scanned: 0,
-      zoho_connected: false,
-      note: "Zoho CRM is not connected, so no Leads could be scanned.",
+      CRMProvider_connected: false,
+      note: "CRMProvider CRM is not connected, so no Leads could be scanned.",
     };
   }
 
   const maxRecords = options.maxRecords ?? 2500;
-  const leads = await fetchAllZohoRecords("Leads", { maxRecords });
+  const leads = await fetchAllCRMProviderRecords("Leads", { maxRecords });
   const matches: LeadPhoneMatch[] = [];
   for (const r of leads) {
     const leadPhone = readPhone(r);
@@ -204,7 +204,7 @@ export async function findLeadsByPhoneMatch(
 
 
 /**
- * Attempt to auto-link a call record to a Zoho Lead by phone match.
+ * Attempt to auto-link a call record to a CRMProvider Lead by phone match.
  * Tries each candidate phone in order and uses the first one that:
  *   • Normalizes to ≥ 7 digits, AND
  *   • Returns exactly one lead match.
@@ -213,7 +213,7 @@ export async function findLeadsByPhoneMatch(
  * updater callback (kept as a callback so this util doesn't import the
  * DB layer directly — `callIntelligenceRoutes` injects it).
  *
- * Never throws on Zoho/network errors — returns a structured reason.
+ * Never throws on CRMProvider/network errors — returns a structured reason.
  */
 export async function autoLinkLeadByPhone(
   callRecordId: number,
@@ -260,13 +260,13 @@ export async function autoLinkLeadByPhone(
       attempted_phone: phone,
     };
     if (result.scanned === 0 && result.matches.length === 0) {
-      // Likely no Zoho creds — bail with clear reason.
+      // Likely no CRMProvider creds — bail with clear reason.
       return {
         linked: false,
         lead_id: null,
         matches_count: 0,
         scanned: 0,
-        reason: "no_zoho",
+        reason: "no_CRMProvider",
         attempted_phone: phone,
       };
     }
@@ -321,17 +321,17 @@ export async function autoLinkLeadByPhone(
   // Contact → Deal fallback (2026-05-29).
   //
   // The Leads-only matcher misses every call whose Lead has already
-  // been converted in Zoho. Conversion moves the phone from Leads to
+  // been converted in CRMProvider. Conversion moves the phone from Leads to
   // Contact + Deal + Account and removes the Lead row from the Leads
   // module entirely, so the historical scan returns 0 matches and the
-  // call shows "Auto-link could not match this call to any Zoho Lead/
+  // call shows "Auto-link could not match this call to any CRMProvider Lead/
   // Deal (no_match)" — even though the same phone number is alive on
   // the converted Deal.
   //
   // Strategy: only run this fallback when a deal persister is supplied
   // (so legacy callers stay on the old behaviour), and only when the
-  // Leads pass returned a no-match (not ambiguous and not a zoho-cred
-  // failure). For each phone candidate, ask Zoho's word-search index
+  // Leads pass returned a no-match (not ambiguous and not a CRMProvider-cred
+  // failure). For each phone candidate, ask CRMProvider's word-search index
   // for Contacts whose phone field matches, filter to those whose
   // normalised phone truly overlaps by MIN_PHONE_OVERLAP_DIGITS, then
   // look up the Deals related to each matching Contact via the
@@ -342,16 +342,16 @@ export async function autoLinkLeadByPhone(
   // existing Search CRM by phone widget in the call-details modal).
   //
   // Cost: at most one word search + one criteria search per phone
-  // candidate per Contact. Word search is the indexed Zoho global
+  // candidate per Contact. Word search is the indexed CRMProvider global
   // lookup the UI uses, so it's much cheaper than the bulk
-  // fetchAllZohoRecords scan the Leads path performs.
+  // fetchAllCRMProviderRecords scan the Leads path performs.
   if (options.persistDealId && !ambiguousFallback) {
     for (const phone of phones) {
       const normalized = normalizePhoneDigits(phone);
       if (!normalized || normalized.length < MIN_PHONE_OVERLAP_DIGITS) continue;
-      let contactsRaw: ZohoCRMRecord[] = [];
+      let contactsRaw: CRMProviderCRMRecord[] = [];
       try {
-        contactsRaw = await searchZohoRecordsByWord("Contacts", normalized);
+        contactsRaw = await searchCRMProviderRecordsByWord("Contacts", normalized);
       } catch {
         continue;
       }
@@ -369,9 +369,9 @@ export async function autoLinkLeadByPhone(
       // no_match below.
       let dealAmbig: AutoLinkLeadResult | null = null;
       for (const c of realContactMatches) {
-        let deals: ZohoCRMRecord[] = [];
+        let deals: CRMProviderCRMRecord[] = [];
         try {
-          deals = await searchZohoRecords(
+          deals = await searchCRMProviderRecords(
             "Deals",
             `(Contact_Name:equals:${c.id})`,
           );

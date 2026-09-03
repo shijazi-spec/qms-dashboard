@@ -2,8 +2,8 @@
  * SDR + Sales KPI process calculators (Phase B + C).
  *
  * IMPORTANT — these read ONLY the Duplicate Radar's already-synced LOCAL tables
- * (`duplicate_records.raw_data` holds the full Zoho JSON per record, plus the
- * `deal_doc_compliance` scan table). They do NOT make live Zoho API calls, so a
+ * (`duplicate_records.raw_data` holds the full CRMProvider JSON per record, plus the
+ * `deal_doc_compliance` scan table). They do NOT make live CRMProvider API calls, so a
  * recalc can never freeze the platform on a 50k-record pull (a recurring hazard).
  * Coverage is therefore whatever the Radar has synced.
  *
@@ -19,7 +19,7 @@ import {
   openStagePredicate,
   buildSegmentPredicate,
 } from "./duplicateRadarDatabase";
-import { fetchDealStageHistory } from "./zohoCRM";
+import { fetchDealStageHistory } from "./CRMProviderCRM";
 import { getAllFrameworkCoverage } from "./obligationDocumentsDatabase";
 import { calcCertMilestoneDelivery } from "./northStarSources";
 
@@ -31,7 +31,7 @@ export interface ProcessKpiValue {
 
 const EMPTY: ProcessKpiValue = { value: 0, dataAvailable: false };
 
-/** Read a Zoho string-or-{name} field off a raw record. */
+/** Read a CRMProvider string-or-{name} field off a raw record. */
 function readField(v: any): string | null {
   if (v == null) return null;
   if (typeof v === "string") return v.trim() || null;
@@ -40,19 +40,19 @@ function readField(v: any): string | null {
   return null;
 }
 
-/** All locally-synced raw records for a module (full Zoho JSON each). */
+/** All locally-synced raw records for a module (full CRMProvider JSON each). */
 async function localRawRecords(
   module: string,
   limit = 60000,
 ): Promise<any[]> {
   const res = await pool.query(
-    `SELECT raw_data FROM duplicate_records WHERE zoho_module = $1 LIMIT $2`,
+    `SELECT raw_data FROM duplicate_records WHERE CRMProvider_module = $1 LIMIT $2`,
     [module, limit],
   );
   return res.rows.map((r: any) => r.raw_data || {});
 }
 
-/** True if a Zoho field (string or {name}) has a non-empty value on the record. */
+/** True if a CRMProvider field (string or {name}) has a non-empty value on the record. */
 function hasField(raw: any, field: string): boolean {
   const v = raw?.[field];
   if (v == null) return false;
@@ -104,14 +104,14 @@ export async function calcSdrDuplicateRate(): Promise<ProcessKpiValue> {
   const res = await pool.query(
     `WITH lead_clusters AS (
        SELECT cluster_id FROM duplicate_records
-        WHERE zoho_module = 'Leads' AND cluster_id IS NOT NULL
+        WHERE CRMProvider_module = 'Leads' AND cluster_id IS NOT NULL
         GROUP BY cluster_id HAVING COUNT(*) > 1
      )
      SELECT
-       (SELECT COUNT(*) FROM duplicate_records WHERE zoho_module = 'Leads')::int AS total,
+       (SELECT COUNT(*) FROM duplicate_records WHERE CRMProvider_module = 'Leads')::int AS total,
        (SELECT COUNT(*) FROM duplicate_records r
           JOIN lead_clusters lc ON r.cluster_id = lc.cluster_id
-         WHERE r.zoho_module = 'Leads' AND r.is_primary = false)::int AS dups`,
+         WHERE r.CRMProvider_module = 'Leads' AND r.is_primary = false)::int AS dups`,
   );
   const total = Number(res.rows[0]?.total || 0);
   const dups = Number(res.rows[0]?.dups || 0);
@@ -174,7 +174,7 @@ export async function calcSdrQualificationRate(): Promise<ProcessKpiValue> {
 // Meeting KPIs (SDR-KPI-04 / SDR-KPI-05)
 // ---------------------------------------------------------------------------
 /**
- * Zoho has no Events/Meetings module synced into this platform (only Deals,
+ * CRMProvider has no Events/Meetings module synced into this platform (only Deals,
  * Leads and Calls are ever fetched), so these are derived from the two Deal
  * STAGES the Sales SOP defines for the meeting step — "Meeting" (§7.3) and
  * "Not Attend Meeting" (§7.2.8), see salesStageSlaSpec.ts.
@@ -200,7 +200,7 @@ const MEETING_WINDOW_DAYS = 28;
  * (attended or no-show; both were BOOKED) within the window, averaged per week.
  *
  * Uses Modified_Time as the stage-entry proxy. That is the same proxy the Deal
- * Stage Aging engine already uses platform-wide (Zoho exposes no stage-entry
+ * Stage Aging engine already uses platform-wide (CRMProvider exposes no stage-entry
  * date without a per-deal history call), so a deal edited for an unrelated
  * reason can re-enter the window. Documented rather than hidden: `details`
  * carries the raw count so the number can be sanity-checked.
@@ -230,7 +230,7 @@ export async function calcSdrMeetingsBooked(): Promise<ProcessKpiValue> {
  * This is a snapshot of the current meeting cohort, not a historical rate: a
  * deal that attended and then progressed to Proposal has left both stages and
  * is no longer counted on either side. A true historical rate needs per-deal
- * stage history (the same expensive Zoho call the Sales cycle times make), so
+ * stage history (the same expensive CRMProvider call the Sales cycle times make), so
  * the cheap cohort ratio is used here. Both sides move together, so the ratio
  * stays meaningful even though the denominator is a snapshot.
  */
@@ -257,13 +257,13 @@ export async function calcSdrShowRate(): Promise<ProcessKpiValue> {
 // ---------------------------------------------------------------------------
 /**
  * Average days deals have currently spent in a stage, read from the local
- * mirror. No Zoho call.
+ * mirror. No CRMProvider call.
  *
- * WHY LOCAL: these were previously computable only from Zoho's per-deal
+ * WHY LOCAL: these were previously computable only from CRMProvider's per-deal
  * Stage_History, up to 40 sequential API calls, which is why they were excluded
  * from the interactive recalculate. That path does not work in this tenant —
  * verified live 2026-08-17: a full cycle-times run completed and reported "no
- * synced source data" for both, and /api/zoho/deals/:id/stage-aging returns
+ * synced source data" for both, and /api/CRMProvider/deals/:id/stage-aging returns
  * source:"created", meaning it fell back to the record's creation time because
  * no usable Stage_Duration came back. Retrying cannot fix that.
  *
@@ -282,7 +282,7 @@ async function avgStageDwellDays(stageMatch: string): Promise<ProcessKpiValue> {
     `SELECT COUNT(*)::int AS deals,
             AVG(EXTRACT(EPOCH FROM (NOW() - COALESCE(r.modified_date, r.created_date))) / 86400.0) AS avg_days
        FROM duplicate_records r
-      WHERE r.zoho_module = 'Deals'
+      WHERE r.CRMProvider_module = 'Deals'
         AND LOWER(COALESCE(NULLIF(r.stage,''), r.raw_data->>'Stage','')) LIKE $1
         AND COALESCE(r.modified_date, r.created_date) IS NOT NULL`,
     [stageMatch],
@@ -320,16 +320,16 @@ export async function calcSalesAgreementCycleTime(): Promise<ProcessKpiValue> {
 // Follow-up KPIs (SDR-KPI-11 / SALES-KPI-07 / SALES-KPI-08)
 // ---------------------------------------------------------------------------
 /**
- * All three read the local `zoho_tasks` mirror (zohoTasksSync.ts), never Zoho
+ * All three read the local `CRMProvider_tasks` mirror (CRMProviderTasksSync.ts), never CRMProvider
  * directly — a per-record activity fetch costs one API call per parent, which
  * is why the Sales cycle times are excluded from the interactive recalculate.
  *
  * Each returns EMPTY when its denominator is zero, so an unsynced or empty
  * mirror renders "--" rather than a confident 0% that reads as total failure.
  *
- * Zoho links a task through Who_Id (Lead/Contact) or What_Id (Deal/Account).
+ * CRMProvider links a task through Who_Id (Lead/Contact) or What_Id (Deal/Account).
  * Rather than trusting the lookup alone, each query JOINS to duplicate_records
- * on the matching zoho_module, so a Contact-linked task cannot be counted as a
+ * on the matching CRMProvider_module, so a Contact-linked task cannot be counted as a
  * Lead one and an Account-linked task cannot be counted as a Deal one.
  */
 
@@ -357,9 +357,9 @@ export async function calcSdrFollowUpCompliance(): Promise<ProcessKpiValue> {
             COUNT(*) FILTER (
               WHERE t.closed_time::date <= t.due_date
             )::int AS on_time
-       FROM zoho_tasks t
+       FROM CRMProvider_tasks t
        JOIN duplicate_records r
-         ON r.zoho_module = 'Leads' AND r.zoho_record_id = t.who_id
+         ON r.CRMProvider_module = 'Leads' AND r.CRMProvider_record_id = t.who_id
       WHERE t.status = 'Completed'
         AND t.due_date IS NOT NULL
         AND t.closed_time IS NOT NULL`,
@@ -385,16 +385,16 @@ export async function calcSdrFollowUpCompliance(): Promise<ProcessKpiValue> {
 export async function calcSalesFollowUpEffectiveness(): Promise<ProcessKpiValue> {
   const r = await pool.query(
     `WITH open_deals AS (
-       SELECT r.zoho_record_id
+       SELECT r.CRMProvider_record_id
          FROM duplicate_records r
-        WHERE r.zoho_module = 'Deals'
-          AND r.zoho_record_id IS NOT NULL
+        WHERE r.CRMProvider_module = 'Deals'
+          AND r.CRMProvider_record_id IS NOT NULL
           AND ${openStagePredicate("r")}
      )
      SELECT COUNT(*)::int AS deals,
             COUNT(*) FILTER (WHERE EXISTS (
-              SELECT 1 FROM zoho_tasks t
-               WHERE t.what_id = d.zoho_record_id
+              SELECT 1 FROM CRMProvider_tasks t
+               WHERE t.what_id = d.CRMProvider_record_id
                  AND (t.status IS NULL OR t.status <> 'Completed')
                  AND t.due_date >= CURRENT_DATE
             ))::int AS covered
@@ -421,18 +421,18 @@ export async function calcSalesFollowUpEffectiveness(): Promise<ProcessKpiValue>
 export async function calcSalesFirstContactSla(): Promise<ProcessKpiValue> {
   const r = await pool.query(
     `WITH new_deals AS (
-       SELECT r.zoho_record_id,
+       SELECT r.CRMProvider_record_id,
               COALESCE(r.created_date, (r.raw_data->>'Created_Time')::timestamptz) AS created
          FROM duplicate_records r
-        WHERE r.zoho_module = 'Deals'
-          AND r.zoho_record_id IS NOT NULL
+        WHERE r.CRMProvider_module = 'Deals'
+          AND r.CRMProvider_record_id IS NOT NULL
           AND COALESCE(r.created_date, (r.raw_data->>'Created_Time')::timestamptz)
               >= NOW() - INTERVAL '${FIRST_CONTACT_WINDOW_DAYS} days'
      ),
      first_touch AS (
-       SELECT d.zoho_record_id, d.created,
-              (SELECT MIN(t.created_time) FROM zoho_tasks t
-                WHERE t.what_id = d.zoho_record_id) AS first_task
+       SELECT d.CRMProvider_record_id, d.created,
+              (SELECT MIN(t.created_time) FROM CRMProvider_tasks t
+                WHERE t.what_id = d.CRMProvider_record_id) AS first_task
          FROM new_deals d
      )
      SELECT COUNT(*)::int AS deals,
@@ -504,7 +504,7 @@ function businessDaysInWindow(days: number): number {
  * conversation"; neither mentions leads.
  *
  * It also does not match how this team works. Measured on the live mirror
- * 2026-08-17, right after the first successful Zoho Calls import: of 236 calls,
+ * 2026-08-17, right after the first successful CRMProvider Calls import: of 236 calls,
  * 200 were linked to a DEAL and exactly 1 to a Lead. The lead-only filter
  * discarded 85% of the corpus and left both KPIs permanently "--".
  *
@@ -513,7 +513,7 @@ function businessDaysInWindow(days: number): number {
  * Speed to Lead" measures lead-creation to first contact, so lead linkage is
  * intrinsic to it rather than incidental.
  *
- * Both callers also bound the window at `call_date <= NOW()`. Zoho's Calls
+ * Both callers also bound the window at `call_date <= NOW()`. CRMProvider's Calls
  * module holds SCHEDULED calls, and the same live check found rows dated into
  * the future. Counting those as work already done inflates calls-per-day and
  * would let the metric be raised by booking calls rather than making them.
@@ -574,7 +574,7 @@ export async function calcSdrSpeedToLead(): Promise<ProcessKpiValue> {
                    THEN (dr.raw_data->>'Created_Time')::timestamptz END AS created
          FROM first_calls fc
          JOIN duplicate_records dr
-           ON dr.zoho_module = 'Leads' AND dr.zoho_record_id = fc.lead_id
+           ON dr.CRMProvider_module = 'Leads' AND dr.CRMProvider_record_id = fc.lead_id
      )
      SELECT AVG(EXTRACT(EPOCH FROM (first_call - created)) / 3600.0) AS avg_hours,
             COUNT(*)::int AS n
@@ -648,14 +648,14 @@ export async function calcSalesDuplicateRate(): Promise<ProcessKpiValue> {
   const res = await pool.query(
     `WITH deal_clusters AS (
        SELECT cluster_id FROM duplicate_records
-        WHERE zoho_module = 'Deals' AND cluster_id IS NOT NULL
+        WHERE CRMProvider_module = 'Deals' AND cluster_id IS NOT NULL
         GROUP BY cluster_id HAVING COUNT(*) > 1
      )
      SELECT
-       (SELECT COUNT(*) FROM duplicate_records WHERE zoho_module = 'Deals')::int AS total,
+       (SELECT COUNT(*) FROM duplicate_records WHERE CRMProvider_module = 'Deals')::int AS total,
        (SELECT COUNT(*) FROM duplicate_records r
           JOIN deal_clusters dc ON r.cluster_id = dc.cluster_id
-         WHERE r.zoho_module = 'Deals' AND r.is_primary = false)::int AS dups`,
+         WHERE r.CRMProvider_module = 'Deals' AND r.is_primary = false)::int AS dups`,
   );
   const total = Number(res.rows[0]?.total || 0);
   const dups = Number(res.rows[0]?.dups || 0);
@@ -669,9 +669,9 @@ export async function calcSalesDuplicateRate(): Promise<ProcessKpiValue> {
 
 /**
  * SALES-KPI-03 Proposal Cycle Time + SALES-KPI-04 Agreement Cycle Time — from
- * Zoho Stage_History (per Sample User's choice). Zoho gives Stage_Duration (days spent
+ * CRMProvider Stage_History (per Sample User's choice). CRMProvider gives Stage_Duration (days spent
  * in each stage) directly, so no transition math. This is the ONE place that hits
- * the live Zoho API, so it is bounded to a sample of recently-modified deals that
+ * the live CRMProvider API, so it is bounded to a sample of recently-modified deals that
  * have reached Proposal+; the sample size is logged (no silent truncation).
  */
 const CYCLE_TIME_DEAL_CAP = 40;
@@ -680,16 +680,16 @@ export async function computeSalesCycleTimes(
   cap = CYCLE_TIME_DEAL_CAP,
 ): Promise<Record<string, ProcessKpiValue>> {
   const dealRows = await pool.query(
-    `SELECT zoho_record_id
+    `SELECT CRMProvider_record_id
        FROM duplicate_records
-      WHERE zoho_module = 'Deals' AND zoho_record_id IS NOT NULL
+      WHERE CRMProvider_module = 'Deals' AND CRMProvider_record_id IS NOT NULL
         AND lower(coalesce(raw_data->>'Stage','')) ~ '(proposal|agreement|paid|closed won)'
       ORDER BY modified_date DESC NULLS LAST
       LIMIT $1`,
     [cap],
   );
   const ids: string[] = dealRows.rows
-    .map((r: any) => r.zoho_record_id)
+    .map((r: any) => r.CRMProvider_record_id)
     .filter(Boolean);
 
   if (ids.length === 0) {
@@ -746,7 +746,7 @@ export async function computeSalesCycleTimes(
 /**
  * ADHOC-SALES-01/02/03/04 — the four one-off Sales KPIs Sample User the BI
  * portal's sales-summary (2026-08-17). They were entered manually at first;
- * these calculators make QMS compute them from its own synced Zoho mirror.
+ * these calculators make QMS compute them from its own synced CRMProvider mirror.
  *
  * Scope decisions, all deliberate — they are what makes the numbers mean
  * something, so do not "simplify" them away:
@@ -785,7 +785,7 @@ function wonStagePredicate(alias: string): string {
 
 /**
  * Deals that have reached the meeting step, and the subset that moved past it.
- * Zoho's Stage_History carries no usable duration in this tenant, so "reached"
+ * CRMProvider's Stage_History carries no usable duration in this tenant, so "reached"
  * is inferred from the CURRENT stage against the Sales SOP ladder. Closed
  * Lost/Junk therefore sit in NEITHER set — a lost deal's stage says nothing
  * about how far it got, and guessing would silently move the KPI.
@@ -795,7 +795,7 @@ const AT_OR_PAST_MEETING_RE =
 const PAST_MEETING_RE = "(proposal|agreement sent|signed|paid|closed won)";
 
 /**
- * Calendar year-to-date on the deal's Closing_Date. Zoho sends it as a bare
+ * Calendar year-to-date on the deal's Closing_Date. CRMProvider sends it as a bare
  * 'YYYY-MM-DD' string inside raw_data, so the shape is checked BEFORE the cast —
  * an unparseable value must fall out of the window, never abort the whole query.
  * Future-dated closings are excluded too: a deal closing in November is not
@@ -855,7 +855,7 @@ export async function adhocSalesAggregates(): Promise<AdhocSalesAggregates> {
          COUNT(*) FILTER (WHERE ${stage} ~ '${AT_OR_PAST_MEETING_RE}')::int        AS reached_meeting,
          COUNT(*) FILTER (WHERE ${stage} ~ '${PAST_MEETING_RE}')::int              AS past_meeting
        FROM duplicate_records r
-      WHERE r.zoho_module = 'Deals'${seg.condition ? ` AND ${seg.condition}` : ""}`,
+      WHERE r.CRMProvider_module = 'Deals'${seg.condition ? ` AND ${seg.condition}` : ""}`,
       seg.params,
     );
     const row = res.rows[0] || {};
@@ -1031,11 +1031,11 @@ export async function calcSdrBookingConversionRate(): Promise<ProcessKpiValue> {
 /**
  * The CS SOP defines 33 KPIs (§8.1 Individual, §8.2 Process, §8.3 Governance).
  * Most name Client-Hub, Jira, the Admin/BI Portal or QA sampling as their
- * system of record, and QMS mirrors Zoho — so they stay manual until those
+ * system of record, and QMS mirrors CRMProvider — so they stay manual until those
  * feeds exist. Four are computable TODAY from the CS lifecycle engine, which
  * already evaluates every synced CS deal against the SOP's own phase rules.
  *
- * These are Zoho-side measures of a Client-Hub KPI. They are not a substitute
+ * These are CRMProvider-side measures of a Client-Hub KPI. They are not a substitute
  * for the SOP's stated source, and each KPI's description says so — the point
  * is to give CS a live signal now rather than four permanently blank rows.
  */
@@ -1124,7 +1124,7 @@ export async function calcCsSlaAdherence(): Promise<ProcessKpiValue> {
     value: Math.round((onTime / a.csDeals) * 1000) / 10,
     dataAvailable: true,
     details: {
-      source: "Zoho CS lifecycle scan (SOP names Client-Hub / Dashboard)",
+      source: "CRMProvider CS lifecycle scan (SOP names Client-Hub / Dashboard)",
       cs_deals: a.csDeals,
       deals_with_an_overdue_step: a.slaBreachDeals,
       rules_counted: "onboarding overdue, renewal overdue, phase transition stalled",
@@ -1141,7 +1141,7 @@ export async function calcCsDataAccuracy(): Promise<ProcessKpiValue> {
     value: Math.round((clean / a.csDeals) * 1000) / 10,
     dataAvailable: true,
     details: {
-      source: "Zoho CS section (SOP names Client-Hub / QA Records)",
+      source: "CRMProvider CS section (SOP names Client-Hub / QA Records)",
       cs_deals: a.csDeals,
       deals_missing_a_mandatory_field: a.dataGapDeals,
       fields_checked:
@@ -1161,7 +1161,7 @@ export async function calcCsChurnClassificationAccuracy(): Promise<ProcessKpiVal
     value: Math.round((accurate / a.terminationDeals) * 1000) / 10,
     dataAvailable: true,
     details: {
-      source: "Zoho CS lifecycle scan (SOP names Client-Hub / QA Records)",
+      source: "CRMProvider CS lifecycle scan (SOP names Client-Hub / QA Records)",
       churned_deals: a.terminationDeals,
       missing_churn_date_or_reason: a.churnRecordGapDeals,
     },
@@ -1188,7 +1188,7 @@ export async function calcCsChurnClassificationAccuracy(): Promise<ProcessKpiVal
  * Client-Hub KPIs rather than publishing a confident wrong red.
  *
  * To build it properly: a per-deal churn date across all CS records (Client-Hub,
- * or a Zoho churn-date field synced onto duplicate_records), then
+ * or a CRMProvider churn-date field synced onto duplicate_records), then
  * churned-in-trailing-12-months / active-at-period-start.
  */
 
@@ -1413,9 +1413,9 @@ export async function calcDocumentationLifecycle(): Promise<ProcessKpiValue> {
 }
 
 /**
- * Map of canonical SDR/Sales KPI code → LOCAL-only calculator (no Zoho calls).
+ * Map of canonical SDR/Sales KPI code → LOCAL-only calculator (no CRMProvider calls).
  * Cycle-time KPIs (SALES-KPI-03/04) are handled separately via
- * computeSalesCycleTimes() because they hit the live Zoho API. Codes not covered
+ * computeSalesCycleTimes() because they hit the live CRMProvider API. Codes not covered
  * anywhere have no source yet and stay "--".
  */
 export const PROCESS_CALCULATORS: Record<
@@ -1453,10 +1453,10 @@ export const PROCESS_CALCULATORS: Record<
   "ADHOC-SALES-03": calcAdhocSalesAvgDealValue,
   "ADHOC-SALES-04": calcAdhocSalesMeetingConversion,
   // Customer Success (B2B) — the four KPIs of WP-BU-CS-SOP-003 that QMS can
-  // measure from the Zoho mirror. The other 29 name Client-Hub / Jira / the
+  // measure from the CRMProvider mirror. The other 29 name Client-Hub / Jira / the
   // Admin-BI Portal / QA sampling and stay manual until those feeds exist.
   // CS-KPI-21 Client Churn Rate is intentionally absent — see the note above
-  // calcCsDataAccuracy. It cannot be sourced correctly from Zoho.
+  // calcCsDataAccuracy. It cannot be sourced correctly from CRMProvider.
   "CS-KPI-23": calcCsDataAccuracy,
   "CS-KPI-25": calcCsSlaAdherence,
   "CS-KPI-30": calcCsChurnClassificationAccuracy,
@@ -1503,27 +1503,27 @@ export async function computeProcessKPIs(
     }
   }
 
-  // Sales cycle times = the ONLY Zoho-API step (up to 40 sequential per-deal
+  // Sales cycle times = the ONLY CRMProvider-API step (up to 40 sequential per-deal
   // history calls). Run it only in the background daily job (includeCycleTimes),
   // NOT on the interactive Recalculate button, so the button can't hang / time out.
   if (includeCycleTimes) {
     try {
       // MERGE, don't clobber. SALES-KPI-03/04 now have LOCAL calculators in the
-      // registry above that always produce a value. The Zoho stage-history
+      // registry above that always produce a value. The CRMProvider stage-history
       // sample is a refinement on top — it measures completed dwell per stage
       // transition, which the local proxy cannot see.
       //
       // A blind Object.assign would overwrite good local values with EMPTY
-      // whenever Zoho returns nothing, which is this tenant's normal state:
+      // whenever CRMProvider returns nothing, which is this tenant's normal state:
       // Stage_History yields no usable Stage_Duration here (the aging endpoint
       // reports source:"created", i.e. it fell back to the record's creation
       // time), so the run reports "no synced source data" rather than failing.
-      const zoho = await computeSalesCycleTimes();
-      for (const [code, value] of Object.entries(zoho)) {
+      const CRMProvider = await computeSalesCycleTimes();
+      for (const [code, value] of Object.entries(CRMProvider)) {
         if (value?.dataAvailable) out[code] = value;
       }
     } catch (e) {
-      // Leave the local values in place — a Zoho outage must not blank a KPI
+      // Leave the local values in place — a CRMProvider outage must not blank a KPI
       // that was computed successfully from our own mirror.
       logger.error(`[KPIProcessCalc] cycle-times failed: ${(e as Error).message}`);
     }

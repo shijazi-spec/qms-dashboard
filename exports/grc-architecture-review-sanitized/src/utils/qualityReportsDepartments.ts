@@ -84,7 +84,7 @@ export async function ensureQualityReportTables(): Promise<void> {
   // EXISTS above is a no-op for them — the column has to be added
   // separately. Kept in lockstep with the canonical CREATE TABLE per the
   // strict schema-parity rule (check:schema-parity fails on drift, and a
-  // column missing from the canonical source is what makes Replit's
+  // column missing from the canonical source is what makes HostingPlatform's
   // deploy-time schema diff propose DROPping it).
   await pool.query(
     `ALTER TABLE quality_report_bus ADD COLUMN IF NOT EXISTS kpi_owner_name VARCHAR(100)`,

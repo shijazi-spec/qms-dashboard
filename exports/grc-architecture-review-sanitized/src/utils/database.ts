@@ -491,7 +491,7 @@ function buildAuditDateRangeClause(
 }
 
 // Skip "ghost audits" — rows with total_records_audited = 0 created when
-// directAuditRunner falls back (missing Zoho credentials, transient fetch
+// directAuditRunner falls back (missing CRMProvider credentials, transient fetch
 // failures). They carry default scores (72%/75%/68%/72%) and pollute the
 // dashboard summary / latest-audit views. Callers needing the raw history
 // (debug / forensics) opt in via includeEmpty: true.
@@ -567,7 +567,7 @@ export async function getDashboardData(opts?: AuditFilterOpts): Promise<{
   /**
    * Enterprise-wide GRC snapshot (NCs, CAPAs, risks, KPIs, compliance, and
    * the composite enterprise health score / rating). Mirrors the executive
-   * digest's numbers so the dashboard headline agrees with the Slack/email
+   * digest's numbers so the dashboard headline agrees with the ChatProvider/email
    * digest by construction. Always system-wide — independent of any
    * Created/Modified period filter applied to the audit body.
    */
@@ -619,7 +619,7 @@ export async function getDashboardData(opts?: AuditFilterOpts): Promise<{
     getActiveGovernanceDocumentsByModule(),
     getActiveScorecard(),
     // System-wide GRC snapshot — never gated by the audit Created/Modified
-    // filter, so the headline rating stays consistent with the Slack/email
+    // filter, so the headline rating stays consistent with the ChatProvider/email
     // digest regardless of dashboard filtering.
     getEnterpriseGRCSnapshot().catch(() => null),
   ]);

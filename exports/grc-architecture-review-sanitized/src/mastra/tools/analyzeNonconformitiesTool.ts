@@ -9,7 +9,7 @@ import { getCurrentAgentContext } from "../../utils/withApprovalGate";
 // previously allowed head_of_operations_quality / grc_manager / quality_manager
 // to enumerate NC trends the REST API would deny. Per Sample User's governance
 // decision (2026-06-11) NC/CAPA/Training stay admin-only, INCLUDING for the
-// Slack role (head_of_operations_quality), since Slack channel membership is not
+// ChatProvider role (head_of_operations_quality), since ChatProvider channel membership is not
 // a platform login. To open NC to the team later, add the roles here AND in
 // queryPlatformDataTool's MODULE_ROLE_ALLOWLIST so both paths stay consistent.
 const NC_ANALYSIS_ROLES = new Set([

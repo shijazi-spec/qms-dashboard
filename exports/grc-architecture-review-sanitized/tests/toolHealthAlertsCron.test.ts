@@ -108,12 +108,12 @@ function makeDeps(opts: {
   pastCooldown?: boolean;
   /**
    * Override the default notifier stub. Defaults to a no-op that returns
-   * `{ slackSent: true }` so we can assert that the cron only invokes the
+   * `{ ChatProviderSent: true }` so we can assert that the cron only invokes the
    * notifier on freshly-created breaches.
    */
   notifierResult?: NotifyToolHealthBreachResult;
   notifierThrows?: boolean;
-  /** Override the default recovery notifier result. Defaults to `{ slackSent: true, emailSent: false, skipped: false }`. */
+  /** Override the default recovery notifier result. Defaults to `{ ChatProviderSent: true, emailSent: false, skipped: false }`. */
   recoveryNotifierResult?: NotifyToolHealthRecoveryResult;
   /** When true, the recovery notifier stub throws instead of returning. */
   recoveryNotifierThrows?: boolean;
@@ -158,14 +158,14 @@ function makeDeps(opts: {
   const existingDedupeKeys = new Set<string>(opts.existingOpenDedupeKeys ?? []);
   const defaultNotifyResult: NotifyToolHealthBreachResult =
     opts.notifierResult ?? {
-      slackSent: true,
+      ChatProviderSent: true,
       emailSent: false,
       throttled: false,
       skipped: false,
     };
   const defaultRecoveryNotifyResult: NotifyToolHealthRecoveryResult =
     opts.recoveryNotifierResult ?? {
-      slackSent: true,
+      ChatProviderSent: true,
       emailSent: false,
       skipped: false,
       disabled: false,
@@ -427,7 +427,7 @@ await suite.test(
 );
 
 await suite.test(
-  "(d) duplicate alerts are deduped against existing open ai_alerts rows",
+  "(d) duplicate alerts are deduped against existing LLMProvider_alerts rows",
   async () => {
     const agg = makeAggregate({
       tool_name: "qms_create_nc",
@@ -724,7 +724,7 @@ await suite.test("tool not in aggregates → matching open alert is NOT auto-res
 // ─── Task #128: on-call notification wiring ──────────────────────────────────
 
 await suite.test(
-  "(n1) new breach alert triggers exactly one Slack/email notification",
+  "(n1) new breach alert triggers exactly one ChatProvider/email notification",
   async () => {
     const agg = makeAggregate({
       tool_name: "qms_create_nc",
@@ -762,7 +762,7 @@ await suite.test(
 );
 
 await suite.test(
-  "(n2) duplicate breach (existing open ai_alerts row) does NOT re-page",
+  "(n2) duplicate breach (existing LLMProvider_alerts row) does NOT re-page",
   async () => {
     const agg = makeAggregate({
       tool_name: "qms_create_nc",
@@ -867,7 +867,7 @@ await suite.test(
     const { deps, notifies } = makeDeps({
       aggregates: [agg],
       notifierResult: {
-        slackSent: false,
+        ChatProviderSent: false,
         emailSent: false,
         throttled: false,
         skipped: true,
@@ -896,7 +896,7 @@ await suite.test(
     const { deps } = makeDeps({
       aggregates: [agg],
       notifierResult: {
-        slackSent: false,
+        ChatProviderSent: false,
         emailSent: false,
         throttled: true,
         skipped: false,
@@ -964,7 +964,7 @@ await suite.test(
 // ─── Task #288: dead-letter visibility for missed pages ──────────────────────
 
 await suite.test(
-  "(dl1) notifier returns slackSent=false & emailSent=false → dead-letter row written",
+  "(dl1) notifier returns ChatProviderSent=false & emailSent=false → dead-letter row written",
   async () => {
     const agg = makeAggregate({
       tool_name: "silent_failure_tool",
@@ -979,7 +979,7 @@ await suite.test(
       // throttled (throttled=false), but every channel returned ok=false /
       // success=false — i.e. the page was attempted but never delivered.
       notifierResult: {
-        slackSent: false,
+        ChatProviderSent: false,
         emailSent: false,
         throttled: false,
         skipped: false,
@@ -1035,7 +1035,7 @@ await suite.test(
     const { deps, deadLetters } = makeDeps({
       aggregates: [agg],
       notifierResult: {
-        slackSent: true, // Slack delivered the page
+        ChatProviderSent: true, // ChatProvider delivered the page
         emailSent: false, // email failed (or wasn't configured)
         throttled: false,
         skipped: false,
@@ -1066,7 +1066,7 @@ await suite.test(
     const { deps, deadLetters } = makeDeps({
       aggregates: [agg],
       notifierResult: {
-        slackSent: false,
+        ChatProviderSent: false,
         emailSent: false,
         throttled: false,
         skipped: true,
@@ -1097,7 +1097,7 @@ await suite.test(
     const { deps, deadLetters } = makeDeps({
       aggregates: [agg],
       notifierResult: {
-        slackSent: false,
+        ChatProviderSent: false,
         emailSent: false,
         throttled: true,
         skipped: false,
@@ -1132,7 +1132,7 @@ await suite.test(
     const { deps, deadLetters } = makeDeps({
       aggregates: [agg],
       notifierResult: {
-        slackSent: false,
+        ChatProviderSent: false,
         emailSent: false,
         throttled: false,
         skipped: false,
@@ -1758,7 +1758,7 @@ await suite.test(
   },
 );
 
-// ─── Task #213: Slack notification when an override auto-reverts ───────────
+// ─── Task #213: ChatProvider notification when an override auto-reverts ───────────
 // The cron is expected to invoke `notifyOverrideExpired` exactly when the
 // reaper actually swept a row, forwarding `previous_updated_by`,
 // `cleared_overrides`, `expired_at`, and `audit_id`. Notifier failures must
@@ -1781,11 +1781,11 @@ await suite.test(
       }),
       notifyOverrideExpired: (async (n: any) => {
         notifyCalls.push(n);
-        return { slackSent: true, skipped: false };
+        return { ChatProviderSent: true, skipped: false };
       }) as any,
     };
     await runToolHealthCheck(deps);
-    suite.expectEqual(notifyCalls.length, 1, "exactly one Slack post sent");
+    suite.expectEqual(notifyCalls.length, 1, "exactly one ChatProvider post sent");
     const call = notifyCalls[0];
     suite.expectEqual(
       call.previous_updated_by,
@@ -1826,14 +1826,14 @@ await suite.test(
       }),
       notifyOverrideExpired: (async (n: any) => {
         notifyCalls.push(n);
-        return { slackSent: true, skipped: false };
+        return { ChatProviderSent: true, skipped: false };
       }) as any,
     };
     await runToolHealthCheck(deps);
     suite.expectEqual(
       notifyCalls.length,
       0,
-      "no Slack post when nothing was reaped",
+      "no ChatProvider post when nothing was reaped",
     );
   },
 );
@@ -1850,7 +1850,7 @@ await suite.test(
       const baseDeps = makeDeps({
         aggregates: [
           makeAggregate({
-            tool_name: "still_runs_after_slack_blowup",
+            tool_name: "still_runs_after_ChatProvider_blowup",
             agent_name: "agent",
             call_count: 20,
             error_count: 12,
@@ -1868,7 +1868,7 @@ await suite.test(
           previous_updated_by: "user@example.invalid",
         }),
         notifyOverrideExpired: (async () => {
-          throw new Error("simulated Slack outage");
+          throw new Error("simulated ChatProvider outage");
         }) as any,
       };
       const out = await runToolHealthCheck(deps);
@@ -1876,13 +1876,13 @@ await suite.test(
       suite.expectEqual(
         out.expiredOverridesReaped,
         1,
-        "reap counter reflects the sweep even when Slack threw",
+        "reap counter reflects the sweep even when ChatProvider threw",
       );
       suite.expect(
         captured.some((l) =>
-          /override auto-revert Slack notification failed/i.test(l),
+          /override auto-revert ChatProvider notification failed/i.test(l),
         ),
-        `Slack failure logged (got: ${captured.join(" | ")})`,
+        `ChatProvider failure logged (got: ${captured.join(" | ")})`,
       );
     } finally {
       console.error = originalErr;
@@ -2157,7 +2157,7 @@ await suite.test(
           { id: 88, alert_type: "tool_health", severity: "medium", title: "s", description: "s", status: "open" } as any,
         ],
       },
-      recoveryNotifierResult: { slackSent: false, emailSent: false, skipped: true, disabled: false },
+      recoveryNotifierResult: { ChatProviderSent: false, emailSent: false, skipped: true, disabled: false },
       pastCooldown: true,
     });
 
@@ -2295,7 +2295,7 @@ await suite.test(
 // different tool's previous breach has cleared and gets auto-resolved. The
 // breach notifier MUST stay silent: the sibling prompt-regression cron used
 // to call its batch notifier here with an empty payload, which produced
-// "0 new regressions detected" Slack/email pages on recovery-only ticks.
+// "0 new regressions detected" ChatProvider/email pages on recovery-only ticks.
 // The tool-health cron is structurally protected because pages are only
 // dispatched per-breach inside `dispatchBreachNotification`, which is only
 // reached from the `if (result.created)` branch — but lock that contract in

@@ -49,7 +49,7 @@
                 <h1 class="text-xl font-bold text-gray-900">Pipeline Aging</h1>
                 <p class="text-sm text-gray-500" data-testid="text-page-subtitle">
                     Days each Lead has spent in its current Lead Status / each Deal in its current Stage,
-                    derived from Zoho's modification history (terminal states are frozen).
+                    derived from CRMProvider's modification history (terminal states are frozen).
                 </p>
             </div>
             <a href="/dashboard" class="text-sm text-blue-600 hover:underline" data-testid="link-back-dashboard">← Dashboard</a>
@@ -173,7 +173,7 @@
             if (cursor) qs += '&cursor=' + encodeURIComponent(cursor);
             document.getElementById('status').textContent = 'Loading…';
             try {
-                var res = await fetch('/api/zoho/' + currentModule + '/aging?' + qs, { credentials: 'include' });
+                var res = await fetch('/api/CRMProvider/' + currentModule + '/aging?' + qs, { credentials: 'include' });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 var data = await res.json();
                 currentRows = (data.items || []);

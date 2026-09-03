@@ -4,20 +4,20 @@ import { qualitySpecialistAgent } from "../agents/qualitySpecialistAgent";
 import { sdrQualityAgent } from "../agents/sdrQualityAgent";
 import { salesQualityAgent } from "../agents/salesQualityAgent";
 import { withAiTelemetry, buildAiCallTelemetryMetadata } from "../../utils/aiTelemetry";
-import { hasOpenAIApiKey } from "../../utils/openaiCredentials";
+import { hasLLMProviderApiKey } from "../../utils/LLMProviderCredentials";
 import { SDR_QUALITY_PROMPT_VERSION } from "../agents/sdrQualityAgent";
 import { SALES_QUALITY_PROMPT_VERSION } from "../agents/salesQualityAgent";
 import { QUALITY_SPECIALIST_PROMPT_VERSION } from "../agents/qualitySpecialistAgent";
-import { fetchCalendarEvents } from "../../utils/googleCalendar";
-import { sendEmail } from "../../utils/replitmail";
-import { sendResendEmail, QUALITY_REPORT_RECIPIENTS } from "../../utils/resendMail";
+import { fetchCalendarEvents } from "../../utils/IdentityProviderCalendar";
+import { sendEmail } from "../../utils/HostingPlatformmail";
+import { sendEmailProviderEmail, QUALITY_REPORT_RECIPIENTS } from "../../utils/EmailProviderMail";
 import {
-  fetchZohoRecords,
-  fetchAllZohoRecords,
+  fetchCRMProviderRecords,
+  fetchAllCRMProviderRecords,
   analyzeRecordHygiene,
   calculateQualityScores,
   DEFAULT_GOVERNANCE_RULES,
-} from "../../utils/zohoCRM";
+} from "../../utils/CRMProviderCRM";
 import { saveAuditResult, getActiveGovernanceDocument, getActiveScorecard, getGovernanceDocumentByModule, getScorecardsByModuleAndTeam, getScorecardAttributes } from "../../utils/database";
 import { fireAuditCompletedTrigger, fireNonconformanceDetectedTrigger, fireCAPARequiredTrigger, initAuditTriggerTables } from "../../utils/auditTriggerDatabase";
 
@@ -40,16 +40,16 @@ const validateEnvironmentStep = createStep({
     const missingVariables: string[] = [];
     const warnings: string[] = [];
 
-    const hasZohoCredentials = !!(
-      process.env.ZOHO_ACCESS_TOKEN ||
-      (process.env.ZOHO_CLIENT_ID && process.env.ZOHO_CLIENT_SECRET && process.env.ZOHO_REFRESH_TOKEN)
+    const hasCRMProviderCredentials = !!(
+      process.env.CRMProvider_ACCESS_TOKEN ||
+      (process.env.CRMProvider_CLIENT_ID && process.env.CRMProvider_CLIENT_SECRET && process.env.CRMProvider_REFRESH_TOKEN)
     );
-    if (!hasZohoCredentials) {
+    if (!hasCRMProviderCredentials) {
       warnings.push("CRM integration not configured - CRM audit will be skipped");
     }
 
-    if (!hasOpenAIApiKey()) {
-      warnings.push("OpenAI API key is not configured - AI insights will use fallback recommendations");
+    if (!hasLLMProviderApiKey()) {
+      warnings.push("LLMProvider API key is not configured - AI insights will use fallback recommendations");
     }
 
     if (warnings.length > 0) {
@@ -68,7 +68,7 @@ const validateEnvironmentStep = createStep({
 
 const fetchCalendarEventsStep = createStep({
   id: "fetch-calendar-events",
-  description: "Fetches calendar events from Google Calendar for the audit period",
+  description: "Fetches calendar events from IdentityProvider Calendar for the audit period",
 
   inputSchema: z.object({
     valid: z.boolean(),
@@ -104,7 +104,7 @@ const fetchCalendarEventsStep = createStep({
     startDate.setDate(startDate.getDate() - 7);
 
     try {
-      logger?.info("📅 [Step 1] Fetching events from Google Calendar API...", {
+      logger?.info("📅 [Step 1] Fetching events from IdentityProvider Calendar API...", {
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
       });
@@ -232,14 +232,14 @@ const auditCRMWithAgentStep = createStep({
       dateRange: inputData.dateRange,
     };
 
-    const hasZohoCredentials = !!(
-      process.env.ZOHO_ACCESS_TOKEN ||
-      (process.env.ZOHO_CLIENT_ID && process.env.ZOHO_CLIENT_SECRET && process.env.ZOHO_REFRESH_TOKEN)
+    const hasCRMProviderCredentials = !!(
+      process.env.CRMProvider_ACCESS_TOKEN ||
+      (process.env.CRMProvider_CLIENT_ID && process.env.CRMProvider_CLIENT_SECRET && process.env.CRMProvider_REFRESH_TOKEN)
     );
-    const hasOpenAIKey = hasOpenAIApiKey();
+    const hasLLMProviderKey = hasLLMProviderApiKey();
 
-    if (!hasZohoCredentials) {
-      logger?.warn("⚠️ [Step 2] Zoho CRM credentials not configured - skipping CRM audit");
+    if (!hasCRMProviderCredentials) {
+      logger?.warn("⚠️ [Step 2] CRMProvider CRM credentials not configured - skipping CRM audit");
       
       return {
         calendarData,
@@ -266,8 +266,8 @@ const auditCRMWithAgentStep = createStep({
       };
     }
 
-    if (!hasOpenAIKey) {
-      logger?.info("📊 [Step 2] OpenAI API key not configured - performing direct CRM audit without AI agent...");
+    if (!hasLLMProviderKey) {
+      logger?.info("📊 [Step 2] LLMProvider API key not configured - performing direct CRM audit without AI agent...");
       
       try {
         const modules = ["Leads", "Deals"];
@@ -279,7 +279,7 @@ const auditCRMWithAgentStep = createStep({
         for (const moduleName of modules) {
           logger?.info(`📊 [Step 2] Auditing ${moduleName} (all records)...`);
           try {
-            const records = await fetchAllZohoRecords(moduleName, { maxRecords: 50000 });
+            const records = await fetchAllCRMProviderRecords(moduleName, { maxRecords: 50000 });
             totalRecordsAudited += records.length;
             
             const moduleGovDoc = await getGovernanceDocumentByModule(moduleName);
@@ -837,7 +837,7 @@ const generateInsightsStep = createStep({
     const logger = mastra?.getLogger();
     logger?.info("🤖 [Step 3] Generating AI-powered insights...");
 
-    const hasOpenAIKey = hasOpenAIApiKey();
+    const hasLLMProviderKey = hasLLMProviderApiKey();
 
     if (inputData.crmAudit.skipped) {
       logger?.info("📝 [Step 3] CRM audit was skipped, generating configuration guidance...");
@@ -857,8 +857,8 @@ const generateInsightsStep = createStep({
       };
     }
 
-    if (!hasOpenAIKey) {
-      logger?.info("📝 [Step 3] OpenAI API key not configured - using deterministic insights...");
+    if (!hasLLMProviderKey) {
+      logger?.info("📝 [Step 3] LLMProvider API key not configured - using deterministic insights...");
       
       const { qualityScores, crmAudit, calendarData } = inputData;
       
@@ -1304,23 +1304,23 @@ This report was automatically generated by the ExampleOrg Agentic AI Quality Spe
       let emailMessageId: string | undefined;
       let emailSentSuccessfully = false;
 
-      const resendResult = await sendResendEmail({
+      const EmailProviderResult = await sendEmailProviderEmail({
         to: QUALITY_REPORT_RECIPIENTS,
         subject: emailSubject,
         html: htmlContent,
         text: textContent,
       });
 
-      if (resendResult.success) {
-        logger?.info("✅ [Step 4] Quality report sent via Resend to custom recipients", {
+      if (EmailProviderResult.success) {
+        logger?.info("✅ [Step 4] Quality report sent via EmailProvider to custom recipients", {
           recipients: QUALITY_REPORT_RECIPIENTS,
-          emailId: resendResult.id,
+          emailId: EmailProviderResult.id,
         });
-        emailMessageId = resendResult.id;
+        emailMessageId = EmailProviderResult.id;
         emailSentSuccessfully = true;
       } else {
-        logger?.warn("⚠️ [Step 4] Resend failed, falling back to Replit Mail", {
-          error: resendResult.error,
+        logger?.warn("⚠️ [Step 4] EmailProvider failed, falling back to HostingPlatform Mail", {
+          error: EmailProviderResult.error,
         });
         
         try {
@@ -1330,7 +1330,7 @@ This report was automatically generated by the ExampleOrg Agentic AI Quality Spe
             text: textContent,
           });
 
-          logger?.info("✅ [Step 4] Quality report sent via Replit Mail (fallback)", {
+          logger?.info("✅ [Step 4] Quality report sent via HostingPlatform Mail (fallback)", {
             messageId: fallbackResult.messageId,
             accepted: fallbackResult.accepted,
           });
@@ -1338,9 +1338,9 @@ This report was automatically generated by the ExampleOrg Agentic AI Quality Spe
           emailSentSuccessfully = true;
         } catch (fallbackError) {
           const fallbackErrorMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
-          logger?.error("❌ [Step 4] Both Resend and Replit Mail failed", {
-            resendError: resendResult.error,
-            replitMailError: fallbackErrorMessage,
+          logger?.error("❌ [Step 4] Both EmailProvider and HostingPlatform Mail failed", {
+            EmailProviderError: EmailProviderResult.error,
+            HostingPlatformMailError: fallbackErrorMessage,
           });
         }
       }

@@ -2,7 +2,7 @@
  * Leadership KPI Feed
  * ===================
  * Computes the "Current" value of the GRQ KPIs that the ExampleOrg **Leadership
- * Platform** (a separate Replit app at <REDACTED_HOST>)
+ * Platform** (a separate HostingPlatform app at <REDACTED_HOST>)
  * tracks on its KPI Management screen. The Leadership Platform PULLS this feed
  * (see src/mastra/routes/leadershipFeedRoutes.ts) and overwrites its manual
  * "Current" values, while keeping its OWN baselines, targets, QTD pace, RAG

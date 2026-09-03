@@ -34,12 +34,12 @@ Semantic recall is enabled by default, so if you give your agent memory it will 
 ```typescript {9}
 import { Agent } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 
 const agent = new Agent({
   name: "SupportAgent",
   instructions: "You are a helpful support agent.",
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   memory: new Memory(),
 });
 ```
@@ -113,16 +113,16 @@ import { Agent } from "@mastra/core/agent";
 const agent = new Agent({
   memory: new Memory({
     // ... other memory options
-    embedder: "openai/text-embedding-3-small", // TypeScript autocomplete supported
+    embedder: "LLMProvider/text-embedding-3-small", // TypeScript autocomplete supported
   }),
 });
 ```
 
 Supported embedding models:
-- **OpenAI**: `text-embedding-3-small`, `text-embedding-3-large`, `text-embedding-ada-002`
-- **Google**: `gemini-embedding-001`, `text-embedding-004`
+- **LLMProvider**: `text-embedding-3-small`, `text-embedding-3-large`, `text-embedding-ada-002`
+- **IdentityProvider**: `gemini-embedding-001`, `text-embedding-004`
 
-The model router automatically handles API key detection from environment variables (`OPENAI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`).
+The model router automatically handles API key detection from environment variables (`LLMProvider_API_KEY`, `IdentityProvider_GENERATIVE_AI_API_KEY`).
 
 #### Using AI SDK Packages
 
@@ -131,12 +131,12 @@ You can also use AI SDK embedding models directly:
 ```ts {3,8}
 import { Memory } from "@mastra/memory";
 import { Agent } from "@mastra/core/agent";
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 
 const agent = new Agent({
   memory: new Memory({
     // ... other memory options
-    embedder: openai.embedding("text-embedding-3-small"),
+    embedder: LLMProvider.embedding("text-embedding-3-small"),
   }),
 });
 ```
@@ -168,7 +168,7 @@ const agent = new Agent({
 
 When using PostgreSQL as your vector store, you can optimize semantic recall performance by configuring the vector index. This is particularly important for large-scale deployments with thousands of messages.
 
-PostgreSQL supports both IVFFlat and HNSW indexes. By default, Mastra creates an IVFFlat index, but HNSW indexes typically provide better performance, especially with OpenAI embeddings which use inner product distance.
+PostgreSQL supports both IVFFlat and HNSW indexes. By default, Mastra creates an IVFFlat index, but HNSW indexes typically provide better performance, especially with LLMProvider embeddings which use inner product distance.
 
 ```typescript {9-18}
 import { Memory } from "@mastra/memory";
@@ -188,7 +188,7 @@ const agent = new Agent({
         messageRange: 2,
         indexConfig: {
           type: 'hnsw',           // Use HNSW for better performance
-          metric: 'dotproduct',   // Best for OpenAI embeddings  
+          metric: 'dotproduct',   // Best for LLMProvider embeddings  
           m: 16,                  // Number of bi-directional links (default: 16)
           efConstruction: 64,    // Size of candidate list during construction (default: 64)
         },

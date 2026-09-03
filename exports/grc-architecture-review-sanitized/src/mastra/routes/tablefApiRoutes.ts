@@ -110,7 +110,7 @@ export const tablefApiRoutes = [
           // user-supplied KPI payload BEFORE it touches Postgres. KPI rows
           // store free-text columns (description, calculation_definition,
           // owner_email, …) where a misbehaving operator could otherwise
-          // paste a JWT, GitHub PAT (`ghp_…`), bcrypt hash, etc.
+          // paste a JWT, SourceControlProvider PAT (`ghp_…`), bcrypt hash, etc.
           const data = redactSensitiveDeep(await c.req.json());
           let kpi;
           if (data.kpi_id) {

@@ -826,7 +826,7 @@ export const kpiRoutes = [
               c,
               "Insufficient permissions to recalculate KPIs",
             );
-          // ?cycleTimes=1 forces the Zoho stage-history step (Sales cycle times)
+          // ?cycleTimes=1 forces the CRMProvider stage-history step (Sales cycle times)
           // on demand; default is the fast local-only recompute.
           const includeCycleTimes =
             c.req.query("cycleTimes") === "1" ||
@@ -842,7 +842,7 @@ export const kpiRoutes = [
   },
   {
     // Manual push of current KPI values to the Leadership Platform's webhook.
-    // Reads the URL + secret from Replit Secrets — never hardcoded.
+    // Reads the URL + secret from HostingPlatform Secrets — never hardcoded.
     path: "/api/kpis/push-to-leadership",
     method: "POST" as const,
     createHandler: async () => {

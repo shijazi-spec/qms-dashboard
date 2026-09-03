@@ -3,8 +3,8 @@
  * `registerApiRoute()`.
  *
  * The id MUST be unique per route *path*. Several routes can legitimately share
- * a first path segment — e.g. `/webhooks/slack/action`,
- * `/webhooks/slack/consultant-rating`, and `/webhooks/telegram/action` all start
+ * a first path segment — e.g. `/webhooks/ChatProvider/action`,
+ * `/webhooks/ChatProvider/consultant-rating`, and `/webhooks/telegram/action` all start
  * with `webhooks`. Deriving the id from only that first segment produced
  * duplicate `api-webhooks` ids, which makes `inngest.serve()` throw
  * "Duplicate function ID" at boot and exits the process before the HTTP port

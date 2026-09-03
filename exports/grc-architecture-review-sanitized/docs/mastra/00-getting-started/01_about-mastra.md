@@ -20,7 +20,7 @@ Purpose-built for TypeScript and designed around established AI patterns, Mastra
 
 Some highlights include:
 
-- [**Model routing**](/models) - Connect to 40+ providers through one standard interface. Use models from OpenAI, Anthropic, Gemini, and more.
+- [**Model routing**](/models) - Connect to 40+ providers through one standard interface. Use models from LLMProvider, Anthropic, Gemini, and more.
 
 - [**Agents**](/docs/agents/overview) - Build autonomous agents that use LLMs and tools to solve open-ended tasks. Agents reason about goals, decide which tools to use,  and iterate internally until the model emits a final answer or an optional stopping condition is met.
 
@@ -239,7 +239,7 @@ Deploy and manage your applications with automated builds, organized projects, a
 
 Key features:
 
-Mastra Cloud supports zero-config deployment, continuous integration with GitHub, and atomic deployments that package agents, tools, and workflows together.
+Mastra Cloud supports zero-config deployment, continuous integration with SourceControlProvider, and atomic deployments that package agents, tools, and workflows together.
 
 ## Project Dashboard
 
@@ -301,14 +301,14 @@ import { Steps } from "nextra/components";
 # Setting Up and Deploying
 [EN] Source: <REDACTED_URL>
 
-This page explains how to set up a project on [Mastra Cloud](<REDACTED_URL> with automatic deployments using our GitHub integration.
+This page explains how to set up a project on [Mastra Cloud](<REDACTED_URL> with automatic deployments using our SourceControlProvider integration.
 
 <MastraCloudCallout />
 
 ## Prerequisites
 
 - A [Mastra Cloud](<REDACTED_URL> account
-- A GitHub account / repository containing a Mastra application
+- A SourceControlProvider account / repository containing a Mastra application
 
 > See our [Getting started](/docs/getting-started/installation) guide to scaffold out a new Mastra project with sensible defaults.
 
@@ -320,14 +320,14 @@ This page explains how to set up a project on [Mastra Cloud](<REDACTED_URL> with
 
 Head over to [<REDACTED_URL> and sign in with either:
 
-- **GitHub**
-- **Google**
+- **SourceControlProvider**
+- **IdentityProvider**
 
-### Install the Mastra GitHub app
+### Install the Mastra SourceControlProvider app
 
-When prompted, install the Mastra GitHub app.
+When prompted, install the Mastra SourceControlProvider app.
 
-![Install GitHub](/image/mastra-cloud/mastra-cloud-install-github.jpg)
+![Install SourceControlProvider](/image/mastra-cloud/mastra-cloud-install-SourceControlProvider.jpg)
 
 ### Create a new project
 
@@ -347,7 +347,7 @@ Mastra Cloud automatically detects the right build settings, but you can customi
 
 ![Deployment details](/image/mastra-cloud/mastra-cloud-deployment-details.jpg)
 
-- **Importing from GitHub**: The GitHub repository name
+- **Importing from SourceControlProvider**: The SourceControlProvider repository name
 - **Project name**: Customize the project name
 - **Branch**: The branch to deploy from
 - **Project root**: The root directory of your project
@@ -374,7 +374,7 @@ After a successful deployment you'll be shown the **Overview** screen where you 
 
 ## Continuous integration
 
-Your project is now configured with automatic deployments which occur whenever you push to the configured branch of your GitHub repository.
+Your project is now configured with automatic deployments which occur whenever you push to the configured branch of your SourceControlProvider repository.
 
 ## Testing your application
 

@@ -35,7 +35,7 @@ describe("scorecard_v2_copc.json — structural integrity", () => {
     expect(Array.isArray(c.scorecard.sections)).toBe(true);
   });
 
-  test("has exactly 4 sections matching the Five9 COPC template", () => {
+  test("has exactly 4 sections matching the ContactCenterProvider COPC template", () => {
     const c = loadCanonical();
     expect(c.scorecard.sections).toHaveLength(4);
     const ids = c.scorecard.sections.map((s: any) => s.id);
@@ -100,17 +100,17 @@ describe("scorecard_v2_copc.json — structural integrity", () => {
     });
   });
 
-  test("Five9-blocked checkpoints are explicitly tagged", () => {
+  test("ContactCenterProvider-blocked checkpoints are explicitly tagged", () => {
     const c = loadCanonical();
     const blocked: string[] = [];
     for (const s of c.scorecard.sections) {
       for (const cp of s.checkpoints) {
-        if (cp.data_dependency.includes("five9_real_ingest")) {
+        if (cp.data_dependency.includes("ContactCenterProvider_real_ingest")) {
           blocked.push(cp.id);
         }
       }
     }
-    // The DMAIC analysis documented exactly 8 Five9-blocked checkpoints
+    // The DMAIC analysis documented exactly 8 ContactCenterProvider-blocked checkpoints
     expect(blocked.length).toBe(8);
     expect(blocked).toContain("login_to_call_gap");
     expect(blocked).toContain("answer_rate");
@@ -124,20 +124,20 @@ describe("scorecard_v2_copc.json — structural integrity", () => {
 });
 
 describe("dependencies summary mirrors actual checkpoints", () => {
-  test("blocked_on_five9 list matches checkpoint tags", () => {
+  test("blocked_on_ContactCenterProvider list matches checkpoint tags", () => {
     const c = loadCanonical();
     const tagged: string[] = [];
     for (const s of c.scorecard.sections) {
       for (const cp of s.checkpoints) {
-        if (cp.data_dependency.includes("five9_real_ingest")) {
+        if (cp.data_dependency.includes("ContactCenterProvider_real_ingest")) {
           tagged.push(cp.id);
         }
       }
     }
-    const declared = c._dependencies_summary?.blocked_on_five9 || [];
+    const declared = c._dependencies_summary?.blocked_on_ContactCenterProvider || [];
     // Every tagged checkpoint must appear in the declared list
     for (const t of tagged) {
-      expect(declared, `tagged ${t} should be in blocked_on_five9 list`).toContain(t);
+      expect(declared, `tagged ${t} should be in blocked_on_ContactCenterProvider list`).toContain(t);
     }
   });
 });

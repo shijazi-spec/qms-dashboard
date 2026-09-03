@@ -28,7 +28,7 @@ From the Aug 25 email to CTO (the most complete version of the vendor's scope):
 
 | # | Pillar | Velents commitments |
 |---|---|---|
-| 1 | Ingestion & Storage | Webhook/scheduled pull from Five9 on call completion; download audio + metadata (agent/campaign/disposition); secure storage |
+| 1 | Ingestion & Storage | Webhook/scheduled pull from ContactCenterProvider on call completion; download audio + metadata (agent/campaign/disposition); secure storage |
 | 2 | Transcription (ASR) | Auto-language detect Arabic/English including code-switching; speaker diarization; channel mapping (Agent vs Customer); PII redaction with reversible/irreversible hashing per policy |
 | 3 | Conversation Enrichment | Talk-time features (silence/overlaps/interruptions/talk ratio/pace); semantic features (intents/issues/products/sentiment shifts); knowledge checks against ExampleOrg KB/FAQs |
 | 4 | Scorecard & Compliance Engine | LLM rubric scoring (Greeting/Needs Discovery/Resolution/Closing); deterministic checks (mandatory phrases, compliance steps, prohibited words); weighted total scores with rationales + timestamped evidence; auto-fail rules for major breaches |
@@ -52,7 +52,7 @@ Going through Velents's 6 pillars against `<REDACTED_HOST>/calls`:
 
 | Velents commitment | ExampleOrg internal status |
 |---|---|
-| Webhook from Five9 on call completion | ❌ **Gap.** We ingest via filename-parsed bulk upload (199 historical) + `/api/calls/ingest` endpoint exists but no live Five9 webhook is wired |
+| Webhook from ContactCenterProvider on call completion | ❌ **Gap.** We ingest via filename-parsed bulk upload (199 historical) + `/api/calls/ingest` endpoint exists but no live ContactCenterProvider webhook is wired |
 | Download audio + metadata (agent/campaign/disposition) | ⚠️ Partial. Audio yes (`audio_blob` column). Metadata: agent + call date yes; campaign + disposition no |
 | Secure storage | ✅ Postgres `audio_blob` + Whisper-derived transcripts persisted |
 
@@ -107,7 +107,7 @@ Going through Velents's 6 pillars against `<REDACTED_HOST>/calls`:
 | Agent/team dashboards | ✅ Overview tab + Coaching tab + Analytics tab cover this |
 | Trends | ✅ QA Score Trends + Topic Clusters (shipped today) |
 | Compliance breach logs | ⚠️ Partial. `call_compliance` table exists; no "breach log" view |
-| Daily digests | ❌ **Gap.** No scheduled email/Slack digest. This is THE missing manager-facing output Sample User for |
+| Daily digests | ❌ **Gap.** No scheduled email/ChatProvider digest. This is THE missing manager-facing output Sample User for |
 | Real-time alerts for severe issues | ❌ **Gap.** Coaching plans auto-generate but there's no proactive notification — manager has to log in and check |
 | Exports (CSV / S3 / CRM / BI) | ⚠️ Partial. Some CSV exports exist; no S3/BI integration |
 
@@ -137,7 +137,7 @@ My plan (in `docs/Call_Evaluation_Revamp_Plan_2026_05_25.md`) covers:
 
 | Revamp plan section | Maps to which Velents pillar |
 |---|---|
-| **P1 — Reports surface** (manager-shareable PDF / Slack / CSV) | Pillar 6 (daily digests + exports). Closes ~2 of the 3.5 missing points. |
+| **P1 — Reports surface** (manager-shareable PDF / ChatProvider / CSV) | Pillar 6 (daily digests + exports). Closes ~2 of the 3.5 missing points. |
 | **P2 — Agent View** | Pillar 6 (agent dashboards) — already mostly shipped, P2 polishes |
 | **P3 — Team View** (leaderboard, weak areas, coaching backlog) | Pillar 6 (team scores, trends, compliance breach logs) |
 | **P4 — IA cleanup** | Not a Velents requirement; pure UX hygiene |
@@ -157,7 +157,7 @@ These are the genuine gaps I should add to the revamp plan if you want the in-ho
 |---|---|---|---|
 | **PII redaction in transcripts** | PDPL Article 18 (data minimisation) — storing customer PII verbatim in transcripts is a real risk. Auditor would flag this. | ~1 week. Either Whisper-side redaction or post-process via regex/NER for Saudi ID numbers, phone, IBAN, email | **🔴 Add to revamp plan as P0** |
 | **Deterministic compliance checks** (mandatory phrases / prohibited words / auto-fail) | Without this, our PDPL consent line and 3-point verification (docs already drafted) cannot be ENFORCED — only suggested | ~3-5 days. Phrase-matching engine + auto-fail rule config + scorecard integration | **🔴 Add to revamp plan as P1.5** |
-| **Real-time alerts on severe breaches** | "Agent X just had a call without consent line — alert manager NOW" — currently impossible | ~3 days. Slack/email integration + alert routing config | **🟡 Add to revamp plan as P2.5** |
+| **Real-time alerts on severe breaches** | "Agent X just had a call without consent line — alert manager NOW" — currently impossible | ~3 days. ChatProvider/email integration + alert routing config | **🟡 Add to revamp plan as P2.5** |
 
 ### Tier 2 — Coaching quality / signal quality
 
@@ -171,7 +171,7 @@ These are the genuine gaps I should add to the revamp plan if you want the in-ho
 
 | Capability | Why it matters | Effort | Priority |
 |---|---|---|---|
-| **Live Five9 webhook ingest** | Replaces filename-parsed uploads for live calls. Filename parser stays for historical bulk imports | ~1 week. Need Five9 admin access + their webhook config | **🟢 P2 of the revamp plan already** |
+| **Live ContactCenterProvider webhook ingest** | Replaces filename-parsed uploads for live calls. Filename parser stays for historical bulk imports | ~1 week. Need ContactCenterProvider admin access + their webhook config | **🟢 P2 of the revamp plan already** |
 | **KB/FAQ knowledge checks** | "Agent said the discount is 30% but our KB says 25% — flag this" | ~1-2 weeks. Requires a KB ingestion pipeline + semantic search | **🟢 Future** |
 | **BI exports** (Snowflake/BigQuery/Power BI) | Useful if you ever connect ExampleOrg data to a corporate data warehouse | ~3 days per target | **🟢 Future** |
 | **QA Inbox** (sampling workflow for reviewers) | Manager-review workflow exists today; the "queue of N random calls to review this week" UI doesn't | ~3 days | **🟢 Recommend** |
@@ -182,7 +182,7 @@ These are the genuine gaps I should add to the revamp plan if you want the in-ho
 | Velents capability | Why we likely don't need it |
 |---|---|
 | Reversible hashing for PII | Irreversible redaction is sufficient for PDPL; reversibility is rarely needed |
-| Channel mapping (stereo recordings) | Five9 typically gives mono. Diarization is the practical alternative |
+| Channel mapping (stereo recordings) | ContactCenterProvider typically gives mono. Diarization is the practical alternative |
 | Cohen's κ as a UI surface | The metric should INFORM rubric tuning, not be a dashboard for managers |
 
 ---
@@ -201,7 +201,7 @@ To bring the in-house build to functional parity with the Velents proposal Sampl
 | **P3** | Team View | + **QA Inbox** (sampling workflow for reviewers) |
 | **P4** | IA cleanup | (unchanged) |
 | **P5** | COPC v2 polish | + **Cohen's κ inter-rater agreement** for rubric tuning |
-| **P6 (NEW, future)** | — | **Five9 live webhook ingest**, **KB knowledge checks**, **BI exports**, **sentiment shifts** |
+| **P6 (NEW, future)** | — | **ContactCenterProvider live webhook ingest**, **KB knowledge checks**, **BI exports**, **sentiment shifts** |
 
 **Net change:** 3 new phases (P0, P1.5, P2.5) + additions to existing phases. Total revamp scope grows by roughly +3-4 weeks of focused work.
 
@@ -226,12 +226,12 @@ Going line-by-line through Sample User's Aug 17 user story and proposed solution
 
 | Sample User's Aug 17 requirement | Status today |
 |---|---|
-| Per-call AI scorecard outside Five9 | ✅ Shipped (COPC v2 scorecard) |
-| Integrated with Five9 metadata | ⚠️ Partial (no live webhook yet) |
+| Per-call AI scorecard outside ContactCenterProvider | ✅ Shipped (COPC v2 scorecard) |
+| Integrated with ContactCenterProvider metadata | ⚠️ Partial (no live webhook yet) |
 | Greeting & introduction compliance | ⚠️ Scored via LLM rubric, but NOT deterministically enforced |
 | Mandatory qualification questions | ⚠️ Same — the 3-point verification doc exists but isn't yet enforced by the scorecard |
 | Handling objections & clarifications | ✅ Scored |
-| Accuracy of call outcome disposition | ❌ Not currently checked — would need disposition pulled from Five9 |
+| Accuracy of call outcome disposition | ❌ Not currently checked — would need disposition pulled from ContactCenterProvider |
 | Closing & follow-up actions | ✅ Scored |
 | Agent-level dashboards (repeated mistakes / coaching) | ✅ Shipped (Coaching tab + Performance vs Team) |
 | Link scorecards to leads/deals in CRM | ✅ Shipped (auto-link + activity timeline) |

@@ -3,11 +3,11 @@ import { z } from "zod";
 
 export const crmComplianceTool = createTool({
   id: "crm-compliance-tool",
-  description: "Validates CRM compliance after a call by checking if the agent properly updated Zoho CRM with notes, call logs, tasks, stage updates, and meeting outcomes.",
+  description: "Validates CRM compliance after a call by checking if the agent properly updated CRMProvider CRM with notes, call logs, tasks, stage updates, and meeting outcomes.",
   inputSchema: z.object({
     call_record_id: z.number().describe("ID of the call record to check compliance for"),
-    lead_id: z.string().optional().describe("Zoho Lead ID to check"),
-    deal_id: z.string().optional().describe("Zoho Deal ID to check"),
+    lead_id: z.string().optional().describe("CRMProvider Lead ID to check"),
+    deal_id: z.string().optional().describe("CRMProvider Deal ID to check"),
     expected_actions: z.array(z.enum([
       "notes_updated",
       "call_logged", 
@@ -62,21 +62,21 @@ export const crmComplianceTool = createTool({
       let meetingOutcomeLogged = false;
       const complianceDetails: Record<string, any> = {};
 
-      // Route ALL Zoho traffic through the shared zohoCRM helper so the
+      // Route ALL CRMProvider traffic through the shared CRMProviderCRM helper so the
       // OAuth cooldown, singleflight, and token caching enforced in
-      // src/utils/zohoCRM.ts apply to this tool too. Previously this tool
-      // had its own raw fetch to /oauth/v2/token and Zoho APIs, which
+      // src/utils/CRMProviderCRM.ts apply to this tool too. Previously this tool
+      // had its own raw fetch to /oauth/v2/token and CRMProvider APIs, which
       // bypassed the cooldown entirely — under load it kept burning the
       // per-account OAuth quota even while the rest of the app was
       // honoring the rate-limit window.
       const {
-        getZohoConnectionStatus,
+        getCRMProviderConnectionStatus,
         getValidAccessToken,
-      } = await import("../../utils/zohoCRM");
+      } = await import("../../utils/CRMProviderCRM");
 
-      const zohoStatus = getZohoConnectionStatus();
-      if (zohoStatus.configured) {
-        logger?.info("📡 [CRMCompliance] Checking Zoho CRM for updates");
+      const CRMProviderStatus = getCRMProviderConnectionStatus();
+      if (CRMProviderStatus.configured) {
+        logger?.info("📡 [CRMCompliance] Checking CRMProvider CRM for updates");
 
         try {
           // Single token acquisition routed through the shared helper so
@@ -84,8 +84,8 @@ export const crmComplianceTool = createTool({
           // The returned token is cached for the session, so the four
           // CRM reads below reuse it without re-hitting /oauth/v2/token.
           const accessToken = await getValidAccessToken();
-          const apiDomain = process.env.ZOHO_API_DOMAIN || "<REDACTED_URL>";
-          const authHeader = { Authorization: `Zoho-oauthtoken ${accessToken}` };
+          const apiDomain = process.env.CRMProvider_API_DOMAIN || "<REDACTED_URL>";
+          const authHeader = { Authorization: `CRMProvider-oauthtoken ${accessToken}` };
 
           if (leadId) {
             const callDate = callRecord.call_date ? new Date(callRecord.call_date) : new Date();
@@ -146,22 +146,22 @@ export const crmComplianceTool = createTool({
                 : "No stage update detected";
             }
           }
-        } catch (zohoError) {
+        } catch (CRMProviderError) {
           const isRateLimited =
-            zohoError && typeof zohoError === "object" &&
-            (zohoError as { isZohoRateLimited?: boolean }).isZohoRateLimited === true;
-          logger?.error("❌ [CRMCompliance] Zoho API error", {
-            error: zohoError instanceof Error ? zohoError.message : String(zohoError),
+            CRMProviderError && typeof CRMProviderError === "object" &&
+            (CRMProviderError as { isCRMProviderRateLimited?: boolean }).isCRMProviderRateLimited === true;
+          logger?.error("❌ [CRMCompliance] CRMProvider API error", {
+            error: CRMProviderError instanceof Error ? CRMProviderError.message : String(CRMProviderError),
             rateLimited: isRateLimited,
           });
-          complianceDetails.mode = isRateLimited ? "zoho_rate_limited" : "zoho_error";
+          complianceDetails.mode = isRateLimited ? "CRMProvider_rate_limited" : "CRMProvider_error";
           complianceDetails.error =
-            zohoError instanceof Error ? zohoError.message : String(zohoError);
+            CRMProviderError instanceof Error ? CRMProviderError.message : String(CRMProviderError);
         }
       } else {
-        logger?.warn("⚠️ [CRMCompliance] Zoho credentials not configured, cannot check CRM compliance");
+        logger?.warn("⚠️ [CRMCompliance] CRMProvider credentials not configured, cannot check CRM compliance");
         complianceDetails.mode = "not_configured";
-        complianceDetails.error = "Zoho CRM credentials not configured";
+        complianceDetails.error = "CRMProvider CRM credentials not configured";
       }
 
       const missingActions: string[] = [];

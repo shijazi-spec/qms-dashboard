@@ -6,21 +6,21 @@
  *         is invoked from `npm test` (which scripts/post-merge.sh runs).
  *
  * Goal: protect the on-call notification surface from silent regressions.
- * The notifier mixes throttle accounting, Slack Block Kit rendering, and
- * Resend email building — a regression in any of those paths would only
+ * The notifier mixes throttle accounting, ChatProvider Block Kit rendering, and
+ * EmailProvider email building — a regression in any of those paths would only
  * surface as a missed page in production. We exercise each path with
- * stubbed deps (`sendSlack`, `sendEmail`, `claimDb`, `now`) so no real
- * Slack / Resend / DB call is made.
+ * stubbed deps (`sendChatProvider`, `sendEmail`, `claimDb`, `now`) so no real
+ * ChatProvider / EmailProvider / DB call is made.
  *
  * Coverage (matches Task #285 "Done looks like"):
  *   notifyToolHealthBreach
- *     • skipped when no Slack channel and no email recipients are configured
+ *     • skipped when no ChatProvider channel and no email recipients are configured
  *     • throttled when the same dedupe key is paged within the window
- *     • slackSent=true when Slack send resolves true
- *     • emailSent=true when Resend send resolves { success: true }
+ *     • ChatProviderSent=true when ChatProvider send resolves true
+ *     • emailSent=true when EmailProvider send resolves { success: true }
  *     • throttle resets after the window expires (injected clock)
  *   notifyToolHealthOverrideExpired
- *     • posts a Slack message on auto-revert with cleared-fields rendering
+ *     • posts a ChatProvider message on auto-revert with cleared-fields rendering
  *   _diffToolHealthConfigOverridesForTests
  *     • computes per-field diffs in canonical order, including
  *       transitions to/from "default (env baseline)" (null ↔ value)
@@ -88,13 +88,13 @@ function assertDeepEqual<T>(actual: T, expected: T, label: string): void {
 // same `npm test` run without leaking config.
 // ---------------------------------------------------------------------------
 const ENV_KEYS = [
-  "TOOL_HEALTH_SLACK_CHANNEL",
-  "TOOL_HEALTH_SLACK_USE_DEFAULT_CHANNEL",
+  "TOOL_HEALTH_ChatProvider_CHANNEL",
+  "TOOL_HEALTH_ChatProvider_USE_DEFAULT_CHANNEL",
   "TOOL_HEALTH_ALERT_EMAIL",
   "TOOL_HEALTH_NOTIFY_THROTTLE_MIN",
   "TOOL_HEALTH_APP_URL",
   "TOOL_HEALTH_CONFIG_NOTIFY",
-  "SLACK_CHANNEL_ID",
+  "ChatProvider_CHANNEL_ID",
 ] as const;
 
 const baselineEnv: Record<string, string | undefined> = {};
@@ -140,14 +140,14 @@ async function testSkippedWhenNothingConfigured(): Promise<void> {
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
 
-  let slackCalls = 0;
+  let ChatProviderCalls = 0;
   let emailCalls = 0;
   let dbCalls = 0;
   const result = await notifyToolHealthBreach(
     makeBreach({ related_record_id: "skip-case:error_rate" }),
     {
-      sendSlack: async () => {
-        slackCalls++;
+      sendChatProvider: async () => {
+        ChatProviderCalls++;
         return true;
       },
       sendEmail: async () => {
@@ -162,29 +162,29 @@ async function testSkippedWhenNothingConfigured(): Promise<void> {
   );
 
   assertEqual(result.skipped, true, "result.skipped is true");
-  assertEqual(result.slackSent, false, "no Slack send recorded");
+  assertEqual(result.ChatProviderSent, false, "no ChatProvider send recorded");
   assertEqual(result.emailSent, false, "no email send recorded");
   assertEqual(result.throttled, false, "throttled is false (skip is the reason)");
-  assertEqual(slackCalls, 0, "sendSlack was not invoked");
+  assertEqual(ChatProviderCalls, 0, "sendChatProvider was not invoked");
   assertEqual(emailCalls, 0, "sendEmail was not invoked");
   assertEqual(dbCalls, 0, "claimDb was not invoked (no transport configured)");
 }
 
-async function testSlackSentOnSuccess(): Promise<void> {
-  console.log("\nnotifyToolHealthBreach — slackSent=true on Slack success");
+async function testChatProviderSentOnSuccess(): Promise<void> {
+  console.log("\nnotifyToolHealthBreach — ChatProviderSent=true on ChatProvider success");
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
   process.env.TOOL_HEALTH_APP_URL = "<REDACTED_URL>";
 
-  type SlackArgs = { channel: string; text: string; blocks: any[] };
-  const slackCalls: SlackArgs[] = [];
+  type ChatProviderArgs = { channel: string; text: string; blocks: any[] };
+  const ChatProviderCalls: ChatProviderArgs[] = [];
 
   const result = await notifyToolHealthBreach(
-    makeBreach({ related_record_id: "slack-ok:error_rate" }),
+    makeBreach({ related_record_id: "ChatProvider-ok:error_rate" }),
     {
-      sendSlack: async (channel, text, blocks) => {
-        slackCalls.push({ channel, text, blocks: blocks as any[] });
+      sendChatProvider: async (channel, text, blocks) => {
+        ChatProviderCalls.push({ channel, text, blocks: blocks as any[] });
         return true;
       },
       sendEmail: async () => ({ success: false, error: "should not be called" }),
@@ -193,18 +193,18 @@ async function testSlackSentOnSuccess(): Promise<void> {
     },
   );
 
-  assertEqual(result.slackSent, true, "result.slackSent is true");
+  assertEqual(result.ChatProviderSent, true, "result.ChatProviderSent is true");
   assertEqual(result.emailSent, false, "result.emailSent stays false (no email config)");
   assertEqual(result.throttled, false, "not throttled on first send");
   assertEqual(result.skipped, false, "not skipped");
-  assertEqual(slackCalls.length, 1, "sendSlack called exactly once");
-  assertEqual(slackCalls[0].channel, "C-ONCALL", "Slack posted to configured channel");
+  assertEqual(ChatProviderCalls.length, 1, "sendChatProvider called exactly once");
+  assertEqual(ChatProviderCalls[0].channel, "C-ONCALL", "ChatProvider posted to configured channel");
   assert(
-    typeof slackCalls[0].text === "string" && slackCalls[0].text.includes("search_web"),
-    "Slack fallback text mentions the tool name",
+    typeof ChatProviderCalls[0].text === "string" && ChatProviderCalls[0].text.includes("search_web"),
+    "ChatProvider fallback text mentions the tool name",
   );
   // Block-kit shape sanity: header + divider + section with key fields.
-  const blocks = slackCalls[0].blocks;
+  const blocks = ChatProviderCalls[0].blocks;
   assert(Array.isArray(blocks) && blocks.length > 0, "blocks array is non-empty");
   assertEqual(blocks[0]?.type, "header", "first block is a header");
   assert(
@@ -227,12 +227,12 @@ async function testSlackSentOnSuccess(): Promise<void> {
     .flatMap((b: any) => b.elements ?? [])
     .map((e: any) => e?.text ?? "")
     .join(" ");
-  assert(contextText.includes("slack-ok:error_rate"), "context block includes dedupe key");
+  assert(contextText.includes("ChatProvider-ok:error_rate"), "context block includes dedupe key");
   assert(contextText.includes("alert #42"), "context block includes alert id");
 }
 
 async function testEmailSentOnSuccess(): Promise<void> {
-  console.log("\nnotifyToolHealthBreach — emailSent=true on Resend success");
+  console.log("\nnotifyToolHealthBreach — emailSent=true on EmailProvider success");
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
   process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid, user@example.invalid";
@@ -244,7 +244,7 @@ async function testEmailSentOnSuccess(): Promise<void> {
   const result = await notifyToolHealthBreach(
     makeBreach({ related_record_id: "email-ok:error_rate", severity: "critical" }),
     {
-      sendSlack: async () => false,
+      sendChatProvider: async () => false,
       sendEmail: async (opts) => {
         emailCalls.push(opts as EmailArgs);
         return { success: true, id: "msg-1" };
@@ -255,7 +255,7 @@ async function testEmailSentOnSuccess(): Promise<void> {
   );
 
   assertEqual(result.emailSent, true, "result.emailSent is true");
-  assertEqual(result.slackSent, false, "Slack stays false (no channel configured)");
+  assertEqual(result.ChatProviderSent, false, "ChatProvider stays false (no channel configured)");
   assertEqual(result.skipped, false, "not skipped (email is configured)");
   assertEqual(emailCalls.length, 1, "sendEmail called exactly once");
   assertDeepEqual(
@@ -285,14 +285,14 @@ async function testThrottledWithinWindow(): Promise<void> {
   console.log("\nnotifyToolHealthBreach — throttled within window");
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
   process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60"; // 60 minutes window
 
-  let slackCalls = 0;
+  let ChatProviderCalls = 0;
   let dbCalls = 0;
   const sharedDeps = {
-    sendSlack: async () => {
-      slackCalls++;
+    sendChatProvider: async () => {
+      ChatProviderCalls++;
       return true;
     },
     sendEmail: async () => ({ success: true }),
@@ -308,13 +308,13 @@ async function testThrottledWithinWindow(): Promise<void> {
     makeBreach({ related_record_id: "throttle-key:error_rate" }),
     sharedDeps,
   );
-  assertEqual(first.slackSent, true, "first call: Slack send recorded");
+  assertEqual(first.ChatProviderSent, true, "first call: ChatProvider send recorded");
   assertEqual(first.throttled, false, "first call: not throttled");
-  assertEqual(slackCalls, 1, "Slack invoked exactly once after first call");
+  assertEqual(ChatProviderCalls, 1, "ChatProvider invoked exactly once after first call");
   assertEqual(dbCalls, 1, "DB claim invoked exactly once on first call");
 
   // Second call within the window: in-process throttle map should short-
-  // circuit BEFORE Slack or DB is touched.
+  // circuit BEFORE ChatProvider or DB is touched.
   const second = await notifyToolHealthBreach(
     makeBreach({ related_record_id: "throttle-key:error_rate" }),
     {
@@ -323,9 +323,9 @@ async function testThrottledWithinWindow(): Promise<void> {
     },
   );
   assertEqual(second.throttled, true, "second call (within window): throttled=true");
-  assertEqual(second.slackSent, false, "second call: no Slack send");
+  assertEqual(second.ChatProviderSent, false, "second call: no ChatProvider send");
   assertEqual(second.skipped, false, "second call: skipped stays false");
-  assertEqual(slackCalls, 1, "Slack still invoked exactly once total");
+  assertEqual(ChatProviderCalls, 1, "ChatProvider still invoked exactly once total");
   assertEqual(dbCalls, 1, "DB claim still invoked exactly once total");
 }
 
@@ -333,14 +333,14 @@ async function testThrottleResetsAfterWindow(): Promise<void> {
   console.log("\nnotifyToolHealthBreach — throttle resets after window expires");
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
   process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
 
-  let slackCalls = 0;
+  let ChatProviderCalls = 0;
   let dbCalls = 0;
   const baseDeps = {
-    sendSlack: async () => {
-      slackCalls++;
+    sendChatProvider: async () => {
+      ChatProviderCalls++;
       return true;
     },
     sendEmail: async () => ({ success: true }),
@@ -355,8 +355,8 @@ async function testThrottleResetsAfterWindow(): Promise<void> {
     makeBreach({ related_record_id: "reset-key:p95_latency", reason: "p95_latency" }),
     { ...baseDeps, now: () => 1_700_000_000_000 },
   );
-  assertEqual(first.slackSent, true, "first page sends Slack");
-  assertEqual(slackCalls, 1, "Slack call count = 1 after first page");
+  assertEqual(first.ChatProviderSent, true, "first page sends ChatProvider");
+  assertEqual(ChatProviderCalls, 1, "ChatProvider call count = 1 after first page");
 
   // Second page at t = window + 1 minute → throttle window has elapsed
   // and the in-process map must let it through.
@@ -366,33 +366,33 @@ async function testThrottleResetsAfterWindow(): Promise<void> {
     { ...baseDeps, now: () => later },
   );
   assertEqual(second.throttled, false, "second page (after window): not throttled");
-  assertEqual(second.slackSent, true, "second page: Slack send recorded");
-  assertEqual(slackCalls, 2, "Slack invoked exactly twice total");
+  assertEqual(second.ChatProviderSent, true, "second page: ChatProvider send recorded");
+  assertEqual(ChatProviderCalls, 2, "ChatProvider invoked exactly twice total");
   assertEqual(dbCalls, 2, "DB claim invoked exactly twice total");
 }
 
-async function testBreachSlackThrowsDoesNotPropagate(): Promise<void> {
+async function testBreachChatProviderThrowsDoesNotPropagate(): Promise<void> {
   console.log(
-    "\nnotifyToolHealthBreach — sendSlack throws ⇒ slackSent=false, no throw escapes",
+    "\nnotifyToolHealthBreach — sendChatProvider throws ⇒ ChatProviderSent=false, no throw escapes",
   );
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
 
-  let slackCalls = 0;
+  let ChatProviderCalls = 0;
   let emailCalls = 0;
-  // Suppress the expected "Slack send threw" log so test output stays
+  // Suppress the expected "ChatProvider send threw" log so test output stays
   // readable. Any unexpected error path still surfaces because we only
   // swallow during the call under test and restore in `finally`.
   const originalError = console.error;
   console.error = () => {};
   try {
     const result = await notifyToolHealthBreach(
-      makeBreach({ related_record_id: "slack-throw:error_rate" }),
+      makeBreach({ related_record_id: "ChatProvider-throw:error_rate" }),
       {
-        sendSlack: async () => {
-          slackCalls++;
-          throw new Error("simulated Slack 5xx");
+        sendChatProvider: async () => {
+          ChatProviderCalls++;
+          throw new Error("simulated ChatProvider 5xx");
         },
         sendEmail: async () => {
           emailCalls++;
@@ -403,13 +403,13 @@ async function testBreachSlackThrowsDoesNotPropagate(): Promise<void> {
         now: () => 1_700_000_002_000,
       },
     );
-    // Critical contract: a Slack outage must NOT propagate up to the cron;
+    // Critical contract: a ChatProvider outage must NOT propagate up to the cron;
     // the cron tick would otherwise crash and stop subsequent breach checks.
-    assertEqual(result.slackSent, false, "result.slackSent is false on throw");
+    assertEqual(result.ChatProviderSent, false, "result.ChatProviderSent is false on throw");
     assertEqual(result.emailSent, false, "result.emailSent stays false (no email config)");
     assertEqual(result.throttled, false, "not throttled — claim succeeded before send");
-    assertEqual(result.skipped, false, "not skipped — Slack channel was configured");
-    assertEqual(slackCalls, 1, "sendSlack was invoked exactly once before throwing");
+    assertEqual(result.skipped, false, "not skipped — ChatProvider channel was configured");
+    assertEqual(ChatProviderCalls, 1, "sendChatProvider was invoked exactly once before throwing");
     assertEqual(emailCalls, 0, "sendEmail was not invoked (no email recipients)");
   } finally {
     console.error = originalError;
@@ -428,21 +428,21 @@ async function testBreachEmailRejectedKeepsEmailSentFalse(): Promise<void> {
   const result = await notifyToolHealthBreach(
     makeBreach({ related_record_id: "email-reject:error_rate" }),
     {
-      sendSlack: async () => false,
+      sendChatProvider: async () => false,
       sendEmail: async () => {
         emailCalls++;
-        return { success: false, error: "Resend rejected: invalid recipient" };
+        return { success: false, error: "EmailProvider rejected: invalid recipient" };
       },
       claimDb: async () => true,
       recordResult: async () => {},
       now: () => 1_700_000_003_000,
     },
   );
-  // Critical contract: a failed Resend response must surface on the result
+  // Critical contract: a failed EmailProvider response must surface on the result
   // object as `emailSent: false` so the dashboard's notified column shows
   // "failed" rather than misleading operators with a green check.
   assertEqual(result.emailSent, false, "result.emailSent is false on { success: false }");
-  assertEqual(result.slackSent, false, "Slack stays false (no channel configured)");
+  assertEqual(result.ChatProviderSent, false, "ChatProvider stays false (no channel configured)");
   assertEqual(result.skipped, false, "not skipped — email recipients are configured");
   assertEqual(result.throttled, false, "not throttled");
   assertEqual(emailCalls, 1, "sendEmail was invoked exactly once");
@@ -463,10 +463,10 @@ async function testBreachEmailThrowsDoesNotPropagate(): Promise<void> {
     const result = await notifyToolHealthBreach(
       makeBreach({ related_record_id: "email-throw:error_rate" }),
       {
-        sendSlack: async () => false,
+        sendChatProvider: async () => false,
         sendEmail: async () => {
           emailCalls++;
-          throw new Error("simulated Resend network failure");
+          throw new Error("simulated EmailProvider network failure");
         },
         claimDb: async () => true,
         recordResult: async () => {},
@@ -474,7 +474,7 @@ async function testBreachEmailThrowsDoesNotPropagate(): Promise<void> {
       },
     );
     assertEqual(result.emailSent, false, "result.emailSent is false on throw");
-    assertEqual(result.slackSent, false, "Slack stays false (no channel configured)");
+    assertEqual(result.ChatProviderSent, false, "ChatProvider stays false (no channel configured)");
     assertEqual(result.skipped, false, "not skipped — email recipients are configured");
     assertEqual(result.throttled, false, "not throttled");
     assertEqual(emailCalls, 1, "sendEmail was invoked exactly once before throwing");
@@ -489,11 +489,11 @@ async function testBreachClaimDbThrowsFallsThroughToSend(): Promise<void> {
   );
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
   process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
 
   let claimCalls = 0;
-  let slackCalls = 0;
+  let ChatProviderCalls = 0;
   // Suppress the expected "DB claimDb threw" log.
   const originalError = console.error;
   console.error = () => {};
@@ -501,8 +501,8 @@ async function testBreachClaimDbThrowsFallsThroughToSend(): Promise<void> {
     const result = await notifyToolHealthBreach(
       makeBreach({ related_record_id: "claimdb-throw:error_rate" }),
       {
-        sendSlack: async () => {
-          slackCalls++;
+        sendChatProvider: async () => {
+          ChatProviderCalls++;
           return true;
         },
         sendEmail: async () => ({ success: true }),
@@ -518,11 +518,11 @@ async function testBreachClaimDbThrowsFallsThroughToSend(): Promise<void> {
     // err on the side of paging on-call rather than swallowing the breach.
     // The in-process map then prevents this instance from re-paging the same
     // key for the rest of the throttle window.
-    assertEqual(result.slackSent, true, "Slack send proceeds despite claimDb throw");
+    assertEqual(result.ChatProviderSent, true, "ChatProvider send proceeds despite claimDb throw");
     assertEqual(result.throttled, false, "not throttled — fall-through treats claim as success");
     assertEqual(result.skipped, false, "not skipped");
     assertEqual(claimCalls, 1, "claimDb was invoked exactly once");
-    assertEqual(slackCalls, 1, "sendSlack was invoked exactly once after fall-through");
+    assertEqual(ChatProviderCalls, 1, "sendChatProvider was invoked exactly once after fall-through");
   } finally {
     console.error = originalError;
   }
@@ -533,26 +533,26 @@ async function testBreachClaimDbThrowsFallsThroughToSend(): Promise<void> {
 //
 // The persist() helper inside notifyToolHealthBreach wraps recordResult in
 // a try/catch so a transient DB write failure (the "Notified" column UPDATE)
-// never escapes back to the cron tick. Task #560 covered the Slack/email
+// never escapes back to the cron tick. Task #560 covered the ChatProvider/email
 // throw paths; this section pins the *third* try/catch — the one around
 // recordResult — for every terminal state.
 //
 // Why this matters (Task #577): a regression that turned the swallow into
 // a re-throw would crash the cron *after* a successful page, so operators
-// would see the Slack/email but the cron would silently stop until the next
+// would see the ChatProvider/email but the cron would silently stop until the next
 // process restart. The "Notified" column would also stay frozen on the
 // previous (or NULL) value, defeating the dashboard's whole purpose.
 // ---------------------------------------------------------------------------
 
-async function testBreachRecordResultThrowsAfterSlackSuccess(): Promise<void> {
+async function testBreachRecordResultThrowsAfterChatProviderSuccess(): Promise<void> {
   console.log(
-    "\nnotifyToolHealthBreach — recordResult throws after Slack success ⇒ slackSent stays true, no throw escapes",
+    "\nnotifyToolHealthBreach — recordResult throws after ChatProvider success ⇒ ChatProviderSent stays true, no throw escapes",
   );
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
 
-  let slackCalls = 0;
+  let ChatProviderCalls = 0;
   let recordCalls = 0;
   let recordChannel: string | null = null;
   // Suppress the expected "[ToolHealthNotifier] recordResult threw …" log so
@@ -562,10 +562,10 @@ async function testBreachRecordResultThrowsAfterSlackSuccess(): Promise<void> {
   console.error = () => {};
   try {
     const result = await notifyToolHealthBreach(
-      makeBreach({ related_record_id: "record-throw-slack:error_rate", alert_id: 7 }),
+      makeBreach({ related_record_id: "record-throw-ChatProvider:error_rate", alert_id: 7 }),
       {
-        sendSlack: async () => {
-          slackCalls++;
+        sendChatProvider: async () => {
+          ChatProviderCalls++;
           return true;
         },
         sendEmail: async () => ({ success: false, error: "should not be called" }),
@@ -579,16 +579,16 @@ async function testBreachRecordResultThrowsAfterSlackSuccess(): Promise<void> {
       },
     );
     // Critical contract: a persist() failure must NEVER undo a successful
-    // Slack send. Without this guarantee a transient DB error would leave
+    // ChatProvider send. Without this guarantee a transient DB error would leave
     // operators thinking the page failed when it actually went out, AND
     // would crash the cron tick that has already paged on-call.
-    assertEqual(result.slackSent, true, "result.slackSent stays true despite recordResult throw");
+    assertEqual(result.ChatProviderSent, true, "result.ChatProviderSent stays true despite recordResult throw");
     assertEqual(result.emailSent, false, "result.emailSent stays false (no email config)");
     assertEqual(result.throttled, false, "not throttled — claim succeeded before send");
-    assertEqual(result.skipped, false, "not skipped — Slack channel was configured");
-    assertEqual(slackCalls, 1, "sendSlack was invoked exactly once");
+    assertEqual(result.skipped, false, "not skipped — ChatProvider channel was configured");
+    assertEqual(ChatProviderCalls, 1, "sendChatProvider was invoked exactly once");
     assertEqual(recordCalls, 1, "recordResult was invoked exactly once");
-    assertEqual(recordChannel, "slack", "channel persisted is 'slack' (Slack-only configured)");
+    assertEqual(recordChannel, "ChatProvider", "channel persisted is 'ChatProvider' (ChatProvider-only configured)");
   } finally {
     console.error = originalError;
   }
@@ -600,10 +600,10 @@ async function testBreachRecordResultThrowsOnSkippedPath(): Promise<void> {
   );
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
-  // No Slack channel and no email recipients ⇒ persist("not_configured")
+  // No ChatProvider channel and no email recipients ⇒ persist("not_configured")
   // is the only call site exercised on this path.
 
-  let slackCalls = 0;
+  let ChatProviderCalls = 0;
   let emailCalls = 0;
   let recordCalls = 0;
   let recordChannel: string | null = null;
@@ -613,8 +613,8 @@ async function testBreachRecordResultThrowsOnSkippedPath(): Promise<void> {
     const result = await notifyToolHealthBreach(
       makeBreach({ related_record_id: "record-throw-skipped:error_rate", alert_id: 8 }),
       {
-        sendSlack: async () => {
-          slackCalls++;
+        sendChatProvider: async () => {
+          ChatProviderCalls++;
           return true;
         },
         sendEmail: async () => {
@@ -630,10 +630,10 @@ async function testBreachRecordResultThrowsOnSkippedPath(): Promise<void> {
       },
     );
     assertEqual(result.skipped, true, "result.skipped stays true despite recordResult throw");
-    assertEqual(result.slackSent, false, "no Slack send recorded");
+    assertEqual(result.ChatProviderSent, false, "no ChatProvider send recorded");
     assertEqual(result.emailSent, false, "no email send recorded");
     assertEqual(result.throttled, false, "throttled is false (skip is the reason)");
-    assertEqual(slackCalls, 0, "sendSlack was not invoked (nothing configured)");
+    assertEqual(ChatProviderCalls, 0, "sendChatProvider was not invoked (nothing configured)");
     assertEqual(emailCalls, 0, "sendEmail was not invoked (nothing configured)");
     assertEqual(recordCalls, 1, "recordResult was invoked exactly once on the skip path");
     assertEqual(recordChannel, "not_configured", "skip path persists 'not_configured' channel");
@@ -648,10 +648,10 @@ async function testBreachRecordResultThrowsOnThrottledPath(): Promise<void> {
   );
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
   process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
 
-  let slackCalls = 0;
+  let ChatProviderCalls = 0;
   let recordCalls = 0;
   let recordChannel: string | null = null;
   const originalError = console.error;
@@ -660,8 +660,8 @@ async function testBreachRecordResultThrowsOnThrottledPath(): Promise<void> {
     const result = await notifyToolHealthBreach(
       makeBreach({ related_record_id: "record-throw-throttled:error_rate", alert_id: 9 }),
       {
-        sendSlack: async () => {
-          slackCalls++;
+        sendChatProvider: async () => {
+          ChatProviderCalls++;
           return true;
         },
         sendEmail: async () => ({ success: true }),
@@ -676,10 +676,10 @@ async function testBreachRecordResultThrowsOnThrottledPath(): Promise<void> {
       },
     );
     assertEqual(result.throttled, true, "result.throttled stays true despite recordResult throw");
-    assertEqual(result.slackSent, false, "Slack stays false — claim was lost to a sibling");
+    assertEqual(result.ChatProviderSent, false, "ChatProvider stays false — claim was lost to a sibling");
     assertEqual(result.emailSent, false, "email stays false — claim was lost to a sibling");
     assertEqual(result.skipped, false, "not skipped");
-    assertEqual(slackCalls, 0, "sendSlack was not invoked (claim lost)");
+    assertEqual(ChatProviderCalls, 0, "sendChatProvider was not invoked (claim lost)");
     assertEqual(recordCalls, 1, "recordResult was invoked exactly once on the throttle path");
     assertEqual(recordChannel, "throttled", "throttle path persists 'throttled' channel");
   } finally {
@@ -693,7 +693,7 @@ async function testBreachRecordResultThrowsOnFailedPath(): Promise<void> {
   );
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
   process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
 
   let recordCalls = 0;
@@ -706,8 +706,8 @@ async function testBreachRecordResultThrowsOnFailedPath(): Promise<void> {
       {
         // Both transports report failure WITHOUT throwing, so the only
         // try/catch that fires here is the one around recordResult.
-        sendSlack: async () => false,
-        sendEmail: async () => ({ success: false, error: "Resend rejected" }),
+        sendChatProvider: async () => false,
+        sendEmail: async () => ({ success: false, error: "EmailProvider rejected" }),
         claimDb: async () => true,
         recordResult: async (_id, channel) => {
           recordCalls++;
@@ -717,7 +717,7 @@ async function testBreachRecordResultThrowsOnFailedPath(): Promise<void> {
         now: () => 1_700_000_012_000,
       },
     );
-    assertEqual(result.slackSent, false, "result.slackSent stays false (transport returned false)");
+    assertEqual(result.ChatProviderSent, false, "result.ChatProviderSent stays false (transport returned false)");
     assertEqual(result.emailSent, false, "result.emailSent stays false (transport returned false)");
     assertEqual(result.throttled, false, "not throttled");
     assertEqual(result.skipped, false, "not skipped");
@@ -736,7 +736,7 @@ async function testBreachRecordResultChannelLabelPerTerminalState(): Promise<voi
   // Each terminal state writes a distinct channel string that the AI Ops
   // panel uses to render the "what was configured vs what delivered"
   // distinction. Pin the exact label per state so a refactor that, say,
-  // collapsed `slack_only` into `slack` would fail loudly here instead of
+  // collapsed `ChatProvider_only` into `ChatProvider` would fail loudly here instead of
   // silently regressing the dashboard's filtering.
   type Capture = { channel: string; alertId: number | null | undefined; whenMs: number };
   const captures: Record<string, Capture[]> = {};
@@ -747,13 +747,13 @@ async function testBreachRecordResultChannelLabelPerTerminalState(): Promise<voi
     };
   }
 
-  // -- not_configured: no Slack channel, no email recipients --
+  // -- not_configured: no ChatProvider channel, no email recipients --
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
   await notifyToolHealthBreach(
     makeBreach({ related_record_id: "ch-notconfigured:error_rate", alert_id: 100 }),
     {
-      sendSlack: async () => true,
+      sendChatProvider: async () => true,
       sendEmail: async () => ({ success: true }),
       claimDb: async () => true,
       recordResult: makeRecorder("not_configured"),
@@ -764,12 +764,12 @@ async function testBreachRecordResultChannelLabelPerTerminalState(): Promise<voi
   // -- throttled: claimDb returns false (sibling holds the slot) --
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
   process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
   await notifyToolHealthBreach(
     makeBreach({ related_record_id: "ch-throttled:error_rate", alert_id: 101 }),
     {
-      sendSlack: async () => true,
+      sendChatProvider: async () => true,
       sendEmail: async () => ({ success: true }),
       claimDb: async () => false,
       recordResult: makeRecorder("throttled"),
@@ -777,49 +777,49 @@ async function testBreachRecordResultChannelLabelPerTerminalState(): Promise<voi
     },
   );
 
-  // -- slack+email: both configured, both succeed --
+  // -- ChatProvider+email: both configured, both succeed --
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
   process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
   await notifyToolHealthBreach(
     makeBreach({ related_record_id: "ch-both:error_rate", alert_id: 102 }),
     {
-      sendSlack: async () => true,
+      sendChatProvider: async () => true,
       sendEmail: async () => ({ success: true }),
       claimDb: async () => true,
-      recordResult: makeRecorder("slack+email"),
+      recordResult: makeRecorder("ChatProvider+email"),
       now: () => 1_700_000_022_000,
     },
   );
 
-  // -- slack_only: Slack OK, email configured but failed (the
-  //    "Slack delivered, email is broken" signal for ops). --
+  // -- ChatProvider_only: ChatProvider OK, email configured but failed (the
+  //    "ChatProvider delivered, email is broken" signal for ops). --
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
   process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
   await notifyToolHealthBreach(
-    makeBreach({ related_record_id: "ch-slackonly:error_rate", alert_id: 103 }),
+    makeBreach({ related_record_id: "ch-ChatProvideronly:error_rate", alert_id: 103 }),
     {
-      sendSlack: async () => true,
-      sendEmail: async () => ({ success: false, error: "Resend rejected" }),
+      sendChatProvider: async () => true,
+      sendEmail: async () => ({ success: false, error: "EmailProvider rejected" }),
       claimDb: async () => true,
-      recordResult: makeRecorder("slack_only"),
+      recordResult: makeRecorder("ChatProvider_only"),
       now: () => 1_700_000_023_000,
     },
   );
 
-  // -- email_only: email OK, Slack configured but failed (the
-  //    "email delivered, Slack is broken" signal for ops). --
+  // -- email_only: email OK, ChatProvider configured but failed (the
+  //    "email delivered, ChatProvider is broken" signal for ops). --
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
   process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
   await notifyToolHealthBreach(
     makeBreach({ related_record_id: "ch-emailonly:error_rate", alert_id: 104 }),
     {
-      sendSlack: async () => false,
+      sendChatProvider: async () => false,
       sendEmail: async () => ({ success: true }),
       claimDb: async () => true,
       recordResult: makeRecorder("email_only"),
@@ -830,13 +830,13 @@ async function testBreachRecordResultChannelLabelPerTerminalState(): Promise<voi
   // -- failed: both configured, both fail --
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
   process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
   await notifyToolHealthBreach(
     makeBreach({ related_record_id: "ch-failed:error_rate", alert_id: 105 }),
     {
-      sendSlack: async () => false,
-      sendEmail: async () => ({ success: false, error: "Resend rejected" }),
+      sendChatProvider: async () => false,
+      sendEmail: async () => ({ success: false, error: "EmailProvider rejected" }),
       claimDb: async () => true,
       recordResult: makeRecorder("failed"),
       now: () => 1_700_000_025_000,
@@ -846,8 +846,8 @@ async function testBreachRecordResultChannelLabelPerTerminalState(): Promise<voi
   for (const expected of [
     "not_configured",
     "throttled",
-    "slack+email",
-    "slack_only",
+    "ChatProvider+email",
+    "ChatProvider_only",
     "email_only",
     "failed",
   ]) {
@@ -867,14 +867,14 @@ async function testBreachRecordResultChannelLabelPerTerminalState(): Promise<voi
   // recordResult — the "Notified" column relies on both to render an
   // accurate row + timestamp.
   assertEqual(
-    captures["slack+email"][0].alertId,
+    captures["ChatProvider+email"][0].alertId,
     102,
-    "slack+email persist forwards the alert_id from the breach payload",
+    "ChatProvider+email persist forwards the alert_id from the breach payload",
   );
   assertEqual(
-    captures["slack+email"][0].whenMs,
+    captures["ChatProvider+email"][0].whenMs,
     1_700_000_022_000,
-    "slack+email persist forwards the injected clock to recordResult",
+    "ChatProvider+email persist forwards the injected clock to recordResult",
   );
 }
 
@@ -882,14 +882,14 @@ async function testBreachRecordResultChannelLabelPerTerminalState(): Promise<voi
 // Section 2 — notifyToolHealthOverrideExpired
 // ---------------------------------------------------------------------------
 
-async function testOverrideExpiredSlackPost(): Promise<void> {
-  console.log("\nnotifyToolHealthOverrideExpired — Slack post on auto-revert");
+async function testOverrideExpiredChatProviderPost(): Promise<void> {
+  console.log("\nnotifyToolHealthOverrideExpired — ChatProvider post on auto-revert");
   clearEnv();
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
   process.env.TOOL_HEALTH_APP_URL = "<REDACTED_URL>";
 
-  type SlackArgs = { channel: string; text: string; blocks: any[] };
-  const slackCalls: SlackArgs[] = [];
+  type ChatProviderArgs = { channel: string; text: string; blocks: any[] };
+  const ChatProviderCalls: ChatProviderArgs[] = [];
 
   const expiredAt = new Date("2026-04-25T14:30:00.000Z");
   const note: ToolHealthOverrideExpiredNotification = {
@@ -900,26 +900,26 @@ async function testOverrideExpiredSlackPost(): Promise<void> {
   };
 
   const result = await notifyToolHealthOverrideExpired(note, {
-    sendSlack: async (channel, text, blocks) => {
-      slackCalls.push({ channel, text, blocks: blocks as any[] });
+    sendChatProvider: async (channel, text, blocks) => {
+      ChatProviderCalls.push({ channel, text, blocks: blocks as any[] });
       return true;
     },
   });
 
-  assertEqual(result.slackSent, true, "slackSent=true on success");
+  assertEqual(result.ChatProviderSent, true, "ChatProviderSent=true on success");
   assertEqual(result.skipped, false, "not skipped — channel was configured");
-  assertEqual(slackCalls.length, 1, "Slack invoked exactly once");
-  assertEqual(slackCalls[0].channel, "C-ONCALL", "posted to configured channel");
+  assertEqual(ChatProviderCalls.length, 1, "ChatProvider invoked exactly once");
+  assertEqual(ChatProviderCalls[0].channel, "C-ONCALL", "posted to configured channel");
   assert(
-    slackCalls[0].text.includes("user@example.invalid"),
+    ChatProviderCalls[0].text.includes("user@example.invalid"),
     "fallback text attributes the prior override owner",
   );
   assert(
-    slackCalls[0].text.includes("error-rate breach floor"),
+    ChatProviderCalls[0].text.includes("error-rate breach floor"),
     "fallback text describes a cleared field in plain text",
   );
 
-  const blocks = slackCalls[0].blocks;
+  const blocks = ChatProviderCalls[0].blocks;
   assertEqual(blocks[0]?.type, "header", "first block is the header");
   assert(
     typeof blocks[0]?.text?.text === "string" &&
@@ -958,14 +958,14 @@ async function testOverrideExpiredSlackPost(): Promise<void> {
   assert(contextText.includes("audit row #99"), "context block carries the audit row id");
 }
 
-async function testOverrideExpiredSlackThrowsDoesNotPropagate(): Promise<void> {
+async function testOverrideExpiredChatProviderThrowsDoesNotPropagate(): Promise<void> {
   console.log(
-    "\nnotifyToolHealthOverrideExpired — sendSlack throws ⇒ slackSent=false, no throw escapes",
+    "\nnotifyToolHealthOverrideExpired — sendChatProvider throws ⇒ ChatProviderSent=false, no throw escapes",
   );
   clearEnv();
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
 
-  let slackCalls = 0;
+  let ChatProviderCalls = 0;
   const originalError = console.error;
   console.error = () => {};
   try {
@@ -977,28 +977,28 @@ async function testOverrideExpiredSlackThrowsDoesNotPropagate(): Promise<void> {
         audit_id: 101,
       },
       {
-        sendSlack: async () => {
-          slackCalls++;
-          throw new Error("simulated Slack 5xx");
+        sendChatProvider: async () => {
+          ChatProviderCalls++;
+          throw new Error("simulated ChatProvider 5xx");
         },
       },
     );
-    // Critical contract: a Slack outage must NOT propagate up to the
+    // Critical contract: a ChatProvider outage must NOT propagate up to the
     // override reaper; the override row has already been cleared and the
     // audit entry written, so a thrown send would leave the cron in a
     // confused half-revert state on the next tick.
-    assertEqual(result.slackSent, false, "result.slackSent is false on throw");
+    assertEqual(result.ChatProviderSent, false, "result.ChatProviderSent is false on throw");
     assertEqual(result.skipped, false, "not skipped — channel was configured");
-    assertEqual(slackCalls, 1, "sendSlack was invoked exactly once before throwing");
+    assertEqual(ChatProviderCalls, 1, "sendChatProvider was invoked exactly once before throwing");
   } finally {
     console.error = originalError;
   }
 }
 
 async function testOverrideExpiredSkippedWithoutChannel(): Promise<void> {
-  console.log("\nnotifyToolHealthOverrideExpired — skipped when no Slack channel");
+  console.log("\nnotifyToolHealthOverrideExpired — skipped when no ChatProvider channel");
   clearEnv();
-  let slackCalls = 0;
+  let ChatProviderCalls = 0;
   const result = await notifyToolHealthOverrideExpired(
     {
       cleared_overrides: { errorRatePct: 10 },
@@ -1007,15 +1007,15 @@ async function testOverrideExpiredSkippedWithoutChannel(): Promise<void> {
       audit_id: null,
     },
     {
-      sendSlack: async () => {
-        slackCalls++;
+      sendChatProvider: async () => {
+        ChatProviderCalls++;
         return true;
       },
     },
   );
   assertEqual(result.skipped, true, "skipped=true with no channel configured");
-  assertEqual(result.slackSent, false, "no Slack send recorded");
-  assertEqual(slackCalls, 0, "sendSlack was not invoked");
+  assertEqual(result.ChatProviderSent, false, "no ChatProvider send recorded");
+  assertEqual(ChatProviderCalls, 0, "sendChatProvider was not invoked");
 }
 
 // ---------------------------------------------------------------------------
@@ -1092,7 +1092,7 @@ function testDiffOrderIsCanonical(): void {
 // Sister of the breach notifier — fires when an admin tunes the per-tool
 // alert thresholds. Same env-var resolution rules as the breach path, plus
 // an additional `TOOL_HEALTH_CONFIG_NOTIFY=1` opt-in gate so dev/test
-// environments don't post on every save. The Slack body also embeds a
+// environments don't post on every save. The ChatProvider body also embeds a
 // "Recent changes" block sourced from the audit DB; we inject `getAudit`
 // so no real DB call is made.
 // ---------------------------------------------------------------------------
@@ -1115,18 +1115,18 @@ async function testConfigChangeDisabledWhenEnvNotSet(): Promise<void> {
     "\nnotifyToolHealthConfigChange — disabled when TOOL_HEALTH_CONFIG_NOTIFY != 1",
   );
   clearEnv();
-  // Even with a Slack channel configured, the opt-in gate must dominate so
+  // Even with a ChatProvider channel configured, the opt-in gate must dominate so
   // existing breach-channel wiring doesn't accidentally start posting on
   // every threshold save.
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
 
-  let slackCalls = 0;
+  let ChatProviderCalls = 0;
   let emailCalls = 0;
   let auditCalls = 0;
 
   const result = await notifyToolHealthConfigChange(makeConfigChange(), {
-    sendSlack: async () => {
-      slackCalls++;
+    sendChatProvider: async () => {
+      ChatProviderCalls++;
       return true;
     },
     sendEmail: async () => {
@@ -1142,28 +1142,28 @@ async function testConfigChangeDisabledWhenEnvNotSet(): Promise<void> {
   assertEqual(result.disabled, true, "result.disabled is true");
   assertEqual(result.skipped, false, "skipped stays false (gated before transport check)");
   assertEqual(result.noChanges, false, "noChanges stays false");
-  assertEqual(result.slackSent, false, "no Slack send recorded");
+  assertEqual(result.ChatProviderSent, false, "no ChatProvider send recorded");
   assertEqual(result.emailSent, false, "no email send recorded");
-  assertEqual(slackCalls, 0, "sendSlack was not invoked");
+  assertEqual(ChatProviderCalls, 0, "sendChatProvider was not invoked");
   assertEqual(emailCalls, 0, "sendEmail was not invoked");
   assertEqual(auditCalls, 0, "getAudit was not invoked (gated before audit fetch)");
 }
 
 async function testConfigChangeSkippedWithoutTransport(): Promise<void> {
   console.log(
-    "\nnotifyToolHealthConfigChange — skipped when no Slack channel and no email recipients",
+    "\nnotifyToolHealthConfigChange — skipped when no ChatProvider channel and no email recipients",
   );
   clearEnv();
   // Opt in but configure NO transport — must fall through to skipped.
   process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
 
-  let slackCalls = 0;
+  let ChatProviderCalls = 0;
   let emailCalls = 0;
   let auditCalls = 0;
 
   const result = await notifyToolHealthConfigChange(makeConfigChange(), {
-    sendSlack: async () => {
-      slackCalls++;
+    sendChatProvider: async () => {
+      ChatProviderCalls++;
       return true;
     },
     sendEmail: async () => {
@@ -1179,9 +1179,9 @@ async function testConfigChangeSkippedWithoutTransport(): Promise<void> {
   assertEqual(result.skipped, true, "result.skipped is true");
   assertEqual(result.disabled, false, "disabled stays false (opt-in WAS set)");
   assertEqual(result.noChanges, false, "noChanges stays false");
-  assertEqual(result.slackSent, false, "no Slack send recorded");
+  assertEqual(result.ChatProviderSent, false, "no ChatProvider send recorded");
   assertEqual(result.emailSent, false, "no email send recorded");
-  assertEqual(slackCalls, 0, "sendSlack was not invoked");
+  assertEqual(ChatProviderCalls, 0, "sendChatProvider was not invoked");
   assertEqual(emailCalls, 0, "sendEmail was not invoked");
   assertEqual(auditCalls, 0, "getAudit was not invoked (skipped before audit fetch)");
 }
@@ -1192,16 +1192,16 @@ async function testConfigChangeNoChanges(): Promise<void> {
   );
   clearEnv();
   process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
 
-  let slackCalls = 0;
+  let ChatProviderCalls = 0;
   let auditCalls = 0;
   const identical = { errorRatePct: 10, p95LatencyMs: 1000 };
   const result = await notifyToolHealthConfigChange(
     makeConfigChange({ before: identical, after: identical }),
     {
-      sendSlack: async () => {
-        slackCalls++;
+      sendChatProvider: async () => {
+        ChatProviderCalls++;
         return true;
       },
       getAudit: async () => {
@@ -1212,30 +1212,30 @@ async function testConfigChangeNoChanges(): Promise<void> {
   );
 
   assertEqual(result.noChanges, true, "result.noChanges is true");
-  assertEqual(result.slackSent, false, "no Slack send recorded");
+  assertEqual(result.ChatProviderSent, false, "no ChatProvider send recorded");
   assertEqual(result.emailSent, false, "no email send recorded");
   assertEqual(result.disabled, false, "disabled stays false");
   assertEqual(result.skipped, false, "skipped stays false");
-  assertEqual(slackCalls, 0, "sendSlack was not invoked (early return on no-op diff)");
+  assertEqual(ChatProviderCalls, 0, "sendChatProvider was not invoked (early return on no-op diff)");
   assertEqual(auditCalls, 0, "getAudit was not invoked (early return on no-op diff)");
 }
 
-async function testConfigChangeSlackAndEmailOnSuccess(): Promise<void> {
+async function testConfigChangeChatProviderAndEmailOnSuccess(): Promise<void> {
   console.log(
-    "\nnotifyToolHealthConfigChange — slackSent + emailSent on success, with injected audit",
+    "\nnotifyToolHealthConfigChange — ChatProviderSent + emailSent on success, with injected audit",
   );
   clearEnv();
   process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
   process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
   process.env.TOOL_HEALTH_APP_URL = "<REDACTED_URL>";
 
-  type SlackArgs = { channel: string; text: string; blocks: any[] };
-  const slackCalls: SlackArgs[] = [];
+  type ChatProviderArgs = { channel: string; text: string; blocks: any[] };
+  const ChatProviderCalls: ChatProviderArgs[] = [];
   type EmailArgs = { to: string | string[]; subject: string; html?: string; text?: string };
   const emailCalls: EmailArgs[] = [];
 
-  // Inject 2 audit entries so the "Recent changes" Slack block has data
+  // Inject 2 audit entries so the "Recent changes" ChatProvider block has data
   // without touching the real DB.
   const auditStub: ToolHealthConfigAuditEntry[] = [
     {
@@ -1266,8 +1266,8 @@ async function testConfigChangeSlackAndEmailOnSuccess(): Promise<void> {
       note: "tightening after Friday's incident",
     }),
     {
-      sendSlack: async (channel, text, blocks) => {
-        slackCalls.push({ channel, text, blocks: blocks as any[] });
+      sendChatProvider: async (channel, text, blocks) => {
+        ChatProviderCalls.push({ channel, text, blocks: blocks as any[] });
         return true;
       },
       sendEmail: async (opts) => {
@@ -1281,24 +1281,24 @@ async function testConfigChangeSlackAndEmailOnSuccess(): Promise<void> {
     },
   );
 
-  assertEqual(result.slackSent, true, "result.slackSent is true");
+  assertEqual(result.ChatProviderSent, true, "result.ChatProviderSent is true");
   assertEqual(result.emailSent, true, "result.emailSent is true");
   assertEqual(result.disabled, false, "not disabled");
   assertEqual(result.skipped, false, "not skipped");
   assertEqual(result.noChanges, false, "not noChanges");
 
-  // Slack assertions.
-  assertEqual(slackCalls.length, 1, "sendSlack called exactly once");
-  assertEqual(slackCalls[0].channel, "C-ONCALL", "Slack posted to configured channel");
+  // ChatProvider assertions.
+  assertEqual(ChatProviderCalls.length, 1, "sendChatProvider called exactly once");
+  assertEqual(ChatProviderCalls[0].channel, "C-ONCALL", "ChatProvider posted to configured channel");
   assert(
-    slackCalls[0].text.includes("user@example.invalid"),
-    "Slack fallback text attributes the operator",
+    ChatProviderCalls[0].text.includes("user@example.invalid"),
+    "ChatProvider fallback text attributes the operator",
   );
   assert(
-    slackCalls[0].text.includes("1 change"),
-    "Slack fallback text states the change count",
+    ChatProviderCalls[0].text.includes("1 change"),
+    "ChatProvider fallback text states the change count",
   );
-  const blocks = slackCalls[0].blocks;
+  const blocks = ChatProviderCalls[0].blocks;
   assertEqual(blocks[0]?.type, "header", "first block is the header");
   assert(
     typeof blocks[0]?.text?.text === "string" &&
@@ -1364,31 +1364,31 @@ async function testConfigChangeSlackAndEmailOnSuccess(): Promise<void> {
   );
 }
 
-async function testConfigChangeSlackAndEmailFailIndependently(): Promise<void> {
+async function testConfigChangeChatProviderAndEmailFailIndependently(): Promise<void> {
   console.log(
-    "\nnotifyToolHealthConfigChange — sendSlack throws and sendEmail rejects independently",
+    "\nnotifyToolHealthConfigChange — sendChatProvider throws and sendEmail rejects independently",
   );
   clearEnv();
   process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
   process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
 
-  let slackCalls = 0;
+  let ChatProviderCalls = 0;
   let emailCalls = 0;
   let auditCalls = 0;
   const originalError = console.error;
   console.error = () => {};
   try {
     const result = await notifyToolHealthConfigChange(makeConfigChange(), {
-      sendSlack: async () => {
-        slackCalls++;
-        throw new Error("simulated Slack 5xx");
+      sendChatProvider: async () => {
+        ChatProviderCalls++;
+        throw new Error("simulated ChatProvider 5xx");
       },
       // sendEmail rejected — surfaced as { success: false } rather than
-      // a throw to mirror the Resend SDK's rejected-message branch.
+      // a throw to mirror the EmailProvider SDK's rejected-message branch.
       sendEmail: async () => {
         emailCalls++;
-        return { success: false, error: "Resend rejected: invalid recipient" };
+        return { success: false, error: "EmailProvider rejected: invalid recipient" };
       },
       getAudit: async () => {
         auditCalls++;
@@ -1396,39 +1396,39 @@ async function testConfigChangeSlackAndEmailFailIndependently(): Promise<void> {
       },
     });
 
-    // Critical contract: the two channels are independent. A Slack outage
+    // Critical contract: the two channels are independent. A ChatProvider outage
     // must not block the email attempt, and a rejected email must not
-    // block the result from reflecting the Slack outcome.
-    assertEqual(result.slackSent, false, "result.slackSent is false on Slack throw");
-    assertEqual(result.emailSent, false, "result.emailSent is false on Resend rejection");
+    // block the result from reflecting the ChatProvider outcome.
+    assertEqual(result.ChatProviderSent, false, "result.ChatProviderSent is false on ChatProvider throw");
+    assertEqual(result.emailSent, false, "result.emailSent is false on EmailProvider rejection");
     assertEqual(result.disabled, false, "not disabled — opt-in WAS set");
     assertEqual(result.skipped, false, "not skipped — both transports configured");
     assertEqual(result.noChanges, false, "not noChanges — diff was non-empty");
-    assertEqual(slackCalls, 1, "sendSlack was invoked exactly once before throwing");
-    assertEqual(emailCalls, 1, "sendEmail was still invoked despite Slack throw");
-    assertEqual(auditCalls, 1, "getAudit was invoked once for the Slack block");
+    assertEqual(ChatProviderCalls, 1, "sendChatProvider was invoked exactly once before throwing");
+    assertEqual(emailCalls, 1, "sendEmail was still invoked despite ChatProvider throw");
+    assertEqual(auditCalls, 1, "getAudit was invoked once for the ChatProvider block");
   } finally {
     console.error = originalError;
   }
 }
 
-async function testConfigChangeAuditThrowsStillSendsSlack(): Promise<void> {
+async function testConfigChangeAuditThrowsStillSendsChatProvider(): Promise<void> {
   console.log(
-    "\nnotifyToolHealthConfigChange — getAudit throws ⇒ Slack still sends (best-effort)",
+    "\nnotifyToolHealthConfigChange — getAudit throws ⇒ ChatProvider still sends (best-effort)",
   );
   clearEnv();
   process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
 
-  type SlackArgs = { channel: string; text: string; blocks: any[] };
-  const slackCalls: SlackArgs[] = [];
+  type ChatProviderArgs = { channel: string; text: string; blocks: any[] };
+  const ChatProviderCalls: ChatProviderArgs[] = [];
   let auditCalls = 0;
   const originalError = console.error;
   console.error = () => {};
   try {
     const result = await notifyToolHealthConfigChange(makeConfigChange(), {
-      sendSlack: async (channel, text, blocks) => {
-        slackCalls.push({ channel, text, blocks: blocks as any[] });
+      sendChatProvider: async (channel, text, blocks) => {
+        ChatProviderCalls.push({ channel, text, blocks: blocks as any[] });
         return true;
       },
       getAudit: async () => {
@@ -1438,18 +1438,18 @@ async function testConfigChangeAuditThrowsStillSendsSlack(): Promise<void> {
     });
 
     // Critical contract: a DB hiccup loading the "Recent changes" block
-    // must NOT block the primary Slack post. The block is a nice-to-have
+    // must NOT block the primary ChatProvider post. The block is a nice-to-have
     // — losing it should never make on-call miss the threshold change.
-    assertEqual(result.slackSent, true, "Slack send proceeds despite audit fetch throw");
+    assertEqual(result.ChatProviderSent, true, "ChatProvider send proceeds despite audit fetch throw");
     assertEqual(result.disabled, false, "not disabled");
     assertEqual(result.skipped, false, "not skipped");
     assertEqual(result.noChanges, false, "not noChanges");
     assertEqual(auditCalls, 1, "getAudit was invoked exactly once before throwing");
-    assertEqual(slackCalls.length, 1, "sendSlack was invoked exactly once after audit throw");
+    assertEqual(ChatProviderCalls.length, 1, "sendChatProvider was invoked exactly once after audit throw");
 
     // The "Recent changes" block must be absent when the audit fetch
     // failed — the renderer skips the section when the array is empty.
-    const allSectionText = slackCalls[0].blocks
+    const allSectionText = ChatProviderCalls[0].blocks
       .filter((b: any) => b?.type === "section")
       .map((b: any) => b?.text?.text ?? "")
       .join("\n");
@@ -1468,10 +1468,10 @@ async function testConfigChangeRendersImpactSection(): Promise<void> {
   );
   clearEnv();
   process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
 
-  type SlackArgs = { channel: string; text: string; blocks: any[] };
-  const slackCalls: SlackArgs[] = [];
+  type ChatProviderArgs = { channel: string; text: string; blocks: any[] };
+  const ChatProviderCalls: ChatProviderArgs[] = [];
 
   const result = await notifyToolHealthConfigChange(
     makeConfigChange({
@@ -1487,17 +1487,17 @@ async function testConfigChangeRendersImpactSection(): Promise<void> {
       },
     }),
     {
-      sendSlack: async (channel, text, blocks) => {
-        slackCalls.push({ channel, text, blocks: blocks as any[] });
+      sendChatProvider: async (channel, text, blocks) => {
+        ChatProviderCalls.push({ channel, text, blocks: blocks as any[] });
         return true;
       },
       getAudit: async () => [],
     },
   );
 
-  assertEqual(result.slackSent, true, "Slack send proceeded");
-  assertEqual(slackCalls.length, 1, "sendSlack invoked exactly once");
-  const allSectionText = slackCalls[0].blocks
+  assertEqual(result.ChatProviderSent, true, "ChatProvider send proceeded");
+  assertEqual(ChatProviderCalls.length, 1, "sendChatProvider invoked exactly once");
+  const allSectionText = ChatProviderCalls[0].blocks
     .filter((b: any) => b?.type === "section")
     .map((b: any) => b?.text?.text ?? "")
     .join("\n");
@@ -1525,24 +1525,24 @@ async function testConfigChangeOmitsImpactSectionWhenNull(): Promise<void> {
   );
   clearEnv();
   process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
 
-  type SlackArgs = { channel: string; text: string; blocks: any[] };
-  const slackCalls: SlackArgs[] = [];
+  type ChatProviderArgs = { channel: string; text: string; blocks: any[] };
+  const ChatProviderCalls: ChatProviderArgs[] = [];
 
   const result = await notifyToolHealthConfigChange(
     makeConfigChange({ breach_diff: null }),
     {
-      sendSlack: async (channel, text, blocks) => {
-        slackCalls.push({ channel, text, blocks: blocks as any[] });
+      sendChatProvider: async (channel, text, blocks) => {
+        ChatProviderCalls.push({ channel, text, blocks: blocks as any[] });
         return true;
       },
       getAudit: async () => [],
     },
   );
 
-  assertEqual(result.slackSent, true, "Slack send proceeded");
-  const allSectionText = slackCalls[0].blocks
+  assertEqual(result.ChatProviderSent, true, "ChatProvider send proceeded");
+  const allSectionText = ChatProviderCalls[0].blocks
     .filter((b: any) => b?.type === "section")
     .map((b: any) => b?.text?.text ?? "")
     .join("\n");
@@ -1558,10 +1558,10 @@ async function testConfigChangeOmitsImpactSectionWhenEmpty(): Promise<void> {
   );
   clearEnv();
   process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
 
-  type SlackArgs = { channel: string; text: string; blocks: any[] };
-  const slackCalls: SlackArgs[] = [];
+  type ChatProviderArgs = { channel: string; text: string; blocks: any[] };
+  const ChatProviderCalls: ChatProviderArgs[] = [];
 
   await notifyToolHealthConfigChange(
     makeConfigChange({
@@ -1572,15 +1572,15 @@ async function testConfigChangeOmitsImpactSectionWhenEmpty(): Promise<void> {
       },
     }),
     {
-      sendSlack: async (channel, text, blocks) => {
-        slackCalls.push({ channel, text, blocks: blocks as any[] });
+      sendChatProvider: async (channel, text, blocks) => {
+        ChatProviderCalls.push({ channel, text, blocks: blocks as any[] });
         return true;
       },
       getAudit: async () => [],
     },
   );
 
-  const allSectionText = slackCalls[0].blocks
+  const allSectionText = ChatProviderCalls[0].blocks
     .filter((b: any) => b?.type === "section")
     .map((b: any) => b?.text?.text ?? "")
     .join("\n");
@@ -1606,7 +1606,7 @@ async function testConfigChangeFirstPostSavesRootThreadTs(): Promise<void> {
   );
   clearEnv();
   process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
 
   type Captured = {
     channel: string;
@@ -1617,7 +1617,7 @@ async function testConfigChangeFirstPostSavesRootThreadTs(): Promise<void> {
   const calls: Captured[] = [];
   const setCalls: Array<{ key: string; day: string; ts: string }> = [];
   const result = await notifyToolHealthConfigChange(makeConfigChange(), {
-    postSlack: async (channel, text, blocks, thread_ts) => {
+    postChatProvider: async (channel, text, blocks, thread_ts) => {
       calls.push({ channel, text, blocks: blocks ?? [], thread_ts });
       return { ok: true, ts: "<REDACTED_PHONE>.000100" };
     },
@@ -1630,8 +1630,8 @@ async function testConfigChangeFirstPostSavesRootThreadTs(): Promise<void> {
     now: () => Date.UTC(2026, 4, 3, 12, 0, 0),
   });
 
-  assertEqual(result.slackSent, true, "slackSent true");
-  assertEqual(calls.length, 1, "postSlack invoked exactly once");
+  assertEqual(result.ChatProviderSent, true, "ChatProviderSent true");
+  assertEqual(calls.length, 1, "postChatProvider invoked exactly once");
   assertEqual(
     calls[0].thread_ts,
     undefined,
@@ -1647,7 +1647,7 @@ async function testConfigChangeFirstPostSavesRootThreadTs(): Promise<void> {
   assertEqual(
     setCalls[0].ts,
     "<REDACTED_PHONE>.000100",
-    "stored ts matches the Slack response",
+    "stored ts matches the ChatProvider response",
   );
 }
 
@@ -1657,7 +1657,7 @@ async function testConfigChangeSecondPostThreadsUnderRoot(): Promise<void> {
   );
   clearEnv();
   process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
 
   type Captured = {
     thread_ts: string | undefined;
@@ -1667,7 +1667,7 @@ async function testConfigChangeSecondPostThreadsUnderRoot(): Promise<void> {
   const ROOT_TS = "<REDACTED_PHONE>.000100";
 
   const result = await notifyToolHealthConfigChange(makeConfigChange(), {
-    postSlack: async (_channel, _text, _blocks, thread_ts) => {
+    postChatProvider: async (_channel, _text, _blocks, thread_ts) => {
       calls.push({ thread_ts });
       return { ok: true, ts: "<REDACTED_PHONE>.000200" };
     },
@@ -1679,8 +1679,8 @@ async function testConfigChangeSecondPostThreadsUnderRoot(): Promise<void> {
     now: () => Date.UTC(2026, 4, 3, 14, 30, 0),
   });
 
-  assertEqual(result.slackSent, true, "slackSent true");
-  assertEqual(calls.length, 1, "postSlack invoked exactly once");
+  assertEqual(result.ChatProviderSent, true, "ChatProviderSent true");
+  assertEqual(calls.length, 1, "postChatProvider invoked exactly once");
   assertEqual(
     calls[0].thread_ts,
     ROOT_TS,
@@ -1695,17 +1695,17 @@ async function testConfigChangeSecondPostThreadsUnderRoot(): Promise<void> {
 
 async function testConfigChangeSetThreadTsThrowsDoesNotPropagate(): Promise<void> {
   console.log(
-    "\nnotifyToolHealthConfigChange — setThreadTs throw is swallowed (slack already posted)",
+    "\nnotifyToolHealthConfigChange — setThreadTs throw is swallowed (ChatProvider already posted)",
   );
   clearEnv();
   process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
 
   const originalError = console.error;
   console.error = () => {};
   try {
     const result = await notifyToolHealthConfigChange(makeConfigChange(), {
-      postSlack: async () => ({ ok: true, ts: "<REDACTED_PHONE>.000999" }),
+      postChatProvider: async () => ({ ok: true, ts: "<REDACTED_PHONE>.000999" }),
       getThreadTs: async () => null,
       setThreadTs: async () => {
         throw new Error("simulated DB write failure");
@@ -1715,9 +1715,9 @@ async function testConfigChangeSetThreadTsThrowsDoesNotPropagate(): Promise<void
     });
 
     assertEqual(
-      result.slackSent,
+      result.ChatProviderSent,
       true,
-      "slackSent stays true — page is independent of bookkeeping",
+      "ChatProviderSent stays true — page is independent of bookkeeping",
     );
   } finally {
     console.error = originalError;
@@ -1730,7 +1730,7 @@ async function testConfigChangeGetThreadTsThrowsFallsBackToRoot(): Promise<void>
   );
   clearEnv();
   process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
 
   const calls: Array<{ thread_ts: string | undefined }> = [];
   const setCalls: Array<{ ts: string }> = [];
@@ -1738,7 +1738,7 @@ async function testConfigChangeGetThreadTsThrowsFallsBackToRoot(): Promise<void>
   console.error = () => {};
   try {
     const result = await notifyToolHealthConfigChange(makeConfigChange(), {
-      postSlack: async (_c, _t, _b, thread_ts) => {
+      postChatProvider: async (_c, _t, _b, thread_ts) => {
         calls.push({ thread_ts });
         return { ok: true, ts: "<REDACTED_PHONE>.000111" };
       },
@@ -1752,7 +1752,7 @@ async function testConfigChangeGetThreadTsThrowsFallsBackToRoot(): Promise<void>
       now: () => Date.UTC(2026, 4, 3, 12, 0, 0),
     });
 
-    assertEqual(result.slackSent, true, "slackSent true");
+    assertEqual(result.ChatProviderSent, true, "ChatProviderSent true");
     assertEqual(
       calls[0].thread_ts,
       undefined,
@@ -1769,19 +1769,19 @@ async function testConfigChangeGetThreadTsThrowsFallsBackToRoot(): Promise<void>
   }
 }
 
-async function testConfigChangeLegacySendSlackSkipsThreading(): Promise<void> {
+async function testConfigChangeLegacySendChatProviderSkipsThreading(): Promise<void> {
   console.log(
-    "\nnotifyToolHealthConfigChange — legacy sendSlack dep keeps working (threading disabled)",
+    "\nnotifyToolHealthConfigChange — legacy sendChatProvider dep keeps working (threading disabled)",
   );
   clearEnv();
   process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
 
   let getCalls = 0;
   let setCalls = 0;
   let sendCalls = 0;
   const result = await notifyToolHealthConfigChange(makeConfigChange(), {
-    sendSlack: async () => {
+    sendChatProvider: async () => {
       sendCalls++;
       return true;
     },
@@ -1796,13 +1796,13 @@ async function testConfigChangeLegacySendSlackSkipsThreading(): Promise<void> {
     now: () => Date.UTC(2026, 4, 3, 12, 0, 0),
   });
 
-  assertEqual(result.slackSent, true, "slackSent true via legacy sendSlack");
-  assertEqual(sendCalls, 1, "legacy sendSlack invoked exactly once");
+  assertEqual(result.ChatProviderSent, true, "ChatProviderSent true via legacy sendChatProvider");
+  assertEqual(sendCalls, 1, "legacy sendChatProvider invoked exactly once");
   assertEqual(getCalls, 1, "getThreadTs still consulted (lookup is cheap)");
   assertEqual(
     setCalls,
     0,
-    "setThreadTs not invoked — legacy sendSlack returns no ts to persist",
+    "setThreadTs not invoked — legacy sendChatProvider returns no ts to persist",
   );
 }
 
@@ -1824,59 +1824,59 @@ function makeExpiringSoon(
 
 async function testExpiringSoonSkippedWithoutChannel(): Promise<void> {
   console.log(
-    "\nnotifyToolHealthOverrideExpiringSoon — skipped when no Slack channel",
+    "\nnotifyToolHealthOverrideExpiringSoon — skipped when no ChatProvider channel",
   );
   clearEnv();
   _resetOverrideExpirySoonWarningsForTests();
 
-  let slackCalls = 0;
+  let ChatProviderCalls = 0;
   const result = await notifyToolHealthOverrideExpiringSoon(
     makeExpiringSoon({ expires_at: new Date("2026-04-25T19:00:00.000Z") }),
     {
-      sendSlack: async () => {
-        slackCalls++;
+      sendChatProvider: async () => {
+        ChatProviderCalls++;
         return true;
       },
     },
   );
 
   assertEqual(result.skipped, true, "result.skipped is true");
-  assertEqual(result.slackSent, false, "no Slack send recorded");
+  assertEqual(result.ChatProviderSent, false, "no ChatProvider send recorded");
   assertEqual(result.deduped, false, "deduped stays false");
-  assertEqual(slackCalls, 0, "sendSlack was not invoked");
+  assertEqual(ChatProviderCalls, 0, "sendChatProvider was not invoked");
 }
 
-async function testExpiringSoonSlackOnSuccess(): Promise<void> {
+async function testExpiringSoonChatProviderOnSuccess(): Promise<void> {
   console.log(
-    "\nnotifyToolHealthOverrideExpiringSoon — slackSent on success",
+    "\nnotifyToolHealthOverrideExpiringSoon — ChatProviderSent on success",
   );
   clearEnv();
   _resetOverrideExpirySoonWarningsForTests();
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
   process.env.TOOL_HEALTH_APP_URL = "<REDACTED_URL>";
 
-  type SlackArgs = { channel: string; text: string; blocks: any[] };
-  const slackCalls: SlackArgs[] = [];
+  type ChatProviderArgs = { channel: string; text: string; blocks: any[] };
+  const ChatProviderCalls: ChatProviderArgs[] = [];
 
   const result = await notifyToolHealthOverrideExpiringSoon(makeExpiringSoon(), {
-    sendSlack: async (channel, text, blocks) => {
-      slackCalls.push({ channel, text, blocks: blocks as any[] });
+    sendChatProvider: async (channel, text, blocks) => {
+      ChatProviderCalls.push({ channel, text, blocks: blocks as any[] });
       return true;
     },
   });
 
-  assertEqual(result.slackSent, true, "result.slackSent is true");
+  assertEqual(result.ChatProviderSent, true, "result.ChatProviderSent is true");
   assertEqual(result.skipped, false, "not skipped — channel was configured");
   assertEqual(result.deduped, false, "not deduped on first call");
-  assertEqual(slackCalls.length, 1, "Slack invoked exactly once");
-  assertEqual(slackCalls[0].channel, "C-ONCALL", "posted to configured channel");
+  assertEqual(ChatProviderCalls.length, 1, "ChatProvider invoked exactly once");
+  assertEqual(ChatProviderCalls[0].channel, "C-ONCALL", "posted to configured channel");
   assert(
-    slackCalls[0].text.includes("user@example.invalid") &&
-      slackCalls[0].text.includes("~25 min"),
+    ChatProviderCalls[0].text.includes("user@example.invalid") &&
+      ChatProviderCalls[0].text.includes("~25 min"),
     "fallback text mentions operator and minutes-remaining",
   );
 
-  const blocks = slackCalls[0].blocks;
+  const blocks = ChatProviderCalls[0].blocks;
   assertEqual(blocks[0]?.type, "header", "first block is the header");
   assert(
     typeof blocks[0]?.text?.text === "string" &&
@@ -1922,88 +1922,88 @@ async function testExpiringSoonDedupedOnSecondCall(): Promise<void> {
   );
   clearEnv();
   _resetOverrideExpirySoonWarningsForTests();
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
 
   const sameExpiry = new Date("2026-04-26T08:00:00.000Z");
-  let slackCalls = 0;
-  const sendSlack = async () => {
-    slackCalls++;
+  let ChatProviderCalls = 0;
+  const sendChatProvider = async () => {
+    ChatProviderCalls++;
     return true;
   };
 
   const first = await notifyToolHealthOverrideExpiringSoon(
     makeExpiringSoon({ expires_at: sameExpiry }),
-    { sendSlack },
+    { sendChatProvider },
   );
-  assertEqual(first.slackSent, true, "first call: Slack send recorded");
+  assertEqual(first.ChatProviderSent, true, "first call: ChatProvider send recorded");
   assertEqual(first.deduped, false, "first call: not deduped");
-  assertEqual(slackCalls, 1, "Slack invoked exactly once after first call");
+  assertEqual(ChatProviderCalls, 1, "ChatProvider invoked exactly once after first call");
 
-  // Second call with the SAME expires_at must short-circuit before sendSlack.
+  // Second call with the SAME expires_at must short-circuit before sendChatProvider.
   const second = await notifyToolHealthOverrideExpiringSoon(
     makeExpiringSoon({ expires_at: sameExpiry, minutes_remaining: 5 }),
-    { sendSlack },
+    { sendChatProvider },
   );
   assertEqual(second.deduped, true, "second call (same expires_at): deduped=true");
-  assertEqual(second.slackSent, false, "second call: no Slack send");
+  assertEqual(second.ChatProviderSent, false, "second call: no ChatProvider send");
   assertEqual(second.skipped, false, "second call: skipped stays false");
-  assertEqual(slackCalls, 1, "Slack still invoked exactly once total");
+  assertEqual(ChatProviderCalls, 1, "ChatProvider still invoked exactly once total");
 
   // Sanity check: a DIFFERENT expires_at gets through.
   const otherExpiry = new Date("2026-04-26T09:00:00.000Z");
   const third = await notifyToolHealthOverrideExpiringSoon(
     makeExpiringSoon({ expires_at: otherExpiry }),
-    { sendSlack },
+    { sendChatProvider },
   );
-  assertEqual(third.slackSent, true, "different expires_at: Slack send recorded");
+  assertEqual(third.ChatProviderSent, true, "different expires_at: ChatProvider send recorded");
   assertEqual(third.deduped, false, "different expires_at: not deduped");
-  assertEqual(slackCalls, 2, "Slack invoked twice total after distinct expiry");
+  assertEqual(ChatProviderCalls, 2, "ChatProvider invoked twice total after distinct expiry");
 }
 
-async function testExpiringSoonDedupePersistsWhenSlackThrows(): Promise<void> {
+async function testExpiringSoonDedupePersistsWhenChatProviderThrows(): Promise<void> {
   console.log(
-    "\nnotifyToolHealthOverrideExpiringSoon — dedupe persists even if Slack throws",
+    "\nnotifyToolHealthOverrideExpiringSoon — dedupe persists even if ChatProvider throws",
   );
   clearEnv();
   _resetOverrideExpirySoonWarningsForTests();
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
 
   const sameExpiry = new Date("2026-04-27T10:00:00.000Z");
-  let slackCalls = 0;
-  // Suppress the expected "Slack send threw" error log so the test output
+  let ChatProviderCalls = 0;
+  // Suppress the expected "ChatProvider send threw" error log so the test output
   // stays readable; any other error path will still surface.
   const originalError = console.error;
   console.error = () => {};
   try {
-    // First call: Slack throws — but the dedupe key is added BEFORE the send,
+    // First call: ChatProvider throws — but the dedupe key is added BEFORE the send,
     // so a subsequent call must still short-circuit.
     const first = await notifyToolHealthOverrideExpiringSoon(
       makeExpiringSoon({ expires_at: sameExpiry }),
       {
-        sendSlack: async () => {
-          slackCalls++;
-          throw new Error("simulated Slack 5xx");
+        sendChatProvider: async () => {
+          ChatProviderCalls++;
+          throw new Error("simulated ChatProvider 5xx");
         },
       },
     );
     assertEqual(
-      first.slackSent,
+      first.ChatProviderSent,
       false,
-      "first call: slackSent=false (send threw)",
+      "first call: ChatProviderSent=false (send threw)",
     );
     assertEqual(first.deduped, false, "first call: not deduped");
     assertEqual(first.skipped, false, "first call: not skipped");
-    assertEqual(slackCalls, 1, "Slack invoked exactly once before throwing");
+    assertEqual(ChatProviderCalls, 1, "ChatProvider invoked exactly once before throwing");
 
     // Second call with the SAME expires_at: dedupe must short-circuit even
     // though the previous send failed. This is the contract the comment in
     // the implementation calls out — failing to record dedupe on throw would
-    // turn a transient Slack outage into a flood on every cron tick.
+    // turn a transient ChatProvider outage into a flood on every cron tick.
     const second = await notifyToolHealthOverrideExpiringSoon(
       makeExpiringSoon({ expires_at: sameExpiry }),
       {
-        sendSlack: async () => {
-          slackCalls++;
+        sendChatProvider: async () => {
+          ChatProviderCalls++;
           return true;
         },
       },
@@ -2013,8 +2013,8 @@ async function testExpiringSoonDedupePersistsWhenSlackThrows(): Promise<void> {
       true,
       "second call after throw: deduped=true (no retry flood)",
     );
-    assertEqual(second.slackSent, false, "second call: no Slack send");
-    assertEqual(slackCalls, 1, "Slack still invoked exactly once total");
+    assertEqual(second.ChatProviderSent, false, "second call: no ChatProvider send");
+    assertEqual(ChatProviderCalls, 1, "ChatProvider still invoked exactly once total");
   } finally {
     console.error = originalError;
   }
@@ -2039,15 +2039,15 @@ function makeRecovery(
 
 async function testRecoverySkippedWithoutTransport(): Promise<void> {
   console.log(
-    "\nnotifyToolHealthRecovery — skipped when no Slack channel and no email recipients",
+    "\nnotifyToolHealthRecovery — skipped when no ChatProvider channel and no email recipients",
   );
   clearEnv();
 
-  let slackCalls = 0;
+  let ChatProviderCalls = 0;
   let emailCalls = 0;
   const result = await notifyToolHealthRecovery(makeRecovery(), {
-    sendSlack: async () => {
-      slackCalls++;
+    sendChatProvider: async () => {
+      ChatProviderCalls++;
       return true;
     },
     sendEmail: async () => {
@@ -2057,29 +2057,29 @@ async function testRecoverySkippedWithoutTransport(): Promise<void> {
   });
 
   assertEqual(result.skipped, true, "result.skipped is true");
-  assertEqual(result.slackSent, false, "no Slack send recorded");
+  assertEqual(result.ChatProviderSent, false, "no ChatProvider send recorded");
   assertEqual(result.emailSent, false, "no email send recorded");
-  assertEqual(slackCalls, 0, "sendSlack was not invoked");
+  assertEqual(ChatProviderCalls, 0, "sendChatProvider was not invoked");
   assertEqual(emailCalls, 0, "sendEmail was not invoked");
 }
 
-async function testRecoverySlackAndEmailOnSuccess(): Promise<void> {
+async function testRecoveryChatProviderAndEmailOnSuccess(): Promise<void> {
   console.log(
-    "\nnotifyToolHealthRecovery — slackSent + emailSent on success",
+    "\nnotifyToolHealthRecovery — ChatProviderSent + emailSent on success",
   );
   clearEnv();
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
   process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
   process.env.TOOL_HEALTH_APP_URL = "<REDACTED_URL>";
 
-  type SlackArgs = { channel: string; text: string; blocks: any[] };
-  const slackCalls: SlackArgs[] = [];
+  type ChatProviderArgs = { channel: string; text: string; blocks: any[] };
+  const ChatProviderCalls: ChatProviderArgs[] = [];
   type EmailArgs = { to: string | string[]; subject: string; html?: string; text?: string };
   const emailCalls: EmailArgs[] = [];
 
   const result = await notifyToolHealthRecovery(makeRecovery(), {
-    sendSlack: async (channel, text, blocks) => {
-      slackCalls.push({ channel, text, blocks: blocks as any[] });
+    sendChatProvider: async (channel, text, blocks) => {
+      ChatProviderCalls.push({ channel, text, blocks: blocks as any[] });
       return true;
     },
     sendEmail: async (opts) => {
@@ -2088,20 +2088,20 @@ async function testRecoverySlackAndEmailOnSuccess(): Promise<void> {
     },
   });
 
-  assertEqual(result.slackSent, true, "result.slackSent is true");
+  assertEqual(result.ChatProviderSent, true, "result.ChatProviderSent is true");
   assertEqual(result.emailSent, true, "result.emailSent is true");
   assertEqual(result.skipped, false, "not skipped");
 
-  // Slack body sanity.
-  assertEqual(slackCalls.length, 1, "sendSlack called exactly once");
-  assertEqual(slackCalls[0].channel, "C-ONCALL", "Slack posted to configured channel");
+  // ChatProvider body sanity.
+  assertEqual(ChatProviderCalls.length, 1, "sendChatProvider called exactly once");
+  assertEqual(ChatProviderCalls[0].channel, "C-ONCALL", "ChatProvider posted to configured channel");
   assert(
-    slackCalls[0].text.includes("recovered") &&
-      slackCalls[0].text.includes("search_web") &&
-      slackCalls[0].text.includes("alert #99"),
+    ChatProviderCalls[0].text.includes("recovered") &&
+      ChatProviderCalls[0].text.includes("search_web") &&
+      ChatProviderCalls[0].text.includes("alert #99"),
     "fallback text announces recovery, tool, and alert id",
   );
-  const blocks = slackCalls[0].blocks;
+  const blocks = ChatProviderCalls[0].blocks;
   assertEqual(blocks[0]?.type, "header", "first block is the header");
   assert(
     typeof blocks[0]?.text?.text === "string" &&
@@ -2116,7 +2116,7 @@ async function testRecoverySlackAndEmailOnSuccess(): Promise<void> {
         (e: any) => e?.url === "<REDACTED_URL>",
       ),
   );
-  assert(hasButton, "absolute APP_URL renders an Open AI Operations panel button");
+  assert(hasButton, "absolute APP_URL renders an LLMProvider Operations panel button");
   const contextText = blocks
     .filter((b: any) => b?.type === "context")
     .flatMap((b: any) => b.elements ?? [])
@@ -2165,14 +2165,14 @@ async function testRecoveryNotThrottledByBreachMap(): Promise<void> {
   );
   clearEnv();
   _resetToolHealthNotifierThrottleForTests();
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
   process.env.TOOL_HEALTH_NOTIFY_THROTTLE_MIN = "60";
 
   // Step 1: send a breach for `search_web:error_rate` so the in-process
   // throttle map records that key. Recovery for the SAME key must still
   // fire — recovery and breach are independent events.
   const fixedNow = 1_700_000_500_000;
-  let breachSlackCalls = 0;
+  let breachChatProviderCalls = 0;
   const breachResult = await notifyToolHealthBreach(
     makeBreach({
       tool_name: "search_web",
@@ -2180,8 +2180,8 @@ async function testRecoveryNotThrottledByBreachMap(): Promise<void> {
       related_record_id: "search_web:error_rate",
     }),
     {
-      sendSlack: async () => {
-        breachSlackCalls++;
+      sendChatProvider: async () => {
+        breachChatProviderCalls++;
         return true;
       },
       sendEmail: async () => ({ success: true }),
@@ -2189,8 +2189,8 @@ async function testRecoveryNotThrottledByBreachMap(): Promise<void> {
       now: () => fixedNow,
     },
   );
-  assertEqual(breachResult.slackSent, true, "setup: breach Slack send recorded");
-  assertEqual(breachSlackCalls, 1, "setup: breach Slack invoked exactly once");
+  assertEqual(breachResult.ChatProviderSent, true, "setup: breach ChatProvider send recorded");
+  assertEqual(breachChatProviderCalls, 1, "setup: breach ChatProvider invoked exactly once");
 
   // Step 2: a second BREACH for the same key would be throttled — verify
   // that the breach map is in fact populated for the key we care about.
@@ -2201,7 +2201,7 @@ async function testRecoveryNotThrottledByBreachMap(): Promise<void> {
       related_record_id: "search_web:error_rate",
     }),
     {
-      sendSlack: async () => true,
+      sendChatProvider: async () => true,
       sendEmail: async () => ({ success: true }),
       claimDb: async () => true,
       now: () => fixedNow + 60_000, // +1 min, well within window
@@ -2214,7 +2214,7 @@ async function testRecoveryNotThrottledByBreachMap(): Promise<void> {
   );
 
   // Step 3: recovery for the SAME tool/reason must NOT be throttled.
-  let recoverySlackCalls = 0;
+  let recoveryChatProviderCalls = 0;
   let recoveryEmailCalls = 0;
   const recovery = await notifyToolHealthRecovery(
     makeRecovery({
@@ -2223,8 +2223,8 @@ async function testRecoveryNotThrottledByBreachMap(): Promise<void> {
       alert_id: 1234,
     }),
     {
-      sendSlack: async () => {
-        recoverySlackCalls++;
+      sendChatProvider: async () => {
+        recoveryChatProviderCalls++;
         return true;
       },
       sendEmail: async () => {
@@ -2235,15 +2235,15 @@ async function testRecoveryNotThrottledByBreachMap(): Promise<void> {
   );
 
   assertEqual(
-    recovery.slackSent,
+    recovery.ChatProviderSent,
     true,
     "recovery sends despite breach throttle map holding the same key",
   );
   assertEqual(recovery.skipped, false, "recovery is not skipped");
   assertEqual(
-    recoverySlackCalls,
+    recoveryChatProviderCalls,
     1,
-    "recovery invoked sendSlack exactly once (no throttle short-circuit)",
+    "recovery invoked sendChatProvider exactly once (no throttle short-circuit)",
   );
   assertEqual(
     recoveryEmailCalls,
@@ -2260,54 +2260,54 @@ async function testRecoveryNotThrottledByBreachMap(): Promise<void> {
       alert_id: 1235,
     }),
     {
-      sendSlack: async () => {
-        recoverySlackCalls++;
+      sendChatProvider: async () => {
+        recoveryChatProviderCalls++;
         return true;
       },
     },
   );
-  assertEqual(recovery2.slackSent, true, "second recovery also sends");
+  assertEqual(recovery2.ChatProviderSent, true, "second recovery also sends");
   assertEqual(
-    recoverySlackCalls,
+    recoveryChatProviderCalls,
     2,
-    "recovery sendSlack invoked exactly twice across the two calls",
+    "recovery sendChatProvider invoked exactly twice across the two calls",
   );
 }
 
-async function testRecoverySlackAndEmailFailIndependently(): Promise<void> {
+async function testRecoveryChatProviderAndEmailFailIndependently(): Promise<void> {
   console.log(
-    "\nnotifyToolHealthRecovery — sendSlack throws and sendEmail rejects independently",
+    "\nnotifyToolHealthRecovery — sendChatProvider throws and sendEmail rejects independently",
   );
   clearEnv();
-  process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-ONCALL";
+  process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-ONCALL";
   process.env.TOOL_HEALTH_ALERT_EMAIL = "user@example.invalid";
 
-  let slackCalls = 0;
+  let ChatProviderCalls = 0;
   let emailCalls = 0;
   const originalError = console.error;
   console.error = () => {};
   try {
     const result = await notifyToolHealthRecovery(makeRecovery(), {
-      sendSlack: async () => {
-        slackCalls++;
-        throw new Error("simulated Slack 5xx");
+      sendChatProvider: async () => {
+        ChatProviderCalls++;
+        throw new Error("simulated ChatProvider 5xx");
       },
       // sendEmail rejected — surfaced as { success: false } rather than
-      // a throw to mirror the Resend SDK's rejected-message branch.
+      // a throw to mirror the EmailProvider SDK's rejected-message branch.
       sendEmail: async () => {
         emailCalls++;
-        return { success: false, error: "Resend rejected: domain not verified" };
+        return { success: false, error: "EmailProvider rejected: domain not verified" };
       },
     });
 
-    // Critical contract: the two channels are independent. A Slack outage
+    // Critical contract: the two channels are independent. A ChatProvider outage
     // must not block the email attempt, and a rejected email must not
-    // mask the Slack outcome on the result object.
-    assertEqual(result.slackSent, false, "result.slackSent is false on Slack throw");
-    assertEqual(result.emailSent, false, "result.emailSent is false on Resend rejection");
+    // mask the ChatProvider outcome on the result object.
+    assertEqual(result.ChatProviderSent, false, "result.ChatProviderSent is false on ChatProvider throw");
+    assertEqual(result.emailSent, false, "result.emailSent is false on EmailProvider rejection");
     assertEqual(result.skipped, false, "not skipped — both transports configured");
-    assertEqual(slackCalls, 1, "sendSlack was invoked exactly once before throwing");
-    assertEqual(emailCalls, 1, "sendEmail was still invoked despite Slack throw");
+    assertEqual(ChatProviderCalls, 1, "sendChatProvider was invoked exactly once before throwing");
+    assertEqual(emailCalls, 1, "sendEmail was still invoked despite ChatProvider throw");
   } finally {
     console.error = originalError;
   }
@@ -2325,17 +2325,17 @@ async function testRecoveryEmailThrowsDoesNotPropagate(): Promise<void> {
   console.error = () => {};
   try {
     const result = await notifyToolHealthRecovery(makeRecovery(), {
-      sendSlack: async () => false,
+      sendChatProvider: async () => false,
       sendEmail: async () => {
         emailCalls++;
-        throw new Error("simulated Resend network failure");
+        throw new Error("simulated EmailProvider network failure");
       },
     });
     // Symmetric to the breach-side path: a thrown sendEmail must surface
     // on the result rather than escape to the caller (the auto-resolve
     // sweep would otherwise crash mid-pass).
     assertEqual(result.emailSent, false, "result.emailSent is false on throw");
-    assertEqual(result.slackSent, false, "Slack stays false (no channel configured)");
+    assertEqual(result.ChatProviderSent, false, "ChatProvider stays false (no channel configured)");
     assertEqual(result.skipped, false, "not skipped — email recipients configured");
     assertEqual(emailCalls, 1, "sendEmail was invoked exactly once before throwing");
   } finally {
@@ -2350,21 +2350,21 @@ async function testRecoveryEmailThrowsDoesNotPropagate(): Promise<void> {
 async function main(): Promise<void> {
   try {
     await testSkippedWhenNothingConfigured();
-    await testSlackSentOnSuccess();
+    await testChatProviderSentOnSuccess();
     await testEmailSentOnSuccess();
     await testThrottledWithinWindow();
     await testThrottleResetsAfterWindow();
-    await testBreachSlackThrowsDoesNotPropagate();
+    await testBreachChatProviderThrowsDoesNotPropagate();
     await testBreachEmailRejectedKeepsEmailSentFalse();
     await testBreachEmailThrowsDoesNotPropagate();
     await testBreachClaimDbThrowsFallsThroughToSend();
-    await testBreachRecordResultThrowsAfterSlackSuccess();
+    await testBreachRecordResultThrowsAfterChatProviderSuccess();
     await testBreachRecordResultThrowsOnSkippedPath();
     await testBreachRecordResultThrowsOnThrottledPath();
     await testBreachRecordResultThrowsOnFailedPath();
     await testBreachRecordResultChannelLabelPerTerminalState();
-    await testOverrideExpiredSlackPost();
-    await testOverrideExpiredSlackThrowsDoesNotPropagate();
+    await testOverrideExpiredChatProviderPost();
+    await testOverrideExpiredChatProviderThrowsDoesNotPropagate();
     await testOverrideExpiredSkippedWithoutChannel();
     testDiffNoChanges();
     testDiffValueChange();
@@ -2373,9 +2373,9 @@ async function main(): Promise<void> {
     await testConfigChangeDisabledWhenEnvNotSet();
     await testConfigChangeSkippedWithoutTransport();
     await testConfigChangeNoChanges();
-    await testConfigChangeSlackAndEmailOnSuccess();
-    await testConfigChangeSlackAndEmailFailIndependently();
-    await testConfigChangeAuditThrowsStillSendsSlack();
+    await testConfigChangeChatProviderAndEmailOnSuccess();
+    await testConfigChangeChatProviderAndEmailFailIndependently();
+    await testConfigChangeAuditThrowsStillSendsChatProvider();
     await testConfigChangeRendersImpactSection();
     await testConfigChangeOmitsImpactSectionWhenNull();
     await testConfigChangeOmitsImpactSectionWhenEmpty();
@@ -2383,15 +2383,15 @@ async function main(): Promise<void> {
     await testConfigChangeSecondPostThreadsUnderRoot();
     await testConfigChangeSetThreadTsThrowsDoesNotPropagate();
     await testConfigChangeGetThreadTsThrowsFallsBackToRoot();
-    await testConfigChangeLegacySendSlackSkipsThreading();
+    await testConfigChangeLegacySendChatProviderSkipsThreading();
     await testExpiringSoonSkippedWithoutChannel();
-    await testExpiringSoonSlackOnSuccess();
+    await testExpiringSoonChatProviderOnSuccess();
     await testExpiringSoonDedupedOnSecondCall();
-    await testExpiringSoonDedupePersistsWhenSlackThrows();
+    await testExpiringSoonDedupePersistsWhenChatProviderThrows();
     await testRecoverySkippedWithoutTransport();
-    await testRecoverySlackAndEmailOnSuccess();
+    await testRecoveryChatProviderAndEmailOnSuccess();
     await testRecoveryNotThrottledByBreachMap();
-    await testRecoverySlackAndEmailFailIndependently();
+    await testRecoveryChatProviderAndEmailFailIndependently();
     await testRecoveryEmailThrowsDoesNotPropagate();
   } finally {
     restoreEnv();

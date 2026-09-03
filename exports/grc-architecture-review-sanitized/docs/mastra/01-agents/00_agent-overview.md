@@ -29,10 +29,10 @@ npm install @mastra/core
 
 ### Set your API key [#set-api-key-mastra-router]
 
-Mastra's model router auto-detects environment variables for your chosen provider. For OpenAI, set `OPENAI_API_KEY`:
+Mastra's model router auto-detects environment variables for your chosen provider. For LLMProvider, set `LLMProvider_API_KEY`:
 
 ```bash filename=".env" copy
-OPENAI_API_KEY=<your-api-key>
+LLMProvider_API_KEY=<your-api-key>
 ```
 
 > Mastra supports more than 600 models. Choose from the full list [here](/models).
@@ -47,7 +47,7 @@ import { Agent } from "@mastra/core/agent";
 export const testAgent = new Agent({
   name: "test-agent",
   instructions: "You are a helpful assistant.",
-  model: "openai/gpt-4o-mini"
+  model: "LLMProvider/gpt-4o-mini"
 });
 ```
     </Steps>
@@ -60,15 +60,15 @@ export const testAgent = new Agent({
 Include the Mastra core package alongside the Vercel AI SDK provider you want to use:
 
 ```bash
-npm install @mastra/core @ai-sdk/openai
+npm install @mastra/core @ai-sdk/LLMProvider
 ```
 
 ### Set your API key [#set-api-key-ai-sdk]
 
-Set the corresponding environment variable for your provider. For OpenAI via the AI SDK:
+Set the corresponding environment variable for your provider. For LLMProvider via the AI SDK:
 
 ```bash filename=".env" copy
-OPENAI_API_KEY=<your-api-key>
+LLMProvider_API_KEY=<your-api-key>
 ```
 
 > See the [AI SDK Providers](<REDACTED_URL> in the Vercel AI SDK docs for additional configuration options.
@@ -78,13 +78,13 @@ OPENAI_API_KEY=<your-api-key>
 To create an agent in Mastra, use the `Agent` class. Every agent must include `instructions` to define its behavior, and a `model` parameter to specify the LLM provider and model. When using the Vercel AI SDK, provide the client to your agent's `model` field:
 
 ```typescript filename="src/mastra/agents/test-agent.ts" showLineNumbers copy
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 import { Agent } from "@mastra/core/agent";
 
 export const testAgent = new Agent({
   name: "test-agent",
   instructions: "You are a helpful assistant.",
-  model: openai("gpt-4o-mini")
+  model: LLMProvider("gpt-4o-mini")
 });
 ```
     </Steps>
@@ -127,7 +127,7 @@ instructions: {
   content:
     "You are an expert code reviewer. Analyze code for bugs, performance issues, and best practices.",
   providerOptions: {
-    openai: { reasoningEffort: "high" },        // OpenAI's reasoning models
+    LLMProvider: { reasoningEffort: "high" },        // LLMProvider's reasoning models
     anthropic: { cacheControl: { type: "ephemeral" } }  // Anthropic's prompt caching
   }
 }
@@ -283,7 +283,7 @@ const response = await testAgentWithTools.generate(
         summary: z.string(),
         keywords: z.array(z.string())
       }),
-      model: "openai/gpt-4o"
+      model: "LLMProvider/gpt-4o"
     },
   }
 );
@@ -406,8 +406,8 @@ export const testAgent = new Agent({
     const userTier = runtimeContext.get("user-tier") as UserTier["user-tier"];
 
     return userTier === "enterprise"
-      ? openai("gpt-4o-mini")
-      : openai("gpt-4.1-nano");
+      ? LLMProvider("gpt-4o-mini")
+      : LLMProvider("gpt-4.1-nano");
   }
 });
 ```

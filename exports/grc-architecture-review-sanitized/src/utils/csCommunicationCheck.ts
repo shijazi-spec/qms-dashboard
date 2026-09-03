@@ -41,7 +41,7 @@ export type CommunicationVerdict = "block" | "review" | "allow";
 
 export interface CommunicationCheckMatchedDeal {
   duplicate_record_id: number;
-  zoho_record_id: string | null;
+  CRMProvider_record_id: string | null;
   account_name: string | null;
   domain: string | null;
   company_domain: string | null;
@@ -191,7 +191,7 @@ export async function checkCommunicationEligibility(input: {
   // The first two are cheap indexed lookups; the third uses a JSONB op.
   const dealsR = await pool.query<{
     id: number;
-    zoho_record_id: string | null;
+    CRMProvider_record_id: string | null;
     account_name: string | null;
     record_domain: string | null;
     cluster_id: number | null;
@@ -201,7 +201,7 @@ export async function checkCommunicationEligibility(input: {
     gov_type: string | null;
   }>(
     `SELECT r.id,
-            r.zoho_record_id,
+            r.CRMProvider_record_id,
             r.account_name,
             r.domain AS record_domain,
             r.cluster_id,
@@ -211,7 +211,7 @@ export async function checkCommunicationEligibility(input: {
             r.gov_type
        FROM duplicate_records r
        LEFT JOIN duplicate_clusters c ON c.id = r.cluster_id
-      WHERE r.zoho_module = 'Deals'
+      WHERE r.CRMProvider_module = 'Deals'
         AND (
               LOWER(r.domain) = $1
            OR LOWER(c.domain) = $1
@@ -290,7 +290,7 @@ export async function checkCommunicationEligibility(input: {
 
     matched.push({
       duplicate_record_id: row.id,
-      zoho_record_id: row.zoho_record_id ?? null,
+      CRMProvider_record_id: row.CRMProvider_record_id ?? null,
       account_name: row.account_name ?? null,
       domain: row.record_domain ?? null,
       company_domain: fields.company_domain ?? null,

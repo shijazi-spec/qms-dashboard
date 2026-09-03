@@ -3,7 +3,7 @@
  *
  * Backend entry points the upcoming ExampleOrg mobile app uses to record
  * thumbs-up/down ratings on AI consultant responses. This is the
- * `'mobile'` analogue of the Slack rating handler (Task #589 / #763): the
+ * `'mobile'` analogue of the ChatProvider rating handler (Task #589 / #763): the
  * mobile client only knows the `callId` (or `messageId`) of the response
  * it rendered — it does NOT carry the prompt-version registry — so these
  * routes own the version lookup + the surface marker server-side and
@@ -33,7 +33,7 @@
 
 import { requireRole } from "../../utils/rbacMiddleware";
 import type { UserRole } from "../../utils/rbacDatabase";
-import { recordConsultantRatingFromSurface } from "../../triggers/slackRatingHandler";
+import { recordConsultantRatingFromSurface } from "../../triggers/ChatProviderRatingHandler";
 import {
   saveFeedback,
   buildAiCallFeedbackMetadata,

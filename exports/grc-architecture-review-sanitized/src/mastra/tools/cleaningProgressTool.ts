@@ -65,7 +65,7 @@ export const cleaningProgressTool = createTool({
         accounts: M(d.modules.Accounts),
         emptyDeletedAllSegments: d.empty_deleted_all_segments,
         note:
-          "Verified merges + verified Zoho deletions only; tagged-not-deleted excluded. Empty deletions are all-layers. Est. removed may undercount pre-tracking cleanup.",
+          "Verified merges + verified CRMProvider deletions only; tagged-not-deleted excluded. Empty deletions are all-layers. Est. removed may undercount pre-tracking cleanup.",
       };
     } catch (e: any) {
       return {

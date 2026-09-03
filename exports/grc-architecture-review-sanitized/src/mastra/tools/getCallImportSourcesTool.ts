@@ -4,7 +4,7 @@ import { getCallImportSourcesCatalog } from "../../utils/callMcpImportSources";
 
 /**
  * MCP tool that returns the canonical catalog of how call records can
- * enter the platform (Five9, bulk upload, Google Drive) plus the
+ * enter the platform (ContactCenterProvider, bulk upload, IdentityProvider Drive) plus the
  * CRM-phone-match scope description. Pure read of in-process config —
  * no DB, no external API, no side effects.
  *
@@ -19,7 +19,7 @@ import { getCallImportSourcesCatalog } from "../../utils/callMcpImportSources";
 export const getCallImportSourcesTool = createTool({
   id: "get-import-sources",
   description:
-    "Return the catalog of call-record import channels (Five9, bulk upload, Google Drive) along with the SDR ↔ CRM phone-match scope. Read-only: no platform writes, no external API calls, no DB queries. Useful when an agent needs to explain to an operator how recordings reach QMS or which endpoints to POST to for a given source. The response includes `channels[]` (id / label / status / description / endpoints), `crm_phone_match_scope`, `crm_phone_match_scope_description`, and `sdr_process_scope`.",
+    "Return the catalog of call-record import channels (ContactCenterProvider, bulk upload, IdentityProvider Drive) along with the SDR ↔ CRM phone-match scope. Read-only: no platform writes, no external API calls, no DB queries. Useful when an agent needs to explain to an operator how recordings reach QMS or which endpoints to POST to for a given source. The response includes `channels[]` (id / label / status / description / endpoints), `crm_phone_match_scope`, `crm_phone_match_scope_description`, and `sdr_process_scope`.",
   // Catalog reads take no input — the tool returns the full canonical
   // shape. Declared as an empty Zod object so the MCP `tools/list`
   // contract still publishes a valid JSON-Schema (type: object,

@@ -1,6 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { getOpenAIApiKey, getOpenAIBaseUrl } from "../../utils/openaiCredentials";
+import { getLLMProviderApiKey, getLLMProviderBaseUrl } from "../../utils/LLMProviderCredentials";
 
 export const callAnalysisTool = createTool({
   id: "call-analysis-tool",
@@ -136,18 +136,18 @@ Provide in JSON format:
 
 Respond ONLY with the JSON.` : '';
 
-      const { createOpenAI } = await import("@ai-sdk/openai");
+      const { createLLMProvider } = await import("@ai-sdk/LLMProvider");
       const { generateText } = await import("ai");
 
-      const openai = createOpenAI({
-        baseURL: getOpenAIBaseUrl(),
-        apiKey: getOpenAIApiKey()
+      const LLMProvider = createLLMProvider({
+        baseURL: getLLMProviderBaseUrl(),
+        apiKey: getLLMProviderApiKey()
       });
 
       // Raw-fetch /chat/completions — `.chat()` now also returns v3-spec
-      // models under @ai-sdk/openai 3.x, broken under ai@5 (needs v2).
+      // models under @ai-sdk/LLMProvider 3.x, broken under ai@5 (needs v2).
       // Helper drops the SDK dependency for this hot path entirely.
-      const { generateChatText } = await import("../../utils/openaiChatHelper");
+      const { generateChatText } = await import("../../utils/LLMProviderChatHelper");
       const analysisResult = await generateChatText({
         model: "gpt-4o",
         prompt: analysisPrompt,

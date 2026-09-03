@@ -1,15 +1,15 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import {
-  fetchZohoRecordById,
-  updateZohoRecord,
-  addZohoTags,
-  zohoWritesAllowedInEnv,
-} from "../../utils/zohoCRM";
+  fetchCRMProviderRecordById,
+  updateCRMProviderRecord,
+  addCRMProviderTags,
+  CRMProviderWritesAllowedInEnv,
+} from "../../utils/CRMProviderCRM";
 
 /**
  * Merge duplicate records the ExampleOrg way: migrate-then-tag, NEVER a destructive
- * Zoho native merge and NEVER a delete. Keep the survivor, copy the survivor's
+ * CRMProvider native merge and NEVER a delete. Keep the survivor, copy the survivor's
  * MISSING simple fields from the duplicate(s) (blanks-only — never overwrite),
  * and tag the duplicate(s) "Duplicate-Delete" so the CRM admin deletes them.
  *
@@ -25,9 +25,9 @@ import {
 export const DEFAULT_REMOVAL_TAG = "Duplicate-Delete";
 
 /**
- * Bound every live Zoho call so a single hanging request can never stall the
+ * Bound every live CRMProvider call so a single hanging request can never stall the
  * whole merge. When the merge auto-executes inline (the caller's role tier
- * covers this risk), an un-timed Zoho call that hangs would leave the agent
+ * covers this risk), an un-timed CRMProvider call that hangs would leave the agent
  * waiting forever → the user gets a blank reply / endless spinner. On timeout
  * we reject so the outer try/catch returns a clear, actionable failure.
  */
@@ -50,8 +50,8 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   });
 }
 
-const ZOHO_READ_TIMEOUT_MS = 12_000;
-const ZOHO_WRITE_TIMEOUT_MS = 15_000;
+const CRMProvider_READ_TIMEOUT_MS = 12_000;
+const CRMProvider_WRITE_TIMEOUT_MS = 15_000;
 
 // Never copy from a duplicate and never write to the survivor — system/readonly
 // fields, and name/lookup fields (the survivor keeps its own identity + parent).
@@ -94,20 +94,20 @@ export const mergeRecordsTool = createTool({
   id: "merge-records",
 
   description:
-    'Merge duplicate Zoho records the platform way (migrate-then-tag — NOT a destructive native merge, NEVER a delete): KEEP the survivor, copy the survivor\'s MISSING simple fields from the duplicate(s), and tag the duplicate(s) "Duplicate-Delete" for the admin to delete. Use when asked to "merge account/contact/lead/deal X into Y" or "merge these two". Get the Zoho ids via lookup-entity first (survivor = the record to keep; confirm which one with the user). You DO have this capability — never say you "can\'t merge accounts". Gated by AI Approvals / admin password — report the ticket and do NOT claim it merged until approved/applied.',
+    'Merge duplicate CRMProvider records the platform way (migrate-then-tag — NOT a destructive native merge, NEVER a delete): KEEP the survivor, copy the survivor\'s MISSING simple fields from the duplicate(s), and tag the duplicate(s) "Duplicate-Delete" for the admin to delete. Use when asked to "merge account/contact/lead/deal X into Y" or "merge these two". Get the CRMProvider ids via lookup-entity first (survivor = the record to keep; confirm which one with the user). You DO have this capability — never say you "can\'t merge accounts". Gated by AI Approvals / admin password — report the ticket and do NOT claim it merged until approved/applied.',
 
   inputSchema: z.object({
     module: z
       .enum(["Leads", "Deals", "Contacts", "Accounts"])
-      .describe("Zoho module the records belong to"),
-    survivorZohoId: z
+      .describe("CRMProvider module the records belong to"),
+    survivorCRMProviderId: z
       .string()
       .min(1)
-      .describe("Zoho id of the record to KEEP (the survivor / master)"),
-    duplicateZohoIds: z
+      .describe("CRMProvider id of the record to KEEP (the survivor / master)"),
+    duplicateCRMProviderIds: z
       .array(z.string())
       .min(1)
-      .describe("Zoho id(s) of the duplicate(s) to merge into the survivor and tag Duplicate-Delete"),
+      .describe("CRMProvider id(s) of the duplicate(s) to merge into the survivor and tag Duplicate-Delete"),
     reason: z
       .string()
       .optional()
@@ -117,7 +117,7 @@ export const mergeRecordsTool = createTool({
   outputSchema: z.object({
     success: z.boolean(),
     module: z.string(),
-    survivorZohoId: z.string(),
+    survivorCRMProviderId: z.string(),
     duplicatesTagged: z.number(),
     fieldsFilled: z.array(z.string()),
     message: z.string(),
@@ -125,8 +125,8 @@ export const mergeRecordsTool = createTool({
   }),
 
   execute: async ({ context }) => {
-    const survivorId = String(context.survivorZohoId || "").trim();
-    const ids = (context.duplicateZohoIds || [])
+    const survivorId = String(context.survivorCRMProviderId || "").trim();
+    const ids = (context.duplicateCRMProviderIds || [])
       .map(String)
       .map((s) => s.trim())
       .filter(Boolean)
@@ -135,39 +135,39 @@ export const mergeRecordsTool = createTool({
       return {
         success: false,
         module: context.module,
-        survivorZohoId: survivorId,
+        survivorCRMProviderId: survivorId,
         duplicatesTagged: 0,
         fieldsFilled: [],
         message: "Provide a survivor id and at least one different duplicate id.",
         error: "missing or identical ids",
       };
     }
-    if (!zohoWritesAllowedInEnv()) {
+    if (!CRMProviderWritesAllowedInEnv()) {
       return {
         success: false,
         module: context.module,
-        survivorZohoId: survivorId,
+        survivorCRMProviderId: survivorId,
         duplicatesTagged: 0,
         fieldsFilled: [],
         message:
-          "Merging is blocked outside production (dev shares production's Zoho credentials). Run it from the deployed app.",
-        error: "live Zoho writes disabled outside production",
+          "Merging is blocked outside production (dev shares production's CRMProvider credentials). Run it from the deployed app.",
+        error: "live CRMProvider writes disabled outside production",
       };
     }
     try {
       const survivor = await withTimeout(
-        fetchZohoRecordById(context.module, survivorId),
-        ZOHO_READ_TIMEOUT_MS,
+        fetchCRMProviderRecordById(context.module, survivorId),
+        CRMProvider_READ_TIMEOUT_MS,
         "survivor fetch",
       );
       if (!survivor) {
         return {
           success: false,
           module: context.module,
-          survivorZohoId: survivorId,
+          survivorCRMProviderId: survivorId,
           duplicatesTagged: 0,
           fieldsFilled: [],
-          message: `Survivor ${survivorId} was not found in Zoho.`,
+          message: `Survivor ${survivorId} was not found in CRMProvider.`,
           error: "survivor not found",
         };
       }
@@ -177,8 +177,8 @@ export const mergeRecordsTool = createTool({
 
       for (const dupId of ids) {
         const dup = await withTimeout(
-          fetchZohoRecordById(context.module, dupId),
-          ZOHO_READ_TIMEOUT_MS,
+          fetchCRMProviderRecordById(context.module, dupId),
+          CRMProvider_READ_TIMEOUT_MS,
           `duplicate ${dupId} fetch`,
         ).catch(() => null);
         if (!dup) continue;
@@ -195,21 +195,21 @@ export const mergeRecordsTool = createTool({
 
       if (Object.keys(updates).length > 0) {
         await withTimeout(
-          updateZohoRecord(context.module, survivorId, updates),
-          ZOHO_WRITE_TIMEOUT_MS,
+          updateCRMProviderRecord(context.module, survivorId, updates),
+          CRMProvider_WRITE_TIMEOUT_MS,
           "survivor update",
         );
       }
       await withTimeout(
-        addZohoTags(context.module, ids, [DEFAULT_REMOVAL_TAG]),
-        ZOHO_WRITE_TIMEOUT_MS,
+        addCRMProviderTags(context.module, ids, [DEFAULT_REMOVAL_TAG]),
+        CRMProvider_WRITE_TIMEOUT_MS,
         "tag duplicates",
       );
 
       return {
         success: true,
         module: context.module,
-        survivorZohoId: survivorId,
+        survivorCRMProviderId: survivorId,
         duplicatesTagged: ids.length,
         fieldsFilled: filled,
         message:
@@ -221,10 +221,10 @@ export const mergeRecordsTool = createTool({
       return {
         success: false,
         module: context.module,
-        survivorZohoId: survivorId,
+        survivorCRMProviderId: survivorId,
         duplicatesTagged: 0,
         fieldsFilled: [],
-        message: "Failed to merge in Zoho.",
+        message: "Failed to merge in CRMProvider.",
         error: e?.message || String(e),
       };
     }

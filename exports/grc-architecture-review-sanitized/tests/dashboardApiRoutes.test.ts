@@ -3,14 +3,14 @@
  *
  * Coverage matrix:
  *   - 200 happy path  → GET  /api/integrations/status (no DB, full body shape)
- *   - 400 bad input   → GET  /api/crm/data (Zoho not configured)
+ *   - 400 bad input   → GET  /api/crm/data (CRMProvider not configured)
  *                       GET  /api/agents/performance (malformed createdStart)
  *                       GET  /api/agents/performance (createdStart > createdEnd)
  *                       GET  /api/agents/performance (modifiedStart > modifiedEnd)
  *   - structural      → every route exposes path/method/createHandler
  *
  * Note: a 200 happy-path on /api/agents/performance is intentionally NOT
- * included — it requires a live Zoho CRM connection and would be flaky in CI.
+ * included — it requires a live CRMProvider CRM connection and would be flaky in CI.
  * The four 400 validation tests above exercise that handler deterministically.
  *
  * Run:  npx tsx tests/dashboardApiRoutes.test.ts
@@ -93,7 +93,7 @@ await suite.test("GET /api/integrations/status — 200 with full body shape (no 
   const res = await handler(makeContext({ method: "GET", headers: ADMIN_HEADERS }));
   suite.expectEqual(res.status, 200, "status");
   suite.expect(res.body && typeof res.body === "object", "body is object");
-  for (const key of ["zoho", "googleCalendar", "email"] as const) {
+  for (const key of ["CRMProvider", "IdentityProviderCalendar", "email"] as const) {
     const entry = (res.body as any)[key];
     suite.expect(entry && typeof entry === "object", `body.${key} is object`);
     suite.expect(typeof entry?.connected === "boolean", `body.${key}.connected is boolean`);
@@ -101,28 +101,28 @@ await suite.test("GET /api/integrations/status — 200 with full body shape (no 
   }
 });
 
-await suite.test("GET /api/crm/data — 400 with structured error when Zoho not configured", async () => {
+await suite.test("GET /api/crm/data — 400 with structured error when CRMProvider not configured", async () => {
   const snapshot = {
-    ZOHO_CLIENT_ID: process.env.ZOHO_CLIENT_ID,
-    ZOHO_CLIENT_SECRET: process.env.ZOHO_CLIENT_SECRET,
-    ZOHO_REFRESH_TOKEN: process.env.ZOHO_REFRESH_TOKEN,
-    ZOHO_ACCESS_TOKEN: process.env.ZOHO_ACCESS_TOKEN,
+    CRMProvider_CLIENT_ID: process.env.CRMProvider_CLIENT_ID,
+    CRMProvider_CLIENT_SECRET: process.env.CRMProvider_CLIENT_SECRET,
+    CRMProvider_REFRESH_TOKEN: process.env.CRMProvider_REFRESH_TOKEN,
+    CRMProvider_ACCESS_TOKEN: process.env.CRMProvider_ACCESS_TOKEN,
   };
-  delete process.env.ZOHO_CLIENT_ID;
-  delete process.env.ZOHO_CLIENT_SECRET;
-  delete process.env.ZOHO_REFRESH_TOKEN;
-  delete process.env.ZOHO_ACCESS_TOKEN;
+  delete process.env.CRMProvider_CLIENT_ID;
+  delete process.env.CRMProvider_CLIENT_SECRET;
+  delete process.env.CRMProvider_REFRESH_TOKEN;
+  delete process.env.CRMProvider_ACCESS_TOKEN;
   try {
     const handler = await buildHandler(dashboardApiRoutes, "/api/crm/data", "GET");
     const res = await handler(makeContext({ method: "GET", headers: ADMIN_HEADERS, query: { module: "Leads" } }));
     suite.expectEqual(res.status, 400, "status");
     suite.expectEqual(res.body?.success, false, "body.success");
-    suite.expectEqual(res.body?.error, "Zoho CRM not configured", "body.error");
+    suite.expectEqual(res.body?.error, "CRMProvider CRM not configured", "body.error");
   } finally {
-    if (snapshot.ZOHO_CLIENT_ID !== undefined) process.env.ZOHO_CLIENT_ID = snapshot.ZOHO_CLIENT_ID;
-    if (snapshot.ZOHO_CLIENT_SECRET !== undefined) process.env.ZOHO_CLIENT_SECRET = snapshot.ZOHO_CLIENT_SECRET;
-    if (snapshot.ZOHO_REFRESH_TOKEN !== undefined) process.env.ZOHO_REFRESH_TOKEN = snapshot.ZOHO_REFRESH_TOKEN;
-    if (snapshot.ZOHO_ACCESS_TOKEN !== undefined) process.env.ZOHO_ACCESS_TOKEN = snapshot.ZOHO_ACCESS_TOKEN;
+    if (snapshot.CRMProvider_CLIENT_ID !== undefined) process.env.CRMProvider_CLIENT_ID = snapshot.CRMProvider_CLIENT_ID;
+    if (snapshot.CRMProvider_CLIENT_SECRET !== undefined) process.env.CRMProvider_CLIENT_SECRET = snapshot.CRMProvider_CLIENT_SECRET;
+    if (snapshot.CRMProvider_REFRESH_TOKEN !== undefined) process.env.CRMProvider_REFRESH_TOKEN = snapshot.CRMProvider_REFRESH_TOKEN;
+    if (snapshot.CRMProvider_ACCESS_TOKEN !== undefined) process.env.CRMProvider_ACCESS_TOKEN = snapshot.CRMProvider_ACCESS_TOKEN;
   }
 });
 
@@ -168,9 +168,9 @@ await suite.test("GET /api/agents/performance — 400 when modifiedStart is afte
 });
 
 // Note: GET /api/agents/performance happy-path (200) is intentionally NOT
-// covered here. That handler depends on a live Zoho CRM connection (network
+// covered here. That handler depends on a live CRMProvider CRM connection (network
 // + valid OAuth tokens) which can't be guaranteed in CI; running it would
-// produce flaky failures (e.g. 500 from Zoho rate-limiting). The four 400
+// produce flaky failures (e.g. 500 from CRMProvider rate-limiting). The four 400
 // validation tests above already exercise the route's input-validation paths
 // deterministically without any external dependency.
 

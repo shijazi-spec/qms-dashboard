@@ -33,7 +33,7 @@ export async function weeklyDigestCronWorkflow(): Promise<{
   ok: boolean;
   sent?: boolean;
   <REDACTED_TOKEN>?: string;
-  slack_ok?: boolean;
+  ChatProvider_ok?: boolean;
   email_ok?: boolean;
   error?: string;
 }> {
@@ -53,7 +53,7 @@ export async function weeklyDigestCronWorkflow(): Promise<{
     logger.info("[weeklyDigestCron] fired", {
       sent: result.sent,
       skipped: result.<REDACTED_TOKEN>,
-      slack_ok: result.slack.ok,
+      ChatProvider_ok: result.ChatProvider.ok,
       email_ok: result.email.ok,
       window: result.digest_summary?.window_label,
       agents: result.digest_summary?.agents_active,
@@ -63,7 +63,7 @@ export async function weeklyDigestCronWorkflow(): Promise<{
       ok: true,
       sent: result.sent,
       <REDACTED_TOKEN>: result.<REDACTED_TOKEN>,
-      slack_ok: result.slack.ok,
+      ChatProvider_ok: result.ChatProvider.ok,
       email_ok: result.email.ok,
     };
   } catch (err: any) {

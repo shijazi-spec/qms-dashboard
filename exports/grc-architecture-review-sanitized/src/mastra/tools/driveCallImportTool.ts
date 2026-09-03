@@ -4,7 +4,7 @@ import {
   listDriveAudioFiles,
   resolveDriveAuth,
   type DriveAuthMode,
-} from "../../utils/googleDriveCallSource";
+} from "../../utils/IdentityProviderDriveCallSource";
 import {
   createCallRecord,
   initCallIntelligenceTables,
@@ -23,13 +23,13 @@ const DriveImportRowSchema = z.object({
 export const driveCallImportTool = createTool({
   id: "drive-call-import",
   description:
-    "List audio recordings in a Google Drive folder (or custom query) and create call_records for each, marked source='google_drive'. Audio bytes are NOT downloaded here — the recording_url points to the Drive media endpoint so the existing transcription pipeline can stream them. Pass `dry_run: true` to preview without writing.",
+    "List audio recordings in a IdentityProvider Drive folder (or custom query) and create call_records for each, marked source='IdentityProvider_drive'. Audio bytes are NOT downloaded here — the recording_url points to the Drive media endpoint so the existing transcription pipeline can stream them. Pass `dry_run: true` to preview without writing.",
   inputSchema: z.object({
     folder_id: z
       .string()
       .optional()
       .describe(
-        "Drive folder ID containing call recordings. Falls back to env GOOGLE_DRIVE_CALLS_FOLDER_ID if not set.",
+        "Drive folder ID containing call recordings. Falls back to env IdentityProvider_DRIVE_CALLS_FOLDER_ID if not set.",
       ),
     query: z
       .string()
@@ -46,7 +46,7 @@ export const driveCallImportTool = createTool({
     dry_run: z.boolean().default(false).optional(),
   }),
   outputSchema: z.object({
-    auth_mode: z.enum(["replit_connector", "service_account", "oauth_refresh", "none"]),
+    auth_mode: z.enum(["HostingPlatform_connector", "service_account", "oauth_refresh", "none"]),
     scanned: z.number(),
     created: z.number(),
     skipped: z.number(),
@@ -66,7 +66,7 @@ export const driveCallImportTool = createTool({
         failed: 0,
         rows: [],
         note:
-          "No Google Drive credentials configured. Set up one of: Replit Drive connector, GOOGLE_DRIVE_CLIENT_EMAIL+PRIVATE_KEY, or GOOGLE_OAUTH_CLIENT_ID+SECRET+REFRESH_TOKEN.",
+          "No IdentityProvider Drive credentials configured. Set up one of: HostingPlatform Drive connector, IdentityProvider_DRIVE_CLIENT_EMAIL+PRIVATE_KEY, or IdentityProvider_OAUTH_CLIENT_ID+SECRET+REFRESH_TOKEN.",
       };
     }
 
@@ -108,7 +108,7 @@ export const driveCallImportTool = createTool({
       try {
         const record: CallRecord = {
           call_id: callId,
-          source: "google_drive",
+          source: "IdentityProvider_drive",
           agent_email: context.agent_email,
           direction: context.default_direction ?? "outbound",
           recording_url: `<REDACTED_URL>`,

@@ -175,7 +175,7 @@ const SUGGESTED_ACTIONS: Record<CsViolationCode, string> = {
   termination_missing_churn_date:
     "Termination phase requires a Churn Date for downstream reporting. Backfill the date or revert the phase.",
   termination_missing_churn_reason:
-    "Termination phase requires a Churn Reason so CS can analyse churn drivers (price, fit, competitor, …). Fill the Churn_Reason field on the Deal in Zoho.",
+    "Termination phase requires a Churn Reason so CS can analyse churn drivers (price, fit, competitor, …). Fill the Churn_Reason field on the Deal in CRMProvider.",
   phase_transition_stalled:
     "Deal has not been touched recently and is not in a steady-state phase. Confirm CS is still working it or move to the appropriate next phase.",
   adoption_premature:
@@ -359,13 +359,13 @@ export function evaluateCsLifecycle(
     const cd = (fields.company_domain ?? "").trim();
     if (!cd) {
       // Diagnostic: if raw_data contains domain-like keys none of the extractor's
-      // variants matched, surface them so an operator can pin the correct Zoho
+      // variants matched, surface them so an operator can pin the correct CRMProvider
       // API name via DUPLICATE_RADAR_FIELD_COMPANY_DOMAIN. Without this hint,
       // a populated-in-CRM-but-missing-in-radar bug is invisible.
       const domainKeys = collectDomainLikeKeys(input.raw_data);
       const hint =
         domainKeys.length > 0
-          ? ` (raw_data contains domain-like keys not matched by the extractor: ${domainKeys.join(", ")}; set DUPLICATE_RADAR_FIELD_COMPANY_DOMAIN to the correct Zoho API name)`
+          ? ` (raw_data contains domain-like keys not matched by the extractor: ${domainKeys.join(", ")}; set DUPLICATE_RADAR_FIELD_COMPANY_DOMAIN to the correct CRMProvider API name)`
           : "";
       violations.push({
         code: "missing_company_domain",

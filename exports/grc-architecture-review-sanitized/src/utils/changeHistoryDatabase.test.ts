@@ -303,8 +303,8 @@ console.log("\n=== object-valued payloads — nested secret scrubbing ===\n");
   await logCAPAChange(
     7,
     "integration_config",
-    { provider: "zoho", api_key: SECRETS.api_key, account_id: "acct-public-123" },
-    { provider: "zoho", api_key: SECRETS.api_key, account_id: "acct-public-456" },
+    { provider: "CRMProvider", api_key: SECRETS.api_key, account_id: "acct-public-123" },
+    { provider: "CRMProvider", api_key: SECRETS.api_key, account_id: "acct-public-456" },
     "test-runner",
   );
   const params = lastInsertParams();
@@ -341,7 +341,7 @@ console.log("\n=== object-valued payloads — nested secret scrubbing ===\n");
     );
     assert(
       typeof oldParsed === "object" && oldParsed !== null &&
-        (oldParsed as Record<string, unknown>).provider === "zoho" &&
+        (oldParsed as Record<string, unknown>).provider === "CRMProvider" &&
         (oldParsed as Record<string, unknown>).account_id === "acct-public-123",
       "CAPA/object: parsed old_value preserves non-secret fields (provider, account_id)",
     );
@@ -476,19 +476,19 @@ const SECRET_LIKE_STRINGS: Array<{ label: string; value: string }> = [
       "<REDACTED_TOKEN>",
   },
   {
-    label: "OpenAI sk- key",
+    label: "LLMProvider sk- key",
     value: "<REDACTED_TOKEN>",
   },
   {
-    label: "GitHub PAT",
+    label: "SourceControlProvider PAT",
     value: "<REDACTED_TOKEN>",
   },
   {
-    label: "Stripe live key",
+    label: "PaymentProvider live key",
     value: "<REDACTED_TOKEN>",
   },
   {
-    label: "Google API key",
+    label: "IdentityProvider API key",
     value: "AIzaSyABcDefGHIjklMNOpqrSTUVWXyz1234567",
   },
   {
@@ -631,10 +631,10 @@ const JWT_TOKEN =
   await logNCChange(
     1,
     "investigation_notes",
-    "Previous run referenced github token: <REDACTED_TOKEN>",
+    "Previous run referenced SourceControlProvider token: <REDACTED_TOKEN>",
     {
       author: "alice",
-      notes: `Reset the GitHub PAT to ${GHP_TOKEN} per playbook step 3.`,
+      notes: `Reset the SourceControlProvider PAT to ${GHP_TOKEN} per playbook step 3.`,
       attachments: [
         { name: "post-mortem.md", contents: `Bearer ${JWT_TOKEN} was rotated.` },
       ],
@@ -686,7 +686,7 @@ const JWT_TOKEN =
     {
       submitted_by: "bob",
       evidence: `Old AWS access key <REDACTED_TOKEN> rotated; new key issued via vault.`,
-      slack_thread: {
+      ChatProvider_thread: {
         url: "<REDACTED_URL>",
         excerpt: `Bearer ${JWT_TOKEN} was used in the broken job.`,
       },
@@ -704,7 +704,7 @@ const JWT_TOKEN =
     );
     assert(
       !newParam.includes(JWT_TOKEN),
-      "CAPA/credential-substring: JWT inside slack_thread.excerpt is NOT present",
+      "CAPA/credential-substring: JWT inside ChatProvider_thread.excerpt is NOT present",
     );
     assert(
       newParam.includes(REDACTED_SENTINEL),

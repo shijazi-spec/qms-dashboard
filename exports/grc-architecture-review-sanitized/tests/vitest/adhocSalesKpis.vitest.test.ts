@@ -66,7 +66,7 @@ describe("scope of the single aggregate scan", () => {
     await adhocSalesAggregates();
     const sql = lastSql();
     expect(sql).toMatch(/FROM duplicate_records r/);
-    expect(sql).toMatch(/zoho_module = 'Deals'/);
+    expect(sql).toMatch(/CRMProvider_module = 'Deals'/);
     // The ExampleOrg branch of buildSegmentPredicate = NOT marketplace AND NOT
     // WalaOne. Without it, "Partner Active" / "Welcome Communications" records
     // land in the Sales team's revenue and pipeline.

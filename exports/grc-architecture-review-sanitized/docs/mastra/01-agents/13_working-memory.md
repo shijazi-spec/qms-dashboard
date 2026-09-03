@@ -28,13 +28,13 @@ Here's a minimal example of setting up an agent with working memory:
 ```typescript {12-15}
 import { Agent } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 
 // Create agent with working memory enabled
 const agent = new Agent({
   name: "PersonalAssistant",
   instructions: "You are a helpful personal assistant.",
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   memory: new Memory({
     options: {
       workingMemory: {

@@ -2,12 +2,12 @@
  * SDR Call ↔ CRM linking (pre-qualification stage).
  *
  * All calls in the platform belong to the SDR team — pre-qualification is
- * the SDR's stage. Each incoming call needs to find its way to a Zoho
+ * the SDR's stage. Each incoming call needs to find its way to a CRMProvider
  * Lead OR a Deal so the rest of the pipeline (compliance check, activity
  * timeline, QA scoring) can run with real CRM context.
  *
  * What the existing callLeadPhoneMatch module did: phone-match against
- * the Zoho **Leads module only**. That misses two real scenarios:
+ * the CRMProvider **Leads module only**. That misses two real scenarios:
  *   1. Lead already converted to a Deal — phone still on the Deal record
  *      but the call has nowhere to attach.
  *   2. Direct-deal SDR calls (rare but happens) where the prospect skipped
@@ -24,13 +24,13 @@
  */
 
 import {
-  fetchAllZohoRecords,
-  type ZohoCRMRecord,
-  fetchZohoRecords,
-  searchZohoRecords,
-  searchZohoRecordsByWord,
-  fetchZohoRelatedRecords,
-} from "./zohoCRM";
+  fetchAllCRMProviderRecords,
+  type CRMProviderCRMRecord,
+  fetchCRMProviderRecords,
+  searchCRMProviderRecords,
+  searchCRMProviderRecordsByWord,
+  fetchCRMProviderRelatedRecords,
+} from "./CRMProviderCRM";
 import { normalizePhoneDigits } from "./callMcpReconciliation";
 import {
   phonesShareSubscriberNumber,
@@ -57,13 +57,13 @@ export interface CrmPhoneMatch {
    * (autoLinkCallToCrm) reads this to write linked_via='phone_via_contact'
    * instead of plain 'phone' so the audit trail records *why* a Deal
    * with no phone field of its own got matched. Set to the Contact's
-   * Zoho id; via_contact_name is the operator-facing label.
+   * CRMProvider id; via_contact_name is the operator-facing label.
    */
   via_contact_id?: string;
   via_contact_name?: string;
 }
 
-function readLeadPhone(r: ZohoCRMRecord): string {
+function readLeadPhone(r: CRMProviderCRMRecord): string {
   const d = r.data || {};
   const raw =
     (typeof d.Phone === "object" && d.Phone?.name) ||
@@ -74,7 +74,7 @@ function readLeadPhone(r: ZohoCRMRecord): string {
   return String(raw || "");
 }
 
-function readDealPhone(r: ZohoCRMRecord): string {
+function readDealPhone(r: CRMProviderCRMRecord): string {
   // Deals don't have their own Phone field typically — it's on the linked
   // Contact_Name or Account_Name. But many tenants denormalize a Phone
   // field onto the Deal during conversion. Try both.
@@ -91,7 +91,7 @@ function readDealPhone(r: ZohoCRMRecord): string {
   return "";
 }
 
-function leadToMatch(r: ZohoCRMRecord): CrmPhoneMatch {
+function leadToMatch(r: CRMProviderCRMRecord): CrmPhoneMatch {
   const d = r.data || {};
   return {
     id: r.id,
@@ -105,7 +105,7 @@ function leadToMatch(r: ZohoCRMRecord): CrmPhoneMatch {
   };
 }
 
-function dealToMatch(r: ZohoCRMRecord): CrmPhoneMatch {
+function dealToMatch(r: CRMProviderCRMRecord): CrmPhoneMatch {
   const d = r.data || {};
   return {
     id: r.id,
@@ -144,16 +144,16 @@ export async function findCrmRecordByPhone(
     return { normalized_query: "", matches: [], scanned_leads: 0, scanned_deals: 0 };
   }
 
-  const hasZoho =
-    process.env.ZOHO_ACCESS_TOKEN ||
-    (process.env.ZOHO_CLIENT_ID &&
-      process.env.ZOHO_CLIENT_SECRET &&
-      process.env.ZOHO_REFRESH_TOKEN);
-  if (!hasZoho) {
+  const hasCRMProvider =
+    process.env.CRMProvider_ACCESS_TOKEN ||
+    (process.env.CRMProvider_CLIENT_ID &&
+      process.env.CRMProvider_CLIENT_SECRET &&
+      process.env.CRMProvider_REFRESH_TOKEN);
+  if (!hasCRMProvider) {
     return { normalized_query, matches: [], scanned_leads: 0, scanned_deals: 0 };
   }
 
-  // ─── Phase 4f: native Zoho search-by-phone (PRIMARY path). ─────────────
+  // ─── Phase 4f: native CRMProvider search-by-phone (PRIMARY path). ─────────────
   //
   // Until this fix, the matcher fetched the first 2,500 Leads + 2,500 Deals
   // and compared phones in JavaScript. That worked for small CRMs but
@@ -161,16 +161,16 @@ export async function findCrmRecordByPhone(
   // 2026-05-28 root cause investigation found Dina Attia (Lead phone
   // <REDACTED_PHONE>, owned by r.alsammak) sitting outside the top-2500 window
   // for one of the user's Sep 2025 calls — even though the normalized
-  // forms (`<REDACTED_PHONE>` ↔ `<REDACTED_PHONE>`) were a perfect match. Zoho's CRM
+  // forms (`<REDACTED_PHONE>` ↔ `<REDACTED_PHONE>`) were a perfect match. CRMProvider's CRM
   // had grown past 2,500 leads, the lead hadn't been modified recently,
   // and the scan never reached it.
   //
-  // The fix: use Zoho's native /crm/v2/<module>/search endpoint with a
-  // `Phone:contains:<9 digits>` criteria. Zoho indexes phone fields and
+  // The fix: use CRMProvider's native /crm/v2/<module>/search endpoint with a
+  // `Phone:contains:<9 digits>` criteria. CRMProvider indexes phone fields and
   // returns the matching record(s) regardless of how deep they sit in
   // the CRM, in a single round-trip with no maxRecords cap.
   //
-  // We search BOTH Phone and Mobile (Zoho stores Saudi cellphones on
+  // We search BOTH Phone and Mobile (CRMProvider stores Saudi cellphones on
   // either, depending on layout). The OR'd criteria pulls both with
   // one API call per module.
   //
@@ -178,7 +178,7 @@ export async function findCrmRecordByPhone(
   // errors (so it's a clean "not found" not a transient failure), we
   // still run the legacy 2500-record scan as a safety net. Three
   // reasons we keep the fallback:
-  //   1. Older Zoho instances without phone-field indexing skip the
+  //   1. Older CRMProvider instances without phone-field indexing skip the
   //      search but might still match via JS-side comparison.
   //   2. The legacy scan catches edge-cases where the phone is stored
   //      in a custom field the search criteria doesn't cover.
@@ -190,32 +190,32 @@ export async function findCrmRecordByPhone(
   let nativeSearchSucceeded = false;
 
   try {
-    // CRITICAL: use Zoho's `word=` global search, NOT `criteria=contains`.
+    // CRITICAL: use CRMProvider's `word=` global search, NOT `criteria=contains`.
     //
     // The 2026-05-28 root-cause investigation found that
     // `Phone:contains:<REDACTED_PHONE>` returns ZERO records even when a lead
     // exists with Phone=<REDACTED_PHONE>(Drovox Co's القحطاني نوره) —
-    // confirmed by performing the EXACT same query in Zoho's UI search
-    // and getting an immediate hit. Zoho's phone fields are indexed for
+    // confirmed by performing the EXACT same query in CRMProvider's UI search
+    // and getting an immediate hit. CRMProvider's phone fields are indexed for
     // the global `?word=` search but do NOT support the `contains`
     // operator on structured `?criteria=` search.
     //
-    // The word-based search (which is what the Zoho UI's global search
+    // The word-based search (which is what the CRMProvider UI's global search
     // box uses) does substring lookup across all indexed fields,
     // including phone, mobile, email, name, etc. — exactly what we
     // need. Pass the 9-digit normalized form so every Saudi format
     // (<REDACTED_PHONE>, <REDACTED_PHONE>, <REDACTED_PHONE>, <REDACTED_PHONE>,
     // <REDACTED_PHONE> matches the same query.
     const [leadHits, dealHits] = await Promise.allSettled([
-      searchZohoRecordsByWord("Leads", normalized_query),
-      searchZohoRecordsByWord("Deals", normalized_query),
+      searchCRMProviderRecordsByWord("Leads", normalized_query),
+      searchCRMProviderRecordsByWord("Deals", normalized_query),
     ]);
 
     if (leadHits.status === "fulfilled") {
       nativeSearchSucceeded = true;
       for (const r of leadHits.value) {
         // Re-verify the match on our side using the same normaliser as
-        // the JS-fallback path, so a Zoho word-hit that doesn't actually
+        // the JS-fallback path, so a CRMProvider word-hit that doesn't actually
         // normalize to the same 9 digits (e.g. a 9-digit address suffix
         // that happens to collide with the query) is dropped before we
         // claim a match.
@@ -263,18 +263,18 @@ export async function findCrmRecordByPhone(
   // ─── Contact → Deal walk (PHASE A2, 2026-05-29). ───────────────────────
   //
   // Mirror of the same walk added to autoLinkLeadByPhone the same day
-  // (commit f6f45b0). In Zoho's standard layout the phone number lives
+  // (commit f6f45b0). In CRMProvider's standard layout the phone number lives
   // on the Contact, not on the Deal — the Deal only carries
   // Contact_Name as a lookup. So a Lead that has been CONVERTED to a
   // Deal has its phone migrated to the Contact + (sometimes) the
-  // Account, never the Deal record itself. searchZohoRecordsByWord(
+  // Account, never the Deal record itself. searchCRMProviderRecordsByWord(
   // "Deals", ...) therefore returns zero hits for the user's example
   // (<REDACTED_PHONE>→ Desar National Factory deal), even though the
   // phone is alive on the linked Contact (Shahad Almasabi).
   //
   // Steps:
-  //   1. searchZohoRecordsByWord("Contacts", normalized_query) — the
-  //      same indexed word lookup the Zoho UI's global search box uses.
+  //   1. searchCRMProviderRecordsByWord("Contacts", normalized_query) — the
+  //      same indexed word lookup the CRMProvider UI's global search box uses.
   //   2. Filter Contact hits to those whose phone REALLY shares the
   //      subscriber number, so a fuzzy word-search hit (e.g. a Contact
   //      whose name happens to contain those digits) is dropped.
@@ -286,11 +286,11 @@ export async function findCrmRecordByPhone(
   //      a missing phone index, irrelevant once we've found a Deal).
   //
   // Cost: one word-search per phone candidate + one criteria-search per
-  // matched Contact. Both are indexed Zoho calls, far cheaper than the
+  // matched Contact. Both are indexed CRMProvider calls, far cheaper than the
   // 2500-record bulk scan.
   if (nativeSearchSucceeded && matches.length === 0) {
     try {
-      const contactHits = await searchZohoRecordsByWord(
+      const contactHits = await searchCRMProviderRecordsByWord(
         "Contacts",
         normalized_query,
       );
@@ -313,7 +313,7 @@ export async function findCrmRecordByPhone(
       // the UI can show a "via Contact: …" tooltip on the badge.
       const annotateMatch = (
         m: CrmPhoneMatch,
-        c: ZohoCRMRecord,
+        c: CRMProviderCRMRecord,
       ): CrmPhoneMatch => {
         const cd = c.data || {};
         const cName =
@@ -342,9 +342,9 @@ export async function findCrmRecordByPhone(
       for (const c of realContactMatches) {
         // Primary Contact lookup: Deals where Contact_Name equals this
         // Contact (one-to-one primary relationship — most Deals).
-        let primaryDeals: ZohoCRMRecord[] = [];
+        let primaryDeals: CRMProviderCRMRecord[] = [];
         try {
-          primaryDeals = await searchZohoRecords(
+          primaryDeals = await searchCRMProviderRecords(
             "Deals",
             `(Contact_Name:equals:${c.id})`,
           );
@@ -362,18 +362,18 @@ export async function findCrmRecordByPhone(
         //
         // The criteria search above only finds Deals whose PRIMARY
         // Contact_Name is this Contact. It misses Deals where the
-        // Contact participates only via "Contact Roles" (Zoho's
+        // Contact participates only via "Contact Roles" (CRMProvider's
         // many-to-many junction object — stakeholder lists, decision-
         // makers, etc.). The related-list endpoint
         // /crm/v2/Contacts/{id}/Deals returns the union of both, so
         // we hit it when the criteria search produced 0 results.
         //
-        // Cost: one extra Zoho call per Contact ONLY when primary search
+        // Cost: one extra CRMProvider call per Contact ONLY when primary search
         // missed. Indexed related-list endpoint, cheap.
         let dealsForContact = primaryDeals;
         if (primaryDeals.length === 0) {
           try {
-            const related = await fetchZohoRelatedRecords(
+            const related = await fetchCRMProviderRelatedRecords(
               "Contacts",
               c.id,
               "Deals",
@@ -432,8 +432,8 @@ export async function findCrmRecordByPhone(
   const maxRecords = options.maxRecordsPerModule ?? 2500;
 
   const [leadsResult, dealsResult] = await Promise.allSettled([
-    fetchAllZohoRecords("Leads", { maxRecords }),
-    fetchAllZohoRecords("Deals", { maxRecords }),
+    fetchAllCRMProviderRecords("Leads", { maxRecords }),
+    fetchAllCRMProviderRecords("Deals", { maxRecords }),
   ]);
 
   if (leadsResult.status === "fulfilled") {
@@ -503,7 +503,7 @@ export interface AutoLinkResult {
     | "no_match"
     | "ambiguous"
     | "already_linked"
-    | "no_zoho"
+    | "no_CRMProvider"
     | "persist_failed";
   attempted_phone?: string;
 }
@@ -512,7 +512,7 @@ export interface AutoLinkResult {
 //
 // Phone matching is the primary signal but misses real cases:
 //   • The SDR called from a number not on file (mobile vs office).
-//   • Zoho stores phone in a custom field we don't read.
+//   • CRMProvider stores phone in a custom field we don't read.
 //   • The lead was deduped/merged and the original phone moved.
 //
 // Fallback: every SDR call in CRM is typically followed by an activity
@@ -549,7 +549,7 @@ export function ownerMatchesAgent(
 ): boolean {
   if (!ownerName) return false;
   const ownerLower = ownerName.toLowerCase();
-  // Zoho's `r.owner` is set to either Owner.name or Owner.id depending
+  // CRMProvider's `r.owner` is set to either Owner.name or Owner.id depending
   // on what came back. Match conservatively: exact case-insensitive
   // match against the agent's email local part OR full name.
   if (agentEmail) {
@@ -601,12 +601,12 @@ export async function findCrmRecordsByAgentActivity(
   if (!agentEmail && !agentName) {
     return { matches: [], scanned_activities: 0, errors };
   }
-  const hasZoho =
-    process.env.ZOHO_ACCESS_TOKEN ||
-    (process.env.ZOHO_CLIENT_ID &&
-      process.env.ZOHO_CLIENT_SECRET &&
-      process.env.ZOHO_REFRESH_TOKEN);
-  if (!hasZoho) {
+  const hasCRMProvider =
+    process.env.CRMProvider_ACCESS_TOKEN ||
+    (process.env.CRMProvider_CLIENT_ID &&
+      process.env.CRMProvider_CLIENT_SECRET &&
+      process.env.CRMProvider_REFRESH_TOKEN);
+  if (!hasCRMProvider) {
     return { matches: [], scanned_activities: 0, errors };
   }
 
@@ -623,9 +623,9 @@ export async function findCrmRecordsByAgentActivity(
   const safeFetch = async (
     moduleName: "Notes" | "Calls" | "Tasks" | "Events",
     timeField: string,
-  ): Promise<ZohoCRMRecord[]> => {
+  ): Promise<CRMProviderCRMRecord[]> => {
     try {
-      return await fetchZohoRecords(moduleName, {
+      return await fetchCRMProviderRecords(moduleName, {
         criteria: `(${timeField}:greater_than:${fromIso})and(${timeField}:less_than:${toIso})`,
         perPage,
       });
@@ -646,7 +646,7 @@ export async function findCrmRecordsByAgentActivity(
   let scanned = 0;
 
   const ingest = (
-    rows: ZohoCRMRecord[],
+    rows: CRMProviderCRMRecord[],
     timeFieldGetter: (d: any) => string | undefined,
   ): void => {
     for (const r of rows) {
@@ -664,12 +664,12 @@ export async function findCrmRecordsByAgentActivity(
       if (who?.module === "Leads" || (typeof who === "object" && who?.id && d.$se_module === "Leads")) {
         pushParent(parents, "Leads", who.id || who);
       } else if (typeof who === "string") {
-        // Older Zoho payload — id only, module unknown. Skip.
+        // Older CRMProvider payload — id only, module unknown. Skip.
       }
       if (what?.module === "Deals" || (typeof what === "object" && what?.id && d.$se_module === "Deals")) {
         pushParent(parents, "Deals", what.id || what);
       }
-      // Newer Zoho payload shape: $se_module flags the parent module.
+      // Newer CRMProvider payload shape: $se_module flags the parent module.
       if (d.$se_module === "Leads" && (who?.id || typeof who === "string")) {
         pushParent(parents, "Leads", who?.id || who);
       }
@@ -695,7 +695,7 @@ export async function findCrmRecordsByAgentActivity(
   await Promise.all(
     Array.from(parents.values()).map(async (p) => {
       try {
-        const rows = await fetchZohoRecords(p.module, {
+        const rows = await fetchCRMProviderRecords(p.module, {
           criteria: `(id:equals:${p.id})`,
           perPage: 1,
         });
@@ -726,7 +726,7 @@ export async function findCrmRecordsByAgentActivity(
   // had this problem because junk Leads usually have junk phones
   // (sub-9-digit) and got rejected by MIN_PHONE_OVERLAP_DIGITS.
   //
-  // Statuses sourced from observed Zoho Lead_Status values; safe to
+  // Statuses sourced from observed CRMProvider Lead_Status values; safe to
   // extend if ops surfaces more. We intentionally do NOT filter Deals
   // by stage here — a Closed-Lost Deal is still a valid record to link
   // a coaching/post-mortem call to.
@@ -786,7 +786,7 @@ export async function autoLinkCallToCrm(
   let phoneScannedLeads = 0;
   let phoneScannedDeals = 0;
   let lastAttemptedPhone: string | undefined;
-  let noZohoBail = false;
+  let noCRMProviderBail = false;
 
   // Phase 1 — phone match (unchanged primary signal).
   for (const phone of phones) {
@@ -812,7 +812,7 @@ export async function autoLinkCallToCrm(
       result.scanned_deals === 0 &&
       result.matches.length === 0
     ) {
-      noZohoBail = true;
+      noCRMProviderBail = true;
       continue;
     }
 
@@ -966,7 +966,7 @@ export async function autoLinkCallToCrm(
     };
   }
 
-  if (noZohoBail) {
+  if (noCRMProviderBail) {
     return {
       linked: false,
       lead_id: null,
@@ -976,7 +976,7 @@ export async function autoLinkCallToCrm(
       scanned_leads: 0,
       scanned_deals: 0,
       linked_via: null,
-      reason: "no_zoho",
+      reason: "no_CRMProvider",
       attempted_phone: lastAttemptedPhone,
     };
   }
@@ -1046,9 +1046,9 @@ export async function getSdrActivityTimeline(
   const safeFetch = async (
     moduleName: ActivityItem["module"],
     criteria: string,
-  ): Promise<ZohoCRMRecord[]> => {
+  ): Promise<CRMProviderCRMRecord[]> => {
     try {
-      return await fetchZohoRecords(moduleName, { criteria, perPage });
+      return await fetchCRMProviderRecords(moduleName, { criteria, perPage });
     } catch (err: any) {
       errors[moduleName] = String(err?.message || err);
       return [];

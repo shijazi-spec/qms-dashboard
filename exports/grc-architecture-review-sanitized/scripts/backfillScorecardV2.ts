@@ -198,7 +198,7 @@ async function run(): Promise<void> {
       "../src/utils/callIntelligenceDb"
     );
     const { generateChatText } = await import(
-      "../src/utils/openaiChatHelper"
+      "../src/utils/LLMProviderChatHelper"
     );
     const { isCostCapped, recordSpend, COST } = await import(
       "../src/utils/aiCostGuard"

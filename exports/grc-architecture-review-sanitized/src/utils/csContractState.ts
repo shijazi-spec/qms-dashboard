@@ -13,7 +13,7 @@
  *   - NOT signed AND closed/lost                                 →  ALLOW (was never a customer)
  *
  * Signal detection is env-configurable so Quality / Ops can adjust without
- * a redeploy. Defaults reflect what we observed in ExampleOrg Zoho:
+ * a redeploy. Defaults reflect what we observed in ExampleOrg CRMProvider:
  *
  *   STAGE = "Agreement Signed"  →  signed
  *   Invoiced = "Yes"             →  paid

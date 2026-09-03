@@ -3,7 +3,7 @@
  *
  * Run: npx vitest run tests/vitest/salesStageSlaSpec.vitest.test.ts
  *
- * Pure logic only — no DB, no Zoho. Covers the math (business-day skipping,
+ * Pure logic only — no DB, no CRMProvider. Covers the math (business-day skipping,
  * calendar-day fallback), grading thresholds at SLA / 1.5× SLA / past 1.5×
  * SLA, On Hold's custom 90/180 bands, terminal stage freeze, and unknown
  * stage passthrough.

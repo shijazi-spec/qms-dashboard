@@ -24,8 +24,8 @@ async function ensureTable(): Promise<void> {
       id SERIAL PRIMARY KEY,
       cluster_id INTEGER,
       event_type VARCHAR(32) NOT NULL,            -- 'preview' | 'dry_run' | 'applied'
-      proposed_master_zoho_id VARCHAR(100),
-      chosen_master_zoho_id VARCHAR(100),
+      proposed_master_CRMProvider_id VARCHAR(100),
+      chosen_master_CRMProvider_id VARCHAR(100),
       master_overridden BOOLEAN DEFAULT FALSE,
       fields_migrated INTEGER DEFAULT 0,
       duplicates_tagged INTEGER DEFAULT 0,
@@ -53,8 +53,8 @@ async function ensureTable(): Promise<void> {
 export interface ResolutionEvent {
   clusterId: number;
   eventType: "preview" | "dry_run" | "applied";
-  proposedMasterZohoId?: string | null;
-  chosenMasterZohoId?: string | null;
+  proposedMasterCRMProviderId?: string | null;
+  chosenMasterCRMProviderId?: string | null;
   fieldsMigrated?: number;
   duplicatesTagged?: number;
   reparented?: number;
@@ -69,24 +69,24 @@ export async function recordResolutionEvent(ev: ResolutionEvent): Promise<void> 
   try {
     await ensureTable();
     const overridden =
-      !!ev.proposedMasterZohoId &&
-      !!ev.chosenMasterZohoId &&
-      ev.proposedMasterZohoId !== ev.chosenMasterZohoId;
+      !!ev.proposedMasterCRMProviderId &&
+      !!ev.chosenMasterCRMProviderId &&
+      ev.proposedMasterCRMProviderId !== ev.chosenMasterCRMProviderId;
     // The agent-supplied plan/report are arbitrary objects that can embed
-    // credential-shaped values (e.g. a Zoho field snapshot containing an
+    // credential-shaped values (e.g. a CRMProvider field snapshot containing an
     // api_key/access_token). Scrub every value before it reaches the INSERT
     // params, matching the platform's changeHistoryDatabase write-path
-    // convention. performed_by and the zoho-id strings are scrubbed defensively
+    // convention. performed_by and the CRMProvider-id strings are scrubbed defensively
     // in case a caller ever routes a secret-shaped value through them.
     const safePlan = redactSensitiveDeep(ev.plan ?? null);
     const safeReport = redactSensitiveDeep(ev.report ?? null);
     const safeProposed =
-      ev.proposedMasterZohoId != null
-        ? (redactSensitiveDeep(ev.proposedMasterZohoId, "proposed_master_zoho_id") as string)
+      ev.proposedMasterCRMProviderId != null
+        ? (redactSensitiveDeep(ev.proposedMasterCRMProviderId, "proposed_master_CRMProvider_id") as string)
         : null;
     const safeChosen =
-      ev.chosenMasterZohoId != null
-        ? (redactSensitiveDeep(ev.chosenMasterZohoId, "chosen_master_zoho_id") as string)
+      ev.chosenMasterCRMProviderId != null
+        ? (redactSensitiveDeep(ev.chosenMasterCRMProviderId, "chosen_master_CRMProvider_id") as string)
         : null;
     const safePerformedBy =
       ev.performedBy != null
@@ -94,7 +94,7 @@ export async function recordResolutionEvent(ev: ResolutionEvent): Promise<void> 
         : null;
     await pool.query(
       `INSERT INTO duplicate_resolution_feedback
-         (cluster_id, event_type, proposed_master_zoho_id, chosen_master_zoho_id,
+         (cluster_id, event_type, proposed_master_CRMProvider_id, chosen_master_CRMProvider_id,
           master_overridden, fields_migrated, duplicates_tagged, reparented, errors,
           plan_json, report_json, performed_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12)`,
@@ -181,7 +181,7 @@ export async function getResolutionLearnings(): Promise<ResolutionLearnings> {
     const overrideRate = decisions > 0 ? overrides / decisions : 0;
 
     const recent = await pool.query(`
-      SELECT cluster_id, proposed_master_zoho_id, chosen_master_zoho_id, created_at
+      SELECT cluster_id, proposed_master_CRMProvider_id, chosen_master_CRMProvider_id, created_at
       FROM duplicate_resolution_feedback
       WHERE master_overridden = TRUE
       ORDER BY created_at DESC
@@ -216,8 +216,8 @@ export async function getResolutionLearnings(): Promise<ResolutionLearnings> {
       totalReparented: Number(r.total_reparented || 0),
       recentCorrections: recent.rows.map((row: any) => ({
         clusterId: row.cluster_id,
-        proposed: row.proposed_master_zoho_id,
-        chosen: row.chosen_master_zoho_id,
+        proposed: row.proposed_master_CRMProvider_id,
+        chosen: row.chosen_master_CRMProvider_id,
         when: row.created_at ? new Date(row.created_at).toISOString() : null,
       })),
       guidance,
@@ -257,8 +257,8 @@ export async function getResolutionActivity(
     await ensureTable();
     const lim = Math.min(Math.max(Number(limit) || 100, 1), 500);
     const r = await pool.query(
-      `SELECT id, cluster_id, event_type, proposed_master_zoho_id,
-              chosen_master_zoho_id, master_overridden, fields_migrated,
+      `SELECT id, cluster_id, event_type, proposed_master_CRMProvider_id,
+              chosen_master_CRMProvider_id, master_overridden, fields_migrated,
               duplicates_tagged, reparented, errors, performed_by, created_at
          FROM duplicate_resolution_feedback
         ORDER BY created_at DESC
@@ -269,8 +269,8 @@ export async function getResolutionActivity(
       id: row.id,
       clusterId: row.cluster_id,
       eventType: row.event_type,
-      proposedMaster: row.proposed_master_zoho_id,
-      chosenMaster: row.chosen_master_zoho_id,
+      proposedMaster: row.proposed_master_CRMProvider_id,
+      chosenMaster: row.chosen_master_CRMProvider_id,
       masterOverridden: !!row.master_overridden,
       fieldsMigrated: row.fields_migrated ?? 0,
       duplicatesTagged: row.duplicates_tagged ?? 0,

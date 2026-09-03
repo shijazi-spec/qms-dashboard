@@ -22,8 +22,8 @@ export const PREFLIGHT_SALESPERSON_EMAIL = process.env.PREFLIGHT_SALESPERSON_EMA
 export const PREFLIGHT_GOV_TYPE = process.env.PREFLIGHT_GOV_TYPE ?? "Private";
 // CS Member — a plain TEXT (name) field, normally populated from the CS
 // platform. CS_Member is a USER LOOKUP field — sending a plain string ("ExampleOrg")
-// is rejected by Zoho as INVALID_DATA. Provide a USER by EMAIL instead; the push
-// resolves it to a Zoho user id and sends { id }. Sample User 2026-07-05: CS_Member is
+// is rejected by CRMProvider as INVALID_DATA. Provide a USER by EMAIL instead; the push
+// resolves it to a CRMProvider user id and sends { id }. Sample User 2026-07-05: CS_Member is
 // NOT mandatory, so if the email doesn't resolve to a user the field is simply
 // omitted (no failed deal). Default user: user@example.invalid.
 export const PREFLIGHT_CS_MEMBER = process.env.PREFLIGHT_CS_MEMBER ?? "ExampleOrg"; // legacy (unused for the value)
@@ -34,14 +34,14 @@ export const PREFLIGHT_CS_MEMBER_EMAIL = process.env.PREFLIGHT_CS_MEMBER_EMAIL ?
 // Env-overridable so a future batch/source can change it without a code change.
 export const PREFLIGHT_LEAD_SOURCE = process.env.PREFLIGHT_LEAD_SOURCE || "Mawsool";
 
-// Zoho Tags applied to pushed records (the tags already exist in the CRM).
+// CRMProvider Tags applied to pushed records (the tags already exist in the CRM).
 // Leads → "Mawsool"; Deals → "Mawsool/Sales". Env-overridable. Contacts get
 // no tag (not requested). Empty string disables tagging for that module.
 export const PREFLIGHT_LEAD_TAG = process.env.PREFLIGHT_LEAD_TAG ?? "Mawsool";
 export const PREFLIGHT_DEAL_TAG = process.env.PREFLIGHT_DEAL_TAG ?? "Mawsool/Sales";
 
 // ---------------------------------------------------------------------------
-// Task 2: Pure planner — no Zoho, no DB
+// Task 2: Pure planner — no CRMProvider, no DB
 // ---------------------------------------------------------------------------
 
 export interface SPRow {
@@ -54,7 +54,7 @@ export interface SPRow {
   title: string;
   verdict: string;
   cluster_id: number | null;
-  matched_account_zoho_id: string | null;
+  matched_account_CRMProvider_id: string | null;
   matched_account_name?: string | null;
   lifecycle_state: string | null;
 }
@@ -107,7 +107,7 @@ export function realDomainRoot(value: string | null | undefined): string | null 
   return d;
 }
 
-// websiteFromDomain — pure. Returns a clean https:// URL for a REAL company
+// websiteFromDomain — pure. Returns a clean <REDACTED_URL_SCHEME> URL for a REAL company
 // domain, or null for blank/placeholder/free-mail domains (must not be written
 // to the CRM).
 export function websiteFromDomain(domain: string | null | undefined): string | null {
@@ -129,8 +129,8 @@ const LEGAL_SUFFIX_TOKENS = new Set([
 ]);
 
 // normalizeCoreName — lowercase, drop the bilingual second half, strip
-// punctuation and legal-form suffix words, collapse spaces. "Acme Trading Co."
-// and "acme trading" both normalize to "acme trading".
+// punctuation and legal-form suffix words, collapse spaces. "Example Organization Trading Co."
+// and "Example Organization trading" both normalize to "Example Organization trading".
 export function normalizeCoreName(name: string | null | undefined): string {
   let s = String(name || "").toLowerCase();
   s = s.split("|")[0].split(" - ")[0];               // drop bilingual/second half
@@ -219,13 +219,13 @@ export function routeContactsByDomainConsistency(rows: SPRow[]): RoutedRow[] {
     const anchor = domainAnchor || emailAnchor;
     const verified = !!anchor && g.some(r => realDomainRoot(r.email) === anchor);
     // A company already matched to a CRM Account (churned re-engage, or an
-    // explicit matched_account_zoho_id / cluster) is trusted as-is — the label
+    // explicit matched_account_CRMProvider_id / cluster) is trusted as-is — the label
     // was validated against the CRM, so we keep ALL its contacts rather than
     // re-verify by email domain.
     const crmMatched = g.some(
       r =>
         r.lifecycle_state === "termination_old" ||
-        !!String(r.matched_account_zoho_id || "").trim() ||
+        !!String(r.matched_account_CRMProvider_id || "").trim() ||
         r.cluster_id != null,
     );
     anchorByKey.set(key, anchor);
@@ -270,8 +270,8 @@ export function routeContactsByDomainConsistency(rows: SPRow[]): RoutedRow[] {
 
 // ---------------------------------------------------------------------------
 // splitContactName — pure helper: splits a full display name into
-// First_Name / Last_Name for Zoho Contact/Lead payloads. Single-token names
-// (e.g. "Basserah") go entirely into Last_Name (Zoho requires Last_Name;
+// First_Name / Last_Name for CRMProvider Contact/Lead payloads. Single-token names
+// (e.g. "Basserah") go entirely into Last_Name (CRMProvider requires Last_Name;
 // First_Name is optional). Multi-token names put everything but the final
 // token into First_Name, and the final token into Last_Name.
 // ---------------------------------------------------------------------------
@@ -314,7 +314,7 @@ export function buildStructuredPushPlan(
 
   // ONLY verdict === "pass" rows are ever pushable. The caller may hand us the
   // full result set (block / review / duplicate / no-contact included); those
-  // must never reach Zoho — e.g. the 563 "duplicate" rows already exist in the
+  // must never reach CRMProvider — e.g. the 563 "duplicate" rows already exist in the
   // CRM and would otherwise be pulled into A1 as existing-account links. A1 and
   // A4 don't re-check the verdict downstream, so we gate it here, up front.
   //
@@ -322,11 +322,11 @@ export function buildStructuredPushPlan(
   // deals for companies we ALREADY pushed. Their accounts + contacts exist (so
   // the rows now read "duplicate"); we only need the deal. In that mode any row
   // that RESOLVED to an existing account (Layer-1 enrichment set
-  // matched_account_zoho_id) is eligible — the A1 run reuses the account +
+  // matched_account_CRMProvider_id) is eligible — the A1 run reuses the account +
   // contacts and creates only the deal, skipping a company that already has an
   // open deal. It never creates accounts/contacts (they're found and reused).
   const pushableRows = opts.dealBackfill && action === 1
-    ? rows.filter(r => !!String(r.matched_account_zoho_id || "").trim())
+    ? rows.filter(r => !!String(r.matched_account_CRMProvider_id || "").trim())
     : rows.filter(r => String(r.verdict || "").toLowerCase() === "pass");
 
   // Domain-consistency routing FIRST. Only "account"-routed rows may be filed
@@ -347,7 +347,7 @@ export function buildStructuredPushPlan(
   // @<REDACTED_HOST> (new) — correctly split: the first links to Riyad Bank
   // (A1), the second opens a new "New Startup" account (A3).
   const isRowExistingMatch = (r: SPRow) =>
-    !!String(r.matched_account_zoho_id || "").trim() ||
+    !!String(r.matched_account_CRMProvider_id || "").trim() ||
     r.lifecycle_state === "termination_old" ||
     r.cluster_id != null;
 
@@ -381,7 +381,7 @@ export function buildStructuredPushPlan(
   const effectiveLeadRows: SPRow[] = leadRows.concat(parkedAsLeadRows);
 
   // Every action pushes ALL its eligible items in one request, which fires one
-  // sequential Zoho Contact_Roles PUT per contact — a big batch (~200 contacts)
+  // sequential CRMProvider Contact_Roles PUT per contact — a big batch (~200 contacts)
   // would exceed the gateway timeout. count/offset let the operator push in
   // slices (e.g. 20 at a time). count<=0 = push all (back-compat).
   const sliceCount = Math.max(0, Math.floor(opts.count ?? 0));
@@ -397,7 +397,7 @@ export function buildStructuredPushPlan(
     // resolves their account from domain/name.
     const byAcc = new Map<string, SPCompany>();
     for (const r of matchedRows) {
-      const key = String(r.matched_account_zoho_id || "").trim() || ("name:" + normalizeCompanyKey(r.company, r.domain));
+      const key = String(r.matched_account_CRMProvider_id || "").trim() || ("name:" + normalizeCompanyKey(r.company, r.domain));
       let grp = byAcc.get(key);
       if (!grp) {
         // Prefer the RESOLVED account name (human-readable "links to <Account>")

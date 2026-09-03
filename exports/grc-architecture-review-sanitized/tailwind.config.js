@@ -37,7 +37,7 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-IdentityProvider-system', 'sans-serif'],
       },
       // Semantic color tokens sourced from CSS custom properties defined in
       // dashboard/css/theme.css. HSL triplets (no `hsl()` wrapper in the

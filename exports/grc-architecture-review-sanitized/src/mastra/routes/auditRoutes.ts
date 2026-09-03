@@ -22,7 +22,7 @@ export const auditRoutes = [
           if (!sessionUser) return unauthorizedResponse(c);
 
           const { DEFAULT_GOVERNANCE_RULES } = await import(
-            "../../utils/zohoCRM"
+            "../../utils/CRMProviderCRM"
           );
           const { getGovernanceDocumentByModule } = await import(
             "../../utils/database"

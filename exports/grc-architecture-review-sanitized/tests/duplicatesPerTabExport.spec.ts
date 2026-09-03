@@ -65,13 +65,13 @@ test.describe('Duplicate Radar — per-tab Export CSV', () => {
       (window as any)._csLifecycleData = {
         violations: [
           {
-            record_id: 1, zoho_record_id: 'z1', account_name: 'Example Organization', domain: '<REDACTED_HOST>',
+            record_id: 1, CRMProvider_record_id: 'z1', account_name: 'Example Organization', domain: '<REDACTED_HOST>',
             current_phase: 'renewal', days_since_modified: 10, cs_owner_name: 'Sara',
             customer_since: '2023-01-01', renewal_date: '2025-01-01', churn_date: '', health: 'green',
             violation: { code: 'renewal_overdue', severity: 'warning', message: 'Renewal overdue' },
           },
           {
-            record_id: 2, zoho_record_id: 'z2', account_name: 'Example Organization', domain: '<REDACTED_HOST>',
+            record_id: 2, CRMProvider_record_id: 'z2', account_name: 'Example Organization', domain: '<REDACTED_HOST>',
             current_phase: 'onboarding', days_since_modified: 3, cs_owner_name: 'Omar',
             customer_since: '2024-06-01', renewal_date: '', churn_date: '', health: 'red',
             violation: { code: 'missing_owner', severity: 'critical', message: 'No CS owner' },
@@ -129,8 +129,8 @@ test.describe('Duplicate Radar — per-tab Export CSV', () => {
     await page.evaluate(() => {
       (window as any)._accountHintsData = {
         hints: [
-          { id: 1, deal_company_name: '=cmd|calc', deal_account_name: '', suggested_account_name: 'Acme', suggested_domain: '<REDACTED_HOST>', evidence_contact_email: 'user@example.invalid', confidence: 88, status: 'pending' },
-          { id: 2, deal_company_name: 'Globex', deal_account_name: 'Globex LLC', suggested_account_name: 'Globex Corp', suggested_domain: '<REDACTED_HOST>', evidence_contact_email: 'user@example.invalid', confidence: 61, status: 'pending' },
+          { id: 1, deal_company_name: '=cmd|calc', deal_account_name: '', suggested_account_name: 'Example Organization', suggested_domain: '<REDACTED_HOST>', evidence_contact_email: 'user@example.invalid', confidence: 88, status: 'pending' },
+          { id: 2, deal_company_name: 'Example Organization', deal_account_name: 'Example Organization LLC', suggested_account_name: 'Example Organization Corp', suggested_domain: '<REDACTED_HOST>', evidence_contact_email: 'user@example.invalid', confidence: 61, status: 'pending' },
         ],
         summary: { pending: 2, applied: 0, dismissed: 0 },
       };
@@ -145,8 +145,8 @@ test.describe('Duplicate Radar — per-tab Export CSV', () => {
     // Formula-looking value is neutralized with a leading apostrophe (no comma
     // in the value, so it isn't additionally quoted).
     expect(lines[1].startsWith("'=cmd|calc,")).toBe(true);
-    expect(lines[1]).toContain('Acme,<REDACTED_HOST>,user@example.invalid,88,pending');
-    expect(lines[2]).toContain('Globex,Globex LLC,Globex Corp');
+    expect(lines[1]).toContain('Example Organization,<REDACTED_HOST>,user@example.invalid,88,pending');
+    expect(lines[2]).toContain('Example Organization,Example Organization LLC,Example Organization Corp');
   });
 
   test('Cross-Module exports only the clusters matching the active pairing filter', async ({ page }) => {

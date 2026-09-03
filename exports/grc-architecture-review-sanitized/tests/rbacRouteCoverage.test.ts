@@ -26,10 +26,10 @@
  *   - `/api/inngest*` and `/api/admin/*` — gated by the admin-key check
  *     in `checkApiAuth` BEFORE `enforceRoutePermission` runs, so the
  *     RBAC map is intentionally unaware of them.
- *   - `/api/webhooks/slack/*` — defined in `src/triggers/slackTriggers.ts`
+ *   - `/api/webhooks/ChatProvider/*` — defined in `src/triggers/ChatProviderTriggers.ts`
  *     but that module is never imported, so the routes are not actually
  *     registered (see PUBLIC_PATHS audit comment). Re-enable coverage
- *     here if/when slackTriggers is wired into the registered route set.
+ *     here if/when ChatProviderTriggers is wired into the registered route set.
  *
  * Run:  npx tsx tests/rbacRouteCoverage.test.ts
  */
@@ -149,11 +149,11 @@ function isFrameworkManaged(urlPath: string): boolean {
   if (urlPath === "/api/admin" || urlPath.startsWith("/api/admin/")) {
     return true;
   }
-  // Slack webhook trigger lives in `src/triggers/slackTriggers.ts`, but the
+  // ChatProvider webhook trigger lives in `src/triggers/ChatProviderTriggers.ts`, but the
   // module is never imported into the registered route set (see PUBLIC_PATHS
   // audit comment in src/mastra/middleware/index.ts). Re-enable coverage if
   // the triggers module is ever wired up.
-  if (urlPath.startsWith("/api/webhooks/slack")) return true;
+  if (urlPath.startsWith("/api/webhooks/ChatProvider")) return true;
   return false;
 }
 
@@ -164,12 +164,12 @@ function isFrameworkManaged(urlPath: string): boolean {
  * dates, codes, sections, etc.
  *
  * EXCEPTION — enum-constrained params. A route like
- *   /api/handoff-tasks/:id{[0-9]+}/:action{(accept|reject|done|resend)}
+ *   /api/handoff-tasks/:id{[0-9]+}/:action{(accept|reject|done|EmailProvider)}
  * has a param whose inline constraint only accepts specific literals. Blindly
  * substituting "1" produced `/api/handoff-tasks/1/1`, which no rule can match,
  * and the test then reported the route as having NO RBAC rule at all. That was
  * a false positive: `rbacMiddleware.ts` does cover it via
- * `/^\/api\/handoff-tasks\/\d+\/(accept|reject|done|resend)$/`. For those we
+ * `/^\/api\/handoff-tasks\/\d+\/(accept|reject|done|EmailProvider)$/`. For those we
  * substitute the constraint's first literal alternative instead, so the
  * generated path is one the route could actually receive at runtime.
  */

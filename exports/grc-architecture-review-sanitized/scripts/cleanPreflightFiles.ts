@@ -1,5 +1,5 @@
 /**
- * Local utility (runs on the Windows box, not Replit). For each xlsx passed:
+ * Local utility (runs on the Windows box, not HostingPlatform). For each xlsx passed:
  *   1) print its headers,
  *   2) remove the "Keywords" and "Technologies" columns,
  *   3) save a "<name>__CLEAN.xlsx" copy next to the original,

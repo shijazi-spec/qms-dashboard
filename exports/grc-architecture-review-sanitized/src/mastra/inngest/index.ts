@@ -112,10 +112,10 @@ export function registerApiRoute<P extends string>(
 //   - Delete the registerApiRoute function above (entire function)
 //   - Used for: Daily reports, scheduled tasks, periodic checks
 //
-// FOR WEBHOOK-BASED AUTOMATIONS (Slack, Telegram, connectors):
+// FOR WEBHOOK-BASED AUTOMATIONS (ChatProvider, Telegram, connectors):
 //   - Keep the registerApiRoute function above
 //   - Delete the registerCronWorkflow function below (entire function)
-//   - Used for: Slack bots, Telegram bots, GitHub webhooks, Linear webhooks, etc.
+//   - Used for: ChatProvider bots, Telegram bots, SourceControlProvider webhooks, Linear webhooks, etc.
 // ======================================================================
 
 // Helper function for registering cron-based workflow triggers
@@ -137,7 +137,7 @@ export function registerCronWorkflow(cronExpression: string, workflow: any) {
 
   const cronFunction = inngest.createFunction(
     { id: cronFunctionId },
-    [{ event: "replit/cron.trigger" }, { cron: cronExpression }],
+    [{ event: "HostingPlatform/cron.trigger" }, { cron: cronExpression }],
     async ({ event, step }) => {
       return await step.run("execute-cron-workflow", async () => {
         const startedAt = new Date();
@@ -374,15 +374,15 @@ const duplicateSyncFunction = inngest.createFunction(
   { id: "duplicate-radar-auto-sync" },
   { cron: process.env.DUPLICATE_SCAN_CRON || "0 */6 * * *" },
   async ({ step }) => {
-    // scanZohoCRMForDuplicates does both the sync + detection in one pass.
+    // scanCRMProviderCRMForDuplicates does both the sync + detection in one pass.
     // We split its return value into the two shapes downstream expects so the
     // logging/notification code keeps working unchanged.
     const scanResult = await step.run("sync-and-detect", async () => {
       logger.info("[DuplicateRadar] Auto-sync: scanning CRM");
-      const { scanZohoCRMForDuplicates } = await import(
+      const { scanCRMProviderCRMForDuplicates } = await import(
         "../routes/duplicateRadarRoutes"
       );
-      return await scanZohoCRMForDuplicates("scheduled");
+      return await scanCRMProviderCRMForDuplicates("scheduled");
     });
 
     const syncResult = {
@@ -428,7 +428,7 @@ inngestFunctions.push(duplicateSyncFunction);
 
 // Dedicated PRE-SHIFT incremental sync — 07:00 KSA (04:00 UTC) so the radar is
 // fully current the moment Sample User day, on top of the every-6h cron.
-// Incremental (scanZohoCRMForDuplicates default = not forceFull) so it's fast
+// Incremental (scanCRMProviderCRMForDuplicates default = not forceFull) so it's fast
 // and can't freeze; a full rebuild stays the manual "Rebuild Clusters" action.
 const duplicateMorningSyncFunction = inngest.createFunction(
   { id: "duplicate-radar-morning-sync" },
@@ -436,10 +436,10 @@ const duplicateMorningSyncFunction = inngest.createFunction(
   async ({ step }) => {
     return await step.run("morning-incremental-sync", async () => {
       logger.info("[DuplicateRadar] Pre-shift (07:00 KSA) incremental sync");
-      const { scanZohoCRMForDuplicates } = await import(
+      const { scanCRMProviderCRMForDuplicates } = await import(
         "../routes/duplicateRadarRoutes"
       );
-      const r = await scanZohoCRMForDuplicates("scheduled");
+      const r = await scanCRMProviderCRMForDuplicates("scheduled");
       logger.info("[DuplicateRadar] Pre-shift sync done", {
         scanned: r.totalRecordsScanned,
         clusters: r.totalClustersFound,
@@ -453,7 +453,7 @@ inngestFunctions.push(duplicateMorningSyncFunction);
 // Twice-weekly FULL REBUILD — Sample User 2026-06-20. The every-6h + pre-shift syncs
 // are incremental (fast, changed-only) and keep the radar fresh day to day, but
 // they never wipe+rescore from scratch, so drift (stale clusters, records
-// deleted in Zoho outside the deletion window, scoring changes) can accumulate.
+// deleted in CRMProvider outside the deletion window, scoring changes) can accumulate.
 // This runs a clean forceFull=true rebuild off-hours so nobody has to trigger
 // the heavy 30-min job by hand. KSA 02:00 Sat & Tue = 23:00 UTC Fri & Mon
 // (UTC+3, no DST) → cron "0 23 * * 1,5". Override with DUPLICATE_FULL_REBUILD_CRON;
@@ -466,11 +466,11 @@ const duplicateFullRebuildFunction = inngest.createFunction(
       logger.info(
         "[DuplicateRadar] Twice-weekly FULL rebuild (forceFull) starting",
       );
-      const { scanZohoCRMForDuplicates } = await import(
+      const { scanCRMProviderCRMForDuplicates } = await import(
         "../routes/duplicateRadarRoutes"
       );
       // forceFull=true → wipe + re-fetch every module + re-score all clusters.
-      const r = await scanZohoCRMForDuplicates("scheduled", true);
+      const r = await scanCRMProviderCRMForDuplicates("scheduled", true);
       logger.info("[DuplicateRadar] Twice-weekly full rebuild done", {
         scanned: r.totalRecordsScanned,
         clusters: r.totalClustersFound,
@@ -547,7 +547,7 @@ inngestFunctions.push(scheduleReviewFunction);
 // Weekly Call Evaluation Digest — DECOMMISSIONED 2026-05-25.
 // Per scope amendments 3 (skip weekly digest) + 4 (Weekly Report is
 // in-dashboard only), this Inngest cron is unregistered. The function
-// id `calls-weekly-digest` will no longer be scheduled. If Replit
+// id `calls-weekly-digest` will no longer be scheduled. If HostingPlatform
 // retains the schedule from a previous deploy, it'll fail-open: the
 // underlying sendWeeklyDigest() is also short-circuited at the source
 // (src/utils/weeklyDigest.ts) and the POST /api/calls/weekly-digest/send
@@ -577,7 +577,7 @@ inngestFunctions.push(scheduleReviewFunction);
 // CS-pipeline overlap nightly refresh.
 // Re-classifies every duplicate cluster that contains a Deal record, so the
 // BLOCK / REVIEW / WARN verdicts surfaced on the Duplicates dashboard stay
-// current as Zoho Phases move (Onboarding → Adoption → Renewal → Termination).
+// current as CRMProvider Phases move (Onboarding → Adoption → Renewal → Termination).
 // Idempotent — safe to re-run on any interval. The in-process fallback in
 // src/mastra/index.ts will also catch missed cron fires.
 const csOverlapAutoScanFunction = inngest.createFunction(
@@ -671,7 +671,7 @@ const csOverlapAutoScanFunction = inngest.createFunction(
 inngestFunctions.push(csOverlapAutoScanFunction);
 
 // Medium #9 — SDR Batch evaluation poller.
-// Every 15 minutes, polls every open OpenAI batch job. When a batch
+// Every 15 minutes, polls every open LLMProvider batch job. When a batch
 // transitions to "completed", downloads the output file and saves each
 // successful per-call evaluation through the standard saveSDREvaluation
 // path so Analytics + the SDR Evaluation tab pick them up identically
@@ -842,7 +842,7 @@ inngestFunctions.push(aiApprovalExpiryFunction);
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Daily AI cost summary + pruning cron
-// Emits a Slack/email alert when the trailing-24h cost exceeds
+// Emits a ChatProvider/email alert when the trailing-24h cost exceeds
 // AI_DAILY_COST_ALERT_USD (default $10.00).
 // Also prunes ai_call_metrics rows older than the configured retention window
 // (AI_METRICS_RETENTION_DAYS, default 90 days).
@@ -895,7 +895,7 @@ const aiCostSummaryFunction = inngest.createFunction(
         } = await import("../../utils/aiAlertsDatabase");
         const { createNotification } =
           await import("../../utils/notificationHub");
-        const { sendResendEmail } = await import("../../utils/resendMail");
+        const { sendEmailProviderEmail } = await import("../../utils/EmailProviderMail");
 
         const stats = await getAiMetricsTableStats();
         const storageResult = await evaluateAndAlertStorageHealth(stats, {
@@ -916,7 +916,7 @@ const aiCostSummaryFunction = inngest.createFunction(
               message: input.message,
               action_url: input.link,
             }),
-          sendSlack: async (webhookUrl, text) => {
+          sendChatProvider: async (webhookUrl, text) => {
             try {
               const resp = await fetch(webhookUrl, {
                 method: "POST",
@@ -929,7 +929,7 @@ const aiCostSummaryFunction = inngest.createFunction(
             }
           },
           sendEmail: async ({ to, subject, html }) => {
-            const sendResult = await sendResendEmail({ to, subject, html });
+            const sendResult = await sendEmailProviderEmail({ to, subject, html });
             return Boolean(sendResult?.success);
           },
         });
@@ -938,7 +938,7 @@ const aiCostSummaryFunction = inngest.createFunction(
           logger.warn(
             `[AI-Cost] Storage-health alert opened: ai_call_metrics oldest row ` +
               `${stats.oldestAgeDays?.toFixed?.(1) ?? "?"}d > retention ${stats.retentionDays}d ` +
-              `(slack=${storageResult.slackSent}, email=${storageResult.emailSent})`,
+              `(ChatProvider=${storageResult.ChatProviderSent}, email=${storageResult.emailSent})`,
           );
         } else if (storageResult.alertsResolved > 0) {
           logger.info(
@@ -955,7 +955,7 @@ const aiCostSummaryFunction = inngest.createFunction(
           getOpenAlertsByKey,
           recordAlertNotified: (alertId, channel, whenMs) =>
             recordAlertNotificationResult(alertId, channel, whenMs),
-          sendSlack: async (webhookUrl, text) => {
+          sendChatProvider: async (webhookUrl, text) => {
             try {
               const resp = await fetch(webhookUrl, {
                 method: "POST",
@@ -968,14 +968,14 @@ const aiCostSummaryFunction = inngest.createFunction(
             }
           },
           sendEmail: async ({ to, subject, html }) => {
-            const sendResult = await sendResendEmail({ to, subject, html });
+            const sendResult = await sendEmailProviderEmail({ to, subject, html });
             return Boolean(sendResult?.success);
           },
         });
         if (repageResult.alertsRepaged > 0) {
           logger.warn(
             `[AI-Cost] Storage-health re-paged ${repageResult.alertsRepaged} ` +
-              `stale alert(s) (slack=${repageResult.slackSent}, ` +
+              `stale alert(s) (ChatProvider=${repageResult.ChatProviderSent}, ` +
               `email=${repageResult.emailSent}, ` +
               `throttled=${repageResult.alertsThrottled}, ` +
               `quietHours=${repageResult.alertsQuietHoursSuppressed})`,
@@ -1103,15 +1103,15 @@ const aiCostSummaryFunction = inngest.createFunction(
           logger.warn("[AI-Cost] Failed to create notification:", notifErr);
         }
 
-        if (process.env.SLACK_WEBHOOK_URL) {
+        if (process.env.ChatProvider_WEBHOOK_URL) {
           try {
-            await fetch(process.env.SLACK_WEBHOOK_URL, {
+            await fetch(process.env.ChatProvider_WEBHOOK_URL, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ text: msg }),
             });
-          } catch (slackErr) {
-            logger.warn("[AI-Cost] Slack notification failed:", slackErr);
+          } catch (ChatProviderErr) {
+            logger.warn("[AI-Cost] ChatProvider notification failed:", ChatProviderErr);
           }
         }
 
@@ -1145,11 +1145,11 @@ const aiCostSummaryFunction = inngest.createFunction(
         }
         if (emailRecipients.length > 0) {
           try {
-            const { sendResendEmail } = await import("../../utils/resendMail");
+            const { sendEmailProviderEmail } = await import("../../utils/EmailProviderMail");
             logger.info(
               `[AI-Cost] Sending alert email to ${emailRecipients.length} recipient(s) (source: ${recipientsSource})`,
             );
-            await sendResendEmail({
+            await sendEmailProviderEmail({
               to: emailRecipients,
               subject: `⚠️ ExampleOrg AI Cost Alert — $${summary.totalCostUsd.toFixed(4)} in 24h`,
               html: `<h2>AI Daily Cost Threshold Exceeded</h2>
@@ -1468,7 +1468,7 @@ inngestFunctions.push(rateLimit429EventsPrunerFunction);
 // 24h rate-limit 429 spike alert cron (Task #282) — checks the rolling-24h
 // `rate_limit_429` event count against `RATE_LIMIT_429_24H_ALERT_THRESHOLD`
 // (default 500) every hour and writes a `rate_limit_429_spike_alert`
-// `system_event` (plus optional Slack/email page) when the threshold is
+// `system_event` (plus optional ChatProvider/email page) when the threshold is
 // crossed. Repeat-suppression window is `RATE_LIMIT_429_24H_ALERT_REPEAT_HOURS`
 // (default 6h) so an ongoing spike does not page on every tick.
 const rateLimit429SpikeAlertFunction = inngest.createFunction(
@@ -1543,10 +1543,10 @@ async function runExecutiveDigestCadence(
     windowStart: result.window.start.toISOString(),
     windowEnd: result.window.end.toISOString(),
     email: result.email,
-    slack: result.slack,
+    ChatProvider: result.ChatProvider,
   });
 
-  const failedChannels = [result.email, result.slack].filter(
+  const failedChannels = [result.email, result.ChatProvider].filter(
     (r) => !r.success,
   );
   if (failedChannels.length > 0) {
@@ -1573,7 +1573,7 @@ async function runExecutiveDigestCadence(
 // Storage-health morning digest (Task #604)
 //
 // Once per day, shortly after the configured quiet-hours window ends, push a
-// single Slack/email digest summarising every still-unresolved storage_health
+// single ChatProvider/email digest summarising every still-unresolved storage_health
 // alert that fired while pushes were suppressed. Closes the gap that Task
 // #579 introduced — ops who don't open /ai-ops first thing could miss a
 // breach that fired at 02:00 because the next storage-health cron pass
@@ -1599,11 +1599,11 @@ const storageHealthMorningDigestFunction = inngest.createFunction(
       const { getUnresolvedAlertsCreatedBetween } = await import(
         "../../utils/aiAlertsDatabase"
       );
-      const { sendResendEmail } = await import("../../utils/resendMail");
+      const { sendEmailProviderEmail } = await import("../../utils/EmailProviderMail");
 
       const result = await runStorageHealthMorningDigest({
         getUnresolvedAlertsCreatedBetween,
-        sendSlack: async (webhookUrl, text) => {
+        sendChatProvider: async (webhookUrl, text) => {
           try {
             const resp = await fetch(webhookUrl, {
               method: "POST",
@@ -1616,7 +1616,7 @@ const storageHealthMorningDigestFunction = inngest.createFunction(
           }
         },
         sendEmail: async ({ to, subject, html }) => {
-          const sendResult = await sendResendEmail({ to, subject, html });
+          const sendResult = await sendEmailProviderEmail({ to, subject, html });
           return Boolean(sendResult?.success);
         },
       });
@@ -1757,14 +1757,14 @@ const aiFeedbackDigestFunction = inngest.createFunction(
       } catch {}
 
       try {
-        const { sendSlackNotification } =
-          await import("../../utils/slackNotifications");
-        const slackChannel =
-          process.env.SLACK_CHANNEL_ID ||
-          process.env.SLACK_QMS_CHANNEL ||
+        const { sendChatProviderNotification } =
+          await import("../../utils/ChatProviderNotifications");
+        const ChatProviderChannel =
+          process.env.ChatProvider_CHANNEL_ID ||
+          process.env.ChatProvider_QMS_CHANNEL ||
           "#general";
-        const slackMessage = `📊 *Weekly AI Consultant Feedback*\n${summary}\n\n*Daily trend (last 7 days):*\n\`\`\`\n${trendPlain}\n\`\`\``;
-        await sendSlackNotification(slackChannel, slackMessage);
+        const ChatProviderMessage = `📊 *Weekly AI Consultant Feedback*\n${summary}\n\n*Daily trend (last 7 days):*\n\`\`\`\n${trendPlain}\n\`\`\``;
+        await sendChatProviderNotification(ChatProviderChannel, ChatProviderMessage);
       } catch {}
 
       return {
@@ -2136,7 +2136,7 @@ inngestFunctions.push(fraudKpiMonthlyReminderFunction);
 // The /api/calls/upload and /api/calls/upload-audio handlers execute
 // transcribe → analyze → SDR-evaluate inline so a clean upload settles
 // in `evaluated` (or `qa_review_pending`) before the response returns.
-// A server kill mid-request — Replit redeploy, OOM, container restart —
+// A server kill mid-request — HostingPlatform redeploy, OOM, container restart —
 // leaves the call row stranded at `transcribing` or `evaluating` and it
 // will never move forward without manual intervention.
 //
@@ -2212,7 +2212,7 @@ export function inngestServe({
 }): ReturnType<typeof originalInngestServe> {
   let serveHost: string | undefined = undefined;
   if (process.env.NODE_ENV === "production") {
-    if (process.env.REPLIT_DOMAINS) {
+    if (process.env.HostingPlatform_DOMAINS) {
       serveHost = `<REDACTED_URL>",")[0]}`;
     }
   } else {

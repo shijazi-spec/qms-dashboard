@@ -21,7 +21,7 @@ describe("classifyQuestionSection", () => {
     expect(classifyQuestionSection("what is open in the risk register?")).toBe("risks");
   });
   it("returns null when nothing matches — and NEVER any text", () => {
-    expect(classifyQuestionSection("Acme Trading Ltd wants a partnership brochure")).toBeNull();
+    expect(classifyQuestionSection("Example Organization Trading Ltd wants a partnership brochure")).toBeNull();
     expect(classifyQuestionSection("status?")).toBeNull();
   });
   it("respects canonical order when two sections could match", () => {

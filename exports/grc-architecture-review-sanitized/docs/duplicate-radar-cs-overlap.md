@@ -44,13 +44,13 @@ Order of evaluation:
 5. Table lists every cluster with: domain, company, sector, CS phase,
    ARR exposure, record count, last updated
 
-To refresh after a Zoho resync, click **Run scan** — this re-classifies every
+To refresh after a CRMProvider resync, click **Run scan** — this re-classifies every
 cluster whose records include a Deal with a populated CS section.
 
 ## Automatic refresh (Phase 3)
 
 The platform runs the scan automatically on a daily cron so verdicts stay
-fresh as Zoho `Phase` values move (Onboarding → Adoption → Renewal →
+fresh as CRMProvider `Phase` values move (Onboarding → Adoption → Renewal →
 Termination) without anyone clicking the button.
 
 | Surface | Default | Override |
@@ -114,7 +114,7 @@ during the CS overlap scan and uses it for two things:
 
 The field name is read with a fallback chain (`Company_Domain`,
 `company_domain`, `CompanyDomain`, `Company Domain`, `Domain`, `domain`)
-so it works regardless of the exact Zoho API key. Pin via env if needed:
+so it works regardless of the exact CRMProvider API key. Pin via env if needed:
 
 ```
 DUPLICATE_RADAR_FIELD_COMPANY_DOMAIN=Company_Domain

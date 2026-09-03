@@ -1,7 +1,7 @@
 import { pool } from "./duplicateRadarDatabase";
 import { realDomainRoot } from "./preflightStructuredPush";
 import { logger } from "./logger";
-import { updateZohoRecord } from "./zohoCRM";
+import { updateCRMProviderRecord } from "./CRMProviderCRM";
 
 // Placeholder / non-real account labels (mirror accountInference.ts).
 export const PLACEHOLDER_ACCOUNTS = new Set(["", "-", "n/a", "na", "none", "null", "unknown", "test"]);
@@ -51,15 +51,15 @@ export function pickContactForDeal(domain: string, cands: Array<{ id: string; do
 }
 
 export type LinkHint = {
-  sourceRecordId: number; sourceZohoId: string; sourceModule: "Contacts" | "Deals";
+  sourceRecordId: number; sourceCRMProviderId: string; sourceModule: "Contacts" | "Deals";
   linkField: "Account_Name" | "Contact_Name";
-  targetRecordId: number | null; targetZohoId: string; targetName: string; domain: string;
+  targetRecordId: number | null; targetCRMProviderId: string; targetName: string; domain: string;
   evidenceRecordId: number | null; evidenceDetail: string; confidence: number;
 };
 
 interface DuplicateRecordRow {
   id: number;
-  zoho_record_id: string | null;
+  CRMProvider_record_id: string | null;
   record_name: string | null;
   company_name: string | null;
   email: string | null;
@@ -78,12 +78,12 @@ interface DuplicateRecordRow {
  */
 async function findAccountCandidatesForDomain(
   domain: string,
-): Promise<Array<{ id: number; zoho_record_id: string | null; account_name: string | null; company_name: string | null; domain: string | null; has_explicit_domain: boolean; related_record_count: number }>> {
+): Promise<Array<{ id: number; CRMProvider_record_id: string | null; account_name: string | null; company_name: string | null; domain: string | null; has_explicit_domain: boolean; related_record_count: number }>> {
   const norm = domain.toLowerCase().trim();
   if (!norm) return [];
   const res = await pool.query(
     `SELECT a.id,
-            a.zoho_record_id,
+            a.CRMProvider_record_id,
             a.account_name,
             a.company_name,
             a.domain,
@@ -101,7 +101,7 @@ async function findAccountCandidatesForDomain(
   );
   return res.rows.map((row: any) => ({
     id: row.id,
-    zoho_record_id: row.zoho_record_id,
+    CRMProvider_record_id: row.CRMProvider_record_id,
     account_name: row.account_name,
     company_name: row.company_name,
     domain: row.domain,
@@ -165,11 +165,11 @@ export async function inferAccountForContact(
 
   return {
     sourceRecordId: contact.id,
-    sourceZohoId: contact.zoho_record_id || "",
+    sourceCRMProviderId: contact.CRMProvider_record_id || "",
     sourceModule: "Contacts",
     linkField: "Account_Name",
     targetRecordId: best.id,
-    targetZohoId: best.zoho_record_id || "",
+    targetCRMProviderId: best.CRMProvider_record_id || "",
     targetName: best.account_name || best.company_name || "",
     domain: normDomain,
     evidenceRecordId: contact.id,
@@ -184,7 +184,7 @@ export async function inferAccountForContact(
  */
 async function findContactCandidatesForDeal(
   deal: DuplicateRecordRow,
-): Promise<Array<{ id: number; zoho_record_id: string | null; record_name: string | null; company_name: string | null; domain: string | null }>> {
+): Promise<Array<{ id: number; CRMProvider_record_id: string | null; record_name: string | null; company_name: string | null; domain: string | null }>> {
   const domain =
     (deal.domain && deal.domain.trim().toLowerCase()) ||
     realDomainRoot(deal.domain) ||
@@ -194,7 +194,7 @@ async function findContactCandidatesForDeal(
   if (!domain && !accountName) return [];
 
   const res = await pool.query(
-    `SELECT id, zoho_record_id, record_name, company_name, domain
+    `SELECT id, CRMProvider_record_id, record_name, company_name, domain
        FROM duplicate_records
       WHERE record_type = 'contact'
         AND (
@@ -248,11 +248,11 @@ export async function inferContactForDeal(
 
   return {
     sourceRecordId: deal.id,
-    sourceZohoId: deal.zoho_record_id || "",
+    sourceCRMProviderId: deal.CRMProvider_record_id || "",
     sourceModule: "Deals",
     linkField: "Contact_Name",
     targetRecordId: best.id,
-    targetZohoId: best.zoho_record_id || "",
+    targetCRMProviderId: best.CRMProvider_record_id || "",
     targetName: best.record_name || best.company_name || "",
     domain: dealDomain,
     evidenceRecordId: deal.id,
@@ -275,7 +275,7 @@ export async function scanRecordLinkHints(): Promise<{ contact_account: number; 
   // loads only contacts missing an account, not the whole table. The JS
   // predicate below stays as the authority for any edge the SQL misses.
   const contactsRes = await pool.query(
-    `SELECT id, zoho_record_id, record_name, company_name, email, domain,
+    `SELECT id, CRMProvider_record_id, record_name, company_name, email, domain,
             account_name, contact_name, raw_data, cluster_id
        FROM duplicate_records
       WHERE record_type = 'contact'
@@ -299,7 +299,7 @@ export async function scanRecordLinkHints(): Promise<{ contact_account: number; 
 
   // Pre-filter to deals with no primary contact (mirrors dealNeedsContact).
   const dealsRes = await pool.query(
-    `SELECT id, zoho_record_id, record_name, company_name, email, domain,
+    `SELECT id, CRMProvider_record_id, record_name, company_name, email, domain,
             account_name, contact_name, raw_data, cluster_id
        FROM duplicate_records
       WHERE record_type = 'deal'
@@ -343,11 +343,11 @@ async function upsertLinkHint(hint: LinkHint): Promise<void> {
   await pool.query(
     `INSERT INTO record_link_hints
        (source_record_id, source_type, link_field, suggested_target_record_id,
-        suggested_target_zoho_id, suggested_target_name, suggested_domain,
+        suggested_target_CRMProvider_id, suggested_target_name, suggested_domain,
         evidence_record_id, evidence_detail, confidence, status)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending')
      ON CONFLICT (source_record_id, link_field, suggested_target_record_id) DO UPDATE
-       SET suggested_target_zoho_id = EXCLUDED.suggested_target_zoho_id,
+       SET suggested_target_CRMProvider_id = EXCLUDED.suggested_target_CRMProvider_id,
            suggested_target_name    = EXCLUDED.suggested_target_name,
            suggested_domain         = EXCLUDED.suggested_domain,
            evidence_record_id       = EXCLUDED.evidence_record_id,
@@ -360,7 +360,7 @@ async function upsertLinkHint(hint: LinkHint): Promise<void> {
       hint.sourceModule === "Contacts" ? "contact" : "deal",
       hint.linkField,
       hint.targetRecordId,
-      hint.targetZohoId,
+      hint.targetCRMProviderId,
       hint.targetName,
       hint.domain,
       hint.evidenceRecordId,
@@ -381,13 +381,13 @@ export interface RecordLinkHintRow {
   id: number;
   source_record_id: number;
   source_type: string;
-  source_zoho_id: string | null;
+  source_CRMProvider_id: string | null;
   source_record_name: string | null;
   source_email: string | null;
   link_field: string;
   current_value: string | null;
   suggested_target_record_id: number | null;
-  suggested_target_zoho_id: string | null;
+  suggested_target_CRMProvider_id: string | null;
   suggested_target_name: string | null;
   suggested_domain: string | null;
   evidence_record_id: number | null;
@@ -425,7 +425,7 @@ export async function listRecordLinkHints(opts: {
     params.push(linkField);
     linkFieldClause = `AND h.link_field = $${params.length}`;
   }
-  // Segment chip (Sample User 2026-07-15): filter hints to the SOURCE record's Zoho
+  // Segment chip (Sample User 2026-07-15): filter hints to the SOURCE record's CRMProvider
   // Layout (aliased `s`), same predicate as every tab (buildSegmentPredicate
   // emits an `r.` alias — swap it to `s.`).
   let segClause = "";
@@ -444,14 +444,14 @@ export async function listRecordLinkHints(opts: {
     `SELECT h.id,
             h.source_record_id,
             h.source_type,
-            s.zoho_record_id  AS source_zoho_id,
+            s.CRMProvider_record_id  AS source_CRMProvider_id,
             s.record_name     AS source_record_name,
             s.email           AS source_email,
             h.link_field,
             CASE WHEN h.link_field = 'Account_Name' THEN s.account_name
                  ELSE s.contact_name END AS current_value,
             h.suggested_target_record_id,
-            h.suggested_target_zoho_id,
+            h.suggested_target_CRMProvider_id,
             h.suggested_target_name,
             h.suggested_domain,
             h.evidence_record_id,
@@ -462,7 +462,7 @@ export async function listRecordLinkHints(opts: {
             h.updated_at
        FROM record_link_hints h
        -- INNER JOIN (Sample User 2026-07-14): if the SOURCE record was pruned as a
-       -- deleted-in-Zoho ghost, the hint can never apply — drop it instead of
+       -- deleted-in-CRMProvider ghost, the hint can never apply — drop it instead of
        -- showing a half-empty "refused to merge" row. Same for a pruned target.
        INNER JOIN duplicate_records s ON s.id = h.source_record_id
       WHERE h.status = $1
@@ -500,7 +500,7 @@ export async function listRecordLinkHints(opts: {
 
 /**
  * AI-resolve a single Record-Link-Hint row: write the suggested target
- * directly onto the Zoho source record's link field, then mark the hint
+ * directly onto the CRMProvider source record's link field, then mark the hint
  * applied. Generic over module/field — both come from the hint row itself
  * (source_type -> module, link_field -> the field to write), unlike
  * aiResolveAccountHint which is hard-coded to Deals/Account_Name. Refuses to
@@ -512,8 +512,8 @@ export async function aiResolveRecordLinkHint(
 ): Promise<{ applied: boolean; confidence: number; reason?: string }> {
   const res = await pool.query(
     `SELECT h.id, h.status, h.confidence, h.link_field, h.source_type,
-            s.zoho_record_id AS source_zoho_id,
-            h.suggested_target_zoho_id
+            s.CRMProvider_record_id AS source_CRMProvider_id,
+            h.suggested_target_CRMProvider_id
        FROM record_link_hints h
        JOIN duplicate_records s ON s.id = h.source_record_id
       WHERE h.id = $1
@@ -538,32 +538,32 @@ export async function aiResolveRecordLinkHint(
 
   const sourceModule = row.source_type === "contact" ? "Contacts" : "Deals";
   const linkField = row.link_field as "Account_Name" | "Contact_Name";
-  const sourceZohoId = row.source_zoho_id as string | null;
-  const targetZohoId = row.suggested_target_zoho_id as string | null;
-  if (!sourceZohoId || !targetZohoId) {
-    return { applied: false, confidence, reason: "missing_zoho_ids" };
+  const sourceCRMProviderId = row.source_CRMProvider_id as string | null;
+  const targetCRMProviderId = row.suggested_target_CRMProvider_id as string | null;
+  if (!sourceCRMProviderId || !targetCRMProviderId) {
+    return { applied: false, confidence, reason: "missing_CRMProvider_ids" };
   }
 
   try {
-    await updateZohoRecord(sourceModule, sourceZohoId, {
-      [linkField]: { id: targetZohoId },
+    await updateCRMProviderRecord(sourceModule, sourceCRMProviderId, {
+      [linkField]: { id: targetCRMProviderId },
     });
   } catch (e: any) {
-    // Source record deleted in Zoho (Sample User 2026-07-14: "one of both is already
+    // Source record deleted in CRMProvider (Sample User 2026-07-14: "one of both is already
     // deleted — it shouldn't be here"). The link can never apply, so auto-dismiss
     // the hint and prune the ghost from the mirror so it stops resurfacing,
     // instead of leaving it stuck as "AI refused to merge".
-    const { isZohoGhostError, pruneGhostRecords } = await import(
+    const { isCRMProviderGhostError, pruneGhostRecords } = await import(
       "./emptyRecordsDatabase"
     );
-    if (isZohoGhostError(e)) {
+    if (isCRMProviderGhostError(e)) {
       await pool.query(
         `UPDATE record_link_hints SET status = 'dismissed', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
         [id],
       );
-      await pruneGhostRecords([sourceZohoId]).catch(() => {});
+      await pruneGhostRecords([sourceCRMProviderId]).catch(() => {});
       logger.info(
-        `[recordLinkHints] hint #${id} auto-dismissed — source ${sourceModule} ${sourceZohoId} is deleted in Zoho (ghost).`,
+        `[recordLinkHints] hint #${id} auto-dismissed — source ${sourceModule} ${sourceCRMProviderId} is deleted in CRMProvider (ghost).`,
       );
       return { applied: false, confidence, reason: "source_deleted" };
     }
@@ -578,7 +578,7 @@ export async function aiResolveRecordLinkHint(
     [id],
   );
   logger.info(
-    `[recordLinkHints] AI-resolved hint #${id}: ${sourceModule} ${sourceZohoId} → ${linkField} ${targetZohoId} (confidence ${confidence}%)`,
+    `[recordLinkHints] AI-resolved hint #${id}: ${sourceModule} ${sourceCRMProviderId} → ${linkField} ${targetCRMProviderId} (confidence ${confidence}%)`,
   );
   return { applied: true, confidence };
 }
@@ -586,7 +586,7 @@ export async function aiResolveRecordLinkHint(
 /**
  * Bulk AI-resolve every pending record_link_hints row at-or-above the
  * confidence threshold, optionally scoped to one link type. Sequential to
- * keep Zoho call rate under the per-account ceiling, mirroring
+ * keep CRMProvider call rate under the per-account ceiling, mirroring
  * aiResolveAllAccountHints.
  */
 export async function aiResolveAllRecordLinkHints(opts: {
@@ -640,7 +640,7 @@ export async function aiResolveAllRecordLinkHints(opts: {
 // company's deal picture: if the company already has a live signed/paid deal
 // this stalled one is redundant → suggest CLOSE; otherwise there's no live deal
 // to protect → suggest RE-ENGAGE (move it forward). Read-only computation from
-// the synced mirror; the apply (Zoho write) is a separate HITL step.
+// the synced mirror; the apply (CRMProvider write) is a separate HITL step.
 // ---------------------------------------------------------------------------
 const STALE_DEAL_STAGES = (process.env.RECORD_HINT_STALE_STAGES || "Unaccounted")
   .split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
@@ -648,10 +648,10 @@ const SIGNED_DEAL_STAGES = (process.env.PREFLIGHT_SIGNED_STAGES || "Agreement Si
   .split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
 
 export type StaleDealHint = {
-  dealZohoId: string;
+  dealCRMProviderId: string;
   dealName: string;
   stage: string;
-  accountZohoId: string | null;
+  accountCRMProviderId: string | null;
   accountName: string | null;
   ownerName: string | null;
   createdTime: string | null;
@@ -662,17 +662,17 @@ export type StaleDealHint = {
 };
 
 /** Scan the synced mirror for deals in a stalled stage and suggest a
- * disposition per company deal-picture. Read-only — no Zoho calls, no writes. */
+ * disposition per company deal-picture. Read-only — no CRMProvider calls, no writes. */
 export async function scanStaleDeals(opts: { limit?: number } = {}): Promise<StaleDealHint[]> {
   const limit = Math.min(3000, Math.max(1, Math.floor(opts.limit ?? 500)));
   const dealsRes = await pool.query<{
-    zoho_record_id: string; record_name: string | null; stage: string | null;
-    account_zoho_id: string | null; account_name: string | null;
+    CRMProvider_record_id: string; record_name: string | null; stage: string | null;
+    account_CRMProvider_id: string | null; account_name: string | null;
     owner_name: string | null; created_time: string | null; layout: string | null;
   }>(
-    `SELECT zoho_record_id, record_name,
+    `SELECT CRMProvider_record_id, record_name,
             COALESCE(NULLIF(stage,''), raw_data->>'Stage') AS stage,
-            raw_data->'Account_Name'->>'id' AS account_zoho_id,
+            raw_data->'Account_Name'->>'id' AS account_CRMProvider_id,
             account_name,
             COALESCE(NULLIF(owner_name,''), raw_data->'Owner'->>'name') AS owner_name,
             COALESCE(created_date::text, raw_data->>'Created_Time') AS created_time,
@@ -680,7 +680,7 @@ export async function scanStaleDeals(opts: { limit?: number } = {}): Promise<Sta
        FROM duplicate_records
       WHERE record_type = 'deal'
         AND LOWER(COALESCE(NULLIF(stage,''), raw_data->>'Stage', '')) = ANY($1::text[])
-        AND zoho_record_id NOT IN (SELECT deal_zoho_id FROM stale_deal_dismissals)
+        AND CRMProvider_record_id NOT IN (SELECT deal_CRMProvider_id FROM stale_deal_dismissals)
       ORDER BY id
       LIMIT $2`,
     [STALE_DEAL_STAGES, limit],
@@ -694,7 +694,7 @@ export async function scanStaleDeals(opts: { limit?: number } = {}): Promise<Sta
   // blank or differs still gets caught when the company name has a signed deal.
   const nameKeyOf = (n: string | null | undefined) =>
     String(n || "").trim().toLowerCase();
-  const acctIds = Array.from(new Set(dealsRes.rows.map(r => r.account_zoho_id).filter(Boolean) as string[]));
+  const acctIds = Array.from(new Set(dealsRes.rows.map(r => r.account_CRMProvider_id).filter(Boolean) as string[]));
   const acctNames = Array.from(new Set(dealsRes.rows.map(r => nameKeyOf(r.account_name)).filter(Boolean)));
   const signedAccts = new Set<string>();
   const signedNames = new Set<string>();
@@ -725,9 +725,9 @@ export async function scanStaleDeals(opts: { limit?: number } = {}): Promise<Sta
   return dealsRes.rows.map((r) => {
     const nameKey = nameKeyOf(r.account_name);
     const hasSignedDeal =
-      (!!r.account_zoho_id && signedAccts.has(r.account_zoho_id)) ||
+      (!!r.account_CRMProvider_id && signedAccts.has(r.account_CRMProvider_id)) ||
       (!!nameKey && signedNames.has(nameKey));
-    const hasAccount = !!r.account_zoho_id || !!nameKey;
+    const hasAccount = !!r.account_CRMProvider_id || !!nameKey;
     let disposition: "close" | "reengage" | "review";
     let reason: string;
     if (hasSignedDeal) {
@@ -742,10 +742,10 @@ export async function scanStaleDeals(opts: { limit?: number } = {}): Promise<Sta
       reason = "No account linked — decide manually.";
     }
     return {
-      dealZohoId: r.zoho_record_id,
+      dealCRMProviderId: r.CRMProvider_record_id,
       dealName: r.record_name || "(deal)",
       stage: r.stage || "",
-      accountZohoId: r.account_zoho_id || null,
+      accountCRMProviderId: r.account_CRMProvider_id || null,
       accountName: r.account_name || null,
       ownerName: r.owner_name || null,
       createdTime: r.created_time || null,
@@ -759,45 +759,45 @@ export async function scanStaleDeals(opts: { limit?: number } = {}): Promise<Sta
 
 /** Drop a stalled-deal suggestion off the Unaccounted list with a disposition:
  *   'dismissed' — not a real stale issue / false positive (Sample User 2026-07-14).
- *   'resolved'  — the operator already handled the deal MANUALLY in Zoho and
+ *   'resolved'  — the operator already handled the deal MANUALLY in CRMProvider and
  *                 wants it recorded as resolved, not dismissed (Sample User 2026-07-16).
  * Records the deal id in stale_deal_dismissals so scanStaleDeals stops surfacing
- * it. No Zoho write — the deal is untouched; only the radar's own state changes. */
+ * it. No CRMProvider write — the deal is untouched; only the radar's own state changes. */
 export async function dismissStaleDeal(
-  dealZohoId: string,
+  dealCRMProviderId: string,
   by: string | null,
   disposition: "dismissed" | "resolved" = "dismissed",
 ): Promise<{ dismissed: boolean; disposition: string }> {
-  const id = String(dealZohoId || "").trim();
+  const id = String(dealCRMProviderId || "").trim();
   if (!id) return { dismissed: false, disposition };
   const disp = disposition === "resolved" ? "resolved" : "dismissed";
   await pool.query(
-    `INSERT INTO stale_deal_dismissals (deal_zoho_id, dismissed_by, dismissed_at, disposition)
+    `INSERT INTO stale_deal_dismissals (deal_CRMProvider_id, dismissed_by, dismissed_at, disposition)
        VALUES ($1, $2, CURRENT_TIMESTAMP, $3)
-     ON CONFLICT (deal_zoho_id) DO UPDATE SET dismissed_by = EXCLUDED.dismissed_by, dismissed_at = CURRENT_TIMESTAMP, disposition = EXCLUDED.disposition`,
+     ON CONFLICT (deal_CRMProvider_id) DO UPDATE SET dismissed_by = EXCLUDED.dismissed_by, dismissed_at = CURRENT_TIMESTAMP, disposition = EXCLUDED.disposition`,
     [id, by || null, disp],
   );
   return { dismissed: true, disposition: disp };
 }
 
-/** Mark a stalled deal RESOLVED — the operator fixed it manually in Zoho.
+/** Mark a stalled deal RESOLVED — the operator fixed it manually in CRMProvider.
  * Thin wrapper over dismissStaleDeal with disposition='resolved'. */
 export async function resolveStaleDeal(
-  dealZohoId: string,
+  dealCRMProviderId: string,
   by: string | null,
 ): Promise<{ dismissed: boolean; disposition: string }> {
-  return dismissStaleDeal(dealZohoId, by, "resolved");
+  return dismissStaleDeal(dealCRMProviderId, by, "resolved");
 }
 
 /** Re-open a handled stalled deal — removes its stale_deal_dismissals record so
- * it returns to the Open list on the next scan (if it is still stalled). No Zoho
- * write. Reverses a Close/Re-engage's radar STATE only, not the Zoho stage. */
+ * it returns to the Open list on the next scan (if it is still stalled). No CRMProvider
+ * write. Reverses a Close/Re-engage's radar STATE only, not the CRMProvider stage. */
 export async function reopenStaleDeal(
-  dealZohoId: string,
+  dealCRMProviderId: string,
 ): Promise<{ reopened: boolean }> {
-  const id = String(dealZohoId || "").trim();
+  const id = String(dealCRMProviderId || "").trim();
   if (!id) return { reopened: false };
-  await pool.query(`DELETE FROM stale_deal_dismissals WHERE deal_zoho_id = $1`, [
+  await pool.query(`DELETE FROM stale_deal_dismissals WHERE deal_CRMProvider_id = $1`, [
     id,
   ]);
   return { reopened: true };
@@ -807,25 +807,25 @@ const CLOSE_STAGE = process.env.RECORD_HINT_CLOSE_STAGE || "Closed Lost";
 const REENGAGE_STAGE = process.env.RECORD_HINT_REENGAGE_STAGE || "New Deal";
 
 /** HITL apply for a stalled deal. close → set Stage = Closed Lost; reengage →
- * move the Stage to an active working stage. A Zoho write (updateZohoRecord) —
+ * move the Stage to an active working stage. A CRMProvider write (updateCRMProviderRecord) —
  * never deletes. Also updates the mirror's stage so the deal drops off the
  * stale-deals scan before the next sync. Stages are env-configurable. */
 export async function applyStaleDealDisposition(
-  dealZohoId: string,
+  dealCRMProviderId: string,
   action: "close" | "reengage",
   by: string | null = null,
 ): Promise<{ applied: boolean; stage: string; reason?: string }> {
-  const id = String(dealZohoId || "").trim();
+  const id = String(dealCRMProviderId || "").trim();
   if (!id) return { applied: false, stage: "", reason: "missing_deal_id" };
   const stage = action === "close" ? CLOSE_STAGE : REENGAGE_STAGE;
   try {
-    await updateZohoRecord("Deals", id, { Stage: stage });
+    await updateCRMProviderRecord("Deals", id, { Stage: stage });
   } catch (e: any) {
     return { applied: false, stage, reason: e?.message || String(e) };
   }
   try {
     await pool.query(
-      `UPDATE duplicate_records SET stage = $2 WHERE zoho_record_id = $1 AND record_type = 'deal'`,
+      `UPDATE duplicate_records SET stage = $2 WHERE CRMProvider_record_id = $1 AND record_type = 'deal'`,
       [id, stage],
     );
   } catch { /* best-effort mirror refresh */ }
@@ -834,12 +834,12 @@ export async function applyStaleDealDisposition(
   try {
     const disp = action === "close" ? "closed" : "reengaged";
     await pool.query(
-      `INSERT INTO stale_deal_dismissals (deal_zoho_id, dismissed_by, dismissed_at, disposition)
+      `INSERT INTO stale_deal_dismissals (deal_CRMProvider_id, dismissed_by, dismissed_at, disposition)
          VALUES ($1, $2, CURRENT_TIMESTAMP, $3)
-       ON CONFLICT (deal_zoho_id) DO UPDATE SET dismissed_by = EXCLUDED.dismissed_by, dismissed_at = CURRENT_TIMESTAMP, disposition = EXCLUDED.disposition`,
+       ON CONFLICT (deal_CRMProvider_id) DO UPDATE SET dismissed_by = EXCLUDED.dismissed_by, dismissed_at = CURRENT_TIMESTAMP, disposition = EXCLUDED.disposition`,
       [id, by || null, disp],
     );
-  } catch { /* best-effort — the Zoho write already succeeded */ }
+  } catch { /* best-effort — the CRMProvider write already succeeded */ }
   logger.info(`[recordLinkHints] stale-deal ${action} → ${id} Stage=${stage}`);
   return { applied: true, stage };
 }
@@ -853,7 +853,7 @@ export async function listHandledStaleDeals(opts: {
   limit?: number;
 }): Promise<{
   deals: Array<{
-    dealZohoId: string;
+    dealCRMProviderId: string;
     dealName: string;
     accountName: string | null;
     ownerName: string | null;
@@ -869,7 +869,7 @@ export async function listHandledStaleDeals(opts: {
   const limit = Math.min(3000, Math.max(1, Math.floor(opts.limit ?? 500)));
   const disp = opts.disposition && opts.disposition !== "all" ? opts.disposition : null;
   const rows = await pool.query<{
-    deal_zoho_id: string;
+    deal_CRMProvider_id: string;
     record_name: string | null;
     account_name: string | null;
     owner_name: string | null;
@@ -880,7 +880,7 @@ export async function listHandledStaleDeals(opts: {
     dismissed_by: string | null;
     dismissed_at: string | null;
   }>(
-    `SELECT sdd.deal_zoho_id,
+    `SELECT sdd.deal_CRMProvider_id,
             dr.record_name,
             COALESCE(dr.account_name, dr.raw_data->'Account_Name'->>'name') AS account_name,
             COALESCE(NULLIF(dr.owner_name,''), dr.raw_data->'Owner'->>'name') AS owner_name,
@@ -892,7 +892,7 @@ export async function listHandledStaleDeals(opts: {
             sdd.dismissed_at::text AS dismissed_at
        FROM stale_deal_dismissals sdd
        LEFT JOIN duplicate_records dr
-              ON dr.zoho_record_id = sdd.deal_zoho_id AND dr.record_type = 'deal'
+              ON dr.CRMProvider_record_id = sdd.deal_CRMProvider_id AND dr.record_type = 'deal'
       WHERE ($1::text IS NULL OR sdd.disposition = $1)
       ORDER BY sdd.dismissed_at DESC NULLS LAST
       LIMIT $2`,
@@ -905,8 +905,8 @@ export async function listHandledStaleDeals(opts: {
   for (const r of countRows.rows) counts[r.disposition] = r.n;
   return {
     deals: rows.rows.map((r) => ({
-      dealZohoId: r.deal_zoho_id,
-      dealName: r.record_name || r.deal_zoho_id,
+      dealCRMProviderId: r.deal_CRMProvider_id,
+      dealName: r.record_name || r.deal_CRMProvider_id,
       accountName: r.account_name,
       ownerName: r.owner_name,
       createdTime: r.created_time,

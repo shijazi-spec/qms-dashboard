@@ -5,7 +5,7 @@
  *
  * Run: npx vitest run tests/vitest/copcSdrEvaluationPrompt.vitest.test.ts
  *
- * Pure-function tests — no DB, no OpenAI calls.
+ * Pure-function tests — no DB, no LLMProvider calls.
  */
 import { describe, expect, test } from "vitest";
 import {
@@ -137,7 +137,7 @@ describe("buildCopcSDREvaluationPrompt — structure", () => {
     expect(p).toContain("### Section: coaching_and_improvement");
   });
 
-  test("tags Five9-deferred checkpoints inline so the AI scores them null", () => {
+  test("tags ContactCenterProvider-deferred checkpoints inline so the AI scores them null", () => {
     const card = {
       id: 1,
       name: "x",
@@ -147,7 +147,7 @@ describe("buildCopcSDREvaluationPrompt — structure", () => {
         copcAttr({
           id: "login_gap",
           section_id: "activity_and_process",
-          data_dependency: "five9_real_ingest",
+          data_dependency: "ContactCenterProvider_real_ingest",
         }),
       ],
     };

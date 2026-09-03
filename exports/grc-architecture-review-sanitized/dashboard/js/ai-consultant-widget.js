@@ -358,7 +358,7 @@
 
     window._closeAIWidget = function() { setWidgetOpen(false); };
     // Opened by the global header 🤖 Adam button (ExampleOrgNav.openAssistant).
-    window._openAIWidget = function() {
+    window._LLMProviderWidget = function() {
         setWidgetOpen(true);
         widgetLoadThreadHistory();
     };
@@ -788,7 +788,7 @@
             // Keep the "Adam is preparing your answer…" indicator visible until
             // the FIRST token actually arrives (create the bubble lazily). The
             // connection can open long before any text — e.g. while the server
-            // waits out an OpenAI rate limit — and hiding the indicator here made
+            // waits out an LLMProvider rate limit — and hiding the indicator here made
             // it look like the chat had ended. ensureBubble() flips the state.
             streamOk = true;
             function ensureBubble() {

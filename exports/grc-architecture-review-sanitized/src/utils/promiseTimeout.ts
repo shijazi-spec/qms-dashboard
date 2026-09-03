@@ -1,7 +1,7 @@
 /**
  * withTimeout — race a promise against a wall-clock deadline.
  *
- * Shared so every live external call (Zoho reads/writes, cluster lookups) can
+ * Shared so every live external call (CRMProvider reads/writes, cluster lookups) can
  * be bounded. Without a timeout, one hanging call leaves the agent's tool
  * pending forever → the user gets a blank reply / endless spinner. On timeout
  * we REJECT with a labelled error so the caller's try/catch can report a clear,

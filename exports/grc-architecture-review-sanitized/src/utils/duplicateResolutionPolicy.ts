@@ -26,19 +26,19 @@ export interface ResolutionRiskInput {
   /** SAR pipeline value on the duplicates + ARR exposure. */
   pipelineValue: number;
   arrExposure: number;
-  /** a prior merge on this cluster's domain failed Zoho verification. */
+  /** a prior merge on this cluster's domain failed CRMProvider verification. */
   verificationFailed: boolean;
   /** plan.fieldDecisions where action === 'conflict'. */
   conflictCount: number;
   /** plan touches custom fields whose API names are assumptions. */
   hasCustomFieldAssumption: boolean;
-  /** master or any included duplicate lacks a zoho_record_id. */
-  anyMissingZohoId: boolean;
+  /** master or any included duplicate lacks a CRMProvider_record_id. */
+  anyMissingCRMProviderId: boolean;
   /** 0..1 completeness of the chosen survivor. */
   masterCompleteness: number;
   /** distinct owners across the merge set. */
   distinctOwners: number;
-  /** distinct Zoho layouts across the merge set (split = intentional). */
+  /** distinct CRMProvider layouts across the merge set (split = intentional). */
   distinctLayouts: number;
   /** smallest "days since modified" across the merge set (Infinity if unknown). */
   minDaysSinceModified: number;
@@ -48,10 +48,10 @@ export interface ResolutionRiskInput {
   isCrossModule: boolean;
   /**
    * Count of duplicate records (the ones that would be tagged Duplicate-Delete)
-   * that carry ≥1 Zoho attachment. ANY > 0 forces escalate — auto-merging a
+   * that carry ≥1 CRMProvider attachment. ANY > 0 forces escalate — auto-merging a
    * record with files risks losing audit evidence (signed contracts, NDAs…).
    * The runner only populates this for clusters it would otherwise auto-apply
-   * (bounded Zoho calls); defaults 0 elsewhere.
+   * (bounded CRMProvider calls); defaults 0 elsewhere.
    */
   duplicatesWithAttachments: number;
 }
@@ -140,9 +140,9 @@ export function evaluateResolutionRisk(
       `${input.conflictCount} field conflict(s) need a human decision.`,
     );
   }
-  if (input.anyMissingZohoId) {
+  if (input.anyMissingCRMProviderId) {
     reasons.push(
-      "A record (master or duplicate) has no Zoho id — cannot be safely written/tagged.",
+      "A record (master or duplicate) has no CRMProvider id — cannot be safely written/tagged.",
     );
   }
   if (input.isCrossModule) {
@@ -167,12 +167,12 @@ export function evaluateResolutionRisk(
   }
   if (input.verificationFailed) {
     reasons.push(
-      "A previous merge on this cluster's domain failed Zoho verification.",
+      "A previous merge on this cluster's domain failed CRMProvider verification.",
     );
   }
   if (input.hasCustomFieldAssumption) {
     reasons.push(
-      "Plan touches custom fields whose Zoho API names are unconfirmed.",
+      "Plan touches custom fields whose CRMProvider API names are unconfirmed.",
     );
   }
   if (input.masterCompleteness < cfg.minMasterCompleteness) {
@@ -182,7 +182,7 @@ export function evaluateResolutionRisk(
   }
   if (input.duplicatesWithAttachments > 0) {
     reasons.push(
-      `${input.duplicatesWithAttachments} duplicate(s) carry Zoho attachments — escalating to protect audit evidence (ISO 9001 §7.5).`,
+      `${input.duplicatesWithAttachments} duplicate(s) carry CRMProvider attachments — escalating to protect audit evidence (ISO 9001 §7.5).`,
     );
   }
 

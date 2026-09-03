@@ -346,7 +346,7 @@ export function classifyCsOverlap(
 }
 
 /**
- * Pull CS-pipeline fields out of a Zoho raw_data JSON blob, tolerant of common
+ * Pull CS-pipeline fields out of a CRMProvider raw_data JSON blob, tolerant of common
  * field-name variations (Phase / phase / Phase__c, etc). Specific keys can be
  * pinned via env (DUPLICATE_RADAR_FIELD_PHASE etc).
  *
@@ -370,7 +370,7 @@ export function extractCsFieldsFromRawData(
   // Last Contact Date — when the CS team last spoke to / touched the customer.
   // Surfaced in the CS Lifecycle tab so CS can spot silent accounts at a glance.
   last_contact_date?: string | Date | null;
-  // ExtID (Admin) — Zoho custom field surfaced in the CS Lifecycle tab.
+  // ExtID (Admin) — CRMProvider custom field surfaced in the CS Lifecycle tab.
   // Optional so legacy callers don't have to destructure it.
   ext_id?: string | null;
   // Customer Success → Company field. Source of truth for the CS
@@ -395,7 +395,7 @@ export function extractCsFieldsFromRawData(
   };
 
   // Normalized lookup: matches any raw_data key whose lower-cased,
-  // separator-stripped form equals one of the candidates. Catches Zoho
+  // separator-stripped form equals one of the candidates. Catches CRMProvider
   // tenants where the API name uses a different casing or separator than
   // the documented defaults (e.g. "CompanyDomain1" matching "company_domain"
   // after normalisation). Skipped when the explicit tryKeys path already
@@ -422,7 +422,7 @@ export function extractCsFieldsFromRawData(
    * Fuzzy fallback (2026-05-30): when the exact + normalised passes
    * above can't find the field, walk every raw_data key and match
    * any whose normalised form CONTAINS one of the substrings. Used
-   * for fields whose Zoho API name varies enough across tenants that
+   * for fields whose CRMProvider API name varies enough across tenants that
    * a fixed candidate list misses them — operator's CS section field
    * "ExtID (Admin)" is one such field; depending on tenant it could
    * be "ExtID", "Ext_ID", "ExtID_Admin", "ExtIDAdmin1", "External_ID_2",
@@ -433,7 +433,7 @@ export function extractCsFieldsFromRawData(
    *
    * Returns the FIRST non-empty value in iteration order over keys.
    * Iteration order in modern engines matches insertion order, which
-   * for Zoho responses follows the layout order — close enough to
+   * for CRMProvider responses follows the layout order — close enough to
    * "the field the operator means" in practice.
    */
   const tryKeysFuzzyContains = (substrs: string[]): unknown => {
@@ -496,7 +496,7 @@ export function extractCsFieldsFromRawData(
     ]),
   );
   // CS team's curated authoritative domain — populated at Onboarding handoff.
-  // Tolerant of the common Zoho key variations AND case/separator variants
+  // Tolerant of the common CRMProvider key variations AND case/separator variants
   // (via normalised lookup); pin via env if your field name doesn't normalise
   // to "companydomain" (DUPLICATE_RADAR_FIELD_COMPANY_DOMAIN=<api_name>).
   const companyDomainRaw = tryKeysOrNormalized(
@@ -535,8 +535,8 @@ export function extractCsFieldsFromRawData(
   );
 
   // CS Owner display name — surfaced for the lifecycle violations table so CS
-  // can see who owns the deal without opening Zoho. Tolerant of the common
-  // Zoho key variants; a lookup field may arrive as an object {name}.
+  // can see who owns the deal without opening CRMProvider. Tolerant of the common
+  // CRMProvider key variants; a lookup field may arrive as an object {name}.
   const csOwnerRaw = tryKeysOrNormalized(
     envOr("DUPLICATE_RADAR_FIELD_CS_OWNER", [
       "CS_Owner_Name",
@@ -566,9 +566,9 @@ export function extractCsFieldsFromRawData(
   );
 
   // Last Contact Date — the CS section's last-touch date. Display only.
-  // Tolerant of common Zoho variants + a fuzzy "lastcontact"/"lastactivity"
+  // Tolerant of common CRMProvider variants + a fuzzy "lastcontact"/"lastactivity"
   // fallback; pin with DUPLICATE_RADAR_FIELD_LAST_CONTACT if a tenant's API
-  // name doesn't normalise to one of the candidates. Falls back to Zoho's
+  // name doesn't normalise to one of the candidates. Falls back to CRMProvider's
   // standard Last_Activity_Time only when no dedicated field is present.
   const lastContactRaw =
     tryKeysOrNormalized(
@@ -605,7 +605,7 @@ export function extractCsFieldsFromRawData(
   const csCompanyRaw = csCompanyEnv && csCompanyEnv.trim()
     ? tryKeysOrNormalized([csCompanyEnv.trim()])
     : tryKeysOrNormalized([
-        "Company1",            // Zoho's common auto-suffix when "Company" already exists on the layout
+        "Company1",            // CRMProvider's common auto-suffix when "Company" already exists on the layout
         "Company",
         "CS_Company",
         "Customer_Company",
@@ -613,7 +613,7 @@ export function extractCsFieldsFromRawData(
         "CS_Company_Name",
       ]);
 
-  // ExtID (Admin) — Zoho custom field operators use as an internal
+  // ExtID (Admin) — CRMProvider custom field operators use as an internal
   // reference key (lives in the same Customer Success section as
   // Health). Three-step lookup so the operator never has to hunt for
   // the API name:
@@ -703,7 +703,7 @@ export function extractCsFieldsFromRawData(
 
 /** Pulled from raw_data with the same tolerance as extractCsFieldsFromRawData. */
 export interface ClusterDealInfo {
-  /** Zoho Stage field — drives the open / handoff classification. */
+  /** CRMProvider Stage field — drives the open / handoff classification. */
   stage: string | null;
   /** CS section fields — Phase / Churn Date / Renewal Date / Gov Type / Domain. */
   cs: CsOverlapInput;
@@ -746,7 +746,7 @@ export function resetClusterOverlapConfigCache(): void {
   cachedClusterConfig = null;
 }
 
-/** Pull Zoho Stage out of a raw_data blob, tolerant of common variants. */
+/** Pull CRMProvider Stage out of a raw_data blob, tolerant of common variants. */
 export function extractDealStage(rawData: unknown): string | null {
   if (!rawData || typeof rawData !== "object") return null;
   const r = rawData as Record<string, unknown>;
@@ -755,7 +755,7 @@ export function extractDealStage(rawData: unknown): string | null {
     const v = r[k];
     if (v == null || v === "") continue;
     if (typeof v === "string") return v.trim() || null;
-    // Some Zoho responses wrap stage as { value: "Paid" } — be tolerant.
+    // Some CRMProvider responses wrap stage as { value: "Paid" } — be tolerant.
     if (typeof v === "object") {
       const obj = v as Record<string, unknown>;
       const candidate = obj.value ?? obj.name ?? obj.display_label;

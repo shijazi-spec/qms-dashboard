@@ -5,7 +5,7 @@
 # Fails the build when ANY TypeScript file under src/ contains a raw
 # console.log / console.error / console.warn / console.debug call.
 #
-# Task #61 migrated the four highest-risk modules (zohoCRM, slackNotifications,
+# Task #61 migrated the four highest-risk modules (CRMProviderCRM, ChatProviderNotifications,
 # userAccessRoutes, aiApprovalDatabase) to the logger.ts wrapper.  Task #356
 # migrated the remaining ~90 grandfathered files and removed the allow-list
 # entirely, so the guardrail is now a hard ban: every console.* call must be

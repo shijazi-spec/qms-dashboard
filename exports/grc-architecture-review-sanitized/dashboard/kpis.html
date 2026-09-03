@@ -69,7 +69,7 @@
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.<REDACTED_PHONE> 9m0 0H9m11 11v-5h-.581m0 0a8.<REDACTED_PHONE>-2m15.357 2H15"/></svg>
                     Recalculate
                 </button>
-                <button data-on-click="recalcKPIs" data-args="[true]" id="recalcCycleBtn" class="border border-amber-600 text-amber-700 px-3 py-2 rounded text-sm hover:bg-amber-50 flex items-center gap-1" title="Recalculate AND refresh the Sales Proposal/Agreement cycle times (SALES-KPI-03/04). Calls the Zoho API — up to 40 stage-history requests, so it can take minutes. Normally handled by the nightly job; use this when that has not run or is suspected of failing.">
+                <button data-on-click="recalcKPIs" data-args="[true]" id="recalcCycleBtn" class="border border-amber-600 text-amber-700 px-3 py-2 rounded text-sm hover:bg-amber-50 flex items-center gap-1" title="Recalculate AND refresh the Sales Proposal/Agreement cycle times (SALES-KPI-03/04). Calls the CRMProvider API — up to 40 stage-history requests, so it can take minutes. Normally handled by the nightly job; use this when that has not run or is suspected of failing.">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 <REDACTED_PHONE> 0z"/></svg>
                     + Cycle times
                 </button>
@@ -1066,7 +1066,7 @@
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) { alert(data.error || 'Push failed.'); return; }
                 if (data.configured === false) {
-                    alert('Push not configured.\n\n' + (data.error || 'Set PLATFORM_WEBHOOK_URL and WEBHOOK_SECRET in Replit Secrets, then republish.'));
+                    alert('Push not configured.\n\n' + (data.error || 'Set PLATFORM_WEBHOOK_URL and WEBHOOK_SECRET in HostingPlatform Secrets, then republish.'));
                     return;
                 }
                 const lines = (data.pushed || []).map(p => `${p.ok ? '✓' : '—'} ${p.code}${p.value != null ? ' = ' + p.value + '%' : ''}${p.note ? '  (' + p.note + ')' : ''}`);
@@ -1078,7 +1078,7 @@
             }
         }
         // The Sales cycle-time KPIs (SALES-KPI-03 Proposal, SALES-KPI-04
-        // Agreement) are the only step that calls the Zoho API — up to 40
+        // Agreement) are the only step that calls the CRMProvider API — up to 40
         // sequential per-deal stage-history requests. They are therefore
         // EXCLUDED from the plain Recalculate button, which must stay fast, and
         // normally run only in the nightly job. `withCycleTimes` is the
@@ -1093,8 +1093,8 @@
             const other = document.getElementById(slow ? 'recalcBtn' : 'recalcCycleBtn');
             const orig = btn ? btn.innerHTML : '';
             // Disable BOTH so the two runs can't overlap — they write the same
-            // kpi_values rows, and the slow one holds a Zoho token.
-            if (btn) { btn.disabled = true; btn.innerHTML = slow ? 'Recalculating + Zoho…' : 'Recalculating…'; }
+            // kpi_values rows, and the slow one holds a CRMProvider token.
+            if (btn) { btn.disabled = true; btn.innerHTML = slow ? 'Recalculating + CRMProvider…' : 'Recalculating…'; }
             if (other) other.disabled = true;
             try {
                 const url = slow ? '/api/kpis/recalc?cycleTimes=1' : '/api/kpis/recalc';
@@ -1106,13 +1106,13 @@
                     if (slow) {
                         // Report the two KPIs this run exists for by name. Without
                         // this the operator only sees a total and cannot tell
-                        // whether the Zoho step actually worked — which is the
+                        // whether the CRMProvider step actually worked — which is the
                         // whole reason for running it on demand.
                         const details = Array.isArray(data.details) ? data.details : [];
                         const cycle = details.filter(d => d && (d.code === 'SALES-KPI-03' || d.code === 'SALES-KPI-04'));
                         msg += '\n\nSales cycle times:';
                         if (!cycle.length) {
-                            msg += '\n  • not reported by this run — the Zoho stage-history step did not run. Check the server log for "[KPIProcessCalc] cycle-times failed".';
+                            msg += '\n  • not reported by this run — the CRMProvider stage-history step did not run. Check the server log for "[KPIProcessCalc] cycle-times failed".';
                         } else {
                             cycle.forEach(d => {
                                 msg += `\n  • ${d.code}: ` + (d.value !== undefined && d.value !== null ? `${d.value}` : `no value — ${d.reason || 'unknown reason'}`);
@@ -1126,7 +1126,7 @@
             } catch (e) {
                 console.error('Recalc error:', e);
                 alert(slow
-                    ? 'Failed to recalculate with cycle times. This run calls Zoho and can take minutes — if it timed out, the plain Recalculate still works.'
+                    ? 'Failed to recalculate with cycle times. This run calls CRMProvider and can take minutes — if it timed out, the plain Recalculate still works.'
                     : 'Failed to recalculate KPIs.');
             } finally {
                 if (btn) { btn.disabled = false; btn.innerHTML = orig; }

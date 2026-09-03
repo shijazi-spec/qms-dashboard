@@ -32,7 +32,7 @@ describe("getCompanyBatchRows", () => {
   });
 
   it("maps a NULL stages aggregate to an empty array", async () => {
-    query.mockResolvedValue({ rows: [{ crm_name: "Acme", record_type: "account", n: 1, stages: null }] });
+    query.mockResolvedValue({ rows: [{ crm_name: "Example Organization", record_type: "account", n: 1, stages: null }] });
     const rows = await getCompanyBatchRows("all");
     expect(rows[0].stages).toEqual([]);
   });

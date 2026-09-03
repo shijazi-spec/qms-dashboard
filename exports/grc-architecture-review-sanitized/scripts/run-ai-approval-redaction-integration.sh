@@ -52,8 +52,8 @@
 #   bash scripts/run-ai-approval-redaction-integration.sh
 #
 # Wired into:
-#   - .github/workflows/ai-approval-redaction-integration.yml (dedicated CI)
-#   - .github/workflows/test.yml via RUN_APPROVAL_REDACTION_INTEGRATION_E2E=1
+#   - .SourceControlProvider/workflows/ai-approval-redaction-integration.yml (dedicated CI)
+#   - .SourceControlProvider/workflows/test.yml via RUN_APPROVAL_REDACTION_INTEGRATION_E2E=1
 #   - tests/runIntegrationTests.ts when RUN_APPROVAL_REDACTION_INTEGRATION_E2E=1
 # ----------------------------------------------------------------------------
 set -euo pipefail
@@ -77,8 +77,8 @@ if [ "${#missing[@]}" -gt 0 ]; then
   echo "   every signed cookie comes back as 401)." >&2
   echo "" >&2
   echo "   In CI these are set in" >&2
-  echo "   .github/workflows/ai-approval-redaction-integration.yml and" >&2
-  echo "   .github/workflows/test.yml. Locally, export them before running" >&2
+  echo "   .SourceControlProvider/workflows/ai-approval-redaction-integration.yml and" >&2
+  echo "   .SourceControlProvider/workflows/test.yml. Locally, export them before running" >&2
   echo "   this script." >&2
   exit 2
 fi

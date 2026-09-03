@@ -2,7 +2,7 @@
  * Tool-Health Alert Notifier
  *
  * Goal: when the per-tool health cron opens a NEW `tool_health` alert, page
- * on-call via Slack and/or email so the breach is noticed even when nobody
+ * on-call via ChatProvider and/or email so the breach is noticed even when nobody
  * is staring at the AI Operations panel.
  *
  * Wiring:
@@ -23,15 +23,15 @@
  *
  * Configuration (matches the `TOOL_HEALTH_*` env-var convention used by
  * the cron's `TOOL_HEALTH_THRESHOLDS`):
- *   - `TOOL_HEALTH_SLACK_CHANNEL`        — Slack channel id/name to page.
- *                                          Falls back to `SLACK_CHANNEL_ID`
+ *   - `TOOL_HEALTH_ChatProvider_CHANNEL`        — ChatProvider channel id/name to page.
+ *                                          Falls back to `ChatProvider_CHANNEL_ID`
  *                                          only when explicitly opted-in
- *                                          via `TOOL_HEALTH_SLACK_USE_DEFAULT_CHANNEL=1`,
+ *                                          via `TOOL_HEALTH_ChatProvider_USE_DEFAULT_CHANNEL=1`,
  *                                          to avoid accidentally posting
  *                                          tool-health alerts to the QMS
  *                                          channel.
  *   - `TOOL_HEALTH_ALERT_EMAIL`          — comma-separated recipient list
- *                                          for the Resend email.
+ *                                          for the EmailProvider email.
  *   - `TOOL_HEALTH_NOTIFY_THROTTLE_MIN`  — minutes within which the same
  *                                          `<tool_name>:<reason>` key will
  *                                          not be paged twice. Default 60.
@@ -41,12 +41,12 @@
  *                                          relative path.
  *
  * The module exposes a small dep-injection surface so unit tests can
- * stub Slack/Resend without touching the real APIs and can reset the
+ * stub ChatProvider/EmailProvider without touching the real APIs and can reset the
  * throttle map between runs.
  */
 
-import { sendSlackNotification, postSlackMessage } from "./slackNotifications";
-import { sendResendEmail, type ResendEmailOptions } from "./resendMail";
+import { sendChatProviderNotification, postChatProviderMessage } from "./ChatProviderNotifications";
+import { sendEmailProviderEmail, type EmailProviderEmailOptions } from "./EmailProviderMail";
 import {
   type AlertSeverity,
   claimToolHealthNotifySlot,
@@ -87,20 +87,20 @@ export interface ToolHealthBreachNotification {
 }
 
 export interface NotifyToolHealthBreachResult {
-  slackSent: boolean;
+  ChatProviderSent: boolean;
   emailSent: boolean;
   /** True when the throttle map blocked the page entirely. */
   throttled: boolean;
-  /** True when neither Slack nor email is configured. */
+  /** True when neither ChatProvider nor email is configured. */
   skipped: boolean;
 }
 
 export interface ToolHealthNotifierDeps {
-  /** Defaults to `sendSlackNotification`. */
-  sendSlack?: typeof sendSlackNotification;
-  /** Defaults to `sendResendEmail`. */
+  /** Defaults to `sendChatProviderNotification`. */
+  sendChatProvider?: typeof sendChatProviderNotification;
+  /** Defaults to `sendEmailProviderEmail`. */
   sendEmail?: (
-    opts: ResendEmailOptions,
+    opts: EmailProviderEmailOptions,
   ) => Promise<{ success: boolean; id?: string; error?: string }>;
   /** Defaults to `Date.now`. Tests inject a deterministic clock. */
   now?: () => number;
@@ -142,12 +142,12 @@ function envInt(name: string, fallback: number): number {
 }
 
 function readConfig() {
-  const useDefaultSlack =
-    process.env.TOOL_HEALTH_SLACK_USE_DEFAULT_CHANNEL === "1";
-  const slackChannel =
-    (process.env.TOOL_HEALTH_SLACK_CHANNEL || "").trim() ||
-    (useDefaultSlack
-      ? (process.env.SLACK_CHANNEL_ID || "").trim() || null
+  const useDefaultChatProvider =
+    process.env.TOOL_HEALTH_ChatProvider_USE_DEFAULT_CHANNEL === "1";
+  const ChatProviderChannel =
+    (process.env.TOOL_HEALTH_ChatProvider_CHANNEL || "").trim() ||
+    (useDefaultChatProvider
+      ? (process.env.ChatProvider_CHANNEL_ID || "").trim() || null
       : null) ||
     null;
   const emailRaw = (process.env.TOOL_HEALTH_ALERT_EMAIL || "").trim();
@@ -161,7 +161,7 @@ function readConfig() {
     .trim()
     .replace(/\/+$/, "");
   // `link` is always emit-able (relative when no base URL is set); `linkIsAbsolute`
-  // gates Slack's action button — Slack rejects blocks whose button.url is a
+  // gates ChatProvider's action button — ChatProvider rejects blocks whose button.url is a
   // relative path, so we degrade to a plain mrkdwn link in that case.
   // The AI Operations page was retired; point recipients at the main
   // dashboard instead. The legacy `?tab=…` query suffix appended further
@@ -171,7 +171,7 @@ function readConfig() {
     : `/dashboard`;
   const linkIsAbsolute = /^https?:\/\//i.test(link);
   return {
-    slackChannel: slackChannel || null,
+    ChatProviderChannel: ChatProviderChannel || null,
     emailRecipients,
     link,
     linkIsAbsolute,
@@ -182,7 +182,7 @@ function readConfig() {
 // ──────────────────────────────────────────────────────────────────────────────
 // Throttle map (in-process). Keyed on `<tool_name>:<reason>`, value is the
 // epoch ms at which the last successful page was sent. The cron's DB-level
-// dedupe (open ai_alerts row) is the primary mechanism — this is a safety
+// dedupe (LLMProvider_alerts row) is the primary mechanism — this is a safety
 // net so a flapping breach can't double-page the same key within the
 // configured window.
 // ──────────────────────────────────────────────────────────────────────────────
@@ -254,7 +254,7 @@ function reasonLabel(reason: ToolHealthReason): string {
   return reason === "error_rate" ? "Error rate" : "P95 latency";
 }
 
-function buildSlackBlocks(
+function buildChatProviderBlocks(
   n: ToolHealthBreachNotification,
   link: string,
   linkIsAbsolute: boolean,
@@ -289,7 +289,7 @@ function buildSlackBlocks(
       text: { type: "mrkdwn", text: `*Suggested action:*\n${n.suggestion}` },
     });
   }
-  // Slack's `actions.button.url` REQUIRES an absolute URL — posting a
+  // ChatProvider's `actions.button.url` REQUIRES an absolute URL — posting a
   // relative path causes the whole message to be rejected with
   // `invalid_blocks`. Fall back to a plain mrkdwn-link section when
   // `TOOL_HEALTH_APP_URL` is unset so dev/test environments still get a
@@ -302,7 +302,7 @@ function buildSlackBlocks(
           type: "button",
           text: {
             type: "plain_text",
-            text: "Open AI Operations panel",
+            text: "LLMProvider Operations panel",
             emoji: true,
           },
           url: link,
@@ -394,7 +394,7 @@ function escapeHtml(s: string): string {
 /**
  * Page on-call about a newly-opened `tool_health` alert.
  *
- * Safe to call unconditionally: when neither Slack nor email is configured
+ * Safe to call unconditionally: when neither ChatProvider nor email is configured
  * the function returns `{ skipped: true }` without throwing, so the cron
  * does not need to special-case dev/test environments.
  */
@@ -403,15 +403,15 @@ export async function notifyToolHealthBreach(
   depsOverride: ToolHealthNotifierDeps = {},
 ): Promise<NotifyToolHealthBreachResult> {
   const cfg = readConfig();
-  const sendSlack = depsOverride.sendSlack ?? sendSlackNotification;
-  const sendEmail = depsOverride.sendEmail ?? sendResendEmail;
+  const sendChatProvider = depsOverride.sendChatProvider ?? sendChatProviderNotification;
+  const sendEmail = depsOverride.sendEmail ?? sendEmailProviderEmail;
   const nowFn = depsOverride.now ?? Date.now;
   const claimDb = depsOverride.claimDb ?? claimToolHealthNotifySlot;
   const recordResult =
     depsOverride.recordResult ?? recordAlertNotificationResult;
 
   const result: NotifyToolHealthBreachResult = {
-    slackSent: false,
+    ChatProviderSent: false,
     emailSent: false,
     throttled: false,
     skipped: false,
@@ -434,10 +434,10 @@ export async function notifyToolHealthBreach(
     }
   };
 
-  if (!cfg.slackChannel && cfg.emailRecipients.length === 0) {
+  if (!cfg.ChatProviderChannel && cfg.emailRecipients.length === 0) {
     // Nothing configured — explicitly mark as skipped so callers can log/count.
     // Persist 'not_configured' so the dashboard can surface a warning that
-    // ops needs to set TOOL_HEALTH_SLACK_CHANNEL / TOOL_HEALTH_ALERT_EMAIL.
+    // ops needs to set TOOL_HEALTH_ChatProvider_CHANNEL / TOOL_HEALTH_ALERT_EMAIL.
     result.skipped = true;
     await persist("not_configured");
     return result;
@@ -482,23 +482,23 @@ export async function notifyToolHealthBreach(
     lastNotifiedAt.set(key, now);
   }
 
-  if (cfg.slackChannel) {
+  if (cfg.ChatProviderChannel) {
     const fallback =
       `${severityEmoji(notification.severity)} Tool health alert: ` +
       `${notification.tool_name} — ${reasonLabel(notification.reason)} ` +
       `(${notification.severity.toUpperCase()})`;
     try {
-      result.slackSent = await sendSlack(
-        cfg.slackChannel,
+      result.ChatProviderSent = await sendChatProvider(
+        cfg.ChatProviderChannel,
         fallback,
-        buildSlackBlocks(notification, cfg.link, cfg.linkIsAbsolute),
+        buildChatProviderBlocks(notification, cfg.link, cfg.linkIsAbsolute),
       );
     } catch (err) {
       logger.error(
-        `[ToolHealthNotifier] Slack send threw for ${notification.related_record_id}:`,
+        `[ToolHealthNotifier] ChatProvider send threw for ${notification.related_record_id}:`,
         err,
       );
-      result.slackSent = false;
+      result.ChatProviderSent = false;
     }
   }
 
@@ -521,18 +521,18 @@ export async function notifyToolHealthBreach(
   }
 
   // Compute the channel label for persistence. Knowing what was *configured*
-  // vs what *actually delivered* matters: an "email_only" outcome with Slack
-  // configured but failing tells ops "Slack is broken" — distinct from
-  // "email" (where Slack was simply not set up).
-  const slackConfigured = !!cfg.slackChannel;
+  // vs what *actually delivered* matters: an "email_only" outcome with ChatProvider
+  // configured but failing tells ops "ChatProvider is broken" — distinct from
+  // "email" (where ChatProvider was simply not set up).
+  const ChatProviderConfigured = !!cfg.ChatProviderChannel;
   const emailConfigured = cfg.emailRecipients.length > 0;
   let channel: string;
-  if (result.slackSent && result.emailSent) {
-    channel = "slack+email";
-  } else if (result.slackSent) {
-    channel = emailConfigured ? "slack_only" : "slack";
+  if (result.ChatProviderSent && result.emailSent) {
+    channel = "ChatProvider+email";
+  } else if (result.ChatProviderSent) {
+    channel = emailConfigured ? "ChatProvider_only" : "ChatProvider";
   } else if (result.emailSent) {
-    channel = slackConfigured ? "email_only" : "email";
+    channel = ChatProviderConfigured ? "email_only" : "email";
   } else {
     channel = "failed";
   }
@@ -545,19 +545,19 @@ export async function notifyToolHealthBreach(
 // Tool-health threshold-tuning notifier (Task #190)
 //
 // When an admin tunes the per-tool health alert thresholds via the AI Ops
-// panel, post a Slack message to the same on-call channel the breach
+// panel, post a ChatProvider message to the same on-call channel the breach
 // notifier uses so changes don't sit silently in the DB audit log.
 //
 // Gating:
 //   • `TOOL_HEALTH_CONFIG_NOTIFY=1` opts the behavior in. Any other value
 //     (including unset) skips the post — matches the breach notifier's
 //     "safe in dev/test by default" stance.
-//   • Slack channel resolution reuses `readConfig()` (above), so the
-//     `TOOL_HEALTH_SLACK_CHANNEL` / `TOOL_HEALTH_SLACK_USE_DEFAULT_CHANNEL`
+//   • ChatProvider channel resolution reuses `readConfig()` (above), so the
+//     `TOOL_HEALTH_ChatProvider_CHANNEL` / `TOOL_HEALTH_ChatProvider_USE_DEFAULT_CHANNEL`
 //     env-var rules apply identically.
 //
 // Best-effort:
-//   • Caller awaits but never throws — Slack outages must not block a
+//   • Caller awaits but never throws — ChatProvider outages must not block a
 //     successful threshold save.
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -606,35 +606,35 @@ export interface ToolHealthConfigChangeNotification {
 }
 
 export interface NotifyToolHealthConfigChangeResult {
-  slackSent: boolean;
+  ChatProviderSent: boolean;
   emailSent: boolean;
   /** True when no override field actually changed (no message posted). */
   noChanges: boolean;
   /** True when `TOOL_HEALTH_CONFIG_NOTIFY` is not opted in. */
   disabled: boolean;
-  /** True when neither Slack nor email is configured. */
+  /** True when neither ChatProvider nor email is configured. */
   skipped: boolean;
 }
 
 export interface ToolHealthConfigChangeNotifierDeps {
   /**
-   * Boolean-returning Slack send dep, kept for back-compat with existing
-   * test stubs. When provided AND `postSlack` is not, threading is
+   * Boolean-returning ChatProvider send dep, kept for back-compat with existing
+   * test stubs. When provided AND `postChatProvider` is not, threading is
    * disabled because we have no `ts` to persist — the post still goes
    * out, it just starts a fresh root every time. Production wiring leaves
-   * both unset and falls through to `postSlackMessage`, which preserves
+   * both unset and falls through to `postChatProviderMessage`, which preserves
    * threading.
    */
-  sendSlack?: typeof sendSlackNotification;
+  sendChatProvider?: typeof sendChatProviderNotification;
   /**
-   * Threading-aware Slack send dep that returns the message `ts` so the
+   * Threading-aware ChatProvider send dep that returns the message `ts` so the
    * notifier can persist a daily root and reply-thread under it on
-   * subsequent posts (Task #383). Defaults to `postSlackMessage`. Takes
-   * precedence over `sendSlack` when both are supplied.
+   * subsequent posts (Task #383). Defaults to `postChatProviderMessage`. Takes
+   * precedence over `sendChatProvider` when both are supplied.
    */
-  postSlack?: typeof postSlackMessage;
+  postChatProvider?: typeof postChatProviderMessage;
   /**
-   * Look up today's persisted Slack `ts` for the "config_change" notify
+   * Look up today's persisted ChatProvider `ts` for the "config_change" notify
    * key. Returns `null` when no root has been posted yet today. Defaults
    * to `getNotifyThreadTs` from `toolHealthConfigDatabase`.
    */
@@ -658,14 +658,14 @@ export interface ToolHealthConfigChangeNotifierDeps {
    * inject a stub so no real DB connection is required.
    */
   getAudit?: (limit: number) => Promise<ToolHealthConfigAuditEntry[]>;
-  /** Defaults to `sendResendEmail`. */
+  /** Defaults to `sendEmailProviderEmail`. */
   sendEmail?: (
-    opts: ResendEmailOptions,
+    opts: EmailProviderEmailOptions,
   ) => Promise<{ success: boolean; id?: string; error?: string }>;
 }
 
 /**
- * Notify-key for the per-day Slack thread that folds together repeated
+ * Notify-key for the per-day ChatProvider thread that folds together repeated
  * threshold-tune messages (Task #383). Exported for tests / observability —
  * other notification kinds (override expiry, breach, recovery) intentionally
  * do not thread because each event is operationally meaningful in its own
@@ -735,7 +735,7 @@ function formatAuditEntrySummary(entry: ToolHealthConfigAuditEntry): string {
 }
 
 /**
- * Render the per-row counts of a breach diff into Slack mrkdwn lines for
+ * Render the per-row counts of a breach diff into ChatProvider mrkdwn lines for
  * the "Impact" section. Returns `null` when the diff has zero entries
  * across all three buckets so the caller can omit the section entirely
  * rather than render an empty block.
@@ -836,7 +836,7 @@ function buildConfigChangeBlocks(
     });
   }
 
-  // Slack rejects relative URLs in actions.button.url; degrade to a plain
+  // ChatProvider rejects relative URLs in actions.button.url; degrade to a plain
   // mrkdwn link section in that case (mirrors the breach notifier).
   if (linkIsAbsolute) {
     blocks.push({
@@ -938,12 +938,12 @@ function buildConfigChangeEmailText(
 }
 
 /**
- * Post a Slack message and/or send an email summarising a successful
+ * Post a ChatProvider message and/or send an email summarising a successful
  * tool-health-config tuning operation. Best-effort: never throws, returns a
  * result object so the caller can log/count.
  *
  * Safe to call unconditionally — when `TOOL_HEALTH_CONFIG_NOTIFY` is not
- * set to "1", or when neither Slack nor email is configured, the function
+ * set to "1", or when neither ChatProvider nor email is configured, the function
  * returns `{ disabled: true }` / `{ skipped: true }` without sending anything.
  */
 export async function notifyToolHealthConfigChange(
@@ -951,7 +951,7 @@ export async function notifyToolHealthConfigChange(
   depsOverride: ToolHealthConfigChangeNotifierDeps = {},
 ): Promise<NotifyToolHealthConfigChangeResult> {
   const result: NotifyToolHealthConfigChangeResult = {
-    slackSent: false,
+    ChatProviderSent: false,
     emailSent: false,
     noChanges: false,
     disabled: false,
@@ -964,7 +964,7 @@ export async function notifyToolHealthConfigChange(
   }
 
   const cfg = readConfig();
-  if (!cfg.slackChannel && cfg.emailRecipients.length === 0) {
+  if (!cfg.ChatProviderChannel && cfg.emailRecipients.length === 0) {
     result.skipped = true;
     return result;
   }
@@ -982,21 +982,21 @@ export async function notifyToolHealthConfigChange(
   // `?tab=…` switch in dashboard/ai-ops.html (DOMContentLoaded handler).
   const link = `${cfg.link}?tab=thresholds`;
 
-  if (cfg.slackChannel) {
-    // Resolve the Slack send. `postSlack` (returns ts) wins when supplied
+  if (cfg.ChatProviderChannel) {
+    // Resolve the ChatProvider send. `postChatProvider` (returns ts) wins when supplied
     // so the threading bookkeeping has something to persist. Otherwise fall
-    // through to `sendSlack` (legacy boolean) wrapped into the same shape —
+    // through to `sendChatProvider` (legacy boolean) wrapped into the same shape —
     // when only the legacy dep is provided we lose the ts and therefore
     // can't fold the post into a thread, but the message still goes out so
     // dev/test wiring keeps working unchanged.
-    const postSlack: typeof postSlackMessage =
-      depsOverride.postSlack ??
-      (depsOverride.sendSlack
+    const postChatProvider: typeof postChatProviderMessage =
+      depsOverride.postChatProvider ??
+      (depsOverride.sendChatProvider
         ? async (channel, text, blocks, thread_ts) => ({
-            ok: await depsOverride.sendSlack!(channel, text, blocks, thread_ts),
+            ok: await depsOverride.sendChatProvider!(channel, text, blocks, thread_ts),
             ts: null,
           })
-        : postSlackMessage);
+        : postChatProviderMessage);
 
     // Look up today's persisted root ts (Task #383). Best-effort — a DB
     // hiccup just means we start a fresh thread root, which is the correct
@@ -1031,7 +1031,7 @@ export async function notifyToolHealthConfigChange(
 
     // Fetch the last 3 audit entries from the DB (including the one just
     // written) so on-call can see "what's changed recently?" in a single
-    // glance. Best-effort: a DB failure must never block the Slack send.
+    // glance. Best-effort: a DB failure must never block the ChatProvider send.
     // The default loader is imported lazily to avoid a circular-module risk;
     // tests inject a stub via depsOverride.getAudit.
     let recentAudit: ToolHealthConfigAuditEntry[] = [];
@@ -1042,7 +1042,7 @@ export async function notifyToolHealthConfigChange(
       recentAudit = await getAuditFn(3);
     } catch (auditErr) {
       logger.error(
-        "[ToolHealthNotifier] Failed to load recent audit entries for Slack block (best-effort):",
+        "[ToolHealthNotifier] Failed to load recent audit entries for ChatProvider block (best-effort):",
         auditErr,
       );
     }
@@ -1051,8 +1051,8 @@ export async function notifyToolHealthConfigChange(
       `:wrench: Tool-health alert thresholds updated by ${notification.changedBy || "—"} ` +
       `(${changes.length} change${changes.length === 1 ? "" : "s"})`;
     try {
-      const r = await postSlack(
-        cfg.slackChannel,
+      const r = await postChatProvider(
+        cfg.ChatProviderChannel,
         fallback,
         buildConfigChangeBlocks(
           notification,
@@ -1063,10 +1063,10 @@ export async function notifyToolHealthConfigChange(
         ),
         existingThreadTs ?? undefined,
       );
-      result.slackSent = r.ok;
+      result.ChatProviderSent = r.ok;
 
       // Persist the freshly-posted root only when we successfully posted
-      // a NEW root (no existing thread today) and Slack handed us a ts.
+      // a NEW root (no existing thread today) and ChatProvider handed us a ts.
       // Skipping on a thread reply keeps the row pinned to the original
       // root so subsequent posts continue to thread under it.
       if (r.ok && r.ts && !existingThreadTs) {
@@ -1081,15 +1081,15 @@ export async function notifyToolHealthConfigChange(
       }
     } catch (err) {
       logger.error(
-        "[ToolHealthNotifier] Slack send threw for config change notification:",
+        "[ToolHealthNotifier] ChatProvider send threw for config change notification:",
         err,
       );
-      result.slackSent = false;
+      result.ChatProviderSent = false;
     }
   }
 
   if (cfg.emailRecipients.length > 0) {
-    const sendEmail = depsOverride.sendEmail ?? sendResendEmail;
+    const sendEmail = depsOverride.sendEmail ?? sendEmailProviderEmail;
     const subject = `[Tool Health · Thresholds Updated] ${changes.length} change${changes.length === 1 ? "" : "s"} by ${notification.changedBy || "—"}`;
     try {
       const sendResult = await sendEmail({
@@ -1115,7 +1115,7 @@ export async function notifyToolHealthConfigChange(
 // Override auto-revert notification (Task #213)
 //
 // When the cron's reaper clears an expired tool-health override row, post a
-// Slack message to the same on-call channel so the team notices that the
+// ChatProvider message to the same on-call channel so the team notices that the
 // env baseline has taken back over. Best-effort: failure is logged but
 // never propagates back to the cron.
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1168,14 +1168,14 @@ export interface ToolHealthOverrideExpiredNotification {
 }
 
 export interface NotifyOverrideExpiredResult {
-  slackSent: boolean;
-  /** True when no Slack channel is configured — caller can ignore quietly. */
+  ChatProviderSent: boolean;
+  /** True when no ChatProvider channel is configured — caller can ignore quietly. */
   skipped: boolean;
 }
 
 export interface ToolHealthOverrideNotifierDeps {
-  /** Defaults to `sendSlackNotification`. */
-  sendSlack?: typeof sendSlackNotification;
+  /** Defaults to `sendChatProviderNotification`. */
+  sendChatProvider?: typeof sendChatProviderNotification;
   /**
    * Fetches the most recent N audit entries, newest first. Defaults to
    * `getToolHealthConfigAudit` from `toolHealthConfigDatabase`. Tests can
@@ -1184,7 +1184,7 @@ export interface ToolHealthOverrideNotifierDeps {
   getAudit?: (limit: number) => Promise<ToolHealthConfigAuditEntry[]>;
 }
 
-function buildOverrideExpiredSlackBlocks(
+function buildOverrideExpiredChatProviderBlocks(
   n: ToolHealthOverrideExpiredNotification,
   link: string,
   linkIsAbsolute: boolean,
@@ -1228,7 +1228,7 @@ function buildOverrideExpiredSlackBlocks(
   ];
   // "Recent changes" — same pattern as the threshold-tuning notifier
   // (Task #205). Surfaces the last few audit entries so on-call can see
-  // "what's been tuned recently?" without leaving Slack (Task #384).
+  // "what's been tuned recently?" without leaving ChatProvider (Task #384).
   if (recentAudit.length > 0) {
     const lines = recentAudit.map(formatAuditEntrySummary);
     blocks.push({
@@ -1239,9 +1239,9 @@ function buildOverrideExpiredSlackBlocks(
       },
     });
   }
-  // Slack rejects relative URLs in `actions.button.url`, so degrade to a
+  // ChatProvider rejects relative URLs in `actions.button.url`, so degrade to a
   // plain mrkdwn link when no public origin is configured (mirrors the
-  // breach notifier's behavior — see buildSlackBlocks).
+  // breach notifier's behavior — see buildChatProviderBlocks).
   if (linkIsAbsolute) {
     blocks.push({
       type: "actions",
@@ -1285,15 +1285,15 @@ function buildOverrideExpiredSlackBlocks(
 }
 
 /**
- * Post a Slack message announcing that the time-boxed override row was
+ * Post a ChatProvider message announcing that the time-boxed override row was
  * auto-reverted by the cron's reaper (Task #213).
  *
  * Best-effort by design — the cron calls this AFTER the reaper has already
- * cleared the row and written the audit entry, so a Slack outage must not
+ * cleared the row and written the audit entry, so a ChatProvider outage must not
  * roll back the revert. The function therefore:
- *   • returns `{ skipped: true }` when no Slack channel is configured
+ *   • returns `{ skipped: true }` when no ChatProvider channel is configured
  *     (dev/test environments shouldn't have to special-case the call);
- *   • catches and logs any error from `sendSlack` so the caller can stay
+ *   • catches and logs any error from `sendChatProvider` so the caller can stay
  *     in a single try/catch around the whole cron tick;
  *   • does NOT consult the breach throttle map — a reaper firing is a
  *     comparatively rare event and operators want to see every one.
@@ -1307,14 +1307,14 @@ export async function notifyToolHealthOverrideExpired(
   depsOverride: ToolHealthOverrideNotifierDeps = {},
 ): Promise<NotifyOverrideExpiredResult> {
   const cfg = readConfig();
-  const sendSlack = depsOverride.sendSlack ?? sendSlackNotification;
+  const sendChatProvider = depsOverride.sendChatProvider ?? sendChatProviderNotification;
 
   const result: NotifyOverrideExpiredResult = {
-    slackSent: false,
+    ChatProviderSent: false,
     skipped: false,
   };
 
-  if (!cfg.slackChannel) {
+  if (!cfg.ChatProviderChannel) {
     result.skipped = true;
     return result;
   }
@@ -1336,10 +1336,10 @@ export async function notifyToolHealthOverrideExpired(
     `${setBy} just auto-reverted; alerts now using env baseline ` +
     `again. Cleared: ${describeClearedOverridesPlain(notification.cleared_overrides)}.`;
 
-  // Best-effort: pull the last 3 audit entries so the Slack message gives
+  // Best-effort: pull the last 3 audit entries so the ChatProvider message gives
   // on-call the same "what's changed recently?" view the manual tune
   // notification provides (Task #205 / Task #384). A DB hiccup must not
-  // block the Slack send — swallow the error and post without the block.
+  // block the ChatProvider send — swallow the error and post without the block.
   let recentAudit: ToolHealthConfigAuditEntry[] = [];
   try {
     const getAuditFn =
@@ -1348,16 +1348,16 @@ export async function notifyToolHealthOverrideExpired(
     recentAudit = await getAuditFn(3);
   } catch (auditErr) {
     logger.error(
-      "[ToolHealthNotifier] Failed to load recent audit entries for override-expired Slack block (best-effort):",
+      "[ToolHealthNotifier] Failed to load recent audit entries for override-expired ChatProvider block (best-effort):",
       auditErr,
     );
   }
 
   try {
-    result.slackSent = await sendSlack(
-      cfg.slackChannel,
+    result.ChatProviderSent = await sendChatProvider(
+      cfg.ChatProviderChannel,
       fallback,
-      buildOverrideExpiredSlackBlocks(
+      buildOverrideExpiredChatProviderBlocks(
         notification,
         link,
         cfg.linkIsAbsolute,
@@ -1366,11 +1366,11 @@ export async function notifyToolHealthOverrideExpired(
     );
   } catch (err) {
     logger.error(
-      `[ToolHealthNotifier] Slack send threw for override auto-revert ` +
+      `[ToolHealthNotifier] ChatProvider send threw for override auto-revert ` +
         `(audit_id=${notification.audit_id ?? "?"}):`,
       err,
     );
-    result.slackSent = false;
+    result.ChatProviderSent = false;
   }
 
   return result;
@@ -1379,7 +1379,7 @@ export async function notifyToolHealthOverrideExpired(
 // ──────────────────────────────────────────────────────────────────────────────
 // Override expiry pre-warning notification (Task #219)
 //
-// Before the reaper clears an expired override, post a Slack heads-up while
+// Before the reaper clears an expired override, post a ChatProvider heads-up while
 // the admin still has time to extend it. The warning fires once per unique
 // `expires_at` value (in-process dedupe keyed on the ISO timestamp) so it
 // does not repeat on every cron tick during the warning window.
@@ -1390,7 +1390,7 @@ export async function notifyToolHealthOverrideExpired(
 //     `getToolHealthOverrideExpiringSoon()` with the resulting window.
 //
 // Best-effort:
-//   Never throws; a Slack outage must not block the surrounding cron pass.
+//   Never throws; a ChatProvider outage must not block the surrounding cron pass.
 // ──────────────────────────────────────────────────────────────────────────────
 
 export interface ToolHealthOverrideExpiringSoonNotification {
@@ -1409,8 +1409,8 @@ export interface ToolHealthOverrideExpiringSoonNotification {
 }
 
 export interface NotifyOverrideExpiringSoonResult {
-  slackSent: boolean;
-  /** True when no Slack channel is configured. */
+  ChatProviderSent: boolean;
+  /** True when no ChatProvider channel is configured. */
   skipped: boolean;
   /**
    * True when this exact `expires_at` timestamp was already warned during
@@ -1423,7 +1423,7 @@ export interface NotifyOverrideExpiringSoonResult {
 /**
  * In-process deduplication set for expiry pre-warnings. Keyed on the
  * `expires_at` ISO string so each impending expiry produces exactly one
- * Slack post per process lifetime.
+ * ChatProvider post per process lifetime.
  *
  * @internal
  */
@@ -1434,7 +1434,7 @@ export function _resetOverrideExpirySoonWarningsForTests(): void {
   _warnedExpiryAtKeys.clear();
 }
 
-function buildOverrideExpiringSoonSlackBlocks(
+function buildOverrideExpiringSoonChatProviderBlocks(
   n: ToolHealthOverrideExpiringSoonNotification,
   link: string,
   linkIsAbsolute: boolean,
@@ -1514,7 +1514,7 @@ function buildOverrideExpiringSoonSlackBlocks(
 }
 
 /**
- * Post a Slack heads-up that a time-boxed tool-health override will expire
+ * Post a ChatProvider heads-up that a time-boxed tool-health override will expire
  * within the configured warning window (Task #219).
  *
  * Deduplication: each unique `expires_at` value is posted at most once per
@@ -1523,7 +1523,7 @@ function buildOverrideExpiringSoonSlackBlocks(
  * is then silent for the remaining ticks — exactly one advance notice per
  * scheduled revert.
  *
- * Best-effort by design — a Slack outage must not block the surrounding
+ * Best-effort by design — a ChatProvider outage must not block the surrounding
  * cron pass. Returns `{ skipped: true }` when no channel is configured;
  * `{ deduped: true }` when this expiry was already warned.
  */
@@ -1532,7 +1532,7 @@ export async function notifyToolHealthOverrideExpiringSoon(
   depsOverride: ToolHealthOverrideNotifierDeps = {},
 ): Promise<NotifyOverrideExpiringSoonResult> {
   const result: NotifyOverrideExpiringSoonResult = {
-    slackSent: false,
+    ChatProviderSent: false,
     skipped: false,
     deduped: false,
   };
@@ -1544,14 +1544,14 @@ export async function notifyToolHealthOverrideExpiringSoon(
   }
 
   const cfg = readConfig();
-  const sendSlack = depsOverride.sendSlack ?? sendSlackNotification;
+  const sendChatProvider = depsOverride.sendChatProvider ?? sendChatProviderNotification;
 
-  if (!cfg.slackChannel) {
+  if (!cfg.ChatProviderChannel) {
     result.skipped = true;
     return result;
   }
 
-  // Mark as warned immediately (before the send) so a throw in sendSlack
+  // Mark as warned immediately (before the send) so a throw in sendChatProvider
   // doesn't trigger a double-post on the next tick.
   _warnedExpiryAtKeys.add(dedupeKey);
 
@@ -1566,10 +1566,10 @@ export async function notifyToolHealthOverrideExpiringSoon(
     `Extend it now if still needed.`;
 
   try {
-    result.slackSent = await sendSlack(
-      cfg.slackChannel,
+    result.ChatProviderSent = await sendChatProvider(
+      cfg.ChatProviderChannel,
       fallback,
-      buildOverrideExpiringSoonSlackBlocks(
+      buildOverrideExpiringSoonChatProviderBlocks(
         notification,
         link,
         cfg.linkIsAbsolute,
@@ -1577,11 +1577,11 @@ export async function notifyToolHealthOverrideExpiringSoon(
     );
   } catch (err) {
     logger.error(
-      `[ToolHealthNotifier] Slack send threw for override expiry pre-warning ` +
+      `[ToolHealthNotifier] ChatProvider send threw for override expiry pre-warning ` +
         `(expires_at=${dedupeKey}):`,
       err,
     );
-    result.slackSent = false;
+    result.ChatProviderSent = false;
   }
 
   return result;
@@ -1596,7 +1596,7 @@ export async function notifyToolHealthOverrideExpiringSoon(
 // refresh the dashboard.
 //
 // Design notes:
-//   • Uses the same `TOOL_HEALTH_SLACK_CHANNEL` / `TOOL_HEALTH_ALERT_EMAIL`
+//   • Uses the same `TOOL_HEALTH_ChatProvider_CHANNEL` / `TOOL_HEALTH_ALERT_EMAIL`
 //     / `TOOL_HEALTH_APP_URL` env settings as the breach notifier — no new
 //     env vars required.
 //   • NOT throttled by the breach-side throttle map. Recovery is its own
@@ -1638,11 +1638,11 @@ export interface ToolHealthRecoveryNotification {
 }
 
 export interface NotifyToolHealthRecoveryResult {
-  slackSent: boolean;
+  ChatProviderSent: boolean;
   emailSent: boolean;
   /**
    * True when the recovery page was suppressed for any reason: neither
-   * Slack nor email is configured, OR the operator opted this tool (or
+   * ChatProvider nor email is configured, OR the operator opted this tool (or
    * all recoveries) out via `TOOL_HEALTH_RECOVERY_NOTIFY=0` /
    * `TOOL_HEALTH_RECOVERY_SKIP_TOOLS=<csv>`.
    *
@@ -1653,7 +1653,7 @@ export interface NotifyToolHealthRecoveryResult {
   /**
    * True when the suppression was caused by an explicit opt-out
    * (env-var gate or per-tool skip list). Distinct from the
-   * "no Slack channel & no email recipient" case so dashboards can
+   * "no ChatProvider channel & no email recipient" case so dashboards can
    * surface "operator silenced this tool" separately from "ops needs
    * to configure a transport".
    *
@@ -1663,11 +1663,11 @@ export interface NotifyToolHealthRecoveryResult {
 }
 
 export interface ToolHealthRecoveryNotifierDeps {
-  /** Defaults to `sendSlackNotification`. */
-  sendSlack?: typeof sendSlackNotification;
-  /** Defaults to `sendResendEmail`. */
+  /** Defaults to `sendChatProviderNotification`. */
+  sendChatProvider?: typeof sendChatProviderNotification;
+  /** Defaults to `sendEmailProviderEmail`. */
   sendEmail?: (
-    opts: ResendEmailOptions,
+    opts: EmailProviderEmailOptions,
   ) => Promise<{ success: boolean; id?: string; error?: string }>;
 }
 
@@ -1702,7 +1702,7 @@ function coerceToDate(
  * instead of showing nonsense like "−2m".
  *
  * This is the canonical "how long was the alert open?" formatter used by
- * the Slack/email recovery messages AND surfaced verbatim in the AI Ops
+ * the ChatProvider/email recovery messages AND surfaced verbatim in the AI Ops
  * dashboard recovery feed (Task #498) — keep the shape stable so the two
  * surfaces stay visually aligned.
  */
@@ -1735,7 +1735,7 @@ export function formatAlertOpenDuration(
  */
 export const _formatRecoveryDurationForTests = formatAlertOpenDuration;
 
-function buildRecoverySlackBlocks(
+function buildRecoveryChatProviderBlocks(
   n: ToolHealthRecoveryNotification,
   link: string,
   linkIsAbsolute: boolean,
@@ -1781,7 +1781,7 @@ function buildRecoverySlackBlocks(
           type: "button",
           text: {
             type: "plain_text",
-            text: "Open AI Operations panel",
+            text: "LLMProvider Operations panel",
             emoji: true,
           },
           url: link,
@@ -1866,7 +1866,7 @@ function buildRecoveryEmailText(
  * Page on-call about a `tool_health` alert that just auto-resolved because
  * the tool's metric dropped back below threshold.
  *
- * Safe to call unconditionally: when neither Slack nor email is configured
+ * Safe to call unconditionally: when neither ChatProvider nor email is configured
  * the function returns `{ skipped: true }` without throwing.
  *
  * NOT throttled — each recovery corresponds to a unique `alert_id` that
@@ -1878,11 +1878,11 @@ export async function notifyToolHealthRecovery(
   depsOverride: ToolHealthRecoveryNotifierDeps = {},
 ): Promise<NotifyToolHealthRecoveryResult> {
   const cfg = readConfig();
-  const sendSlack = depsOverride.sendSlack ?? sendSlackNotification;
-  const sendEmail = depsOverride.sendEmail ?? sendResendEmail;
+  const sendChatProvider = depsOverride.sendChatProvider ?? sendChatProviderNotification;
+  const sendEmail = depsOverride.sendEmail ?? sendEmailProviderEmail;
 
   const result: NotifyToolHealthRecoveryResult = {
-    slackSent: false,
+    ChatProviderSent: false,
     emailSent: false,
     skipped: false,
     disabled: false,
@@ -1913,27 +1913,27 @@ export async function notifyToolHealthRecovery(
     return result;
   }
 
-  if (!cfg.slackChannel && cfg.emailRecipients.length === 0) {
+  if (!cfg.ChatProviderChannel && cfg.emailRecipients.length === 0) {
     result.skipped = true;
     return result;
   }
 
-  if (cfg.slackChannel) {
+  if (cfg.ChatProviderChannel) {
     const fallback =
       `:white_check_mark: Tool health recovered: ${notification.tool_name} — ` +
       `${reasonLabel(notification.reason)} back below threshold (alert #${notification.alert_id})`;
     try {
-      result.slackSent = await sendSlack(
-        cfg.slackChannel,
+      result.ChatProviderSent = await sendChatProvider(
+        cfg.ChatProviderChannel,
         fallback,
-        buildRecoverySlackBlocks(notification, cfg.link, cfg.linkIsAbsolute),
+        buildRecoveryChatProviderBlocks(notification, cfg.link, cfg.linkIsAbsolute),
       );
     } catch (err) {
       logger.error(
-        `[ToolHealthNotifier] Slack recovery send threw for alert #${notification.alert_id}:`,
+        `[ToolHealthNotifier] ChatProvider recovery send threw for alert #${notification.alert_id}:`,
         err,
       );
-      result.slackSent = false;
+      result.ChatProviderSent = false;
     }
   }
 

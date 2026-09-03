@@ -493,9 +493,9 @@ async function checkSalesSLAViolations(result: ScanResult): Promise<void> {
   result.checksPerformed++;
 
   try {
-    const { fetchAllZohoRecords } = await import("./zohoCRM");
+    const { fetchAllCRMProviderRecords } = await import("./CRMProviderCRM");
 
-    const deals = await fetchAllZohoRecords("Deals", {
+    const deals = await fetchAllCRMProviderRecords("Deals", {
       maxRecords: 500,
       fields: [
         "Deal_Name",
@@ -664,9 +664,9 @@ async function checkSDRSLAViolations(result: ScanResult): Promise<void> {
   result.checksPerformed++;
 
   try {
-    const { fetchAllZohoRecords } = await import("./zohoCRM");
+    const { fetchAllCRMProviderRecords } = await import("./CRMProviderCRM");
 
-    const leads = await fetchAllZohoRecords("Leads", {
+    const leads = await fetchAllCRMProviderRecords("Leads", {
       maxRecords: 500,
       fields: [
         "First_Name",

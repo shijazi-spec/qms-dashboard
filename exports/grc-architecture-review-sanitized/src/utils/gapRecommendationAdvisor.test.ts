@@ -14,7 +14,7 @@
  *
  * Both now wrap their caller/AI-supplied values with redactSensitiveDeep()
  * before they reach the params vector. This test mocks pool.query AND the
- * global fetch used by openaiChatHelper, drives the real write functions with
+ * global fetch used by LLMProviderChatHelper, drives the real write functions with
  * payloads containing credential-shaped strings, and asserts the raw secrets
  * never reach the captured INSERT / UPDATE params.
  *
@@ -30,9 +30,9 @@
 
 import { Pool, type QueryResult, type QueryResultRow } from "pg";
 
-// openaiChatHelper.authHeader() throws if no key is configured; fetch is
+// LLMProviderChatHelper.authHeader() throws if no key is configured; fetch is
 // mocked below so the value is never sent anywhere.
-process.env.OPENAI_API_KEY = "test-key-not-a-real-secret-<REDACTED_PHONE>";
+process.env.LLMProvider_API_KEY = "test-key-not-a-real-secret-<REDACTED_PHONE>";
 process.env.DOCUMENT_MAPPING_WEB_SEARCH = "false";
 
 let passed = 0;
@@ -121,7 +121,7 @@ const mockQuery: MockedPoolQuery = (sql, params = []) => {
 (Pool.prototype as unknown as { query: MockedPoolQuery }).query = mockQuery;
 
 // ---------------------------------------------------------------------------
-// Mock global fetch so openaiChatHelper.generateChatText() returns canned
+// Mock global fetch so LLMProviderChatHelper.generateChatText() returns canned
 // content without touching the network.
 // ---------------------------------------------------------------------------
 

@@ -49,18 +49,18 @@ export function recommendedAction(input: {
  * Survivorship-rule descriptor for the cluster. We don't compute this
  * per-pair (that requires buffering the whole cluster); we summarise the
  * cluster-level signal so a stakeholder reading the report knows how much
- * trust to put in the primary selection before merging in Zoho.
+ * trust to put in the primary selection before merging in CRMProvider.
  */
 export function survivorshipRule(input: {
   cluster_confidence: number | null | undefined;
   has_primary: boolean;
 }): string {
   if (!input.has_primary) {
-    return "No primary record selected — operator must mark one before merging in Zoho";
+    return "No primary record selected — operator must mark one before merging in CRMProvider";
   }
   const tier = getConfidenceTier(input.cluster_confidence);
   if (tier === "high") {
-    return "High-confidence cluster (≥90%); primary auto-selected by signal score — verify in Zoho then merge";
+    return "High-confidence cluster (≥90%); primary auto-selected by signal score — verify in CRMProvider then merge";
   }
   if (tier === "medium") {
     return "Medium-confidence cluster (60-89%); review primary's field completeness before merging";

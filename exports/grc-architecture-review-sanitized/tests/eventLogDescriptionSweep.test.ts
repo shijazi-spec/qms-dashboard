@@ -78,7 +78,7 @@ const GHP_TOKEN = '<REDACTED_TOKEN>';
 const JWT =
   '<REDACTED_TOKEN>';
 const BCRYPT = '$2b$12$abcdefghijklmnopqrstuv1234567890ABCDEFGHIJKLMNOPQRSTU';
-const SAFE_PROSE = 'User updated project settings for tenant acme-corp';
+const SAFE_PROSE = 'User updated project settings for tenant Example Organization-corp';
 
 async function run(): Promise<void> {
   console.log('\n[redactEventLogs] description & entity_name sweep (Task #100)\n');
@@ -86,15 +86,15 @@ async function run(): Promise<void> {
   const initial: RowState[] = [
     {
       id: 1,
-      description: `Rotated Stripe key to ${SK_KEY} for finance team`,
-      entity_name: `Stripe config (key=${SK_TOKEN_SHORT(SK_KEY)})`,
+      description: `Rotated PaymentProvider key to ${SK_KEY} for finance team`,
+      entity_name: `PaymentProvider config (key=${SK_TOKEN_SHORT(SK_KEY)})`,
       old_value: null,
       new_value: null,
     },
     {
       id: 2,
-      description: `GitHub PAT issued: ${GHP_TOKEN}`,
-      entity_name: 'GitHub integration',
+      description: `SourceControlProvider PAT issued: ${GHP_TOKEN}`,
+      entity_name: 'SourceControlProvider integration',
       old_value: null,
       new_value: null,
     },
@@ -108,7 +108,7 @@ async function run(): Promise<void> {
     {
       id: 4,
       description: SAFE_PROSE,
-      entity_name: 'Project acme-corp',
+      entity_name: 'Project Example Organization-corp',
       old_value: null,
       new_value: null,
     },
@@ -139,12 +139,12 @@ async function run(): Promise<void> {
       // write path.
       id: 8,
       description: 'Webhook reconfigured',
-      entity_name: 'stripe-webhook',
+      entity_name: 'PaymentProvider-webhook',
       old_value: null,
       new_value: {
         note: `key=${SK_KEY}`,
         curl_example: `curl -H 'Authorization: Bearer ${SK_KEY}' <REDACTED_URL>`,
-        provider: 'stripe',
+        provider: 'PaymentProvider',
       },
     },
   ];
@@ -166,7 +166,7 @@ async function run(): Promise<void> {
     'row 1: sentinel present in description',
   );
   assert(
-    row1.description!.includes('Rotated Stripe key'),
+    row1.description!.includes('Rotated PaymentProvider key'),
     'row 1: surrounding prose preserved in description',
   );
 
@@ -180,7 +180,7 @@ async function run(): Promise<void> {
     'row 2: sentinel present in description',
   );
   assert(
-    row2.entity_name === 'GitHub integration',
+    row2.entity_name === 'SourceControlProvider integration',
     'row 2: clean entity_name is untouched',
   );
 
@@ -257,7 +257,7 @@ async function run(): Promise<void> {
     'row 8 (task-302): newValue.curl_example scrubbed but surrounding prose preserved',
   );
   assert(
-    row8.new_value && row8.new_value.provider === 'stripe',
+    row8.new_value && row8.new_value.provider === 'PaymentProvider',
     'row 8 (task-302): non-secret sibling field preserved verbatim',
   );
 

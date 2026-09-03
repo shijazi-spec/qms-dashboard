@@ -62,11 +62,11 @@ Leave it unset to let the CLI pick a sensible default for the machine.
 
 #### Custom provider endpoints
 
-When using providers supported by the Vercel AI SDK you can redirect requests through proxies or internal gateways by setting a base URL. For OpenAI:
+When using providers supported by the Vercel AI SDK you can redirect requests through proxies or internal gateways by setting a base URL. For LLMProvider:
 
 ```bash copy
-OPENAI_API_KEY=<your-api-key> \
-OPENAI_BASE_URL=<REDACTED_URL> \
+LLMProvider_API_KEY=<your-api-key> \
+LLMProvider_BASE_URL=<REDACTED_URL> \
 mastra dev
 ```
 
@@ -78,7 +78,7 @@ ANTHROPIC_BASE_URL=<REDACTED_URL> \
 mastra dev
 ```
 
-These are forwarded by the AI SDK and work with any `openai()` or `anthropic()` calls.
+These are forwarded by the AI SDK and work with any `LLMProvider()` or `anthropic()` calls.
 
 ## `mastra build`
 
@@ -166,7 +166,7 @@ The command accepts the following additional flags:
 
 #### `--default`
 
-Creates files inside `src` using OpenAI. It also populates the `src/mastra` folders with example code.
+Creates files inside `src` using LLMProvider. It also populates the `src/mastra` folders with example code.
 
 #### `--dir`
 
@@ -178,7 +178,7 @@ Comma-separated list of components to add. For each component a new folder will 
 
 #### `--llm`
 
-Default model provider. Choose from: `"openai" | "anthropic" | "groq" | "google" | "cerebras" | "mistral"`.
+Default model provider. Choose from: `"LLMProvider" | "anthropic" | "groq" | "IdentityProvider" | "cerebras" | "mistral"`.
 
 #### `--llm-api-key`
 

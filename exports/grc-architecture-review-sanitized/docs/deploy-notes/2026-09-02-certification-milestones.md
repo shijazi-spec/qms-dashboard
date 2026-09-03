@@ -39,7 +39,7 @@ This deploy seeds the 16-row plan, extends the schema to carry it, repoints GRC-
 
 1. **Commit + push to `origin/QMS` first** (standing rule — local-only edits deploy stale code), then Republish.
 2. **Schema auto-migrates.** All new columns are added via `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`; the 16 plan rows are seeded on boot via `seedCertificationMilestonePlan()` using `ON CONFLICT (milestone_key) WHERE milestone_key IS NOT NULL DO NOTHING`. No manual SQL required.
-3. **⛔ Do NOT approve any `DROP TABLE` in the Replit publish schema diff.** Approve code-only changes, as always.
+3. **⛔ Do NOT approve any `DROP TABLE` in the HostingPlatform publish schema diff.** Approve code-only changes, as always.
 4. **Before trusting GRC-KPI-002's value, run `SELECT count(*) FROM certification_milestones;`.** If this is non-zero from BEFORE this deploy (i.e. rows pre-dating the `milestone_type` column), `ALTER TABLE ... ADD COLUMN milestone_type ... DEFAULT 'plan'` will have backfilled them all to `'plan'` — and `calcCertMilestoneDelivery()` counts every `milestone_type='plan'` row in its denominator. Those pre-existing rows would silently distort the KPI. Set their `milestone_type` explicitly (to whatever it should actually be) before trusting the KPI.
 
 ## Post-deploy smoke test
@@ -65,7 +65,7 @@ Unit tests and guardrails were run on a separate Node-capable machine (this mach
 - **Checkpoint 1 (Tasks 1–3):** 9/9 vitest passing, `check-schema-parity.mjs --strict` reported no drift.
 - **Checkpoint 2 (Tasks 4–7):** 20/20 vitest passing across 3 files (`certificationMilestonePlan` 10, `certMilestoneDelivery` 8, `grcKpi002Definition` 2), schema-parity clean (151 ALTERs / 208 tables, no drift), i18n guardrail passing (key-tree parity, 3423 keys).
 
-**Not verified as part of writing this note:** the full guardrail suite specified in Task 10 Step 1 (TypeScript compile, schema-parity, i18n, dashboard-HTML-JS lint, and the full 4-file vitest run including `certificationMilestoneRoutes.vitest.test.ts` from Task 9) has not been re-run since Checkpoint 2 — Task 8 and Task 9 landed after that checkpoint and were reviewed but not yet re-verified by a test run. **This final full-suite run is the last gate before Republish** and must be executed on a Node-capable machine (Replit shell) before this deploy proceeds. Do not treat this note's existence as evidence that gate has passed.
+**Not verified as part of writing this note:** the full guardrail suite specified in Task 10 Step 1 (TypeScript compile, schema-parity, i18n, dashboard-HTML-JS lint, and the full 4-file vitest run including `certificationMilestoneRoutes.vitest.test.ts` from Task 9) has not been re-run since Checkpoint 2 — Task 8 and Task 9 landed after that checkpoint and were reviewed but not yet re-verified by a test run. **This final full-suite run is the last gate before Republish** and must be executed on a Node-capable machine (HostingPlatform shell) before this deploy proceeds. Do not treat this note's existence as evidence that gate has passed.
 
 ## Rollback
 

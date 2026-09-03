@@ -12,7 +12,7 @@ There are **3 buckets of work**:
 | # | Bucket | Owner | Effort |
 |---|---|---|---|
 | 1 | **Operational data uploads** (the big one — 9 modules waiting) | Business / module owners | 1–3 weeks of data entry or a one-time bulk import |
-| 2 | **One Slack admin scope** | IT admin | 5 minutes |
+| 2 | **One ChatProvider admin scope** | IT admin | 5 minutes |
 | 3 | **No code fixes outstanding** | — | — |
 
 ---
@@ -35,7 +35,7 @@ Listed in **priority order** (highest business impact first).
 | # | Module | Table(s) | Rows | Why empty | What to upload |
 |---|---|---|---|---|---|
 | 5 | **Vendor Risk Register** | `vendors` | 0 | No vendors entered | Vendor master list (Excel): name, category, criticality, contract date, last review, owner |
-| 6 | **Call Records & QA** | `call_records`, `call_compliance` | 0 / 0 | No call data feed configured | Either (a) bulk upload of last 90 days of call logs (CSV from telephony), or (b) connect Zoho/3CX integration |
+| 6 | **Call Records & QA** | `call_records`, `call_compliance` | 0 / 0 | No call data feed configured | Either (a) bulk upload of last 90 days of call logs (CSV from telephony), or (b) connect CRMProvider/3CX integration |
 | 7 | **Team Performance Metrics** | `team_performance_metrics` | 0 | Not being collected | Monthly team KPIs (Excel): team, period, metric, value |
 | 8 | **Compliance Calendar** | `compliance_calendar` | 0 | No regulatory deadlines scheduled | Upcoming deadlines per regulation: regulation, obligation, due date, owner |
 
@@ -76,7 +76,7 @@ So the manager doesn't think nothing works — these are humming:
 | Policies / Controlled Documents | ✅ 147 policies versioned and tracked |
 | KPI Library | ✅ 35 KPIs defined (ISO-aligned) |
 | Compliance Framework | ✅ 6 regulations × 18 obligations mapped |
-| Infographic Generator | ✅ All 6 sections rendering, Slack + Email sharing live |
+| Infographic Generator | ✅ All 6 sections rendering, ChatProvider + Email sharing live |
 | Authentication & 35 dashboards | ✅ All accessible, role-based landing working (35 = 33 + `/intake` + `/external-audits` shipped in v4.5) |
 | Migration Templates | ✅ 9 templates total (CAPA, Nonconformity, Training, Audit Findings, Deal Evaluations + original 4: Risks, Vendors, Policies, Calls) — AI column-mapper + duplicate pre-check |
 | Page-view telemetry | ✅ Recording (8 events captured this week) |
@@ -87,7 +87,7 @@ So the manager doesn't think nothing works — these are humming:
 
 | # | Ask | Owner | Effort |
 |---|---|---|---|
-| A1 | Grant Slack `files:write` scope to the ExampleOrg bot so infographic shares upload as PNG instead of falling back to a link message | Slack workspace admin | 5 min — toggle in Slack admin → reinstall app |
+| A1 | Grant ChatProvider `files:write` scope to the ExampleOrg bot so infographic shares upload as PNG instead of falling back to a link message | ChatProvider workspace admin | 5 min — toggle in ChatProvider admin → reinstall app |
 
 ---
 
@@ -101,7 +101,7 @@ If we can only do one batch a week, suggested order. v4.5 priorities (Programme,
 4. **Week 4** — **External Audits 2026 calendar + active certificates** (seed `external_audits` and `external_audit_certificates`; populates the GRC hero card).
 5. **Week 5** — **Compliance assessments + calendar** (regulatory deadlines per regulation).
 6. **Week 6** — **Vendor risk + team performance + Training Records** (use the new "Training Records" migration template).
-7. **Ongoing** — Either connect call data feed (Zoho/3CX) or bulk-upload monthly. Funnel any off-platform audit reports through `/intake`.
+7. **Ongoing** — Either connect call data feed (CRMProvider/3CX) or bulk-upload monthly. Funnel any off-platform audit reports through `/intake`.
 
 ---
 
@@ -130,7 +130,7 @@ The CRM Owner Data Quality widget on `/` finally renders real Department + Activ
 **Resolved:**
 - Activity badge no longer shows `Unknown` — now resolves to `Active` (64) or `Inactive` (53).
 - Department badge no longer falls back to `SDR` or `Sales` — now reflects the real team (`WP Sales`, `MP`, `WO Sales`, `CS`, `SDR`, `MGMT`, `CRM Admin`, `BD`, `Eitmad`, `WPE`).
-- Live Zoho Users API (`fetchZohoUsers`) bridges Zoho User IDs to seed names; new hires not yet on the seed still appear (with their Zoho profile as the team).
+- Live CRMProvider Users API (`fetchCRMProviderUsers`) bridges CRMProvider User IDs to seed names; new hires not yet on the seed still appear (with their CRMProvider profile as the team).
 
 **Remaining gap — 7 unassigned owners** (no team in the CRM):
 
@@ -144,15 +144,15 @@ The CRM Owner Data Quality widget on `/` finally renders real Department + Activ
 | 6 | Sample User | Inactive | 15 | Accounts |
 | 7 | عبدالمجيد الشبيلي | Inactive | 193 | Contacts, Accounts |
 
-**Action required (CRM Admin, ≤5 working days):** assign a Department in Zoho for each, OR mark them as system/test accounts and exclude them from the seed re-import. The 193 records under `عبدالمجيد الشبيلي` are the most material.
+**Action required (CRM Admin, ≤5 working days):** assign a Department in CRMProvider for each, OR mark them as system/test accounts and exclude them from the seed re-import. The 193 records under `عبدالمجيد الشبيلي` are the most material.
 
-**Refresh procedure:** when owners join/leave/move teams → re-export `CRM_Users_Complete_*.xlsx` from Zoho → drop into the importer → bump snapshot date in `docs/ExampleOrg_Platform_SOP.md §11.1` and §25 changelog.
+**Refresh procedure:** when owners join/leave/move teams → re-export `CRM_Users_Complete_*.xlsx` from CRMProvider → drop into the importer → bump snapshot date in `docs/ExampleOrg_Platform_SOP.md §11.1` and §25 changelog.
 
 **Two operational asks discovered during the v4.5.1 smoke test (CRM Admin):**
 
-1. **Add the `ZohoCRM.users.READ` scope to the platform OAuth app.** The first end-to-end run of `getUsers()` against live Zoho returned `401` on `GET /crm/v2/users` (after a successful access-token refresh and successful `/crm/v2/Deals` calls in the same request). This means the refresh token has CRUD scopes for record modules (Leads/Deals/Contacts/Accounts) but is missing the `ZohoCRM.users.READ` scope. Until that's granted, the platform falls back to seed-only mode (which works, but loses the new-hire safety net) and ~21 record owners that exist in CRM but aren't on the seed render with `Unknown` activity.
+1. **Add the `CRMProviderCRM.users.READ` scope to the platform OAuth app.** The first end-to-end run of `getUsers()` against live CRMProvider returned `401` on `GET /crm/v2/users` (after a successful access-token refresh and successful `/crm/v2/Deals` calls in the same request). This means the refresh token has CRUD scopes for record modules (Leads/Deals/Contacts/Accounts) but is missing the `CRMProviderCRM.users.READ` scope. Until that's granted, the platform falls back to seed-only mode (which works, but loses the new-hire safety net) and ~21 record owners that exist in CRM but aren't on the seed render with `Unknown` activity.
 
-2. **~21 "ghost" owners on records but not on the seed.** During the smoke test the API returned 128 distinct owners; only 107 matched the seed by name. The other 21 (e.g. `Sample User`, `Sample User`-style names) own real records but were not on the `CRM_Users_Complete_117_Updated.xlsx` export. CRM Admin should diff the next export against the live record-owner set and reconcile. Most of these are likely former employees whose records still carry their Zoho User ID; if so, the cleanest fix is a Zoho-side reassignment to a current team member or to a "Former Employee" service account that we then add to the seed.
+2. **~21 "ghost" owners on records but not on the seed.** During the smoke test the API returned 128 distinct owners; only 107 matched the seed by name. The other 21 (e.g. `Sample User`, `Sample User`-style names) own real records but were not on the `CRM_Users_Complete_117_Updated.xlsx` export. CRM Admin should diff the next export against the live record-owner set and reconcile. Most of these are likely former employees whose records still carry their CRMProvider User ID; if so, the cleanest fix is a CRMProvider-side reassignment to a current team member or to a "Former Employee" service account that we then add to the seed.
 
 ---
 
@@ -160,7 +160,7 @@ The CRM Owner Data Quality widget on `/` finally renders real Department + Activ
 
 1. Do we have an existing risk register Excel we can import directly?
 2. Where is the master vendor list maintained today?
-3. For calls — do we want the live integration (Zoho/3CX) or quarterly CSV uploads?
+3. For calls — do we want the live integration (CRMProvider/3CX) or quarterly CSV uploads?
 4. Are there real NCs/CAPAs from the past year, or is this a greenfield log?
 5. Who is the owner for compliance assessments per regulation (PDPL, ISO 9001, etc.)?
 6. Confirm: are there any data incidents to log, or is `data_incidents` legitimately zero?

@@ -5,7 +5,7 @@
  * Neither KPI's definition asks for that — 01 is "total outbound calls per
  * working day per SDR agent", 02 is "percentage of calls that result in a live
  * conversation". Measured on the live mirror 2026-08-17, right after the first
- * successful Zoho Calls import: of 236 calls, 200 were linked to a DEAL and
+ * successful CRMProvider Calls import: of 236 calls, 200 were linked to a DEAL and
  * exactly 1 to a Lead. The lead-only filter discarded 85% of the corpus and
  * left both KPIs permanently "--".
  *
@@ -66,7 +66,7 @@ describe("SDR call KPIs — future-dated calls", () => {
   it("SDR-KPI-01 excludes calls dated in the future", async () => {
     query.mockResolvedValue({ rows: [{ total: 10, agents: 2 }] });
     await calcSdrCallsPerDay();
-    // Zoho holds SCHEDULED calls. Counting them would let the metric be raised
+    // CRMProvider holds SCHEDULED calls. Counting them would let the metric be raised
     // by BOOKING calls rather than making them.
     expect(lastSql()).toMatch(/call_date <= NOW\(\)/);
   });

@@ -1,5 +1,5 @@
 /**
- * The four CS SOP KPIs QMS can measure from its Zoho mirror.
+ * The four CS SOP KPIs QMS can measure from its CRMProvider mirror.
  *
  * WP-BU-CS-SOP-003 defines 33 KPIs; 29 name Client-Hub, Jira, the Admin/BI
  * Portal or QA sampling as their system of record and stay manual. These four
@@ -120,10 +120,10 @@ describe("CS-KPI-23 Client-Hub Data Accuracy Score", () => {
     expect((await calcCsDataAccuracy()).value).toBe(75);
   });
 
-  it("names the Zoho source, since the SOP specifies Client-Hub", async () => {
+  it("names the CRMProvider source, since the SOP specifies Client-Hub", async () => {
     const r = await calcCsDataAccuracy();
     // The number must never be presented as if it came from Client-Hub.
-    expect(String((r.details as any).source)).toMatch(/Zoho/);
+    expect(String((r.details as any).source)).toMatch(/CRMProvider/);
     expect(String((r.details as any).source)).toMatch(/Client-Hub/);
   });
 });
@@ -149,7 +149,7 @@ describe("CS-KPI-30 Churn Classification Accuracy", () => {
 });
 
 describe("CS-KPI-21 Client Churn Rate stays unwired", () => {
-  it("is NOT registered, because Zoho cannot source it", () => {
+  it("is NOT registered, because CRMProvider cannot source it", () => {
     // Wiring it produced 61% against a 15% annual ceiling: the denominator was
     // the whole historical CS book rather than the active population, and there
     // is no per-deal churn date to window a "per year" rate by. Swapping the
@@ -165,7 +165,7 @@ describe("wiring", () => {
     }
   });
 
-  it("does NOT register the codes Zoho cannot source", () => {
+  it("does NOT register the codes CRMProvider cannot source", () => {
     // Registering one would make it record a value it cannot actually source —
     // CS-KPI-21 is in this list because it was tried and produced a confident
     // 61% against a 15% ceiling.

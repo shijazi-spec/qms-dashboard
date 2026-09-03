@@ -3,7 +3,7 @@
  *
  * Goal: when an admin saves a new AI metrics retention window through
  * `PUT /api/ai-ops/metrics-retention`, page the rest of the AI-ops team via
- * Slack and/or email so the change is visible *before* the next prune cron
+ * ChatProvider and/or email so the change is visible *before* the next prune cron
  * runs. Task #504 already gave us an audit log row, but audit rows tend to
  * be checked only after something has gone wrong — and a silent tighten
  * (e.g. 90 days → 7 days) could quietly delete 80 days of telemetry on the
@@ -13,7 +13,7 @@
  *   - Best-effort: this module never throws back to the caller.
  *   - Opt-in via `AI_METRICS_RETENTION_NOTIFY=1` so dev/test environments
  *     don't accidentally page on-call when seeded data flips the value.
- *   - Skipped when neither Slack nor email is configured (so the route
+ *   - Skipped when neither ChatProvider nor email is configured (so the route
  *     handler can call us unconditionally).
  *   - No-op when before === after — saves with the same value (e.g. an
  *     admin re-saving to update the note) must not generate noise.
@@ -27,10 +27,10 @@
  *                                            PUT notify knob so an ops team
  *                                            can choose to be paged on one
  *                                            but not the other.
- *   - `AI_METRICS_RETENTION_SLACK_CHANNEL` — Slack channel id/name to page.
+ *   - `AI_METRICS_RETENTION_ChatProvider_CHANNEL` — ChatProvider channel id/name to page.
  *                                            Shared by both notifiers.
  *   - `AI_METRICS_RETENTION_ALERT_EMAIL`   — comma-separated recipient list
- *                                            forwarded to Resend. Shared by
+ *                                            forwarded to EmailProvider. Shared by
  *                                            both notifiers.
  *   - `TOOL_HEALTH_APP_URL`                — public origin used to build the
  *                                            deep-link to the AI Ops panel.
@@ -38,8 +38,8 @@
  *                                            set the base URL once.
  */
 
-import { sendSlackNotification } from "./slackNotifications";
-import { sendResendEmail, type ResendEmailOptions } from "./resendMail";
+import { sendChatProviderNotification } from "./ChatProviderNotifications";
+import { sendEmailProviderEmail, type EmailProviderEmailOptions } from "./EmailProviderMail";
 import { logger } from "./logger";
 
 export interface AiMetricsRetentionChangeNotification {
@@ -52,7 +52,7 @@ export interface AiMetricsRetentionChangeNotification {
   /**
    * Effective retention window after the change (resolves env baseline /
    * compile-time default when the override was cleared). Surfaced in the
-   * Slack/email body so the on-call reader knows what the prune cron will
+   * ChatProvider/email body so the on-call reader knows what the prune cron will
    * actually use on its next tick — particularly useful when `after` is
    * `null` (override cleared, env baseline takes back over).
    */
@@ -64,28 +64,28 @@ export interface AiMetricsRetentionChangeNotification {
 }
 
 export interface NotifyAiMetricsRetentionChangeResult {
-  slackSent: boolean;
+  ChatProviderSent: boolean;
   emailSent: boolean;
   /** True when before === after (no value change → no message posted). */
   noChanges: boolean;
   /** True when `AI_METRICS_RETENTION_NOTIFY` is not opted in. */
   disabled: boolean;
-  /** True when neither Slack nor email is configured. */
+  /** True when neither ChatProvider nor email is configured. */
   skipped: boolean;
 }
 
 export interface AiMetricsRetentionChangeNotifierDeps {
-  /** Defaults to `sendSlackNotification`. */
-  sendSlack?: typeof sendSlackNotification;
-  /** Defaults to `sendResendEmail`. */
+  /** Defaults to `sendChatProviderNotification`. */
+  sendChatProvider?: typeof sendChatProviderNotification;
+  /** Defaults to `sendEmailProviderEmail`. */
   sendEmail?: (
-    opts: ResendEmailOptions,
+    opts: EmailProviderEmailOptions,
   ) => Promise<{ success: boolean; id?: string; error?: string }>;
 }
 
 function readConfig() {
-  const slackChannel =
-    (process.env.AI_METRICS_RETENTION_SLACK_CHANNEL || "").trim() || null;
+  const ChatProviderChannel =
+    (process.env.AI_METRICS_RETENTION_ChatProvider_CHANNEL || "").trim() || null;
   const emailRaw = (process.env.AI_METRICS_RETENTION_ALERT_EMAIL || "").trim();
   const emailRecipients = emailRaw
     ? emailRaw
@@ -103,7 +103,7 @@ function readConfig() {
     ? `${appUrl}/dashboard/ai-ops.html?tab=retention`
     : `/dashboard/ai-ops.html?tab=retention`;
   const linkIsAbsolute = /^https?:\/\//i.test(link);
-  return { slackChannel, emailRecipients, link, linkIsAbsolute };
+  return { ChatProviderChannel, emailRecipients, link, linkIsAbsolute };
 }
 
 function escapeHtml(s: string): string {
@@ -168,7 +168,7 @@ function buildBlocks(
     });
   }
 
-  // Slack rejects relative URLs in actions.button.url; degrade to a plain
+  // ChatProvider rejects relative URLs in actions.button.url; degrade to a plain
   // mrkdwn link section in that case (mirrors the tool-health notifier).
   if (linkIsAbsolute) {
     blocks.push({
@@ -178,7 +178,7 @@ function buildBlocks(
           type: "button",
           text: {
             type: "plain_text",
-            text: "Open AI Operations panel",
+            text: "LLMProvider Operations panel",
             emoji: true,
           },
           url: link,
@@ -274,12 +274,12 @@ function buildEmailText(
 }
 
 /**
- * Post a Slack message and/or send an email summarising a successful
+ * Post a ChatProvider message and/or send an email summarising a successful
  * AI-metrics-retention save. Best-effort: never throws, returns a result
  * object so the caller can log/count.
  *
  * Safe to call unconditionally — when `AI_METRICS_RETENTION_NOTIFY` is not
- * "1", or when neither Slack nor email is configured, the function returns
+ * "1", or when neither ChatProvider nor email is configured, the function returns
  * `{ disabled: true }` / `{ skipped: true }` without sending anything.
  */
 export async function notifyAiMetricsRetentionChange(
@@ -287,7 +287,7 @@ export async function notifyAiMetricsRetentionChange(
   depsOverride: AiMetricsRetentionChangeNotifierDeps = {},
 ): Promise<NotifyAiMetricsRetentionChangeResult> {
   const result: NotifyAiMetricsRetentionChangeResult = {
-    slackSent: false,
+    ChatProviderSent: false,
     emailSent: false,
     noChanges: false,
     disabled: false,
@@ -300,7 +300,7 @@ export async function notifyAiMetricsRetentionChange(
   }
 
   const cfg = readConfig();
-  if (!cfg.slackChannel && cfg.emailRecipients.length === 0) {
+  if (!cfg.ChatProviderChannel && cfg.emailRecipients.length === 0) {
     result.skipped = true;
     return result;
   }
@@ -316,30 +316,30 @@ export async function notifyAiMetricsRetentionChange(
     return result;
   }
 
-  if (cfg.slackChannel) {
-    const sendSlack = depsOverride.sendSlack ?? sendSlackNotification;
+  if (cfg.ChatProviderChannel) {
+    const sendChatProvider = depsOverride.sendChatProvider ?? sendChatProviderNotification;
     const fallback =
       `:hourglass_flowing_sand: AI metrics retention window updated by ` +
       `${notification.changedBy || "—"}: ` +
       `${before == null ? "default" : `${before}d`} → ` +
       `${after == null ? "default" : `${after}d`}`;
     try {
-      result.slackSent = await sendSlack(
-        cfg.slackChannel,
+      result.ChatProviderSent = await sendChatProvider(
+        cfg.ChatProviderChannel,
         fallback,
         buildBlocks(notification, cfg.link, cfg.linkIsAbsolute),
       );
     } catch (err) {
       logger.error(
-        "[AiMetricsRetentionNotifier] Slack send threw for retention change",
+        "[AiMetricsRetentionNotifier] ChatProvider send threw for retention change",
         err as Error,
       );
-      result.slackSent = false;
+      result.ChatProviderSent = false;
     }
   }
 
   if (cfg.emailRecipients.length > 0) {
-    const sendEmail = depsOverride.sendEmail ?? sendResendEmail;
+    const sendEmail = depsOverride.sendEmail ?? sendEmailProviderEmail;
     const subject =
       `[AI Metrics Retention · Updated] ` +
       `${before == null ? "default" : `${before}d`} → ` +
@@ -374,7 +374,7 @@ export async function notifyAiMetricsRetentionChange(
  * fire for that path because a prune is not a config-value change.
  *
  * However, an immediate manual deletion of telemetry is operationally
- * as significant as a config change — ops teams reviewing Slack history
+ * as significant as a config change — ops teams reviewing ChatProvider history
  * during an incident currently won't see that someone clicked Prune
  * now until they go look at the audit timeline. This peer notifier
  * closes that gap on an opt-in basis (gated by
@@ -383,7 +383,7 @@ export async function notifyAiMetricsRetentionChange(
  *
  * Same resilience contract as `notifyAiMetricsRetentionChange`:
  *   - Best-effort, never throws back to the caller.
- *   - Skipped when neither Slack nor email is configured (route handler
+ *   - Skipped when neither ChatProvider nor email is configured (route handler
  *     can call us unconditionally without paging on-call from a fresh
  *     checkout).
  *   - The PUT "no-op when before === after" rule does NOT apply here:
@@ -412,17 +412,17 @@ export interface AiMetricsRetentionPruneNowNotification {
 }
 
 export interface NotifyAiMetricsRetentionPruneNowResult {
-  slackSent: boolean;
+  ChatProviderSent: boolean;
   emailSent: boolean;
   /** True when `AI_METRICS_RETENTION_PRUNE_NOTIFY` is not opted in. */
   disabled: boolean;
-  /** True when neither Slack nor email is configured. */
+  /** True when neither ChatProvider nor email is configured. */
   skipped: boolean;
 }
 
 /**
  * Compute previewed-vs-actual drift. Surfaced explicitly in the
- * Slack/email body so on-call doesn't have to do the subtraction
+ * ChatProvider/email body so on-call doesn't have to do the subtraction
  * by hand when reviewing the message during an incident. Returns
  * `null` when the preview was unavailable (preview itself failed).
  */
@@ -494,7 +494,7 @@ function buildPruneNowBlocks(
     });
   }
 
-  // Slack rejects relative URLs in actions.button.url; degrade to a plain
+  // ChatProvider rejects relative URLs in actions.button.url; degrade to a plain
   // mrkdwn link section in that case (mirrors the PUT-config notifier).
   if (linkIsAbsolute) {
     blocks.push({
@@ -504,7 +504,7 @@ function buildPruneNowBlocks(
           type: "button",
           text: {
             type: "plain_text",
-            text: "Open AI Operations panel",
+            text: "LLMProvider Operations panel",
             emoji: true,
           },
           url: link,
@@ -604,12 +604,12 @@ function buildPruneNowEmailText(
 }
 
 /**
- * Post a Slack message and/or send an email summarising a successful
+ * Post a ChatProvider message and/or send an email summarising a successful
  * manual "Prune now" run. Best-effort: never throws, returns a result
  * object so the caller can log/count.
  *
  * Safe to call unconditionally — when `AI_METRICS_RETENTION_PRUNE_NOTIFY`
- * is not "1", or when neither Slack nor email is configured, the
+ * is not "1", or when neither ChatProvider nor email is configured, the
  * function returns `{ disabled: true }` / `{ skipped: true }` without
  * sending anything.
  *
@@ -622,7 +622,7 @@ export async function notifyAiMetricsRetentionPruneNow(
   depsOverride: AiMetricsRetentionChangeNotifierDeps = {},
 ): Promise<NotifyAiMetricsRetentionPruneNowResult> {
   const result: NotifyAiMetricsRetentionPruneNowResult = {
-    slackSent: false,
+    ChatProviderSent: false,
     emailSent: false,
     disabled: false,
     skipped: false,
@@ -634,7 +634,7 @@ export async function notifyAiMetricsRetentionPruneNow(
   }
 
   const cfg = readConfig();
-  if (!cfg.slackChannel && cfg.emailRecipients.length === 0) {
+  if (!cfg.ChatProviderChannel && cfg.emailRecipients.length === 0) {
     result.skipped = true;
     return result;
   }
@@ -644,8 +644,8 @@ export async function notifyAiMetricsRetentionPruneNow(
     notification.deletedRows,
   );
 
-  if (cfg.slackChannel) {
-    const sendSlack = depsOverride.sendSlack ?? sendSlackNotification;
+  if (cfg.ChatProviderChannel) {
+    const sendChatProvider = depsOverride.sendChatProvider ?? sendChatProviderNotification;
     const previewedStr =
       notification.previewedRows == null
         ? "?"
@@ -664,22 +664,22 @@ export async function notifyAiMetricsRetentionPruneNow(
       ` (previewed ${previewedStr}${driftFallback}, ` +
       `${notification.retentionDays}d window)`;
     try {
-      result.slackSent = await sendSlack(
-        cfg.slackChannel,
+      result.ChatProviderSent = await sendChatProvider(
+        cfg.ChatProviderChannel,
         fallback,
         buildPruneNowBlocks(notification, cfg.link, cfg.linkIsAbsolute),
       );
     } catch (err) {
       logger.error(
-        "[AiMetricsRetentionNotifier] Slack send threw for manual prune",
+        "[AiMetricsRetentionNotifier] ChatProvider send threw for manual prune",
         { error: err instanceof Error ? err.message : String(err) },
       );
-      result.slackSent = false;
+      result.ChatProviderSent = false;
     }
   }
 
   if (cfg.emailRecipients.length > 0) {
-    const sendEmail = depsOverride.sendEmail ?? sendResendEmail;
+    const sendEmail = depsOverride.sendEmail ?? sendEmailProviderEmail;
     const subject =
       `[AI Metrics Retention · Pruned] ` +
       `${notification.deletedRows} row` +

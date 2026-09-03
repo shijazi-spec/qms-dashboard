@@ -201,7 +201,7 @@ if (!HAS_DB) {
       // against the test database before exercising the helper.
       await initAIAlertsTable();
       const NOW = Date.now();
-      await recordAlertNotificationResult(createdId, "slack+email", NOW);
+      await recordAlertNotificationResult(createdId, "ChatProvider+email", NOW);
       const handler = await buildHandler(
         aiOpsRoutes,
         "/api/ai-ops/tool-health-alerts",
@@ -214,7 +214,7 @@ if (!HAS_DB) {
       const list: any[] = res.body?.data ?? [];
       const found = list.find((a) => a.id === createdId);
       suite.expect(!!found, "seeded alert is in response");
-      suite.expectEqual(found.notified_channel, "slack+email", "channel persisted");
+      suite.expectEqual(found.notified_channel, "ChatProvider+email", "channel persisted");
       suite.expect(found.notified_at != null, "notified_at populated");
       // Roundtrip through Postgres TIMESTAMP loses sub-second precision, so
       // accept ±2s of drift between what we wrote and what comes back.
@@ -1289,25 +1289,25 @@ if (HAS_DB) {
   });
 
   await suite.test(
-    "PUT /api/ai-ops/tool-health-config — TOOL_HEALTH_CONFIG_NOTIFY=1 still saves successfully when Slack send fails",
+    "PUT /api/ai-ops/tool-health-config — TOOL_HEALTH_CONFIG_NOTIFY=1 still saves successfully when ChatProvider send fails",
     // Regression guard for Task #190: the notifier hook is best-effort.
-    // When the env gate is on but Slack is misconfigured (no bot token,
+    // When the env gate is on but ChatProvider is misconfigured (no bot token,
     // unreachable channel), the threshold save MUST still return 200 and
     // persist the override. We exercise the real notify path (no stub) so
     // the route's try/catch wrapper is what's under test.
     async () => {
       const originalKey = process.env.ADMIN_API_KEY;
       const originalNotify = process.env.TOOL_HEALTH_CONFIG_NOTIFY;
-      const originalChannel = process.env.TOOL_HEALTH_SLACK_CHANNEL;
-      const originalToken = process.env.SLACK_BOT_TOKEN;
-      const originalApiToken = process.env.SLACK_API_TOKEN;
+      const originalChannel = process.env.TOOL_HEALTH_ChatProvider_CHANNEL;
+      const originalToken = process.env.ChatProvider_BOT_TOKEN;
+      const originalApiToken = process.env.ChatProvider_API_TOKEN;
       process.env.ADMIN_API_KEY = ADMIN_KEY;
       process.env.TOOL_HEALTH_CONFIG_NOTIFY = "1";
-      process.env.TOOL_HEALTH_SLACK_CHANNEL = "C-NONEXISTENT";
-      // Force the underlying Slack client to bail (no token → returns false,
+      process.env.TOOL_HEALTH_ChatProvider_CHANNEL = "C-NONEXISTENT";
+      // Force the underlying ChatProvider client to bail (no token → returns false,
       // no throw); proves the route still returns 200 either way.
-      delete process.env.SLACK_BOT_TOKEN;
-      delete process.env.SLACK_API_TOKEN;
+      delete process.env.ChatProvider_BOT_TOKEN;
+      delete process.env.ChatProvider_API_TOKEN;
 
       // Silence the expected "no bot token" log so the test output stays clean.
       const origLog = console.log;
@@ -1325,7 +1325,7 @@ if (HAS_DB) {
             body: { overrides: { windowMinutes: 30 }, note: "task-190 regression" },
           }),
         );
-        suite.expectEqual(res.status, 200, "PUT still 200 when Slack send is a no-op");
+        suite.expectEqual(res.status, 200, "PUT still 200 when ChatProvider send is a no-op");
         suite.expect(res.body?.success === true, "success flag still true");
         suite.expect(
           typeof res.body?.audit_id === "number" && res.body.audit_id > 0,
@@ -1355,10 +1355,10 @@ if (HAS_DB) {
         else process.env.ADMIN_API_KEY = originalKey;
         if (originalNotify === undefined) delete process.env.TOOL_HEALTH_CONFIG_NOTIFY;
         else process.env.TOOL_HEALTH_CONFIG_NOTIFY = originalNotify;
-        if (originalChannel === undefined) delete process.env.TOOL_HEALTH_SLACK_CHANNEL;
-        else process.env.TOOL_HEALTH_SLACK_CHANNEL = originalChannel;
-        if (originalToken !== undefined) process.env.SLACK_BOT_TOKEN = originalToken;
-        if (originalApiToken !== undefined) process.env.SLACK_API_TOKEN = originalApiToken;
+        if (originalChannel === undefined) delete process.env.TOOL_HEALTH_ChatProvider_CHANNEL;
+        else process.env.TOOL_HEALTH_ChatProvider_CHANNEL = originalChannel;
+        if (originalToken !== undefined) process.env.ChatProvider_BOT_TOKEN = originalToken;
+        if (originalApiToken !== undefined) process.env.ChatProvider_API_TOKEN = originalApiToken;
       }
     },
   );
@@ -1787,7 +1787,7 @@ if (HAS_DB) {
           note?: string,
         ) => Promise<AIAlertT | null> = async () => null;
         const stubNotify: () => Promise<NotifyToolHealthBreachResultT> = async () => ({
-          slackSent: false,
+          ChatProviderSent: false,
           emailSent: false,
           throttled: false,
           skipped: true,
@@ -2035,7 +2035,7 @@ if (HAS_DB) {
         };
 
         const stubNotifyBreach = async (): Promise<NotifyToolHealthBreachResultT> => ({
-          slackSent: false,
+          ChatProviderSent: false,
           emailSent: false,
           throttled: false,
           skipped: true,
@@ -2050,7 +2050,7 @@ if (HAS_DB) {
           // open but never paged" case so callers can distinguish a silent
           // skip from a missing config. We're stubbing the recovery path, so
           // emit a stable default rather than letting TS fall through.
-          return { slackSent: false, emailSent: false, skipped: true, disabled: false };
+          return { ChatProviderSent: false, emailSent: false, skipped: true, disabled: false };
         };
 
         const stubReapOverrides = async (): Promise<ReapResultT> => ({
@@ -2073,7 +2073,7 @@ if (HAS_DB) {
         const stubNotifyOverrideExpired = async (
           ..._args: NotifyOverrideExpiredParams
         ): Promise<NotifyOverrideExpiredReturn> =>
-          ({ slackSent: false, emailSent: false, skipped: true } as NotifyOverrideExpiredReturn);
+          ({ ChatProviderSent: false, emailSent: false, skipped: true } as NotifyOverrideExpiredReturn);
 
         const checkResult = await runToolHealthCheck({
           getToolWindowAggregates: stubAggregates,
@@ -2443,7 +2443,7 @@ if (HAS_DB) {
   // -------------------------------------------------------------------
   // Task #763: POST /api/ai-ops/feedback must also persist the echoed
   // `clientSurface` into ai_call_metrics.metadata.client_surface so the
-  // per-surface breakdown in the AI Ops dashboard attributes Slack /
+  // per-surface breakdown in the AI Ops dashboard attributes ChatProvider /
   // mobile / embedded ratings correctly. Same never-overwrite-server-truth
   // contract as prompt_version above.
   // -------------------------------------------------------------------
@@ -2474,7 +2474,7 @@ if (HAS_DB) {
             body: {
               callId,
               rating: "thumbs_up",
-              clientSurface: "slack",
+              clientSurface: "ChatProvider",
             },
           }),
         );
@@ -2492,7 +2492,7 @@ if (HAS_DB) {
           const meta = row.rows[0]?.metadata ?? {};
           suite.expectEqual(
             meta.client_surface,
-            "slack",
+            "ChatProvider",
             "metadata.client_surface backfilled from request",
           );
         } finally {
@@ -2534,7 +2534,7 @@ if (HAS_DB) {
             body: {
               callId,
               rating: "thumbs_down",
-              clientSurface: "slack",
+              clientSurface: "ChatProvider",
             },
           }),
         );

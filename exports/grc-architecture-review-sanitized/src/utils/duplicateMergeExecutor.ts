@@ -1,7 +1,7 @@
 /**
  * Duplicate Resolution — EXECUTOR (Phase 1, Accounts, migrate-then-tag).
  *
- * Consumes a MergePlan (from duplicateMergePlanner) and applies it to Zoho.
+ * Consumes a MergePlan (from duplicateMergePlanner) and applies it to CRMProvider.
  * The platform NEVER deletes — it migrates winning fields onto the survivor,
  * reparents the duplicates' related records, tags each duplicate
  * `Duplicate-Delete`, and stamps audit notes; a human admin deletes the tagged
@@ -12,27 +12,27 @@
  *     records (read-only) so the report shows exactly what a real run would do.
  *   • A real run captures a full pre-write snapshot (all records incl. raw_data)
  *     for rollback BEFORE any mutation.
- *   • Every Zoho call is wrapped — one failure is recorded and the run
+ *   • Every CRMProvider call is wrapped — one failure is recorded and the run
  *     continues, so a partial failure is fully reported rather than silent.
  *   • Reliable reparenting (Deals / Contacts via Account_Name lookup, Notes via
  *     copy) is performed. Activities (Tasks/Calls/Events) and Attachments are
- *     enumerated and reported as "left on the duplicate" — Zoho v2 has no
+ *     enumerated and reported as "left on the duplicate" — CRMProvider v2 has no
  *     reliable move for them, so they stay until the admin deletes the record.
  */
 
 import type { MergePlan, CrmModule } from "./duplicateMergePlanner";
 import {
-  updateZohoRecord,
-  fetchZohoRelatedRecords,
-  fetchZohoRecordById,
-  addZohoTags,
-  addZohoNote,
-  zohoWritesAllowedInEnv,
-} from "./zohoCRM";
+  updateCRMProviderRecord,
+  fetchCRMProviderRelatedRecords,
+  fetchCRMProviderRecordById,
+  addCRMProviderTags,
+  addCRMProviderNote,
+  CRMProviderWritesAllowedInEnv,
+} from "./CRMProviderCRM";
 
 // Re-exported so existing callers (autonomous runner) keep importing the env
-// gate from here; the single source of truth lives in zohoCRM.
-export { zohoWritesAllowedInEnv } from "./zohoCRM";
+// gate from here; the single source of truth lives in CRMProviderCRM.
+export { CRMProviderWritesAllowedInEnv } from "./CRMProviderCRM";
 import {
   captureClusterSnapshot,
   markPrimaryRecord,
@@ -43,14 +43,14 @@ import {
 import { logger } from "./logger";
 
 /**
- * Zoho returns 400 "the related id given seems to be invalid" when the
+ * CRMProvider returns 400 "the related id given seems to be invalid" when the
  * referenced record has already been deleted on their side. Our local
  * duplicate_records table is then carrying a ghost — every per-record
  * operation against that id (fetch related list, stamp note, write
  * lookup) will keep 400-ing. Detect the pattern so the executor can
  * mark it stale and stop trying to act on it.
  *
- * Match is case-insensitive on the exact wording Zoho ships in the
+ * Match is case-insensitive on the exact wording CRMProvider ships in the
  * response body so unrelated 400s (rate limit, malformed payload) keep
  * surfacing as real errors.
  */
@@ -63,7 +63,7 @@ export function isGhostRecordError(e: unknown): boolean {
 export interface ExecuteReport {
   dryRun: boolean;
   clusterId: number;
-  master: { zohoId: string | null; name: string };
+  master: { CRMProviderId: string | null; name: string };
   fieldsMigrated: Array<{ field: string; value: string | number | null }>;
   reparented: { deals: number; contacts: number; notes: number };
   /** Account the survivor was linked to via Account_Name (Contacts/Deals), or null. */
@@ -74,8 +74,8 @@ export interface ExecuteReport {
   clusterResolved: boolean;
   warnings: string[];
   errors: Array<{ step: string; recordId?: string; message: string }>;
-  /** Duplicate Zoho ids the executor detected as already-deleted in Zoho
-   *  (Zoho 400 "the related id given seems to be invalid"). They were
+  /** Duplicate CRMProvider ids the executor detected as already-deleted in CRMProvider
+   *  (CRMProvider 400 "the related id given seems to be invalid"). They were
    *  tagged stale_pending locally and the next sync's cleanup pass will
    *  purge them from duplicate_records. Surfaced as a single info-level
    *  warning instead of a wall of red errors. */
@@ -93,7 +93,7 @@ export interface ExecuteOptions {
    * active list before the remaining modules (Leads / Deals / Contacts)
    * have been actioned via their own Agentic Resolution sections. The
    * cluster auto-flips to resolved once the next sync detects every
-   * module's duplicates as merged/tagged in Zoho.
+   * module's duplicates as merged/tagged in CRMProvider.
    */
   closeCluster?: boolean;
   /**
@@ -122,7 +122,7 @@ const ACTIVITY_LISTS = ["Tasks", "Calls", "Events"];
 
 // Per-module reparenting: which related lists to repoint onto the survivor and
 // via which lookup field. Notes are always copied (handled separately);
-// activities/attachments are enumerated only (no reliable Zoho v2 move).
+// activities/attachments are enumerated only (no reliable CRMProvider v2 move).
 //   Accounts: child Deals + Contacts repoint their Account_Name lookup.
 //   Contacts: related Deals repoint their Contact_Name lookup.
 //   Leads / Deals: no lookup children to repoint (Notes copy only).
@@ -149,22 +149,22 @@ export async function executeMergePlan(
 
   // Central kill switch: refuse REAL writes outside production. This protects
   // every caller (manual Apply route + autonomous runner) from mutating the
-  // shared live Zoho org from dev. Dry-run is always allowed (it never writes).
-  if (!dryRun && !zohoWritesAllowedInEnv()) {
+  // shared live CRMProvider org from dev. Dry-run is always allowed (it never writes).
+  if (!dryRun && !CRMProviderWritesAllowedInEnv()) {
     throw new Error(
-      "Live Zoho writes are blocked outside production (dev shares production's Zoho credentials). " +
-        "Apply from the deployed app, or set RESOLUTION_ALLOW_WRITES_OUTSIDE_PROD=true only for a dedicated non-prod Zoho org.",
+      "Live CRMProvider writes are blocked outside production (dev shares production's CRMProvider credentials). " +
+        "Apply from the deployed app, or set RESOLUTION_ALLOW_WRITES_OUTSIDE_PROD=true only for a dedicated non-prod CRMProvider org.",
     );
   }
   const performedBy = opts.performedBy || "duplicate-radar";
   const module = plan.module; // "Accounts"
-  const masterId = plan.masterZohoId;
-  const dups = plan.duplicateZohoIds;
+  const masterId = plan.masterCRMProviderId;
+  const dups = plan.duplicateCRMProviderIds;
 
   const report: ExecuteReport = {
     dryRun,
     clusterId: plan.clusterId,
-    master: { zohoId: masterId, name: plan.masterName },
+    master: { CRMProviderId: masterId, name: plan.masterName },
     fieldsMigrated: [],
     reparented: { deals: 0, contacts: 0, notes: 0 },
     linkedToAccount: null,
@@ -177,7 +177,7 @@ export async function executeMergePlan(
     staleDropped: [],
   };
 
-  // Ghost-id ledger: once a Zoho id 400s with "invalid related id", every
+  // Ghost-id ledger: once a CRMProvider id 400s with "invalid related id", every
   // subsequent op against the same id is skipped silently and the id is
   // tagged stale_pending in our DB so the next sync cleanup purges it.
   const ghostIds = new Set<string>();
@@ -223,7 +223,7 @@ export async function executeMergePlan(
 
   if (!masterId) {
     report.warnings.push(
-      "Survivor has no Zoho record id — cannot execute. Resolve the cluster manually.",
+      "Survivor has no CRMProvider record id — cannot execute. Resolve the cluster manually.",
     );
     return report;
   }
@@ -247,7 +247,7 @@ export async function executeMergePlan(
     report.fieldsMigrated = fills.map((f) => ({ field: f.field, value: f.chosenValue }));
     if (!dryRun) {
       try {
-        await updateZohoRecord(module, masterId, updates);
+        await updateCRMProviderRecord(module, masterId, updates);
       } catch (e) {
         fail("migrate-fields", e, masterId);
       }
@@ -260,15 +260,15 @@ export async function executeMergePlan(
   // and the "cascade-only" set (Contacts soft-excluded by the strict ≥2-
   // attribute rule — they are NOT duplicates of the survivor but they
   // still belong to the surviving Account). Tagging a contact for deletion
-  // doesn't erase it from Zoho; the admin reviews each tagged record before
+  // doesn't erase it from CRMProvider; the admin reviews each tagged record before
   // flipping the delete switch and needs to see the right parent Account on
   // every row. Failures on a single record are tracked but do not abort.
-  if (plan.linkAccountZohoId && (module === "Contacts" || module === "Deals")) {
-    report.linkedToAccount = plan.linkAccountZohoId;
+  if (plan.linkAccountCRMProviderId && (module === "Contacts" || module === "Deals")) {
+    report.linkedToAccount = plan.linkAccountCRMProviderId;
     if (!dryRun) {
       try {
-        await updateZohoRecord(module, masterId, {
-          Account_Name: { id: plan.linkAccountZohoId },
+        await updateCRMProviderRecord(module, masterId, {
+          Account_Name: { id: plan.linkAccountCRMProviderId },
         });
       } catch (e) {
         fail("link-account", e, masterId);
@@ -276,8 +276,8 @@ export async function executeMergePlan(
       for (const dupId of dups) {
         if (ghostIds.has(dupId)) continue;
         try {
-          await updateZohoRecord(module, dupId, {
-            Account_Name: { id: plan.linkAccountZohoId },
+          await updateCRMProviderRecord(module, dupId, {
+            Account_Name: { id: plan.linkAccountCRMProviderId },
           });
         } catch (e) {
           fail("link-account-duplicate", e, dupId);
@@ -285,10 +285,10 @@ export async function executeMergePlan(
         fire(++processed);
       }
       // Cascade-only: NOT tagged, just re-pointed under the surviving Account.
-      for (const cascadeId of plan.cascadeOnlyZohoIds || []) {
+      for (const cascadeId of plan.cascadeOnlyCRMProviderIds || []) {
         try {
-          await updateZohoRecord(module, cascadeId, {
-            Account_Name: { id: plan.linkAccountZohoId },
+          await updateCRMProviderRecord(module, cascadeId, {
+            Account_Name: { id: plan.linkAccountCRMProviderId },
           });
         } catch (e) {
           fail("link-account-cascade-only", e, cascadeId);
@@ -304,11 +304,11 @@ export async function executeMergePlan(
     // Contacts→Deals via Contact_Name; Leads/Deals→none). Repoint the lookup.
     for (const rp of MODULE_REPARENT[module]) {
       try {
-        const children = await fetchZohoRelatedRecords(module, dupId, rp.list, { perPage: 200 });
+        const children = await fetchCRMProviderRelatedRecords(module, dupId, rp.list, { perPage: 200 });
         for (const ch of children) {
           if (!dryRun) {
             try {
-              await updateZohoRecord(rp.module, ch.id, { [rp.lookup]: { id: masterId } });
+              await updateCRMProviderRecord(rp.module, ch.id, { [rp.lookup]: { id: masterId } });
             } catch (e) {
               fail("reparent-" + rp.list.toLowerCase(), e, ch.id);
               continue;
@@ -321,9 +321,9 @@ export async function executeMergePlan(
       }
     }
 
-    // Notes — Zoho v2 cannot move a note's parent, so copy onto the survivor.
+    // Notes — CRMProvider v2 cannot move a note's parent, so copy onto the survivor.
     try {
-      const notes = await fetchZohoRelatedRecords(module, dupId, "Notes", { perPage: 200 });
+      const notes = await fetchCRMProviderRelatedRecords(module, dupId, "Notes", { perPage: 200 });
       for (const nt of notes) {
         const title = (nt.data?.Note_Title as string) || "Note (migrated)";
         const content =
@@ -331,7 +331,7 @@ export async function executeMergePlan(
           `\n\n[Migrated from duplicate ${dupId} by QMS Agentic Resolution]`;
         if (!dryRun) {
           try {
-            await addZohoNote(module, masterId, title, content);
+            await addCRMProviderNote(module, masterId, title, content);
           } catch (e) {
             fail("reparent-note", e, nt.id);
             continue;
@@ -344,17 +344,17 @@ export async function executeMergePlan(
     }
 
     // Activities + Attachments — enumerate only; left on the duplicate for the
-    // admin (no reliable Zoho v2 move). Surfaced so nothing is silently lost.
+    // admin (no reliable CRMProvider v2 move). Surfaced so nothing is silently lost.
     for (const list of ACTIVITY_LISTS) {
       try {
-        const acts = await fetchZohoRelatedRecords(module, dupId, list, { perPage: 200 });
+        const acts = await fetchCRMProviderRelatedRecords(module, dupId, list, { perPage: 200 });
         report.leftOnDuplicate.activities += acts.length;
       } catch {
         /* related list may not exist — ignore */
       }
     }
     try {
-      const atts = await fetchZohoRelatedRecords(module, dupId, "Attachments", { perPage: 200 });
+      const atts = await fetchCRMProviderRelatedRecords(module, dupId, "Attachments", { perPage: 200 });
       report.leftOnDuplicate.attachments += atts.length;
     } catch {
       /* ignore */
@@ -364,25 +364,25 @@ export async function executeMergePlan(
 
   if (report.leftOnDuplicate.activities > 0 || report.leftOnDuplicate.attachments > 0) {
     report.warnings.push(
-      `${report.leftOnDuplicate.activities} activity(ies) and ${report.leftOnDuplicate.attachments} attachment(s) remain on the tagged duplicate(s) — Zoho v2 has no reliable move; the admin should review them before deleting.`,
+      `${report.leftOnDuplicate.activities} activity(ies) and ${report.leftOnDuplicate.attachments} attachment(s) remain on the tagged duplicate(s) — CRMProvider v2 has no reliable move; the admin should review them before deleting.`,
     );
   }
 
   // 3) Tag the duplicates for the admin to delete. Exclude any ids already
-  //    detected as ghosts (deleted in Zoho during the migrate/reparent steps)
-  //    — Zoho's add_tags 400s on a deleted record id, which otherwise surfaces
+  //    detected as ghosts (deleted in CRMProvider during the migrate/reparent steps)
+  //    — CRMProvider's add_tags 400s on a deleted record id, which otherwise surfaces
   //    as a spurious "Applied with 1 error" even though there was nothing left
   //    to tag. Those ids are handled as stale_pending instead.
   const liveDups = dups.filter((d) => !ghostIds.has(d));
   if (liveDups.length > 0 && !dryRun) {
     try {
-      await addZohoTags(module, liveDups, [plan.tagName]);
+      await addCRMProviderTags(module, liveDups, [plan.tagName]);
       report.taggedRecordIds = [...liveDups];
     } catch (e) {
-      // The batch add_tags failed. Zoho's add_tags returns a generic 400 with
+      // The batch add_tags failed. CRMProvider's add_tags returns a generic 400 with
       // no per-id detail, so we can't tell deleted-record from a real problem
       // from the message alone. Re-VERIFY each id: ones that are actually gone
-      // (fetchZohoRecordById → null on 404/204) are marked stale (a deleted
+      // (fetchCRMProviderRecordById → null on 404/204) are marked stale (a deleted
       // record can't be tagged — that's fine); ones still alive are retried,
       // and only a failure on a LIVE record is reported as a hard error.
       if (isGhostRecordError(e)) {
@@ -392,7 +392,7 @@ export async function executeMergePlan(
         for (const d of liveDups) {
           let alive = true;
           try {
-            alive = (await fetchZohoRecordById(module, d)) !== null;
+            alive = (await fetchCRMProviderRecordById(module, d)) !== null;
           } catch (verifyErr) {
             // Couldn't verify — be conservative and keep it as alive so a
             // genuine tag problem isn't silently swallowed.
@@ -405,14 +405,14 @@ export async function executeMergePlan(
           // Retry tagging only the records confirmed to still exist — a
           // failure here is a genuine tag problem worth surfacing.
           try {
-            await addZohoTags(module, stillAlive, [plan.tagName]);
+            await addCRMProviderTags(module, stillAlive, [plan.tagName]);
             report.taggedRecordIds = [...stillAlive];
           } catch (e2) {
             fail("tag-duplicates", e2);
           }
         } else {
           report.warnings.push(
-            `Tag step skipped — all ${liveDups.length} duplicate(s) were already deleted in Zoho, so there was nothing to tag.`,
+            `Tag step skipped — all ${liveDups.length} duplicate(s) were already deleted in CRMProvider, so there was nothing to tag.`,
           );
         }
       }
@@ -425,7 +425,7 @@ export async function executeMergePlan(
   if (!dryRun) {
     const stamp = `Absorbed duplicate(s) ${dups.join(", ")} via QMS Agentic Resolution by ${performedBy}${plan.generatedAt ? " on " + plan.generatedAt : ""}.`;
     try {
-      await addZohoNote(module, masterId, "QMS Agentic Resolution — survivor", stamp);
+      await addCRMProviderNote(module, masterId, "QMS Agentic Resolution — survivor", stamp);
       report.notesStamped++;
     } catch (e) {
       fail("stamp-master", e, masterId);
@@ -433,11 +433,11 @@ export async function executeMergePlan(
     for (const dupId of dups) {
       if (ghostIds.has(dupId)) continue;
       try {
-        await addZohoNote(
+        await addCRMProviderNote(
           module,
           dupId,
           "Marked for deletion — QMS Duplicate Radar",
-          `Merged into ${masterId} (${plan.masterName}) by ${performedBy}. Tagged "${plan.tagName}" — safe for the Zoho admin to delete.`,
+          `Merged into ${masterId} (${plan.masterName}) by ${performedBy}. Tagged "${plan.tagName}" — safe for the CRMProvider admin to delete.`,
         );
         report.notesStamped++;
       } catch (e) {
@@ -455,8 +455,8 @@ export async function executeMergePlan(
   // NEW LIFECYCLE (Sample User 2026-07-06): an apply NEVER flips the cluster to
   // 'resolved'. It migrates the fields + tags the duplicates Duplicate-Delete
   // and records the merge action, but the cluster stays ACTIVE — surfacing in
-  // the "AI-Applied · pending Zoho delete" queue. Only Verify-in-CRM (which
-  // confirms the tagged records are actually gone from Zoho) flips it to
+  // the "AI-Applied · pending CRMProvider delete" queue. Only Verify-in-CRM (which
+  // confirms the tagged records are actually gone from CRMProvider) flips it to
   // 'resolved'. This now holds for SINGLE-module (closeCluster) AND cross-module
   // (partial) applies alike, so EVERY apply follows Apply → AI-Applied → Verify
   // → Resolved. Previously the closeCluster branch called resolveCluster() here
@@ -465,7 +465,7 @@ export async function executeMergePlan(
   // move to AI-Applied" bug. recordPartialMergeAction writes a 'module_resolved'
   // action (status stays active); it also lets subsequent same-cluster plans for
   // the OTHER modules filter out the just-tagged duplicates (no zombie LINK
-  // SURVIVOR buttons). Best-effort; a logging failure must not abort the Zoho
+  // SURVIVOR buttons). Best-effort; a logging failure must not abort the CRMProvider
   // writes already done.
   const closeCluster = opts.closeCluster !== false;
   if (!dryRun) {
@@ -482,7 +482,7 @@ export async function executeMergePlan(
         dupDbIds,
         performedBy,
         closeCluster
-          ? `Agentic merge (${module}): fields migrated onto ${masterId}; ${dups.length} duplicate(s) tagged ${plan.tagName}. AI-Applied — awaiting Zoho admin delete + Verify-in-CRM to resolve.`
+          ? `Agentic merge (${module}): fields migrated onto ${masterId}; ${dups.length} duplicate(s) tagged ${plan.tagName}. AI-Applied — awaiting CRMProvider admin delete + Verify-in-CRM to resolve.`
           : `Module merge (${module}): survivor=${masterId}; ${dups.length} duplicate(s) tagged ${plan.tagName}. Cluster left open for cross-module follow-up.`,
       );
       // clusterResolved reflects "fully resolved in CRM", which an apply no
@@ -498,7 +498,7 @@ export async function executeMergePlan(
     }
   }
 
-  // Durable solved-ledger write — keyed by stable Zoho identity so the per-
+  // Durable solved-ledger write — keyed by stable CRMProvider identity so the per-
   // module "solved" scoreboard survives a Rebuild Clusters wipe. Only on a
   // clean real run (no errors): a partial/failed apply must not be credited as
   // solved. closeCluster=false ⇒ a single module was merged (the rest of a
@@ -507,8 +507,8 @@ export async function executeMergePlan(
   if (!dryRun && report.errors.length === 0) {
     await recordResolutionLedgerEntry({
       module,
-      masterZohoId: masterId,
-      duplicateZohoIds: dups,
+      masterCRMProviderId: masterId,
+      duplicateCRMProviderIds: dups,
       // Apply is ALWAYS pending verification now → 'module_resolved'. The durable
       // 'resolve' marker is reserved for Verify-in-CRM (resolveCluster), so
       // restoreLedgerResolvedClusterStatus only re-resolves VERIFIED clusters
@@ -527,7 +527,7 @@ export async function executeMergePlan(
         ? ` (+${report.staleDropped.length - 5} more)`
         : "";
     report.warnings.push(
-      `${report.staleDropped.length} duplicate record(s) auto-cleaned — already deleted in Zoho (${idsPreview}${more}). Tagged stale_pending locally; the next sync will purge them. ${dryRun ? "" : "No further apply attempts will be made against these ids."}`.trim(),
+      `${report.staleDropped.length} duplicate record(s) auto-cleaned — already deleted in CRMProvider (${idsPreview}${more}). Tagged stale_pending locally; the next sync will purge them. ${dryRun ? "" : "No further apply attempts will be made against these ids."}`.trim(),
     );
   }
 

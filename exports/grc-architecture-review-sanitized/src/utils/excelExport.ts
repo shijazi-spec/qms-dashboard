@@ -2374,7 +2374,7 @@ export async function stageStreamingExportFromHono(
   // Staging is an OPTIMISATION — it buys Range/resume support and lets repeat
   // downloads of the same export skip regeneration. It is not what the caller
   // asked for. When it fails, serve the export directly rather than failing
-  // the download: on the Replit deployment every staged export was returning
+  // the download: on the HostingPlatform deployment every staged export was returning
   // 500 and taking the whole instance down with it (measured 2026-08-25 —
   // 28s of healthy checks, one export call, 12s of 500s on every route,
   // reproduced on the pre-existing /api/duplicates/export-xlsx as well).

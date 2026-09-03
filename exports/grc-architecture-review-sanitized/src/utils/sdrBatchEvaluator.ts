@@ -1,5 +1,5 @@
 // =======================================================================
-// Medium #9 — OpenAI Batch API integration for SDR scorecard evaluation.
+// Medium #9 — LLMProvider Batch API integration for SDR scorecard evaluation.
 //
 // Bulk path only. Interactive single-call evaluation still uses real-time
 // `generateText` (managers expect instant results when they click "Run
@@ -7,7 +7,7 @@
 // pending call I uploaded last night" workflow, where we trade 24h
 // latency for a 50% discount on the per-token cost.
 //
-// OpenAI Batch API contract (raw fetch — no SDK dependency):
+// LLMProvider Batch API contract (raw fetch — no SDK dependency):
 //   1. Upload a .jsonl file via POST /v1/files with purpose="batch".
 //      Each line is one chat/completions request keyed by custom_id.
 //   2. Create the batch with POST /v1/batches referencing the file id,
@@ -25,7 +25,7 @@
 
 import { createRedactedPool } from "./redactedPool";
 import { logger } from "./logger";
-import { getOpenAIApiKey, getOpenAIBaseUrl } from "./openaiCredentials";
+import { getLLMProviderApiKey, getLLMProviderBaseUrl } from "./LLMProviderCredentials";
 import { logEvent } from "./eventLogsDatabase";
 import {
   getActiveSDRScorecard,
@@ -39,7 +39,7 @@ const pool = createRedactedPool({
   connectionString: process.env.DATABASE_URL,
 });
 
-// OpenAI Batch API states. completed/failed/cancelled/expired are
+// LLMProvider Batch API states. completed/failed/cancelled/expired are
 // terminal — the poller skips batches in any terminal state.
 export type BatchStatus =
   | "validating"
@@ -58,9 +58,9 @@ const OPEN_BATCH_STATUSES: BatchStatus[] = [
 
 export interface SDRBatchJob {
   id: number;
-  openai_batch_id: string | null;
-  openai_input_file_id: string | null;
-  openai_output_file_id: string | null;
+  LLMProvider_batch_id: string | null;
+  LLMProvider_input_file_id: string | null;
+  LLMProvider_output_file_id: string | null;
   status: BatchStatus | "submission_failed";
   call_count: number;
   processed_count: number;
@@ -78,9 +78,9 @@ async function ensureSDRBatchJobsTable(): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS sdr_batch_jobs (
       id SERIAL PRIMARY KEY,
-      openai_batch_id VARCHAR(100) UNIQUE,
-      openai_input_file_id VARCHAR(100),
-      openai_output_file_id VARCHAR(100),
+      LLMProvider_batch_id VARCHAR(100) UNIQUE,
+      LLMProvider_input_file_id VARCHAR(100),
+      LLMProvider_output_file_id VARCHAR(100),
       status VARCHAR(32) NOT NULL DEFAULT 'validating',
       call_count INTEGER NOT NULL DEFAULT 0,
       processed_count INTEGER NOT NULL DEFAULT 0,
@@ -100,27 +100,27 @@ async function ensureSDRBatchJobsTable(): Promise<void> {
 
 // ============================== HTTP helpers ============================
 
-function openaiBatchBase(): string {
+function LLMProviderBatchBase(): string {
   // Always resolve at call-time — secrets may have been swapped (e.g. the
   // modelfarm proxy bug from the prior session). Falls back to the public
-  // OpenAI API so the batch path keeps working even if AI_INTEGRATIONS_*
+  // LLMProvider API so the batch path keeps working even if AI_INTEGRATIONS_*
   // is unset.
-  return getOpenAIBaseUrl() || "<REDACTED_URL>";
+  return getLLMProviderBaseUrl() || "<REDACTED_URL>";
 }
 
 function authHeader(): Record<string, string> {
-  const key = getOpenAIApiKey();
+  const key = getLLMProviderApiKey();
   if (!key) {
-    throw new Error("OPENAI_API_KEY is not configured — cannot submit batch");
+    throw new Error("LLMProvider_API_KEY is not configured — cannot submit batch");
   }
   return { Authorization: `Bearer ${key}` };
 }
 
-async function openaiFetch(
+async function LLMProviderFetch(
   path: string,
   init: RequestInit & { responseType?: "json" | "text" } = {},
 ): Promise<any> {
-  const url = `${openaiBatchBase()}${path}`;
+  const url = `${LLMProviderBatchBase()}${path}`;
   const headers: Record<string, string> = {
     ...authHeader(),
     ...((init.headers as Record<string, string>) || {}),
@@ -129,7 +129,7 @@ async function openaiFetch(
   if (!res.ok) {
     const errorBody = await res.text().catch(() => "");
     throw new Error(
-      `OpenAI ${path} returned ${res.status}: ${errorBody.slice(0, 500)}`,
+      `LLMProvider ${path} returned ${res.status}: ${errorBody.slice(0, 500)}`,
     );
   }
   if (init.responseType === "text") return res.text();
@@ -144,15 +144,15 @@ async function uploadBatchInputFile(jsonl: string): Promise<string> {
   form.append("purpose", "batch");
   form.append("file", blob, "sdr-batch-input.jsonl");
 
-  const data = await openaiFetch("/files", { method: "POST", body: form });
+  const data = await LLMProviderFetch("/files", { method: "POST", body: form });
   if (!data?.id) {
-    throw new Error("OpenAI /files response missing id field");
+    throw new Error("LLMProvider /files response missing id field");
   }
   return data.id as string;
 }
 
 async function downloadFileContent(fileId: string): Promise<string> {
-  return openaiFetch(`/files/${fileId}/content`, { responseType: "text" });
+  return LLMProviderFetch(`/files/${fileId}/content`, { responseType: "text" });
 }
 
 // =========================== Batches API ==========================
@@ -167,12 +167,12 @@ async function createBatch(
     completion_window: "24h",
     metadata,
   });
-  const data = await openaiFetch("/batches", {
+  const data = await LLMProviderFetch("/batches", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body,
   });
-  if (!data?.id) throw new Error("OpenAI /batches response missing id");
+  if (!data?.id) throw new Error("LLMProvider /batches response missing id");
   return { id: data.id, status: data.status as BatchStatus };
 }
 
@@ -184,7 +184,7 @@ async function retrieveBatch(batchId: string): Promise<{
   request_counts?: { total?: number; completed?: number; failed?: number };
   errors?: any;
 }> {
-  return openaiFetch(`/batches/${batchId}`);
+  return LLMProviderFetch(`/batches/${batchId}`);
 }
 
 // =========================== JSONL builder ========================
@@ -263,7 +263,7 @@ export async function submitPendingForBatch(opts: {
   maxCalls?: number;
 }): Promise<{
   batchJobId: number;
-  openaiBatchId: string;
+  LLMProviderBatchId: string;
   callCount: number;
 }> {
   await ensureSDRBatchJobsTable();
@@ -274,10 +274,10 @@ export async function submitPendingForBatch(opts: {
 
   // Run the eligibility check + job row insert under a transaction-scoped
   // advisory lock so two concurrent POSTs cannot pass the eligibility
-  // gate in parallel and double-bill OpenAI for the same call_ids. The
+  // gate in parallel and double-bill LLMProvider for the same call_ids. The
   // lock releases automatically when the transaction commits or rolls
   // back; we hold a single client through the critical section. The
-  // outbound OpenAI calls happen AFTER COMMIT so we don't hold the lock
+  // outbound LLMProvider calls happen AFTER COMMIT so we don't hold the lock
   // across slow network IO.
   const client = await pool.connect();
   let batchJobId: number;
@@ -299,7 +299,7 @@ export async function submitPendingForBatch(opts: {
     const callIds = eligible.map((c) => c.call_record_id);
 
     // Insert the job row up front in a placeholder state so we have a
-    // durable record even if the OpenAI submission fails midway. If
+    // durable record even if the LLMProvider submission fails midway. If
     // file upload or batch create errors, we mark it submission_failed;
     // the poller ignores it and the row stays as evidence in the UI.
     // Within the advisory lock so the next caller's eligibility check
@@ -338,7 +338,7 @@ export async function submitPendingForBatch(opts: {
     });
     await pool.query(
       `UPDATE sdr_batch_jobs
-       SET openai_input_file_id = $1, openai_batch_id = $2, status = $3
+       SET LLMProvider_input_file_id = $1, LLMProvider_batch_id = $2, status = $3
        WHERE id = $4`,
       [inputFileId, created.id, created.status, batchJobId],
     );
@@ -351,10 +351,10 @@ export async function submitPendingForBatch(opts: {
         module: "calls",
         severity: "INFO",
         aiInvolved: true,
-        description: `SDR batch evaluation submitted — ${eligible.length} call(s), scorecard "${scorecard.name}", openai batch ${created.id}`,
+        description: `SDR batch evaluation submitted — ${eligible.length} call(s), scorecard "${scorecard.name}", LLMProvider batch ${created.id}`,
         newValue: {
           batch_job_id: batchJobId,
-          openai_batch_id: created.id,
+          LLMProvider_batch_id: created.id,
           call_count: eligible.length,
           scorecard_id: scorecard.id,
         },
@@ -365,7 +365,7 @@ export async function submitPendingForBatch(opts: {
 
     return {
       batchJobId,
-      openaiBatchId: created.id,
+      LLMProviderBatchId: created.id,
       callCount: eligible.length,
     };
   } catch (err: any) {
@@ -391,13 +391,13 @@ export async function pollAndProcessOpenBatches(): Promise<{
 
   // Claim open jobs row-by-row with SELECT FOR UPDATE SKIP LOCKED so two
   // concurrent pollers (Inngest cron + manual sync, or two Inngest
-  // workers) cannot process the same OpenAI batch twice — duplicate
+  // workers) cannot process the same LLMProvider batch twice — duplicate
   // processing wastes a download, duplicates event_logs entries, and
   // double-logs the audit trail. Per-row transactions release locks
-  // promptly even when the OpenAI fetch hangs on one batch.
+  // promptly even when the LLMProvider fetch hangs on one batch.
   const candidateIds = await pool.query(
     `SELECT id FROM sdr_batch_jobs
-       WHERE status = ANY($1::text[]) AND openai_batch_id IS NOT NULL
+       WHERE status = ANY($1::text[]) AND LLMProvider_batch_id IS NOT NULL
        ORDER BY submitted_at ASC`,
     [OPEN_BATCH_STATUSES],
   );
@@ -413,7 +413,7 @@ export async function pollAndProcessOpenBatches(): Promise<{
       await client.query("BEGIN");
       const claim = await client.query(
         `SELECT * FROM sdr_batch_jobs
-           WHERE id = $1 AND status = ANY($2::text[]) AND openai_batch_id IS NOT NULL
+           WHERE id = $1 AND status = ANY($2::text[]) AND LLMProvider_batch_id IS NOT NULL
            FOR UPDATE SKIP LOCKED`,
         [candidate.id, OPEN_BATCH_STATUSES],
       );
@@ -427,7 +427,7 @@ export async function pollAndProcessOpenBatches(): Promise<{
       inspected += 1;
 
       try {
-        const live = await retrieveBatch(job.openai_batch_id);
+        const live = await retrieveBatch(job.LLMProvider_batch_id);
         // Always reflect the latest status — managers see in_progress
         // transition to finalizing in the UI between poll runs.
         if (live.status !== job.status) {
@@ -465,7 +465,7 @@ export async function pollAndProcessOpenBatches(): Promise<{
         await client.query(
           `UPDATE sdr_batch_jobs
              SET status = 'completed', completed_at = NOW(),
-                 openai_output_file_id = $1,
+                 LLMProvider_output_file_id = $1,
                  processed_count = $2, failed_count = $3
              WHERE id = $4`,
           [live.output_file_id, result.saved, result.failed, job.id],
@@ -481,10 +481,10 @@ export async function pollAndProcessOpenBatches(): Promise<{
             module: "calls",
             severity: result.failed > 0 ? "WARNING" : "INFO",
             aiInvolved: true,
-            description: `SDR batch ${job.openai_batch_id} completed — ${result.saved} evaluation(s) saved, ${result.failed} failed`,
+            description: `SDR batch ${job.LLMProvider_batch_id} completed — ${result.saved} evaluation(s) saved, ${result.failed} failed`,
             newValue: {
               batch_job_id: job.id,
-              openai_batch_id: job.openai_batch_id,
+              LLMProvider_batch_id: job.LLMProvider_batch_id,
               saved: result.saved,
               failed: result.failed,
             },
@@ -495,11 +495,11 @@ export async function pollAndProcessOpenBatches(): Promise<{
       } catch (err: any) {
         // Transient poll error — rollback the status change so the next
         // pass retries from the same starting state. Don't mark the job
-        // failed: OpenAI itself returns a terminal status when the batch
+        // failed: LLMProvider itself returns a terminal status when the batch
         // truly fails (handled in the live.status branch above).
         await client.query("ROLLBACK");
         logger.warn(
-          `[SDRBatch] Poll for job ${job.id} (${job.openai_batch_id}) failed: ${err?.message}`,
+          `[SDRBatch] Poll for job ${job.id} (${job.LLMProvider_batch_id}) failed: ${err?.message}`,
         );
       }
     } catch (outerErr: any) {

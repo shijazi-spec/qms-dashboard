@@ -38,7 +38,7 @@
  * in individual test files OVERRIDE this shim (vitest mock precedence
  * gives the test file the final say), so suites that already maintain
  * their own bespoke rbac mock — `aiApprovalRoutes`, `kpiRoutes`,
- * `mobileRoutes`, `pmpRoutes`, `scorecardRoutes`, `zohoAgingRoutes` —
+ * `mobileRoutes`, `pmpRoutes`, `scorecardRoutes`, `CRMProviderAgingRoutes` —
  * are unaffected.
  */
 

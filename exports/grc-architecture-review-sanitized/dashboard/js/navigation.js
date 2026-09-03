@@ -676,7 +676,7 @@ const ExampleOrgNav = {
     try {
       if (window.location.pathname.indexOf('consultant') !== -1) return;
     } catch (e) { /* ignore */ }
-    if (typeof window._openAIWidget === 'function') return;
+    if (typeof window._LLMProviderWidget === 'function') return;
     if (document.getElementById('ai-consultant-widget')) return;
     if (document.querySelector('script[data-ExampleOrg-consultant-widget]')) return;
     // Also skip if the page already includes the widget directly (e.g.
@@ -698,8 +698,8 @@ const ExampleOrgNav = {
   // /consultant page (where the widget intentionally doesn't mount) just go
   // there.
   openAssistant() {
-    if (typeof window._openAIWidget === 'function') {
-      window._openAIWidget();
+    if (typeof window._LLMProviderWidget === 'function') {
+      window._LLMProviderWidget();
       return;
     }
     if (window.location.pathname.indexOf('consultant') !== -1) {
@@ -707,7 +707,7 @@ const ExampleOrgNav = {
       return;
     }
     var openWhenReady = function (tries) {
-      if (typeof window._openAIWidget === 'function') { window._openAIWidget(); return; }
+      if (typeof window._LLMProviderWidget === 'function') { window._LLMProviderWidget(); return; }
       if (tries > 0) { setTimeout(function () { openWhenReady(tries - 1); }, 50); return; }
       window.location.href = '/consultant';
     };

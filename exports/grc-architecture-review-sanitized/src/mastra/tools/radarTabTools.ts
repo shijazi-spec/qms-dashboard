@@ -7,7 +7,7 @@ import { z } from "zod";
  * engines the dashboard tabs use).
  *   - executive-summary    : platform-wide KPI tiles (clusters, dup rate, pipeline inflation, resolution rate)
  *   - cs-pipeline-overlap  : duplicate clusters overlapping live CS customers
- *   - cross-module-overlap : same company across ≥2 Zoho modules (Lead+Contact, Lead+Account, …)
+ *   - cross-module-overlap : same company across ≥2 CRMProvider modules (Lead+Contact, Lead+Account, …)
  *   - account-hints        : deals missing Account_Name + the inferred-Account verdict (pending/applied/dismissed)
  *   - deal-compliance      : Sales SOP 7.5.10 attachments check on Proposal / Agreement Signed / Paid deals
  *   - agent-activity       : audit-trail of every preview/dry-run/apply the autonomous resolver performed

@@ -39,7 +39,7 @@ import {
   _csFuzzyMatch,
   matchDoamClient,
   matchProtectedAccount,
-  buildZohoRecordUrl,
+  buildCRMProviderRecordUrl,
   type CsClientStatus,
   type OpenDealDirectory,
 } from "./duplicateRadarPreflight";
@@ -53,7 +53,7 @@ import {
 import { logger } from "./logger";
 
 export interface ReengageInputRow {
-  /** Zoho Deal id (the sheet's "Record Id"; a leading `zcrm_` is stripped). */
+  /** CRMProvider Deal id (the sheet's "Record Id"; a leading `zcrm_` is stripped). */
   record_id?: string | null;
   deal_name?: string | null;
   company_name?: string | null;
@@ -219,7 +219,7 @@ export async function runLostDealReengagement(input: {
 
   const csDir = await getCsClientDirectory(Date.now());
   // Mirror-based open-deal directory: one query for the whole batch. Safe to
-  // trust now that the incremental sync windows correctly (a live Zoho check
+  // trust now that the incremental sync windows correctly (a live CRMProvider check
   // would mean one round-trip per row — thousands on a list this size).
   let openDealDir: OpenDealDirectory = {
     byDomain: new Map(),
@@ -282,7 +282,7 @@ export async function runLostDealReengagement(input: {
       blocking_deal_url: null as string | null,
       blocking_deal_name: null as string | null,
       blocking_deal_stage: null as string | null,
-      deal_url: dealId ? buildZohoRecordUrl("Deals", dealId) : null,
+      deal_url: dealId ? buildCRMProviderRecordUrl("Deals", dealId) : null,
       verified_via: (domain
         ? "domain"
         : nameCandidates.length
@@ -383,7 +383,7 @@ export async function runLostDealReengagement(input: {
         `BLOCK — a live open deal already exists: "${live.dealName}"${live.stage ? ` (stage: ${live.stage})` : ""}${live.owner ? ` owned by ${live.owner}` : ""}. Coordinate with that owner instead of re-approaching.`,
         {
           blocker_owner: live.owner || null,
-          blocking_deal_url: buildZohoRecordUrl("Deals", live.zohoId),
+          blocking_deal_url: buildCRMProviderRecordUrl("Deals", live.CRMProviderId),
           blocking_deal_name: live.dealName,
           blocking_deal_stage: live.stage || null,
         },

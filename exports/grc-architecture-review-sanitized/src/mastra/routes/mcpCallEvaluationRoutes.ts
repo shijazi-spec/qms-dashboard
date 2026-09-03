@@ -16,8 +16,8 @@ const CALL_READ_ROLES = [
 /**
  * MCP evaluation & call–lead reconciliation API.
  * - Reconciliation compares transcript vs stored QA / analysis (programmatic checks).
- * - Phone match: Zoho **Leads only** (all Leads in CRM, bounded scan) — see GET import-sources.
- * - Import channels: Five9 (partial), bulk upload (live), Google Drive (stub).
+ * - Phone match: CRMProvider **Leads only** (all Leads in CRM, bounded scan) — see GET import-sources.
+ * - Import channels: ContactCenterProvider (partial), bulk upload (live), IdentityProvider Drive (stub).
  */
 export const mcpCallEvaluationRoutes = [
   {
@@ -119,7 +119,7 @@ export const mcpCallEvaluationRoutes = [
           ...result,
           note:
             result.scanned === 0 && result.matches.length === 0
-              ? "No Zoho credentials or no Leads fetched — configure Zoho and retry."
+              ? "No CRMProvider credentials or no Leads fetched — configure CRMProvider and retry."
               : undefined,
         });
       };
@@ -176,9 +176,9 @@ export const mcpCallEvaluationRoutes = [
               status: "no_auth",
               ...result,
               required_env_options: [
-                "Replit Drive connector (REPLIT_CONNECTORS_HOSTNAME + repl identity)",
-                "Service Account (GOOGLE_DRIVE_CLIENT_EMAIL + GOOGLE_DRIVE_PRIVATE_KEY)",
-                "OAuth refresh (GOOGLE_OAUTH_CLIENT_ID + GOOGLE_OAUTH_CLIENT_SECRET + GOOGLE_OAUTH_REFRESH_TOKEN)",
+                "HostingPlatform Drive connector (HostingPlatform_CONNECTORS_HOSTNAME + repl identity)",
+                "Service Account (IdentityProvider_DRIVE_CLIENT_EMAIL + IdentityProvider_DRIVE_PRIVATE_KEY)",
+                "OAuth refresh (IdentityProvider_OAUTH_CLIENT_ID + IdentityProvider_OAUTH_CLIENT_SECRET + IdentityProvider_OAUTH_REFRESH_TOKEN)",
               ],
             },
             503,

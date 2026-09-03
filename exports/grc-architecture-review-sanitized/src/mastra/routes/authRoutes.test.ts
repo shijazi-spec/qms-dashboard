@@ -7,9 +7,9 @@
  *
  * The OIDC callback handler hands the upstream IdP profile straight to
  * `upsertOidcUser({ sub, email, name, picture })` which writes free-text
- * columns (`full_name`, `picture`, `google_id`) into `platform_users`. A
+ * columns (`full_name`, `picture`, `IdentityProvider_id`) into `platform_users`. A
  * hostile or misconfigured IdP could otherwise smuggle a `password_hash`,
- * `access_token`, JWT, GitHub PAT (`ghp_…`), or OpenAI key (`sk-…`)
+ * `access_token`, JWT, SourceControlProvider PAT (`ghp_…`), or LLMProvider key (`sk-…`)
  * straight into Postgres. The function now passes the whole profile through
  * `redactSensitiveDeep()` first.
  *
@@ -113,9 +113,9 @@ const SECRET_LIKE_STRINGS: Array<{ label: string; value: string }> = [
     value:
       "<REDACTED_TOKEN>",
   },
-  { label: "GitHub PAT", value: "<REDACTED_TOKEN>" },
+  { label: "SourceControlProvider PAT", value: "<REDACTED_TOKEN>" },
   {
-    label: "OpenAI sk- key",
+    label: "LLMProvider sk- key",
     value: "<REDACTED_TOKEN>",
   },
 ];

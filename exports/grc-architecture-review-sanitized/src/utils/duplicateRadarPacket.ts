@@ -88,7 +88,7 @@ interface PacketStrings {
   colQuestion: string;
   colAnswer: string;
   colClusterId: string;
-  colZohoId: string;
+  colCRMProviderId: string;
   colRecordName: string;
   colType: string;
   colIsPrimary: string;
@@ -142,7 +142,7 @@ const STRINGS_EN: PacketStrings = {
   colQuestion: "Question",
   colAnswer: "Answer",
   colClusterId: "Cluster ID",
-  colZohoId: "Zoho ID",
+  colCRMProviderId: "CRMProvider ID",
   colRecordName: "Record name",
   colType: "Type",
   colIsPrimary: "Is primary",
@@ -192,7 +192,7 @@ const STRINGS_EN: PacketStrings = {
     },
     {
       q: "What does 'Merge into <name>' mean in the Recommended Action column?",
-      a: "<name> is the primary record the radar (or an operator) selected as the survivor. Open it in Zoho, copy any unique field values from the duplicate into the primary, then run Zoho's merge so the duplicate is deleted and references re-link.",
+      a: "<name> is the primary record the radar (or an operator) selected as the survivor. Open it in CRMProvider, copy any unique field values from the duplicate into the primary, then run CRMProvider's merge so the duplicate is deleted and references re-link.",
     },
     {
       q: "What is the Survivorship Rule column telling me?",
@@ -204,10 +204,10 @@ const STRINGS_EN: PacketStrings = {
     },
     {
       q: "How do I dispute a row?",
-      a: "Follow the 'Dispute path' on the Cover sheet of this workbook. Include the Cluster ID and Zoho ID(s) from the Action Items sheet so the data-quality team can locate the cluster instantly.",
+      a: "Follow the 'Dispute path' on the Cover sheet of this workbook. Include the Cluster ID and CRMProvider ID(s) from the Action Items sheet so the data-quality team can locate the cluster instantly.",
     },
     {
-      q: "What happens after I act on these in Zoho?",
+      q: "What happens after I act on these in CRMProvider?",
       a: "The next radar sync (typically nightly) re-scans your records. Resolved clusters drop off the dashboard within 24 hours. If a cluster reappears, it usually means the duplicate was re-created from a new source — escalate via the contact above.",
     },
   ],
@@ -225,7 +225,7 @@ const STRINGS_AR: PacketStrings = {
   colQuestion: "السؤال",
   colAnswer: "الإجابة",
   colClusterId: "معرّف المجموعة",
-  colZohoId: "معرّف زوهو",
+  colCRMProviderId: "معرّف زوهو",
   colRecordName: "اسم السجل",
   colType: "النوع",
   colIsPrimary: "السجل الأساسي",
@@ -358,7 +358,7 @@ function buildActionItemsSheet(input: PacketBuildInputs) {
   const S = pickStrings(input.lang);
   const idColumns = [
     { header: S.colClusterId, key: "cluster_id", width: 12 },
-    { header: S.colZohoId, key: "zoho_record_id", width: 22 },
+    { header: S.colCRMProviderId, key: "CRMProvider_record_id", width: 22 },
     { header: S.colRecordName, key: "record_name", width: 30 },
     { header: S.colType, key: "record_type", width: 12 },
     { header: S.colIsPrimary, key: "is_primary_label", width: 12 },
@@ -374,7 +374,7 @@ function buildActionItemsSheet(input: PacketBuildInputs) {
     const pb = rowPlaybook(rec, state);
     rows.push({
       cluster_id: rec.cluster_id,
-      zoho_record_id: rec.zoho_record_id,
+      CRMProvider_record_id: rec.CRMProvider_record_id,
       record_name: rec.record_name,
       record_type: rec.record_type,
       is_primary_label: rec.is_primary ? S.yes : S.no,
@@ -394,7 +394,7 @@ function buildActionItemsSheet(input: PacketBuildInputs) {
 
 /**
  * Raw Records sheet: every column the operator might need to investigate
- * the row in Zoho, no playbook columns (so reads cleanly as a data dump).
+ * the row in CRMProvider, no playbook columns (so reads cleanly as a data dump).
  */
 function buildRawRecordsSheet(input: PacketBuildInputs) {
   const S = pickStrings(input.lang);
@@ -403,7 +403,7 @@ function buildRawRecordsSheet(input: PacketBuildInputs) {
     rightToLeft: input.lang === "ar",
     columns: [
       { header: S.colClusterId, key: "cluster_id", width: 12 },
-      { header: S.colZohoId, key: "zoho_record_id", width: 22 },
+      { header: S.colCRMProviderId, key: "CRMProvider_record_id", width: 22 },
       { header: S.colType, key: "record_type", width: 12 },
       { header: S.colName, key: "record_name", width: 30 },
       { header: S.colCompany, key: "company_name", width: 30 },

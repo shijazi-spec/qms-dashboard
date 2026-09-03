@@ -6,7 +6,7 @@
  *   • which record survives (the "master") and why,
  *   • which field values would be migrated onto the master (gap-fills only —
  *     the master's existing values are never overwritten automatically),
- *   • which duplicates would be tagged `Duplicate-Delete` for the Zoho admin,
+ *   • which duplicates would be tagged `Duplicate-Delete` for the CRMProvider admin,
  *   • field-level conflicts and other warnings for the operator to eyeball.
  *
  * IMPORTANT: this module performs NO writes and contacts NO external service.
@@ -101,18 +101,18 @@ export function isRoleMailbox(email: string | null | undefined): boolean {
 export type MergeFieldAction = "fill" | "conflict";
 
 export interface MergeFieldDecision {
-  /** Zoho API field name (Accounts module). */
+  /** CRMProvider API field name (Accounts module). */
   field: string;
   /** Human label for the UI. */
   label: string;
   action: MergeFieldAction;
   chosenValue: string | number | null;
-  /** zoho_record_id of the record supplying `chosenValue`. */
-  fromZohoId: string | null;
+  /** CRMProvider_record_id of the record supplying `chosenValue`. */
+  fromCRMProviderId: string | null;
   reason: string;
   /** Other values seen for this field across the cluster (for operator review). */
   alternatives: Array<{
-    zohoId: string | null;
+    CRMProviderId: string | null;
     recordName: string;
     value: string | number | null;
   }>;
@@ -120,7 +120,7 @@ export interface MergeFieldDecision {
 
 export interface MergePlanRecordSummary {
   dbId: number | null;
-  zohoId: string | null;
+  CRMProviderId: string | null;
   name: string;
   isMaster: boolean;
   /** Whether this record is in the merge set (false = operator-excluded, untouched). */
@@ -130,25 +130,25 @@ export interface MergePlanRecordSummary {
   createdDate: string | null;
   modifiedDate: string | null;
   owner: string | null;
-  /** Zoho Layout / account category (e.g. "Corporate Accounts", "Partner Accounts"). Informational. */
+  /** CRMProvider Layout / account category (e.g. "Corporate Accounts", "Partner Accounts"). Informational. */
   layout: string | null;
   /**
-   * Zoho Account_Name (parent Account) when the record has one. Surfaced in
+   * CRMProvider Account_Name (parent Account) when the record has one. Surfaced in
    * the Contacts merge modal in place of the 📎 attachments chip — for
    * Contacts the parent-Account context is the more useful merge-decision
    * signal (which company does each duplicate belong to?). Null for records
    * with no Account_Name (e.g. orphan Contacts, all Accounts/Leads).
    */
   accountName: string | null;
-  /** Deal Stage (Zoho). Surfaced in the Deals merge modal in place of the
+  /** Deal Stage (CRMProvider). Surfaced in the Deals merge modal in place of the
    *  attachments chip — the stage is the more useful merge-decision signal for
    *  Deals (don't merge away an open/won deal). Null for non-Deal records. */
   stage: string | null;
-  /** Zoho Lead_Status. Surfaced in the Leads merge/preview table in place of the
+  /** CRMProvider Lead_Status. Surfaced in the Leads merge/preview table in place of the
    *  attachments chip — status is the key merge signal for Leads (don't merge a
    *  Converted lead away). Null for non-Lead records. */
   leadStatus: string | null;
-  hasZohoId: boolean;
+  hasCRMProviderId: boolean;
 }
 
 /** Plain-language email/phone outcome for the Contacts merge preview panel.
@@ -177,12 +177,12 @@ export interface MergePlan {
   /** Phase 1 mechanism — migrate fields to master, tag duplicates for admin. */
   method: "migrate_tag";
   tagName: string;
-  masterZohoId: string | null;
+  masterCRMProviderId: string | null;
   masterDbId: number | null;
   masterName: string;
   masterReason: string;
-  /** zoho_record_ids that would receive the delete tag. */
-  duplicateZohoIds: string[];
+  /** CRMProvider_record_ids that would receive the delete tag. */
+  duplicateCRMProviderIds: string[];
   duplicateDbIds: number[];
   fieldDecisions: MergeFieldDecision[];
   warnings: string[];
@@ -192,96 +192,96 @@ export interface MergePlan {
   rationale: string;
   records: MergePlanRecordSummary[];
   /** Accounts in the cluster the survivor can be linked to (Contacts/Deals only). */
-  accountCandidates: { zohoId: string; name: string }[];
+  accountCandidates: { CRMProviderId: string; name: string }[];
   /** Account the survivor's Account_Name will be set to on apply (null = no link). */
-  linkAccountZohoId: string | null;
+  linkAccountCRMProviderId: string | null;
   /**
-   * Cascade-only Zoho IDs (Contacts merge): records that should receive the
+   * Cascade-only CRMProvider IDs (Contacts merge): records that should receive the
    * Account_Name cascade BUT are NOT tagged Duplicate-Delete because they
    * failed the ≥2-attribute strict rule against the survivor. They appear
    * as "Excluded" in the plan; the executor adds them to its Account_Name
    * cascade so every contact in the cluster lands under the surviving
    * Account, but no Duplicate-Delete tag is applied.
    */
-  cascadeOnlyZohoIds: string[];
+  cascadeOnlyCRMProviderIds: string[];
   generatedBy: string;
   /** ISO timestamp; stamped by the caller (route), null if not provided. */
   generatedAt: string | null;
 }
 
 // ── Field catalogue (Accounts) ───────────────────────────────────────────────
-// `zoho` is the API field name applied during execute; `fallback` reads the
+// `CRMProvider` is the API field name applied during execute; `fallback` reads the
 // structured column when raw_data lacks the key (older / pre-sync rows).
 // NOTE: custom-field API names (CR_Number, VAT_Number) are ASSUMPTIONS and must
-// be confirmed against the live Zoho org before the execute path is enabled —
+// be confirmed against the live CRMProvider org before the execute path is enabled —
 // the planner emits a warning to that effect.
 
 interface FieldSpec {
-  zoho: string;
+  CRMProvider: string;
   label: string;
   custom?: boolean;
   fallback?: (r: DuplicateRecord) => unknown;
 }
 
-// Per-module field catalogues. Standard Zoho API field names; if your org
+// Per-module field catalogues. Standard CRMProvider API field names; if your org
 // renamed a standard field or you want custom fields migrated, adjust here.
 // `custom: true` fields are flagged to the operator as API-name assumptions.
 const MODULE_FIELDS: Record<CrmModule, FieldSpec[]> = {
   Accounts: [
-    { zoho: "Account_Name", label: "Account Name", fallback: (r) => r.record_name || r.company_name },
-    { zoho: "Phone", label: "Phone", fallback: (r) => r.phone },
-    { zoho: "Website", label: "Website", fallback: (r) => r.website || r.domain },
-    { zoho: "Industry", label: "Industry", fallback: (r) => r.industry },
-    { zoho: "Employees", label: "Employees", fallback: (r) => r.no_of_employees },
-    { zoho: "Billing_Country", label: "Country", fallback: (r) => r.country },
-    { zoho: "Billing_State", label: "Region / State", fallback: (r) => r.region },
-    { zoho: "Account_Type", label: "Account Type", fallback: (r) => r.account_type },
-    { zoho: "CR_Number", label: "CR Number", custom: true, fallback: (r) => r.cr_number },
-    { zoho: "VAT_Number", label: "VAT Number", custom: true, fallback: (r) => r.vat_number },
+    { CRMProvider: "Account_Name", label: "Account Name", fallback: (r) => r.record_name || r.company_name },
+    { CRMProvider: "Phone", label: "Phone", fallback: (r) => r.phone },
+    { CRMProvider: "Website", label: "Website", fallback: (r) => r.website || r.domain },
+    { CRMProvider: "Industry", label: "Industry", fallback: (r) => r.industry },
+    { CRMProvider: "Employees", label: "Employees", fallback: (r) => r.no_of_employees },
+    { CRMProvider: "Billing_Country", label: "Country", fallback: (r) => r.country },
+    { CRMProvider: "Billing_State", label: "Region / State", fallback: (r) => r.region },
+    { CRMProvider: "Account_Type", label: "Account Type", fallback: (r) => r.account_type },
+    { CRMProvider: "CR_Number", label: "CR Number", custom: true, fallback: (r) => r.cr_number },
+    { CRMProvider: "VAT_Number", label: "VAT Number", custom: true, fallback: (r) => r.vat_number },
   ],
   Leads: [
-    { zoho: "Last_Name", label: "Name", fallback: (r) => r.record_name },
-    { zoho: "Company", label: "Company", fallback: (r) => r.company_name },
-    { zoho: "Email", label: "Email", fallback: (r) => r.email },
-    { zoho: "Phone", label: "Phone", fallback: (r) => r.phone },
-    { zoho: "Mobile", label: "Mobile", fallback: (r) => r.mobile },
-    { zoho: "Lead_Status", label: "Lead Status", fallback: (r) => r.status },
-    { zoho: "Lead_Source", label: "Source", fallback: (r) => r.source },
-    { zoho: "Industry", label: "Industry", fallback: (r) => r.industry },
-    { zoho: "Website", label: "Website", fallback: (r) => r.website || r.domain },
+    { CRMProvider: "Last_Name", label: "Name", fallback: (r) => r.record_name },
+    { CRMProvider: "Company", label: "Company", fallback: (r) => r.company_name },
+    { CRMProvider: "Email", label: "Email", fallback: (r) => r.email },
+    { CRMProvider: "Phone", label: "Phone", fallback: (r) => r.phone },
+    { CRMProvider: "Mobile", label: "Mobile", fallback: (r) => r.mobile },
+    { CRMProvider: "Lead_Status", label: "Lead Status", fallback: (r) => r.status },
+    { CRMProvider: "Lead_Source", label: "Source", fallback: (r) => r.source },
+    { CRMProvider: "Industry", label: "Industry", fallback: (r) => r.industry },
+    { CRMProvider: "Website", label: "Website", fallback: (r) => r.website || r.domain },
   ],
   Deals: [
-    { zoho: "Deal_Name", label: "Deal Name", fallback: (r) => r.record_name },
-    { zoho: "Amount", label: "Amount", fallback: (r) => r.deal_value },
-    { zoho: "Stage", label: "Stage", fallback: (r) => r.stage },
-    { zoho: "Pipeline", label: "Pipeline", fallback: (r) => r.pipeline },
-    { zoho: "Closing_Date", label: "Closing Date" },
-    { zoho: "Account_Name", label: "Account", fallback: (r) => r.account_name },
-    { zoho: "Contact_Name", label: "Contact", fallback: (r) => r.contact_name },
-    { zoho: "Lead_Source", label: "Source", fallback: (r) => r.source },
+    { CRMProvider: "Deal_Name", label: "Deal Name", fallback: (r) => r.record_name },
+    { CRMProvider: "Amount", label: "Amount", fallback: (r) => r.deal_value },
+    { CRMProvider: "Stage", label: "Stage", fallback: (r) => r.stage },
+    { CRMProvider: "Pipeline", label: "Pipeline", fallback: (r) => r.pipeline },
+    { CRMProvider: "Closing_Date", label: "Closing Date" },
+    { CRMProvider: "Account_Name", label: "Account", fallback: (r) => r.account_name },
+    { CRMProvider: "Contact_Name", label: "Contact", fallback: (r) => r.contact_name },
+    { CRMProvider: "Lead_Source", label: "Source", fallback: (r) => r.source },
   ],
   Contacts: [
-    { zoho: "Last_Name", label: "Name", fallback: (r) => r.record_name },
-    { zoho: "Email", label: "Email", fallback: (r) => r.email },
-    { zoho: "Phone", label: "Phone", fallback: (r) => r.phone },
-    { zoho: "Mobile", label: "Mobile", fallback: (r) => r.mobile },
-    { zoho: "Account_Name", label: "Account", fallback: (r) => r.account_name },
-    { zoho: "Title", label: "Title", fallback: (r) => r.title },
-    { zoho: "Lead_Source", label: "Source", fallback: (r) => r.source },
+    { CRMProvider: "Last_Name", label: "Name", fallback: (r) => r.record_name },
+    { CRMProvider: "Email", label: "Email", fallback: (r) => r.email },
+    { CRMProvider: "Phone", label: "Phone", fallback: (r) => r.phone },
+    { CRMProvider: "Mobile", label: "Mobile", fallback: (r) => r.mobile },
+    { CRMProvider: "Account_Name", label: "Account", fallback: (r) => r.account_name },
+    { CRMProvider: "Title", label: "Title", fallback: (r) => r.title },
+    { CRMProvider: "Lead_Source", label: "Source", fallback: (r) => r.source },
   ],
 };
 
 // ── Value helpers ────────────────────────────────────────────────────────────
 
-function rawVal(r: DuplicateRecord, zoho: string): unknown {
+function rawVal(r: DuplicateRecord, CRMProvider: string): unknown {
   const raw = r.raw_data;
-  if (raw && typeof raw === "object" && !Array.isArray(raw) && zoho in raw) {
-    return (raw as Record<string, unknown>)[zoho];
+  if (raw && typeof raw === "object" && !Array.isArray(raw) && CRMProvider in raw) {
+    return (raw as Record<string, unknown>)[CRMProvider];
   }
   return undefined;
 }
 
-/** Coerce any Zoho/column value into a scalar string|number, or null if empty. */
+/** Coerce any CRMProvider/column value into a scalar string|number, or null if empty. */
 function normalize(v: unknown): string | number | null {
   if (v === null || v === undefined) return null;
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
@@ -291,7 +291,7 @@ function normalize(v: unknown): string | number | null {
     return t === "" ? null : t;
   }
   if (typeof v === "object") {
-    // Zoho lookup / owner objects: { name, id } or { value }
+    // CRMProvider lookup / owner objects: { name, id } or { value }
     const o = v as Record<string, unknown>;
     if (typeof o.name === "string" && o.name.trim() !== "")
       return o.name.trim();
@@ -302,7 +302,7 @@ function normalize(v: unknown): string | number | null {
 }
 
 function fieldValue(r: DuplicateRecord, f: FieldSpec): string | number | null {
-  const fromRaw = normalize(rawVal(r, f.zoho));
+  const fromRaw = normalize(rawVal(r, f.CRMProvider));
   if (fromRaw !== null) return fromRaw;
   if (f.fallback) return normalize(f.fallback(r));
   return null;
@@ -330,7 +330,7 @@ function recName(r: DuplicateRecord): string {
   return (
     r.record_name ||
     r.company_name ||
-    r.zoho_record_id ||
+    r.CRMProvider_record_id ||
     `record #${r.id ?? "?"}`
   );
 }
@@ -341,7 +341,7 @@ function isoOrNull(d: Date | string | null | undefined): string | null {
   return Number.isNaN(t.getTime()) ? null : t.toISOString();
 }
 
-// Zoho Layout (account category, e.g. "Corporate Accounts" / "Partner
+// CRMProvider Layout (account category, e.g. "Corporate Accounts" / "Partner
 // Accounts"). Surfaced in the plan as INFO only — a layout difference between
 // records is legitimate (corporate B2B/B2C vs merchant partner), NOT a merge
 // conflict, so it is deliberately kept out of ACCOUNT_FIELDS / conflict logic.
@@ -351,8 +351,8 @@ function layoutOf(r: DuplicateRecord): string | null {
   return r.layout_name || null;
 }
 
-// Zoho Account_Name (the parent Account a Contact/Deal is linked to). normalize()
-// already unwraps the Zoho lookup shape `{ name, id }` to the display name.
+// CRMProvider Account_Name (the parent Account a Contact/Deal is linked to). normalize()
+// already unwraps the CRMProvider lookup shape `{ name, id }` to the display name.
 // Falls back to the denormalised `account_name` column when raw_data is empty
 // (older / pre-sync rows). Returns null when the record has no parent Account.
 function accountNameOf(r: DuplicateRecord): string | null {
@@ -361,7 +361,7 @@ function accountNameOf(r: DuplicateRecord): string | null {
   return r.account_name || null;
 }
 
-// Zoho Lead_Status (picklist string). Surfaced in the Leads merge/preview table
+// CRMProvider Lead_Status (picklist string). Surfaced in the Leads merge/preview table
 // in place of the 📎 attachments chip — the lead's status (Converted / Junk /
 // Contacted / …) is the more useful merge-decision signal for Leads. Falls back
 // to the denormalised `stage` column some syncs write Lead_Status into. Null for
@@ -420,23 +420,23 @@ export interface BuildPlanOptions {
   /** ISO timestamp; the route passes new Date().toISOString(). */
   generatedAt?: string | null;
   /**
-   * Operator override: force this zoho_record_id to be the survivor instead of
+   * Operator override: force this CRMProvider_record_id to be the survivor instead of
    * the deterministic pick. Ignored if it doesn't match an Account record in
    * the cluster (falls back to the automatic choice).
    */
-  masterZohoId?: string | null;
+  masterCRMProviderId?: string | null;
   /**
-   * Operator-selected subset of account zoho_record_ids to merge (must be >=2).
+   * Operator-selected subset of account CRMProvider_record_ids to merge (must be >=2).
    * Records not in the selection are left untouched (shown as "Excluded").
    * Omitted/empty = merge all accounts in the cluster.
    */
-  includeZohoIds?: string[] | null;
+  includeCRMProviderIds?: string[] | null;
   /**
    * Link the survivor's Account_Name to this account (Contacts/Deals). A non-
    * empty string = link to that account id; "" / null = explicitly don't link;
    * undefined = default to the cluster's primary/sole account if any.
    */
-  linkAccountZohoId?: string | null;
+  linkAccountCRMProviderId?: string | null;
   /**
    * DB ids of Account records that have ALREADY been tagged Duplicate-Delete
    * by a prior Accounts merge on this cluster. They are filtered out of
@@ -492,19 +492,19 @@ export function buildMergePlan(
 
   // Operator may select a subset to merge (>=2). Records left out of the
   // selection are untouched (rendered as "Excluded" in the plan).
-  const sel = (opts.includeZohoIds || []).filter(Boolean);
+  const sel = (opts.includeCRMProviderIds || []).filter(Boolean);
   const selSet = new Set(sel);
   const mergeSet =
     sel.length > 0
-      ? records.filter((r) => r.zoho_record_id && selSet.has(r.zoho_record_id))
+      ? records.filter((r) => r.CRMProvider_record_id && selSet.has(r.CRMProvider_record_id))
       : records;
   // A LINK-ONLY (cascade) plan is valid with a single record: it sets
   // Account_Name on the cluster's contacts and tags/merges nothing. So the
   // "need 2 to merge" rule only applies when there is NO link target chosen
   // (a pure merge). When a real account is being linked, allow 1 selected.
   const isLinkOnly =
-    typeof opts.linkAccountZohoId === "string" &&
-    opts.linkAccountZohoId.trim().length > 0;
+    typeof opts.linkAccountCRMProviderId === "string" &&
+    opts.linkAccountCRMProviderId.trim().length > 0;
   if (sel.length > 0 && mergeSet.length < 1) {
     throw new Error(`Select at least 1 ${label} record (selected ${mergeSet.length}).`);
   }
@@ -520,12 +520,12 @@ export function buildMergePlan(
   }
 
   const overridden =
-    opts.masterZohoId != null
-      ? mergeSet.find((r) => r.zoho_record_id === opts.masterZohoId)
+    opts.masterCRMProviderId != null
+      ? mergeSet.find((r) => r.CRMProvider_record_id === opts.masterCRMProviderId)
       : undefined;
-  if (opts.masterZohoId != null && !overridden) {
+  if (opts.masterCRMProviderId != null && !overridden) {
     warnings.push(
-      `Requested master ${opts.masterZohoId} is not in the selected merge set — using the recommended survivor instead.`,
+      `Requested master ${opts.masterCRMProviderId} is not in the selected merge set — using the recommended survivor instead.`,
     );
   }
   const master = overridden || pickMaster(mergeSet, fields);
@@ -538,7 +538,7 @@ export function buildMergePlan(
   // — that's what the Account_Name cascade is for (everyone in the cluster
   // gets re-pointed to the surviving Account regardless). A non-matching
   // contact stays in the cluster but is moved to "softExcluded": rendered
-  // as Excluded in the plan, untouched in Zoho.
+  // as Excluded in the plan, untouched in CRMProvider.
   //
   // Reason: Sample User (2026-06-10) — the previous behaviour was tagging
   // genuinely different people who happened to sit in the same cluster.
@@ -637,7 +637,7 @@ export function buildMergePlan(
     );
     // Pull soft-excluded contacts out of mergeSet so the UI renders them
     // as "Excluded" (untouched) instead of "Duplicate-Delete". The
-    // Account_Name cascade still covers them via plan.cascadeOnlyZohoIds
+    // Account_Name cascade still covers them via plan.cascadeOnlyCRMProviderIds
     // (added to the executor below).
     if (contactSoftExcluded.length > 0) {
       const excluded = new Set(contactSoftExcluded);
@@ -658,32 +658,32 @@ export function buildMergePlan(
         .filter(
           (r) =>
             r.record_type === "account" &&
-            r.zoho_record_id &&
+            r.CRMProvider_record_id &&
             // Drop Accounts that were tagged Duplicate-Delete by a prior
-            // Accounts merge on this cluster — they're zombies in Zoho and
+            // Accounts merge on this cluster — they're zombies in CRMProvider and
             // must not appear as link targets.
             (r.id == null || !taggedAccountSet.has(r.id)),
         )
         .map((r) => ({
-          zohoId: r.zoho_record_id as string,
-          name: r.record_name || r.company_name || (r.zoho_record_id as string),
+          CRMProviderId: r.CRMProvider_record_id as string,
+          name: r.record_name || r.company_name || (r.CRMProvider_record_id as string),
         }))
     : [];
   const suggestedAccount =
     accountCandidates.find((a) =>
-      allRecords.some((r) => r.zoho_record_id === a.zohoId && r.is_primary),
-    )?.zohoId ||
-    (accountCandidates.length === 1 ? accountCandidates[0].zohoId : null);
-  let linkAccountZohoId: string | null;
-  if (opts.linkAccountZohoId === undefined) {
-    linkAccountZohoId = suggestedAccount; // default suggestion on first preview
-  } else if (!opts.linkAccountZohoId) {
-    linkAccountZohoId = null; // explicit "don't link"
+      allRecords.some((r) => r.CRMProvider_record_id === a.CRMProviderId && r.is_primary),
+    )?.CRMProviderId ||
+    (accountCandidates.length === 1 ? accountCandidates[0].CRMProviderId : null);
+  let linkAccountCRMProviderId: string | null;
+  if (opts.linkAccountCRMProviderId === undefined) {
+    linkAccountCRMProviderId = suggestedAccount; // default suggestion on first preview
+  } else if (!opts.linkAccountCRMProviderId) {
+    linkAccountCRMProviderId = null; // explicit "don't link"
   } else {
-    linkAccountZohoId = accountCandidates.some(
-      (a) => a.zohoId === opts.linkAccountZohoId,
+    linkAccountCRMProviderId = accountCandidates.some(
+      (a) => a.CRMProviderId === opts.linkAccountCRMProviderId,
     )
-      ? opts.linkAccountZohoId
+      ? opts.linkAccountCRMProviderId
       : null;
   }
 
@@ -697,7 +697,7 @@ export function buildMergePlan(
     const masterVal = fieldValue(master, f);
     const dupVals = duplicates
       .map((d) => ({
-        zohoId: d.zoho_record_id ?? null,
+        CRMProviderId: d.CRMProvider_record_id ?? null,
         recordName: recName(d),
         value: fieldValue(d, f),
       }))
@@ -711,14 +711,14 @@ export function buildMergePlan(
         .sort((a, b) => modifiedMs(b) - modifiedMs(a))[0];
       const chosen = fieldValue(freshest, f);
       fieldDecisions.push({
-        field: f.zoho,
+        field: f.CRMProvider,
         label: f.label,
         action: "fill",
         chosenValue: chosen,
-        fromZohoId: freshest.zoho_record_id ?? null,
+        fromCRMProviderId: freshest.CRMProvider_record_id ?? null,
         reason: `Master is empty; filled from "${recName(freshest)}" (most recently modified record holding a value).`,
         alternatives: dupVals.filter(
-          (x) => x.zohoId !== (freshest.zoho_record_id ?? null),
+          (x) => x.CRMProviderId !== (freshest.CRMProvider_record_id ?? null),
         ),
       });
       fillCount++;
@@ -729,11 +729,11 @@ export function buildMergePlan(
       );
       if (conflicting.length > 0) {
         fieldDecisions.push({
-          field: f.zoho,
+          field: f.CRMProvider,
           label: f.label,
           action: "conflict",
           chosenValue: masterVal,
-          fromZohoId: master.zoho_record_id ?? null,
+          fromCRMProviderId: master.CRMProvider_record_id ?? null,
           reason: `Kept master value; ${conflicting.length} duplicate value(s) differ — review before accepting.`,
           alternatives: conflicting,
         });
@@ -751,7 +751,7 @@ export function buildMergePlan(
   // otherwise be discarded when that duplicate is tagged for deletion. If the
   // survivor's Secondary_Email is still empty, capture the freshest distinct
   // alternate email into it so no email is lost. Gap-fill only — never
-  // overwrites an existing Secondary_Email. Zoho Contacts has a single
+  // overwrites an existing Secondary_Email. CRMProvider Contacts has a single
   // Secondary_Email field, so if there are several alternates only one is
   // preserved and the rest are surfaced as alternatives + a warning.
   if (module === "Contacts") {
@@ -773,13 +773,13 @@ export function buildMergePlan(
       }
       const seen = new Set<string>();
       if (primaryKey) seen.add(primaryKey);
-      const alts: { zohoId: string | null; recordName: string; value: string }[] = [];
+      const alts: { CRMProviderId: string | null; recordName: string; value: string }[] = [];
       for (const d of dupsByFresh) {
         const e = emailRaw(d);
         const k = e.toLowerCase();
         if (e && !seen.has(k)) {
           seen.add(k);
-          alts.push({ zohoId: d.zoho_record_id ?? null, recordName: recName(d), value: e });
+          alts.push({ CRMProviderId: d.CRMProvider_record_id ?? null, recordName: recName(d), value: e });
         }
       }
       if (alts.length > 0) {
@@ -789,14 +789,14 @@ export function buildMergePlan(
           label: "Secondary Email",
           action: "fill",
           chosenValue: chosen.value,
-          fromZohoId: chosen.zohoId,
+          fromCRMProviderId: chosen.CRMProviderId,
           reason: `Survivor's email differs from "${chosen.recordName}" — preserved its email in Secondary_Email so no email is lost on merge.`,
           alternatives: alts.slice(1),
         });
         fillCount++;
         if (alts.length > 1) {
           warnings.push(
-            `${alts.length} distinct alternate email(s) found, but Zoho Contacts has a single Secondary_Email field — only "${chosen.value}" is preserved on the survivor. The rest are listed as alternatives; capture them manually if needed: ${alts
+            `${alts.length} distinct alternate email(s) found, but CRMProvider Contacts has a single Secondary_Email field — only "${chosen.value}" is preserved on the survivor. The rest are listed as alternatives; capture them manually if needed: ${alts
               .slice(1)
               .map((a) => a.value)
               .join(", ")}.`,
@@ -841,14 +841,14 @@ export function buildMergePlan(
       }
       const seen = new Set<string>();
       if (primaryKey) seen.add(primaryKey);
-      const alts: { zohoId: string | null; recordName: string; value: string }[] = [];
+      const alts: { CRMProviderId: string | null; recordName: string; value: string }[] = [];
       for (const d of dupsByFresh) {
         for (const field of ["Phone", "Mobile"] as const) {
           const p = phoneRaw(d, field);
           const k = normPhone(p);
           if (p && k && !seen.has(k)) {
             seen.add(k);
-            alts.push({ zohoId: d.zoho_record_id ?? null, recordName: recName(d), value: p });
+            alts.push({ CRMProviderId: d.CRMProvider_record_id ?? null, recordName: recName(d), value: p });
           }
         }
       }
@@ -859,14 +859,14 @@ export function buildMergePlan(
           label: "Mobile",
           action: "fill",
           chosenValue: chosen.value,
-          fromZohoId: chosen.zohoId,
+          fromCRMProviderId: chosen.CRMProviderId,
           reason: `Survivor's phone differs from "${chosen.recordName}" — preserved its number in Mobile so no number is lost on merge.`,
           alternatives: alts.slice(1),
         });
         fillCount++;
         if (alts.length > 1) {
           warnings.push(
-            `${alts.length} distinct alternate number(s) found, but Zoho Contacts holds one in Mobile — only "${chosen.value}" is preserved on the survivor. The rest are listed as alternatives; capture them manually if needed: ${alts
+            `${alts.length} distinct alternate number(s) found, but CRMProvider Contacts holds one in Mobile — only "${chosen.value}" is preserved on the survivor. The rest are listed as alternatives; capture them manually if needed: ${alts
               .slice(1)
               .map((a) => a.value)
               .join(", ")}.`,
@@ -878,7 +878,7 @@ export function buildMergePlan(
 
   // Contacts-only: the plain-language email/phone outcome for the preview panel
   // (Sample User 2026-06-25). Survivor's own value is slot 1 (kept); the next distinct
-  // value lands in Secondary_Email / Mobile; the rest are extras Zoho can't store.
+  // value lands in Secondary_Email / Mobile; the rest are extras CRMProvider can't store.
   // Mirrors the executor's gap-fill order (master wins; else freshest duplicate
   // fills + Saudi-normalised phone de-dupe), so the panel matches exactly what
   // Apply does.
@@ -965,9 +965,9 @@ export function buildMergePlan(
           label: "Description (alternate names)",
           action: "fill",
           chosenValue: newDesc,
-          fromZohoId: master.zoho_record_id ?? null,
+          fromCRMProviderId: master.CRMProvider_record_id ?? null,
           reason: `Preserved ${altNames.length} alternate name(s) (EN/AR) on the survivor so no name is lost when the duplicate is deleted.`,
-          alternatives: altNames.map((n) => ({ zohoId: null, recordName: n, value: n })),
+          alternatives: altNames.map((n) => ({ CRMProviderId: null, recordName: n, value: n })),
         });
         fillCount++;
       }
@@ -975,15 +975,15 @@ export function buildMergePlan(
   }
 
   // Structural warnings.
-  const untaggable = duplicates.filter((d) => !d.zoho_record_id);
+  const untaggable = duplicates.filter((d) => !d.CRMProvider_record_id);
   if (untaggable.length > 0) {
     warnings.push(
-      `${untaggable.length} duplicate(s) have no Zoho record id — they cannot be tagged or migrated (synthetic / pre-sync rows).`,
+      `${untaggable.length} duplicate(s) have no CRMProvider record id — they cannot be tagged or migrated (synthetic / pre-sync rows).`,
     );
   }
-  if (!master.zoho_record_id) {
+  if (!master.CRMProvider_record_id) {
     warnings.push(
-      "Proposed master has no Zoho record id — it cannot be written to. Review the cluster before resolving.",
+      "Proposed master has no CRMProvider record id — it cannot be written to. Review the cluster before resolving.",
     );
   }
   const flaggedPrimary = records.find((r) => r.is_primary);
@@ -994,12 +994,12 @@ export function buildMergePlan(
   }
   if (usesCustomField) {
     warnings.push(
-      "Plan touches custom fields (CR Number / VAT Number) whose Zoho API names are assumptions — confirm them against the org before enabling the execute path.",
+      "Plan touches custom fields (CR Number / VAT Number) whose CRMProvider API names are assumptions — confirm them against the org before enabling the execute path.",
     );
   }
 
-  const duplicateZohoIds = duplicates
-    .map((d) => d.zoho_record_id)
+  const duplicateCRMProviderIds = duplicates
+    .map((d) => d.CRMProvider_record_id)
     .filter((x): x is string => typeof x === "string" && x.length > 0);
   const duplicateDbIds = duplicates
     .map((d) => d.id)
@@ -1007,13 +1007,13 @@ export function buildMergePlan(
   // Cascade-only ids — soft-excluded Contacts that should still receive the
   // Account_Name cascade but never the Duplicate-Delete tag. Stays an empty
   // array for every other module.
-  const cascadeOnlyZohoIds = contactSoftExcluded
-    .map((r) => r.zoho_record_id)
+  const cascadeOnlyCRMProviderIds = contactSoftExcluded
+    .map((r) => r.CRMProvider_record_id)
     .filter((x): x is string => typeof x === "string" && x.length > 0);
 
   const records_summary: MergePlanRecordSummary[] = records.map((r) => ({
     dbId: r.id ?? null,
-    zohoId: r.zoho_record_id ?? null,
+    CRMProviderId: r.CRMProvider_record_id ?? null,
     name: recName(r),
     isMaster: r === master,
     included: mergeSet.includes(r),
@@ -1025,7 +1025,7 @@ export function buildMergePlan(
     accountName: accountNameOf(r),
     stage: r.stage ?? null,
     leadStatus: leadStatusOf(r),
-    hasZohoId: !!r.zoho_record_id,
+    hasCRMProviderId: !!r.CRMProvider_record_id,
   }));
 
   const masterReason = overridden
@@ -1039,15 +1039,15 @@ export function buildMergePlan(
   const linkOnlyMode =
     module === "Contacts" &&
     duplicates.length === 0 &&
-    cascadeOnlyZohoIds.length > 0;
+    cascadeOnlyCRMProviderIds.length > 0;
   const rationale = linkOnlyMode
     ? `Link-only plan for "${recName(master)}"` +
-      (master.zoho_record_id ? ` (${master.zoho_record_id})` : "") +
-      `. ${cascadeOnlyZohoIds.length} other contact(s) in this cluster do NOT pairwise share ≥2 of {email, phone, name} with the survivor — they are different people at the same Account, not duplicates of each other. ` +
+      (master.CRMProvider_record_id ? ` (${master.CRMProvider_record_id})` : "") +
+      `. ${cascadeOnlyCRMProviderIds.length} other contact(s) in this cluster do NOT pairwise share ≥2 of {email, phone, name} with the survivor — they are different people at the same Account, not duplicates of each other. ` +
       `On Apply, every contact's Account_Name is updated to the chosen Account. No record is tagged "${tagName}"; the platform deletes nothing.`
     : `Proposed survivor: "${recName(master)}"` +
-      (master.zoho_record_id ? ` (${master.zoho_record_id})` : "") +
-      ` — ${masterReason}. ${duplicates.length} duplicate(s) would be tagged "${tagName}" for the Zoho admin to delete. ` +
+      (master.CRMProvider_record_id ? ` (${master.CRMProvider_record_id})` : "") +
+      ` — ${masterReason}. ${duplicates.length} duplicate(s) would be tagged "${tagName}" for the CRMProvider admin to delete. ` +
       `${fillCount} field(s) would be migrated onto the survivor; ${conflictCount} field conflict(s) flagged for review. ` +
       `The platform deletes nothing — it only edits the survivor and tags the duplicates.`;
 
@@ -1056,11 +1056,11 @@ export function buildMergePlan(
     module,
     method: "migrate_tag",
     tagName,
-    masterZohoId: master.zoho_record_id ?? null,
+    masterCRMProviderId: master.CRMProvider_record_id ?? null,
     masterDbId: master.id ?? null,
     masterName: recName(master),
     masterReason,
-    duplicateZohoIds,
+    duplicateCRMProviderIds,
     duplicateDbIds,
     fieldDecisions,
     warnings,
@@ -1068,8 +1068,8 @@ export function buildMergePlan(
     rationale,
     records: records_summary,
     accountCandidates,
-    linkAccountZohoId,
-    cascadeOnlyZohoIds,
+    linkAccountCRMProviderId,
+    cascadeOnlyCRMProviderIds,
     generatedBy: opts.generatedBy || "duplicate-radar",
     generatedAt: opts.generatedAt ?? null,
   };

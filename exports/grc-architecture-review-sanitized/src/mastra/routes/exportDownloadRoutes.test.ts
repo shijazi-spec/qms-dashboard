@@ -119,9 +119,9 @@ const SECRET_LIKE_STRINGS: Array<{ label: string; value: string }> = [
     value:
       "<REDACTED_TOKEN>",
   },
-  { label: "GitHub PAT", value: "<REDACTED_TOKEN>" },
+  { label: "SourceControlProvider PAT", value: "<REDACTED_TOKEN>" },
   {
-    label: "OpenAI sk- key",
+    label: "LLMProvider sk- key",
     value: "<REDACTED_TOKEN>",
   },
 ];

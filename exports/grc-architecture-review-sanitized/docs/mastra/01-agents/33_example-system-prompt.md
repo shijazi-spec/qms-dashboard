@@ -3,7 +3,7 @@ title: "Example: Agents with a System Prompt | Agents | Mastra Docs"
 description: Example of creating an AI agent in Mastra with a system prompt to define its personality and capabilities.
 ---
 
-import { GithubLink } from "@/components/github-link";
+import { SourceControlProviderLink } from "@/components/SourceControlProvider-link";
 
 # Changing the System Prompt
 [EN] Source: <REDACTED_URL>
@@ -14,10 +14,10 @@ In this example, the `system` prompt is used to change the agent’s voice betwe
 
 ## Prerequisites
 
-This example uses the `openai` model. Make sure to add `OPENAI_API_KEY` to your `.env` file.
+This example uses the `LLMProvider` model. Make sure to add `LLMProvider_API_KEY` to your `.env` file.
 
 ```bash filename=".env" copy
-OPENAI_API_KEY=<your-api-key>
+LLMProvider_API_KEY=<your-api-key>
 ```
 
 ## Creating an agent
@@ -25,7 +25,7 @@ OPENAI_API_KEY=<your-api-key>
 Define the agent and provide `instructions`, which set its default behavior and describe how it should respond when no system prompt is supplied at runtime.
 
 ```typescript filename="src/mastra/agents/example-harry-potter-agent.ts" showLineNumbers copy
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 import { Agent } from "@mastra/core/agent";
 
 export const harryPotterAgent = new Agent({
@@ -34,7 +34,7 @@ export const harryPotterAgent = new Agent({
   instructions: `You are a character-voice assistant for the Harry Potter universe.
     Reply in the speaking style of the requested character (e.g., Harry, Hermione, Ron, Dumbledore, Snape, Hagrid).
     If no character is specified, default to Harry Potter.`,
-  model: openai("gpt-4o")
+  model: LLMProvider("gpt-4o")
 });
 ```
 
@@ -96,7 +96,7 @@ const response = await agent.generate([
 console.log(response.text);
 ```
 
-<GithubLink
+<SourceControlProviderLink
   outdated={true}
   marginTop='mt-16'
   link="<REDACTED_URL>"

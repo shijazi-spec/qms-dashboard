@@ -13,12 +13,12 @@ The `Memory` class provides a robust system for managing conversation history an
 ```typescript filename="src/mastra/agents/test-agent.ts" showLineNumbers copy
 import { Memory } from "@mastra/memory";
 import { Agent } from "@mastra/core/agent";
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 
 export const agent = new Agent({
   name: "test-agent",
   instructions: "You are an agent with memory.",
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   memory: new Memory({
     options: {
       workingMemory: {
@@ -121,13 +121,13 @@ export const agent = new Agent({
 ```typescript filename="src/mastra/agents/test-agent.ts" showLineNumbers copy
 import { Memory } from "@mastra/memory";
 import { Agent } from "@mastra/core/agent";
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 import { LibSQLStore, LibSQLVector } from "@mastra/libsql";
 
 export const agent = new Agent({
   name: "test-agent",
   instructions: "You are an agent with memory.",
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   memory: new Memory({
     storage: new LibSQLStore({
       url: "file:./working-memory.db"
@@ -158,13 +158,13 @@ export const agent = new Agent({
 ```typescript filename="src/mastra/agents/pg-agent.ts" showLineNumbers copy
 import { Memory } from "@mastra/memory";
 import { Agent } from "@mastra/core/agent";
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 import { PgStore, PgVector } from "@mastra/pg";
 
 export const agent = new Agent({
   name: "pg-agent",
   instructions: "You are an agent with optimized PostgreSQL memory.",
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   memory: new Memory({
     storage: new PgStore({
       connectionString: process.env.DATABASE_URL
@@ -172,7 +172,7 @@ export const agent = new Agent({
     vector: new PgVector({
       connectionString: process.env.DATABASE_URL
     }),
-    embedder: openai.embedding("text-embedding-3-small"),
+    embedder: LLMProvider.embedding("text-embedding-3-small"),
     options: {
       lastMessages: 20,
       semanticRecall: {
@@ -181,7 +181,7 @@ export const agent = new Agent({
         scope: 'resource',
         indexConfig: {
           type: 'hnsw',              // Use HNSW for better performance
-          metric: 'dotproduct',      // Optimal for OpenAI embeddings
+          metric: 'dotproduct',      // Optimal for LLMProvider embeddings
           m: 16,                     // Number of bi-directional links
           efConstruction: 64         // Construction-time candidate list size
         }

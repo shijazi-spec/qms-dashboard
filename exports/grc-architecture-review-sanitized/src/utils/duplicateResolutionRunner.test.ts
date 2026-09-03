@@ -30,8 +30,8 @@ const NOW = Date.parse("2026-06-09T00:00:00Z");
 function planRec(p: Partial<any> = {}): any {
   return {
     dbId: 1,
-    zohoId: "z1",
-    name: "Acme",
+    CRMProviderId: "z1",
+    name: "Example Organization",
     isMaster: false,
     included: true,
     completeness: 0.9,
@@ -39,7 +39,7 @@ function planRec(p: Partial<any> = {}): any {
     modifiedDate: "2026-01-01T00:00:00Z",
     owner: "Owner A",
     layout: "Corporate Accounts",
-    hasZohoId: true,
+    hasCRMProviderId: true,
     ...p,
   };
 }
@@ -60,14 +60,14 @@ function args(over: Partial<BuildRiskInputArgs> = {}): BuildRiskInputArgs {
     },
     moduleRecords: [{ stage: undefined }, { stage: undefined }],
     plan: {
-      masterZohoId: "z1",
+      masterCRMProviderId: "z1",
       fieldDecisions: [{ action: "fill" }],
       warnings: [],
       accountCandidates: [],
-      linkAccountZohoId: null,
+      linkAccountCRMProviderId: null,
       records: [
-        planRec({ isMaster: true, zohoId: "z1" }),
-        planRec({ zohoId: "z2", owner: "Owner A", layout: "Corporate Accounts" }),
+        planRec({ isMaster: true, CRMProviderId: "z1" }),
+        planRec({ CRMProviderId: "z2", owner: "Owner A", layout: "Corporate Accounts" }),
       ],
     } as any,
     mixed: { domains: ["<REDACTED_HOST>"], phones: ["<REDACTED_PHONE>"] },
@@ -84,7 +84,7 @@ assert(clean.conflictCount === 0, "no conflicts when all fills");
 assert(clean.distinctOwners === 1, "single owner counted once");
 assert(clean.distinctLayouts === 1, "single layout counted once");
 assert(clean.isCrossModule === false, "single record type → not cross-module");
-assert(clean.anyMissingZohoId === false, "all have zoho ids");
+assert(clean.anyMissingCRMProviderId === false, "all have CRMProvider ids");
 assert(Math.round(clean.minDaysSinceModified) === 159, "days-since-modified computed from nowMs");
 assert(clean.duplicatesWithAttachments === 0, "attachments default to 0 when not provided");
 assert(
@@ -101,9 +101,9 @@ assert(
 );
 assert(
   buildResolutionRiskInput(
-    args({ plan: { ...args().plan, masterZohoId: null } as any }),
-  ).anyMissingZohoId === true,
-  "null master zoho id → missing",
+    args({ plan: { ...args().plan, masterCRMProviderId: null } as any }),
+  ).anyMissingCRMProviderId === true,
+  "null master CRMProvider id → missing",
 );
 assert(
   buildResolutionRiskInput(
@@ -183,7 +183,7 @@ console.log("liveWritesPermitted — environment guardrail");
     process.env.NODE_ENV = "development";
     assert(
       liveWritesPermitted({ enabled: true }, "autonomous") === false,
-      "dev + enabled + autonomous → blocked (shared live Zoho creds)",
+      "dev + enabled + autonomous → blocked (shared live CRMProvider creds)",
     );
 
     process.env.RESOLUTION_ALLOW_WRITES_OUTSIDE_PROD = "true";

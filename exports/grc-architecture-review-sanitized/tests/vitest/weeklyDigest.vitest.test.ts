@@ -1,7 +1,7 @@
 /**
  * Unit tests for the weekly digest. Pure-function data + rendering
  * exercised against a mock pool. Send orchestration tested at the
- * flag-gate boundary; Slack/Resend integration is not invoked in
+ * flag-gate boundary; ChatProvider/EmailProvider integration is not invoked in
  * these tests (no real credentials).
  *
  * Run: npx vitest run tests/vitest/weeklyDigest.vitest.test.ts
@@ -11,7 +11,7 @@ import {
   buildLastWeekWindow,
   fetchWeeklyAgentRollup,
   renderDigestHtml,
-  renderDigestSlackBlocks,
+  renderDigestChatProviderBlocks,
   renderDigestText,
   sendWeeklyDigest,
   type WeeklyDigest,
@@ -125,9 +125,9 @@ describe("renderDigestText", () => {
   });
 });
 
-describe("renderDigestSlackBlocks", () => {
+describe("renderDigestChatProviderBlocks", () => {
   test("emits header + summary + divider + agent sections", () => {
-    const blocks = renderDigestSlackBlocks(sampleDigest);
+    const blocks = renderDigestChatProviderBlocks(sampleDigest);
     expect(blocks[0].type).toBe("header");
     expect(blocks[1].type).toBe("section");
     expect(blocks[2].type).toBe("divider");
@@ -143,7 +143,7 @@ describe("renderDigestSlackBlocks", () => {
       best_score: 80,
       worst_score: 70,
     }));
-    const blocks = renderDigestSlackBlocks({ ...sampleDigest, agents: manyAgents, agents_active: 15 });
+    const blocks = renderDigestChatProviderBlocks({ ...sampleDigest, agents: manyAgents, agents_active: 15 });
     const contextBlocks = blocks.filter((b) => b.type === "context");
     expect(contextBlocks).toHaveLength(1);
     expect(JSON.stringify(contextBlocks[0])).toContain("5 more agents");
@@ -172,7 +172,7 @@ describe("renderDigestHtml", () => {
 });
 
 describe("sendWeeklyDigest — hard-disabled (decommissioned)", () => {
-  // The Slack + email digest push was retired in the 3rd + 4th scope
+  // The ChatProvider + email digest push was retired in the 3rd + 4th scope
   // amendments (2026-05-25) and HARD-DISABLED on 2026-09-03: the
   // DIGEST_DECOMMISSIONED_OVERRIDE escape hatch was removed at the Quality
   // HOD's request after "0 calls" digests reappeared in #automatic-audits.
@@ -191,7 +191,7 @@ describe("sendWeeklyDigest — hard-disabled (decommissioned)", () => {
     const r = await sendWeeklyDigest(pool);
     expect(r.sent).toBe(false);
     expect(r.<REDACTED_TOKEN>).toBe(DECOMMISSIONED);
-    expect(r.slack.attempted).toBe(false);
+    expect(r.ChatProvider.attempted).toBe(false);
     expect(r.email.attempted).toBe(false);
   });
 
@@ -202,7 +202,7 @@ describe("sendWeeklyDigest — hard-disabled (decommissioned)", () => {
     const r = await sendWeeklyDigest(pool, { forceSend: true });
     expect(r.sent).toBe(false);
     expect(r.<REDACTED_TOKEN>).toBe(DECOMMISSIONED);
-    expect(r.slack.attempted).toBe(false);
+    expect(r.ChatProvider.attempted).toBe(false);
     expect(r.email.attempted).toBe(false);
   });
 

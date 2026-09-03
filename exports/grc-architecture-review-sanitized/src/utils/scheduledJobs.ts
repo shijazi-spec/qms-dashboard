@@ -126,7 +126,7 @@ export async function runKPIAutoCalc(): Promise<KPIAutoCalcResult> {
     logger.error("[KPI Auto] Fatal error:", err);
   }
 
-  // Refresh the local Zoho Calls mirror BEFORE the KPI engine runs below.
+  // Refresh the local CRMProvider Calls mirror BEFORE the KPI engine runs below.
   //
   // Same ordering rule as the Tasks sync that follows: SDR-KPI-01 (Calls Per
   // Day), SDR-KPI-02 (Contact Rate) and SDR-KPI-06 (Speed to Lead) read
@@ -138,49 +138,49 @@ export async function runKPIAutoCalc(): Promise<KPIAutoCalcResult> {
   // Syncing a shorter window would leave the KPI counting days it has no data
   // for and understate the team.
   //
-  // maxRecords is set well above one Zoho page: the import was capped at 200
+  // maxRecords is set well above one CRMProvider page: the import was capped at 200
   // for its whole life because it fetched a single page, which is why Calls Per
   // Day read 0.9 against a target of 40.
   try {
-    const { runZohoCallsImport } = await import("./zohoCallsImport");
-    const calls = await runZohoCallsImport({
+    const { runCRMProviderCallsImport } = await import("./CRMProviderCallsImport");
+    const calls = await runCRMProviderCallsImport({
       sinceIso: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
       maxRecords: 2000,
     });
-    logger.info("[KPI Auto] Zoho calls import", {
+    logger.info("[KPI Auto] CRMProvider calls import", {
       scanned: calls.scanned,
       new: calls.imported_new,
       updated: calls.updated_existing,
       errors: calls.errors,
     });
     results.push({
-      kpi: "zoho-calls-import",
+      kpi: "CRMProvider-calls-import",
       value: calls.scanned,
       status: calls.errors === 0 ? "recorded" : "failed",
       error: calls.error_samples[0],
     });
   } catch (err) {
-    // Isolated like the Tasks sync: a Zoho outage must not cost the day's
+    // Isolated like the Tasks sync: a CRMProvider outage must not cost the day's
     // non-call KPIs. The call KPIs return "--" on an empty window, not a fake 0.
-    logger.error("[KPI Auto] Zoho calls import error:", err);
-    results.push({ kpi: "zoho-calls-import", error: String(err), status: "failed" });
+    logger.error("[KPI Auto] CRMProvider calls import error:", err);
+    results.push({ kpi: "CRMProvider-calls-import", error: String(err), status: "failed" });
   }
 
-  // Refresh the local Zoho Tasks mirror BEFORE the KPI engine runs below.
+  // Refresh the local CRMProvider Tasks mirror BEFORE the KPI engine runs below.
   //
-  // ORDER MATTERS: SDR-KPI-11, SALES-KPI-07 and SALES-KPI-08 read `zoho_tasks`.
+  // ORDER MATTERS: SDR-KPI-11, SALES-KPI-07 and SALES-KPI-08 read `CRMProvider_tasks`.
   // Recalculating first would score them against yesterday's tasks, so every
   // value would silently trail the data by a day. Syncing here is also what
   // stops these three going stale — the sync is otherwise manual-only, wired to
-  // POST /api/zoho/tasks/sync and nothing else.
+  // POST /api/CRMProvider/tasks/sync and nothing else.
   //
-  // Isolated in its own try/catch on purpose: a Zoho outage must not stop the
+  // Isolated in its own try/catch on purpose: a CRMProvider outage must not stop the
   // KPI engine below from recording everything that does not depend on tasks.
   // The three task KPIs return "--" on an empty mirror rather than a fake 0.
   try {
-    const { runZohoTasksSync } = await import("./zohoTasksSync");
-    const tasks = await runZohoTasksSync({ maxRecords: 5000 });
-    logger.info("[KPI Auto] Zoho tasks sync", {
+    const { runCRMProviderTasksSync } = await import("./CRMProviderTasksSync");
+    const tasks = await runCRMProviderTasksSync({ maxRecords: 5000 });
+    logger.info("[KPI Auto] CRMProvider tasks sync", {
       scanned: tasks.scanned,
       new: tasks.imported_new,
       updated: tasks.updated_existing,
@@ -188,7 +188,7 @@ export async function runKPIAutoCalc(): Promise<KPIAutoCalcResult> {
       errors: tasks.errors,
     });
     results.push({
-      kpi: "zoho-tasks-sync",
+      kpi: "CRMProvider-tasks-sync",
       value: tasks.scanned,
       status: tasks.errors === 0 ? "recorded" : "failed",
       error: tasks.error_samples[0],
@@ -202,8 +202,8 @@ export async function runKPIAutoCalc(): Promise<KPIAutoCalcResult> {
       );
     }
   } catch (err) {
-    logger.error("[KPI Auto] Zoho tasks sync error:", err);
-    results.push({ kpi: "zoho-tasks-sync", error: String(err), status: "failed" });
+    logger.error("[KPI Auto] CRMProvider tasks sync error:", err);
+    results.push({ kpi: "CRMProvider-tasks-sync", error: String(err), status: "failed" });
   }
 
   // Also run the canonical KPI engine: leadership-feed-backed Quality/GRC values
@@ -214,7 +214,7 @@ export async function runKPIAutoCalc(): Promise<KPIAutoCalcResult> {
     const { runKPIAutoCalc: runCanonicalKPIAutoCalc } =
       await import("./kpiAutoCalc");
     // includeCycleTimes=true: the daily background run also refreshes the Sales
-    // Proposal/Agreement cycle times (Zoho stage-history sample) — too slow for
+    // Proposal/Agreement cycle times (CRMProvider stage-history sample) — too slow for
     // the interactive Recalculate button, fine here.
     const canon = await runCanonicalKPIAutoCalc(true);
     for (const d of canon.details) {
@@ -277,9 +277,9 @@ export async function runDuplicateScanIfStale(
     `[DuplicateRadar Fallback] Last scan was ${ageHours.toFixed(1)}h ago (>= ${maxAgeHours}h); kicking off scan.`,
   );
   try {
-    const { scanZohoCRMForDuplicates } =
+    const { scanCRMProviderCRMForDuplicates } =
       await import("../mastra/routes/duplicateRadarRoutes");
-    const result = await scanZohoCRMForDuplicates("interval-fallback");
+    const result = await scanCRMProviderCRMForDuplicates("interval-fallback");
     return { ran: true, ageHours, result };
   } catch (err) {
     logger.error("[DuplicateRadar Fallback] Scan failed:", err);
@@ -311,7 +311,7 @@ export async function hoursSinceLastCsOverlapScan(): Promise<number> {
  * The Inngest cron `duplicate-radar-cs-overlap-scan` is the primary driver
  * (default 03:30 UTC daily). This helper re-runs the scan when no cluster
  * has been re-classified in the last `maxAgeHours` (defaults 25h to keep one
- * hour of slack after the cron fire).
+ * hour of ChatProvider after the cron fire).
  *
  * Idempotent — safe to call on any interval.
  */
@@ -355,7 +355,7 @@ export async function runKPIAutoCalcIfStale(
 // The post-sync sweep only runs when a sync COMPLETES, and the recurring
 // stuck/3h syncs mean it often doesn't. This runs the SAME authoritative
 // /deleted-feed prune on the 45-min housekeeping loop, gated to ~every 3h, so
-// records removed in Zoho are pruned from the mirror + the pending-delete ledger
+// records removed in CRMProvider are pruned from the mirror + the pending-delete ledger
 // regardless of sync state. In-memory last-run stamp: a restart just triggers
 // one extra run, which is harmless (the sweep is idempotent).
 let _lastDeletionFeedSweepMs = 0;
@@ -386,7 +386,7 @@ export async function runDeletionFeedSweepIfStale(
     return { ran: true, ageHours, result };
   } catch (err) {
     logger.error("[DeletionFeedSweep Fallback] failed:", err);
-    // Stamp anyway so a persistent failure doesn't hammer Zoho every 45 min.
+    // Stamp anyway so a persistent failure doesn't hammer CRMProvider every 45 min.
     _lastDeletionFeedSweepMs = Date.now();
     return { ran: false, ageHours };
   }
@@ -397,11 +397,11 @@ export async function runDeletionFeedSweepIfStale(
 //
 // Deal Compliance used to learn a deal's document status only when a human sat
 // on the tab and pressed "Check all documents", which walked the loaded rows
-// calling Zoho's attachments API. It capped at 200 of 976 in-scope deals, so
+// calling CRMProvider's attachments API. It capped at 200 of 976 in-scope deals, so
 // it could never finish, and it pinned the browser while running.
 //
 // Now a slice runs here instead, every tick. Deliberately NOT a once-a-day
-// burst: 976 attachment calls back-to-back risks Zoho's rate limit, and this
+// burst: 976 attachment calls back-to-back risks CRMProvider's rate limit, and this
 // deployment has already shown it falls over under that kind of load. ~60
 // deals per 45-minute tick is ~1,900 checks a day, so every in-scope deal is
 // re-checked daily with the load spread thin.
@@ -430,7 +430,7 @@ export async function runDealDocComplianceSweepIfDue(
     return { ran: true, ageHours, result };
   } catch (err) {
     logger.error("[DealDocSweep] pass failed:", err);
-    // Stamp anyway — a persistent failure must not hammer Zoho every tick.
+    // Stamp anyway — a persistent failure must not hammer CRMProvider every tick.
     _lastDealDocSweepMs = Date.now();
     return { ran: false, ageHours };
   }
@@ -513,8 +513,8 @@ export async function runMonthlyMissingDocsReportIfDue(): Promise<{
       dashboardUrl: process.env.MISSING_DOCS_REPORT_LINK,
     });
 
-    const { sendResendEmail } = await import("./resendMail");
-    const sent = await sendResendEmail({
+    const { sendEmailProviderEmail } = await import("./EmailProviderMail");
+    const sent = await sendEmailProviderEmail({
       to: recipients,
       subject: mail.subject,
       html: mail.html,
@@ -553,7 +553,7 @@ export async function hoursSinceLastQualityAudit(): Promise<number> {
 
 /**
  * Run a fresh quality audit if the latest one is older than `maxAgeHours`.
- * Without this, Zoho data changes (merges, edits, completed records) only
+ * Without this, CRMProvider data changes (merges, edits, completed records) only
  * appear on the dashboard when someone manually triggers an audit.
  */
 export async function runQualityAuditIfStale(
@@ -850,15 +850,15 @@ export async function runLeadershipPushIfDue(): Promise<{ ran: boolean; ageHours
   const now = new Date();
   // ONLY the production deployment may run the automatic push. The dev workspace
   // and any preview deploy run this same fallback loop but read a DIFFERENT
-  // database (Replit dev/prod split), so if they also push, the leadership board
+  // database (HostingPlatform dev/prod split), so if they also push, the leadership board
   // flip-flops between each instance's value (seen 2026-08/09: BU Pilot bouncing
   // 75/66.7/0 on every push, across all KPIs). We BLOCK only when positively
-  // identified as the dev workspace (REPLIT_DEV_DOMAIN set and NOT a deployment),
+  // identified as the dev workspace (HostingPlatform_DEV_DOMAIN set and NOT a deployment),
   // so production is never accidentally silenced if the env vars ever change.
   // LEADERSHIP_PUSH_FORCE=true forces this instance to push regardless.
   const inDeployment =
-    process.env.REPLIT_DEPLOYMENT === "1" || !!process.env.REPLIT_DEPLOYMENT_ID;
-  const isDevWorkspace = !inDeployment && !!process.env.REPLIT_DEV_DOMAIN;
+    process.env.HostingPlatform_DEPLOYMENT === "1" || !!process.env.HostingPlatform_DEPLOYMENT_ID;
+  const isDevWorkspace = !inDeployment && !!process.env.HostingPlatform_DEV_DOMAIN;
   const forced =
     String(process.env.LEADERSHIP_PUSH_FORCE || "").toLowerCase() === "true";
   if (isDevWorkspace && !forced) return { ran: false, ageHours: 0 };

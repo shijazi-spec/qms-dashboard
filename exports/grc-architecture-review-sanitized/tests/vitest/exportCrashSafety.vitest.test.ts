@@ -133,7 +133,7 @@ describe("a failing export does not kill the process", () => {
 
 describe("staging is an optimisation, not a requirement", () => {
   it("still returns a usable workbook when the export cache dir is unwritable", async () => {
-    // The Replit-shaped failure: the staging directory cannot be written, so
+    // The HostingPlatform-shaped failure: the staging directory cannot be written, so
     // every staged export failed. Point the cache at a path that cannot exist
     // and assert the caller still gets a workbook rather than an error.
     const prev = process.env.STREAMING_EXPORT_CACHE_DIR;

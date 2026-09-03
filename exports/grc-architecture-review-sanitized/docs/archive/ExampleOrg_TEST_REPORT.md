@@ -49,7 +49,7 @@
 | T-INFO-duplicates | SVG renders for duplicates | `GET /api/infographic/duplicates` | 200 | 200 | ✅ |
 | T-INFO-consultant | SVG renders for consultant | `GET /api/infographic/consultant` | 200 | 200 | ✅ |
 | T-INFO-PNG | PNG render size for risks | `GET /api/infographic/risks?format=png` | ≥ 400000 B | 833872 B | ✅ |
-| T-INFO-SLACK | Slack share (graceful) | `POST /api/infographic/risks/share/slack` | success:true | "mode":"message" | ✅ |
+| T-INFO-ChatProvider | ChatProvider share (graceful) | `POST /api/infographic/risks/share/ChatProvider` | success:true | "mode":"message" | ✅ |
 
 ## Tier 2 — Capability features (target ≥ 95% green)
 | ID | Description | Endpoint | Expected | Actual | Result |

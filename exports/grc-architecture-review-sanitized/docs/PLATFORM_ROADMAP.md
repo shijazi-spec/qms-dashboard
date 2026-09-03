@@ -37,7 +37,7 @@ Score = (R × I × C) / E. Higher = do first.
 | Rank | # | Initiative | Reach | Impact | Conf. | Effort (pw) | RICE | Audit ref |
 |---|---|---|---|---|---|---|---|---|
 | 1 | 8  | Verify health-pulse cron + add "stale > 24 h" red banner on /health | 100 | 2 | 100 % | 0.5 | **400** | P1 §2.5 |
-| 1 | 16 | Update `replit.md` to reflect current state (8 regulations, 4 agents, mapping table, RBAC cookie fix) | 100 | 1 | 100 % | 0.25 | **400** | P2 §2.10 |
+| 1 | 16 | Update `HostingPlatform.md` to reflect current state (8 regulations, 4 agents, mapping table, RBAC cookie fix) | 100 | 1 | 100 % | 0.25 | **400** | P2 §2.10 |
 | 3 | 1  | Re-grant real roles to 35 SSO users (or ship users-admin UI) | 100 | 3 | 100 % | 1 | **300** | P0 §2.1 |
 | 3 | 9  | Pre-install Playwright in workflow env so i18n + sweep gates run | 100 | 1.5 | 100 % | 0.5 | **300** | P2 §2.9 |
 | 5 | 5  | Stale-alert sweep cron (auto-close low-sev `sla_breach` > 30 d) | 100 | 2 | 100 % | 1 | **200** | P1 §2.4 |
@@ -70,7 +70,7 @@ Job stories follow the format **When _ , I want to _ , so I can _**.
 > *Maps to RICE #2, #3, #7, #13, #14, #15.*
 
 > **JS-2 — Quality Manager logs a nonconformity from SSO.**
-> When I sign in via Zoho SSO and try to file a new NC from the Quality
+> When I sign in via CRMProvider SSO and try to file a new NC from the Quality
 > dashboard, I want the form to actually submit, so I don't have to ask the
 > admin for the API key just to record routine quality issues.
 > *Maps to RICE #1.*
@@ -111,7 +111,7 @@ Job stories follow the format **When _ , I want to _ , so I can _**.
 | 5 | Bulk-acknowledge UI on /ai-ops | Eng | O3 | One-click clears N selected alerts | Ready to start |
 | 6 | Health-pulse cron audit + stale banner | Eng | O3 | `health_pulse_runs` row in last 24 h on every prod boot | Ready to start |
 | 7 | Playwright pre-install in workflows | Eng (infra) | — | i18n + sweep workflows finish in < 3 min | Quick win |
-| 8 | Update `replit.md` with current state | PM | — | replit.md mentions 8 regs, 4 prod agents, mapping table | Quick win |
+| 8 | Update `HostingPlatform.md` with current state | PM | — | HostingPlatform.md mentions 8 regs, 4 prod agents, mapping table | Quick win |
 
 ### Next (committed, not started — ordered)
 
@@ -151,8 +151,8 @@ Explicit list — protects against scope creep:
 - **No platform-wide UI redesign.** The recent sidebar / page-title pass
   was sufficient.
 - **No mobile / native app.** Mobile-friendly responsive dashboard only.
-- **No third-party integrations beyond the existing set** (Zoho CRM, Inngest,
-  Slack, email, Replit OIDC, OpenAI). Don't add Jira / ServiceNow / etc.
+- **No third-party integrations beyond the existing set** (CRMProvider CRM, Inngest,
+  ChatProvider, email, HostingPlatform OIDC, LLMProvider). Don't add Jira / ServiceNow / etc.
 - **No replacement of Postgres, Hono, Mastra, or the storage layer.**
 
 ---
@@ -179,7 +179,7 @@ Explicit list — protects against scope creep:
 
 ```gherkin
 # Item 1 — Restore real roles to SSO users
-Given a platform user logged in via Replit OIDC who is a known admin in our records
+Given a platform user logged in via HostingPlatform OIDC who is a known admin in our records
 When that user navigates to /dashboard/audits.html and clicks "New Audit"
 Then the form submits successfully
 And no 401/403 appears in the browser console
@@ -201,7 +201,7 @@ And each card displays its clause number and title
 And the seed is idempotent
 
 # Item 4 — Stale-alert auto-close cron
-Given an open ai_alert with severity='medium' and created_at older than 30 days
+Given an LLMProvider_alert with severity='medium' and created_at older than 30 days
 When the daily auto-close cron runs
 Then that alert moves to status='resolved'
 And resolution_note starts with "auto-resolved (stale)"
@@ -229,8 +229,8 @@ Then it completes in under 3 minutes
 And it does not display the "Ok to proceed?" prompt
 And the workflow exits 0 on a passing run
 
-# Item 8 — replit.md reflects current state
-Given a reader of replit.md who has never used the platform
+# Item 8 — HostingPlatform.md reflects current state
+Given a reader of HostingPlatform.md who has never used the platform
 When they finish reading the doc
 Then they know: 8 regulations are seeded, 4 production agents exist,
      obligation_documents is the clause-evidence link table,
@@ -253,5 +253,5 @@ which a code scan of `src/utils/complianceDatabase.ts` confirms.
 
 | Version | Date | Author | Change summary |
 |---|---|---|---|
-| 1.0 | 2026-05-02 | Replit Agent | Initial roadmap derived from `PLATFORM_AUDIT.md` v1.0 |
-| 1.1 | 2026-05-02 | Replit Agent | Re-sorted RICE backlog by score (descending) and added explicit Rank column; added 5 job stories tied back to RICE items; expanded Acceptance Criteria from 5 to all 8 "Now" items; numbered "Now" rows to match acceptance criteria |
+| 1.0 | 2026-05-02 | HostingPlatform Agent | Initial roadmap derived from `PLATFORM_AUDIT.md` v1.0 |
+| 1.1 | 2026-05-02 | HostingPlatform Agent | Re-sorted RICE backlog by score (descending) and added explicit Rank column; added 5 job stories tied back to RICE items; expanded Acceptance Criteria from 5 to all 8 "Now" items; numbered "Now" rows to match acceptance criteria |

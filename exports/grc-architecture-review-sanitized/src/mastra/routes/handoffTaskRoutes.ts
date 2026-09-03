@@ -30,7 +30,7 @@ const HANDOFF_ROLES = [
   "head_of_operations_quality",
 ] as const;
 
-const APP_URL = process.env.APP_BASE_URL || "https://<REDACTED_HOST>";
+const APP_URL = process.env.APP_BASE_URL || "<REDACTED_URL_SCHEME><REDACTED_HOST>";
 
 function esc(s: any): string {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -40,8 +40,8 @@ function esc(s: any): string {
 async function notify(to: string, subject: string, bodyHtml: string): Promise<void> {
   try {
     if (!to) return;
-    const { sendResendEmail } = await import("../../utils/resendMail");
-    await sendResendEmail({
+    const { sendEmailProviderEmail } = await import("../../utils/EmailProviderMail");
+    await sendEmailProviderEmail({
       to,
       subject,
       html:
@@ -147,8 +147,8 @@ export const handoffTaskRoutes = [
     },
   },
   {
-    // accept | reject | done | resend
-    path: "/api/handoff-tasks/:id{[0-9]+}/:action{(accept|reject|done|resend)}",
+    // accept | reject | done | EmailProvider
+    path: "/api/handoff-tasks/:id{[0-9]+}/:action{(accept|reject|done|EmailProvider)}",
     method: "PUT" as const,
     createHandler: async () => {
       return async (c: any) => {
@@ -163,7 +163,7 @@ export const handoffTaskRoutes = [
             | "accept"
             | "reject"
             | "done"
-            | "resend";
+            | "EmailProvider";
           const body = await c.req.json().catch(() => ({}));
           const before = await getTask(id);
           if (!before) return c.json({ error: "Task not found" }, 404);
@@ -192,7 +192,7 @@ export const handoffTaskRoutes = [
               `Handoff completed: ${task.title}`,
               taskHtml(task, `${user?.email || "The assignee"} marked this handoff complete.`),
             );
-          } else if (action === "resend") {
+          } else if (action === "EmailProvider") {
             await notify(
               task.assigned_to,
               `Handoff re-sent to you: ${task.title}`,

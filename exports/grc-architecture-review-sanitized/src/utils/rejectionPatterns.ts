@@ -63,7 +63,7 @@ const CATEGORIES: CategorySpec[] = [
   },
   {
     key: "layout_split",
-    label: "Different Zoho layouts (intentional split)",
+    label: "Different CRMProvider layouts (intentional split)",
     feature: "layoutSplit",
     suggestedRule: { decision: "never_merge", signature: { layoutSplit: true } },
     advice: "Records on different layouts are often a deliberate split (e.g. Corporate vs Partner).",
@@ -104,7 +104,7 @@ const CATEGORIES: CategorySpec[] = [
   },
   {
     key: "attachments",
-    label: "Duplicate carries Zoho attachments (evidence)",
+    label: "Duplicate carries CRMProvider attachments (evidence)",
     reason: /attachment/i,
     advice: "Never auto-merge away a record with files (signed contracts/NDAs) — keep it as survivor.",
   },

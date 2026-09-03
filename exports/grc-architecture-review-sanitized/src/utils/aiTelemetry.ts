@@ -7,9 +7,9 @@
  *
  * ── Price Table ──────────────────────────────────────────────────────────────
  * Location : src/utils/aiTelemetry.ts  →  MODEL_PRICE_TABLE
- * Last updated : 2025-01  (OpenAI pricing at GA)
+ * Last updated : 2025-01  (LLMProvider pricing at GA)
  * How to update: Edit the inputPer1k / outputPer1k values (USD per 1 000 tokens)
- *   to match <REDACTED_URL>  whenever OpenAI changes rates.
+ *   to match <REDACTED_URL>  whenever LLMProvider changes rates.
  * ─────────────────────────────────────────────────────────────────────────────
  *
  * ── Downstream linking via callId ────────────────────────────────────────────
@@ -152,12 +152,12 @@ export interface AiCallTelemetryMetadata {
   /** Background-scan kind (e.g. `platform_scan`). */
   scan_type?: string;
   /**
-   * Surface that produced the call / rating (e.g. `web`, `mobile`, `slack`,
+   * Surface that produced the call / rating (e.g. `web`, `mobile`, `ChatProvider`,
    * `embedded`). Mirrors the same field on `AiCallFeedbackMetadata` and
    * is read by the per-surface breakdown in
    * `getFeedbackBreakdownByPromptVersion()`. Task #763 made the call-id
    * rating endpoint backfill this onto legacy rows that lack one so
-   * Slack / mobile / embedded ratings attribute correctly.
+   * ChatProvider / mobile / embedded ratings attribute correctly.
    */
   client_surface?: string;
 }
@@ -522,7 +522,7 @@ export function getCurrentParentCallId(): number | null {
 // Open / finalize helpers — used by startTelemetrySpan() so we can allocate
 // a row id BEFORE the LLM call so child tool rows have a parent to point at.
 // ──────────────────────────────────────────────────────────────────────────────
-async function openAiCallMetric(params: {
+async function LLMProviderCallMetric(params: {
   agentName: string;
   model: string;
   promptPreview?: string;
@@ -629,7 +629,7 @@ export async function startTelemetrySpan(
   const promptPreview = params.promptText
     ? redactPromptPreview(params.promptText)
     : undefined;
-  const callId = await openAiCallMetric({
+  const callId = await LLMProviderCallMetric({
     agentName: params.agentName,
     model: params.model,
     promptPreview,
@@ -2084,7 +2084,7 @@ export async function setCallPromptVersionIfMissing(
  * Task #763: companion to {@link setCallPromptVersionIfMissing} that
  * backfills `metadata.client_surface` on a call row when it is missing.
  *
- * Used by non-web rating surfaces (Slack thumbs-up/down bot, mobile app,
+ * Used by non-web rating surfaces (ChatProvider thumbs-up/down bot, mobile app,
  * embedded widget) to mark which UI produced the rating so per-surface
  * analytics in the AI Operations dashboard
  * (`getFeedbackBreakdownByPromptVersion().client_surfaces`) are populated
@@ -2125,14 +2125,14 @@ export async function setCallClientSurfaceIfMissing(
 /**
  * Read the recorded `metadata.prompt_version` for a single call.
  *
- * Task #763: non-web rating surfaces (Slack bot, mobile app, embedded
+ * Task #763: non-web rating surfaces (ChatProvider bot, mobile app, embedded
  * widget) typically only have the `callId` of the response the user
  * reacted to — they do not carry the `promptVersion` echo the web
  * consultant chat client passes back in its feedback POST. Surfaces
  * call this helper to look up the version that was active when the
  * response was generated, then forward it on the rating POST so
  * per-version analytics (`getFeedbackRateByPromptVersion`) attribute
- * Slack/mobile/embedded ratings the same way they attribute web ones.
+ * ChatProvider/mobile/embedded ratings the same way they attribute web ones.
  *
  * Returns the trimmed prompt-version string, or null when the row does
  * not exist or has no `metadata.prompt_version` (e.g. a legacy call
@@ -2221,7 +2221,7 @@ export interface PromptVersionAggregate {
   /**
    * Per-surface call-count breakdown hoisted from
    * `ai_call_metrics.metadata.client_surface` within the selected window
-   * (Task #749). Shape: `{ web: 12, slack: 3, mobile: 1, unknown: 4 }`
+   * (Task #749). Shape: `{ web: 12, ChatProvider: 3, mobile: 1, unknown: 4 }`
    * where the `unknown` bucket collapses rows whose metadata never
    * captured a surface (e.g. legacy traffic). Empty object for archived
    * rows with no in-window activity. Lets the AI Ops dashboard render a
@@ -2466,7 +2466,7 @@ export async function getRecentNegativeFeedback(
      * Client surface that submitted the rating, hoisted from
      * `ai_call_metrics.metadata.client_surface` (Task #749). Lets the AI
      * Ops dashboard show whether thumbs-down ratings are coming from the
-     * web chat, the Slack bot, or a mobile client without a separate
+     * web chat, the ChatProvider bot, or a mobile client without a separate
      * round-trip. NULL for legacy rows where the surface was never
      * captured.
      */

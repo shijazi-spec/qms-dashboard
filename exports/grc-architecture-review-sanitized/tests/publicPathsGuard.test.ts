@@ -91,11 +91,11 @@ const PUBLIC_PATH_ALLOWLIST: Record<string, string> = {
   // ---- Accessibility statement -------------------------------------------
   "/a11y": "WCAG / regulator-facing accessibility statement. Public by design.",
 
-  // ---- Slack interactive-component callback ------------------------------
-  "/webhooks/slack/action":
-    "POST: Slack interactive-component callback. Slack (not a browser) posts here and cannot carry a session cookie; the handler authenticates every request via Slack signing-secret signature verification plus dedup/bot-loop guards (src/triggers/slackTriggers.ts).",
-  "/api/webhooks/slack/action":
-    "POST: /api alias of the Slack interactive-component callback above — same Slack-signature-verified handler. Public so Slack's servers can reach it without a platform session.",
+  // ---- ChatProvider interactive-component callback ------------------------------
+  "/webhooks/ChatProvider/action":
+    "POST: ChatProvider interactive-component callback. ChatProvider (not a browser) posts here and cannot carry a session cookie; the handler authenticates every request via ChatProvider signing-secret signature verification plus dedup/bot-loop guards (src/triggers/ChatProviderTriggers.ts).",
+  "/api/webhooks/ChatProvider/action":
+    "POST: /api alias of the ChatProvider interactive-component callback above — same ChatProvider-signature-verified handler. Public so ChatProvider's servers can reach it without a platform session.",
 
   // ---- Server-to-server leadership KPI feed ------------------------------
   "/api/kpis/leadership-feed":

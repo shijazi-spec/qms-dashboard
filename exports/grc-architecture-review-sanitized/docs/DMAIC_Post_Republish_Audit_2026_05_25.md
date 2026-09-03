@@ -12,7 +12,7 @@ After the republish that included the Coaching Plans tab, Topic Clusters, Peer B
 
 | # | Symptom (screenshot) | What the user sees |
 |---|---|---|
-| 1 | Call Details modal alert — *"Auto-link could not match this call to any Zoho Lead/Deal (no_match). Compliance cannot be checked without a CRM link."* | 559, 562 |
+| 1 | Call Details modal alert — *"Auto-link could not match this call to any CRMProvider Lead/Deal (no_match). Compliance cannot be checked without a CRM link."* | 559, 562 |
 | 2 | Call Details modal alert — *"Auto-link failed: Route not authorized by RBAC policy."* | 564 |
 | 3 | Call Details — "Run compliance now" workflow blocks at auto-link step | 561, 563, 564 |
 | 4 | Coaching tab — all three columns (Pending Delivery / Awaiting Verification / Resolved) show *"Failed to load HTTP 401"* | 565 |
@@ -38,7 +38,7 @@ Symptoms 2–7 are **all the same underlying bug.** Symptoms 1 and 8 are downstr
 | `POST /api/calls/backfill-call-dates` | 200 | **401** | Backfill Dates button fails |
 | `POST /api/calls/backfill-compliance` | 200 | **401** | Backfill CRM Compliance button fails |
 | `POST /api/calls/:id/duration` | 200 / 204 | **401** | Audio self-heal silently fails |
-| `GET /api/zoho/activities/{module}/:id` | 200 + open/closed buckets | **401** | Activities panel in Call Details is empty |
+| `GET /api/CRMProvider/activities/{module}/:id` | 200 + open/closed buckets | **401** | Activities panel in Call Details is empty |
 | `POST /api/calls/:id/auto-link` (existing route, called from new UI) | 200 | **403 "Route not authorised by RBAC policy"** | Per-call compliance retry blocks |
 
 **11 endpoint failures, 1 root cause.**
@@ -103,8 +103,8 @@ Adding 7 explicit `ROUTE_PERMISSION_MAP` rules covering every new endpoint:
 // Bulk backfills (destructive ops, scoped tighter)
 { pattern: /^\/api\/calls\/backfill-(call-dates|compliance)$/, methods: ["POST"], roles: [admin, head_of_operations_quality, quality_manager] }
 
-// Zoho activities reader (Replit's contribution)
-{ pattern: /^\/api\/zoho\/activities\/(Leads|Deals|leads|deals)\/\d+$/, methods: ["GET"], roles: [the 6-role set + bu_owner, executive] }
+// CRMProvider activities reader (HostingPlatform's contribution)
+{ pattern: /^\/api\/CRMProvider\/activities\/(Leads|Deals|leads|deals)\/\d+$/, methods: ["GET"], roles: [the 6-role set + bu_owner, executive] }
 ```
 
 ### Role-list rationale
@@ -112,7 +112,7 @@ Adding 7 explicit `ROUTE_PERMISSION_MAP` rules covering every new endpoint:
 - **Read endpoints** use the standard 6-role set used by `/api/calls` GET (`admin, ai_specialist, head_of_operations_quality, quality_manager, team_lead, grc_manager`).
 - **Write endpoints** are tighter — only roles that should be MAKING coaching decisions (`admin, head_of_operations_quality, quality_manager, team_lead`). AI specialist + GRC manager don't deliver coaching.
 - **Destructive backfills** are tightest — `admin, head_of_operations_quality, quality_manager` only. These rewrite historical data en masse.
-- **Zoho activities GET** is broadest — also includes `bu_owner` and `executive` since BU owners and executives need to see customer activity history.
+- **CRMProvider activities GET** is broadest — also includes `bu_owner` and `executive` since BU owners and executives need to see customer activity history.
 
 ### Not covered by this fix
 
@@ -156,20 +156,20 @@ This is a 1-day session focused on getting features visible to the user. Process
 
 | Issue | Cause | Fix |
 |---|---|---|
-| Phone numbers not in Zoho → "no_match" | Real CRM-coverage gap. Many SDR-called phones never made it into Zoho as Leads/Deals. | Manual CRM data cleanup OR the activity-fallback link path (already implemented). Not a code issue. |
+| Phone numbers not in CRMProvider → "no_match" | Real CRM-coverage gap. Many SDR-called phones never made it into CRMProvider as Leads/Deals. | Manual CRM data cleanup OR the activity-fallback link path (already implemented). Not a code issue. |
 | Topic Clusters empty in screenshot 568 | Likely the Whisper-extracted `key_topics` field is sparse on the existing 199 calls — old analysis runs may not have produced topics. | Will fill in as new calls are analyzed. Backfill is possible but $-expensive (would re-run Whisper). |
 | `CRM Compliance Records` table empty (566) | Same as above — no calls have been linked, so no compliance rows exist | Solved by: link calls → run compliance. The backfill button on Overview does both. |
 | Audio player showing missing-blob hint | Legacy bulk uploads didn't persist `audio_blob`. Documented in `details_recording_missing` i18n key. | No action — by design for legacy data. |
 
 ---
 
-## Verification checklist (after Replit pulls + republishes this fix)
+## Verification checklist (after HostingPlatform pulls + republishes this fix)
 
 - [ ] **Coaching tab** loads with three columns. If empty, click **Re-scan** — should not throw, should show alert with scan summary.
 - [ ] **Performance vs Team** — pick an agent → renders per-attribute rows (not "Failed to load")
 - [ ] **Backfill Dates** button on Overview → runs, returns summary
 - [ ] **Backfill CRM Compliance** button on Overview → starts, shows progress in button label
 - [ ] **Call Details modal → right column** — Open Activities + Closed Activities sections appear with counts. Empty buckets OK; what should NOT happen is the spinner staying forever or "Failed to load" message
-- [ ] **Run compliance now** on a call with no Zoho link → either auto-links + runs check OR shows the polite "no_match" alert. Should NOT show "Route not authorized by RBAC policy"
+- [ ] **Run compliance now** on a call with no CRMProvider link → either auto-links + runs check OR shows the polite "no_match" alert. Should NOT show "Route not authorized by RBAC policy"
 
 If any of those still fail after the fix deploys, the next likely cause is the secondary issue noted under analysis: **the user's session role might not be in the route's allowed-roles list.** That's a config issue (user role assignment) separate from this code fix.

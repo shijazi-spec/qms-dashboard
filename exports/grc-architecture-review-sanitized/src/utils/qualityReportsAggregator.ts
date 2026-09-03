@@ -40,7 +40,7 @@ export interface BUReport {
 /**
  * Per-section wall-clock budget. The whole point is that a slow section
  * degrades to a placeholder card while the rest of the page renders, instead
- * of the entire request hanging until the Replit proxy returns a 504 with no
+ * of the entire request hanging until the HostingPlatform proxy returns a 504 with no
  * diagnostic at all (which is exactly what /quality-reports did).
  *
  * Sections run in PARALLEL, so this is close to the whole request's ceiling,

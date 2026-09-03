@@ -4,10 +4,10 @@
  *
  * Problem
  * -------
- * Many Zoho Deals come in with no Account_Name (placeholder text, blank, or
+ * Many CRMProvider Deals come in with no Account_Name (placeholder text, blank, or
  * the synthetic "_placeholder.cluster" quarantine bucket). The dashboard
  * surfaces them as a junk cluster but doesn't help sales actually fix the
- * underlying Zoho record.
+ * underlying CRMProvider record.
  *
  * Approach
  * --------
@@ -29,7 +29,7 @@
  * suggested_account_record_id). The scan is idempotent — re-running updates
  * existing rows rather than fanning out. Sales work the list from the
  * "Account Hints" tab in Duplicate Radar; clicking a row opens the Deal in
- * Zoho where they fix Account_Name. We do not write back to Zoho — the
+ * CRMProvider where they fix Account_Name. We do not write back to CRMProvider — the
  * dashboard remains read-only.
  */
 
@@ -38,7 +38,7 @@ import {
   extractDomain,
   isPlaceholderName,
 } from "./duplicateRadarDatabase";
-import { updateZohoRecord } from "./zohoCRM";
+import { updateCRMProviderRecord } from "./CRMProviderCRM";
 import { logger } from "./logger";
 
 const PLACEHOLDER_CLUSTER_DOMAIN = "_placeholder.cluster";
@@ -59,7 +59,7 @@ export interface AccountInferenceHint {
 
 interface DealRow {
   id: number;
-  zoho_record_id: string | null;
+  CRMProvider_record_id: string | null;
   account_name: string | null;
   company_name: string | null;
   domain: string | null;
@@ -70,7 +70,7 @@ interface DealRow {
 
 interface CandidateAccount {
   id: number;
-  zoho_record_id: string | null;
+  CRMProvider_record_id: string | null;
   account_name: string | null;
   company_name: string | null;
   domain: string | null;
@@ -81,7 +81,7 @@ interface CandidateAccount {
 
 interface ContactRow {
   id: number;
-  zoho_record_id: string | null;
+  CRMProvider_record_id: string | null;
   email: string | null;
   domain: string | null;
 }
@@ -110,17 +110,17 @@ function dealNeedsHelp(d: DealRow): boolean {
 }
 
 /**
- * Pull the Zoho contact id(s) referenced from a Deal's raw_data.
- * Zoho stores Contact_Name as either { id, name } or null.
+ * Pull the CRMProvider contact id(s) referenced from a Deal's raw_data.
+ * CRMProvider stores Contact_Name as either { id, name } or null.
  */
-function extractLinkedContactZohoIds(rawData: any): string[] {
+function extractLinkedContactCRMProviderIds(rawData: any): string[] {
   if (!rawData || typeof rawData !== "object") return [];
   const out: string[] = [];
   const c = rawData.Contact_Name;
   if (c && typeof c === "object" && typeof c.id === "string") {
     out.push(c.id);
   }
-  // Some Zoho layouts also surface secondary contacts under different keys —
+  // Some CRMProvider layouts also surface secondary contacts under different keys —
   // walk anything that looks like { id, name } at the top level of raw_data.
   for (const [key, val] of Object.entries(rawData)) {
     if (key === "Contact_Name") continue;
@@ -132,16 +132,16 @@ function extractLinkedContactZohoIds(rawData: any): string[] {
   return Array.from(new Set(out));
 }
 
-async function lookupContactsByZohoIds(
-  zohoIds: string[],
+async function lookupContactsByCRMProviderIds(
+  CRMProviderIds: string[],
 ): Promise<ContactRow[]> {
-  if (zohoIds.length === 0) return [];
+  if (CRMProviderIds.length === 0) return [];
   const res = await pool.query(
-    `SELECT id, zoho_record_id, email, domain
+    `SELECT id, CRMProvider_record_id, email, domain
        FROM duplicate_records
-      WHERE zoho_record_id = ANY($1::text[])
+      WHERE CRMProvider_record_id = ANY($1::text[])
         AND record_type = 'contact'`,
-    [zohoIds],
+    [CRMProviderIds],
   );
   return res.rows;
 }
@@ -159,7 +159,7 @@ async function findBestAccountForDomain(
   if (!norm) return null;
   const res = await pool.query(
     `SELECT a.id,
-            a.zoho_record_id,
+            a.CRMProvider_record_id,
             a.account_name,
             a.company_name,
             a.domain,
@@ -181,7 +181,7 @@ async function findBestAccountForDomain(
   const row = res.rows[0];
   return {
     id: row.id,
-    zoho_record_id: row.zoho_record_id,
+    CRMProvider_record_id: row.CRMProvider_record_id,
     account_name: row.account_name,
     company_name: row.company_name,
     domain: row.domain,
@@ -220,10 +220,10 @@ function scoreConfidence(args: {
 export async function inferAccountForDeal(
   deal: DealRow,
 ): Promise<InferenceResult | null> {
-  const zohoContactIds = extractLinkedContactZohoIds(deal.raw_data);
-  if (zohoContactIds.length === 0) return null;
+  const CRMProviderContactIds = extractLinkedContactCRMProviderIds(deal.raw_data);
+  if (CRMProviderContactIds.length === 0) return null;
 
-  const contacts = await lookupContactsByZohoIds(zohoContactIds);
+  const contacts = await lookupContactsByCRMProviderIds(CRMProviderContactIds);
   if (contacts.length === 0) return null;
 
   // domain → list of evidence contacts that agreed on that domain.
@@ -288,19 +288,19 @@ export async function scanDealsForAccountHints(): Promise<InferenceScanResult> {
   };
 
   const deals = await pool.query(
-    `SELECT r.id, r.zoho_record_id, r.account_name, r.company_name,
+    `SELECT r.id, r.CRMProvider_record_id, r.account_name, r.company_name,
             r.domain, r.raw_data, r.cluster_id,
             c.domain AS cluster_domain
        FROM duplicate_records r
        LEFT JOIN duplicate_clusters c ON c.id = r.cluster_id
       WHERE r.record_type = 'deal'
-        AND r.zoho_module = 'Deals'`,
+        AND r.CRMProvider_module = 'Deals'`,
   );
 
   for (const row of deals.rows) {
     const deal: DealRow = {
       id: row.id,
-      zoho_record_id: row.zoho_record_id,
+      CRMProvider_record_id: row.CRMProvider_record_id,
       account_name: row.account_name,
       company_name: row.company_name,
       domain: row.domain,
@@ -313,7 +313,7 @@ export async function scanDealsForAccountHints(): Promise<InferenceScanResult> {
 
     const hint = await inferAccountForDeal(deal);
     if (!hint) {
-      const linkedContacts = extractLinkedContactZohoIds(deal.raw_data);
+      const linkedContacts = extractLinkedContactCRMProviderIds(deal.raw_data);
       if (linkedContacts.length === 0) res.no_contact++;
       else res.no_match++;
       continue;
@@ -363,15 +363,15 @@ export async function scanDealsForAccountHints(): Promise<InferenceScanResult> {
 export interface HintRow {
   id: number;
   deal_record_id: number;
-  deal_zoho_id: string | null;
+  deal_CRMProvider_id: string | null;
   deal_account_name: string | null;
   deal_company_name: string | null;
   suggested_account_record_id: number | null;
-  suggested_account_zoho_id: string | null;
+  suggested_account_CRMProvider_id: string | null;
   suggested_account_name: string | null;
   suggested_domain: string | null;
   evidence_contact_record_id: number | null;
-  evidence_contact_zoho_id: string | null;
+  evidence_contact_CRMProvider_id: string | null;
   evidence_contact_email: string | null;
   confidence: number;
   status: string;
@@ -391,7 +391,7 @@ export async function listAccountInferenceHints(opts: {
   const status = opts.status && ["pending", "dismissed", "applied"].includes(opts.status)
     ? opts.status
     : "pending";
-  // Segment chip (Sample User 2026-07-15): filter hints to the source DEAL's Zoho
+  // Segment chip (Sample User 2026-07-15): filter hints to the source DEAL's CRMProvider
   // Layout (aliased `d` here), same predicate as every tab. buildSegmentPredicate
   // emits an `r.` alias — swap it to `d.`. $1=status, segment binds start at $2,
   // LIMIT is the last placeholder.
@@ -410,15 +410,15 @@ export async function listAccountInferenceHints(opts: {
   const rows = await pool.query(
     `SELECT h.id,
             h.deal_record_id,
-            d.zoho_record_id AS deal_zoho_id,
+            d.CRMProvider_record_id AS deal_CRMProvider_id,
             d.account_name   AS deal_account_name,
             d.company_name   AS deal_company_name,
             h.suggested_account_record_id,
-            a.zoho_record_id AS suggested_account_zoho_id,
+            a.CRMProvider_record_id AS suggested_account_CRMProvider_id,
             h.suggested_account_name,
             h.suggested_domain,
             h.evidence_contact_record_id,
-            ct.zoho_record_id AS evidence_contact_zoho_id,
+            ct.CRMProvider_record_id AS evidence_contact_CRMProvider_id,
             h.evidence_contact_email,
             h.confidence,
             h.status,
@@ -469,7 +469,7 @@ export async function setHintStatus(
 
 /**
  * AI-resolve a single Account-Hint row: write the suggested Account_Name
- * directly onto the Zoho Deal, then mark the hint applied. Refuses to act
+ * directly onto the CRMProvider Deal, then mark the hint applied. Refuses to act
  * when confidence is below the threshold (default 70%) so low-signal hints
  * still go through the human Applied / Dismiss flow. Returns a structured
  * report the route surfaces back to the dashboard.
@@ -484,8 +484,8 @@ export async function aiResolveAccountHint(
 ): Promise<{
   success: boolean;
   hintId: number;
-  dealZohoId?: string | null;
-  accountZohoId?: string | null;
+  dealCRMProviderId?: string | null;
+  accountCRMProviderId?: string | null;
   confidence?: number;
   error?: string;
   reason?: string;
@@ -497,8 +497,8 @@ export async function aiResolveAccountHint(
   // here to keep the surface narrow).
   const res = await pool.query(
     `SELECT h.id, h.status, h.confidence,
-            d.zoho_record_id AS deal_zoho_id,
-            a.zoho_record_id AS suggested_account_zoho_id,
+            d.CRMProvider_record_id AS deal_CRMProvider_id,
+            a.CRMProvider_record_id AS suggested_account_CRMProvider_id,
             a.record_name    AS suggested_account_name
        FROM account_inference_hints h
        JOIN duplicate_records d ON d.id = h.deal_record_id
@@ -527,36 +527,36 @@ export async function aiResolveAccountHint(
       reason: `Confidence ${confidence}% is below the auto-apply threshold (${minConfidence}%). Review and use Applied / Dismiss manually.`,
     };
   }
-  const dealZohoId = row.deal_zoho_id as string | null;
-  const accountZohoId = row.suggested_account_zoho_id as string | null;
-  if (!dealZohoId || !accountZohoId) {
+  const dealCRMProviderId = row.deal_CRMProvider_id as string | null;
+  const accountCRMProviderId = row.suggested_account_CRMProvider_id as string | null;
+  if (!dealCRMProviderId || !accountCRMProviderId) {
     return {
       success: false,
       hintId,
-      dealZohoId,
-      accountZohoId,
+      dealCRMProviderId,
+      accountCRMProviderId,
       error:
-        "Missing deal_zoho_id or suggested_account_zoho_id — sync likely incomplete; retry after the next scan.",
+        "Missing deal_CRMProvider_id or suggested_account_CRMProvider_id — sync likely incomplete; retry after the next scan.",
     };
   }
 
   try {
-    await updateZohoRecord("Deals", dealZohoId, {
-      Account_Name: { id: accountZohoId },
+    await updateCRMProviderRecord("Deals", dealCRMProviderId, {
+      Account_Name: { id: accountCRMProviderId },
     });
   } catch (e: any) {
     return {
       success: false,
       hintId,
-      dealZohoId,
-      accountZohoId,
+      dealCRMProviderId,
+      accountCRMProviderId,
       confidence,
       error: e?.message || String(e),
     };
   }
 
   // Mark the row applied so the chip count moves immediately; the next
-  // scan will retire the row entirely once Zoho propagates the Account_Name.
+  // scan will retire the row entirely once CRMProvider propagates the Account_Name.
   await pool.query(
     `UPDATE account_inference_hints
         SET status = 'applied',
@@ -565,20 +565,20 @@ export async function aiResolveAccountHint(
     [hintId],
   );
   logger.info(
-    `[accountInference] AI-resolved hint #${hintId}: Deal ${dealZohoId} → Account ${accountZohoId} (${row.suggested_account_name}; confidence ${confidence}%; by ${performedBy})`,
+    `[accountInference] AI-resolved hint #${hintId}: Deal ${dealCRMProviderId} → Account ${accountCRMProviderId} (${row.suggested_account_name}; confidence ${confidence}%; by ${performedBy})`,
   );
   return {
     success: true,
     hintId,
-    dealZohoId,
-    accountZohoId,
+    dealCRMProviderId,
+    accountCRMProviderId,
     confidence,
   };
 }
 
 /**
  * Bulk AI-resolve every pending hint at-or-above the confidence threshold.
- * Sequential to keep Zoho call rate under the per-account ceiling. Caps
+ * Sequential to keep CRMProvider call rate under the per-account ceiling. Caps
  * the run at `limit` (default 200) so a runaway is recoverable; the user
  * re-clicks the button to continue. Each per-row result lands in the
  * report so the UI can surface partial-success + per-deal errors.
@@ -594,8 +594,8 @@ export async function aiResolveAllAccountHints(
   perHint: Array<{
     hintId: number;
     status: "resolved" | "refused" | "error";
-    dealZohoId?: string | null;
-    accountZohoId?: string | null;
+    dealCRMProviderId?: string | null;
+    accountCRMProviderId?: string | null;
     reason?: string;
     error?: string;
   }>;
@@ -619,8 +619,8 @@ export async function aiResolveAllAccountHints(
     perHint: [] as Array<{
       hintId: number;
       status: "resolved" | "refused" | "error";
-      dealZohoId?: string | null;
-      accountZohoId?: string | null;
+      dealCRMProviderId?: string | null;
+      accountCRMProviderId?: string | null;
       reason?: string;
       error?: string;
     }>,
@@ -636,16 +636,16 @@ export async function aiResolveAllAccountHints(
         report.perHint.push({
           hintId: r.hintId,
           status: "resolved",
-          dealZohoId: r.dealZohoId,
-          accountZohoId: r.accountZohoId,
+          dealCRMProviderId: r.dealCRMProviderId,
+          accountCRMProviderId: r.accountCRMProviderId,
         });
       } else if (r.error) {
         report.errors++;
         report.perHint.push({
           hintId: r.hintId,
           status: "error",
-          dealZohoId: r.dealZohoId,
-          accountZohoId: r.accountZohoId,
+          dealCRMProviderId: r.dealCRMProviderId,
+          accountCRMProviderId: r.accountCRMProviderId,
           error: r.error,
         });
       } else {

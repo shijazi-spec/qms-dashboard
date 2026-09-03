@@ -8,7 +8,7 @@
  * The dynamic ESM import of `../../utils/callIntelligenceDb` is stubbed so
  * the tests are deterministic and need no live database or AI services.
  *
- * Routes that call the OpenAI SDK (e.g. /api/calls/:callId/analyze) are
+ * Routes that call the LLMProvider SDK (e.g. /api/calls/:callId/analyze) are
  * excluded from this suite; they are covered by a dedicated AI-integration
  * test when the model is available.
  *
@@ -65,7 +65,7 @@ afterEach(() => {
 
 describe("POST /api/calls/ingest — real data path", () => {
   test("200 returns { success, call_record_id, call_id, message } from createCallRecord()", async () => {
-    const record = makeCallRecord({ id: 42, call_id: "call-abc", source: "five9" });
+    const record = makeCallRecord({ id: 42, call_id: "call-abc", source: "ContactCenterProvider" });
     vi.mocked(callDb.createCallRecord).mockResolvedValueOnce(record);
 
     const handler = await buildHandler(callIntelligenceRoutes, "/api/calls/ingest", "POST");
@@ -75,7 +75,7 @@ describe("POST /api/calls/ingest — real data path", () => {
         headers: AUTH_HEADERS,
         body: {
           call_id: "call-abc",
-          source: "five9",
+          source: "ContactCenterProvider",
           lead_id: "lead-1",
           agent_email: "user@example.invalid",
           duration_seconds: 120,
@@ -91,7 +91,7 @@ describe("POST /api/calls/ingest — real data path", () => {
     expect(callDb.createCallRecord).toHaveBeenCalledTimes(1);
     const arg = vi.mocked(callDb.createCallRecord).mock.calls[0][0];
     expect(arg.call_id).toBe("call-abc");
-    expect(arg.source).toBe("five9");
+    expect(arg.source).toBe("ContactCenterProvider");
     expect(arg.status).toBe("uploaded");
   });
 
@@ -104,7 +104,7 @@ describe("POST /api/calls/ingest — real data path", () => {
       makeContext({
         method: "POST",
         headers: AUTH_HEADERS,
-        body: { source: "five9", duration_seconds: 60 },
+        body: { source: "ContactCenterProvider", duration_seconds: 60 },
       }),
     );
 
@@ -127,7 +127,7 @@ describe("GET /api/calls — real data path", () => {
       makeContext({
         method: "GET",
         headers: AUTH_HEADERS,
-        query: { limit: "20", offset: "5", source: "five9", status: "completed" },
+        query: { limit: "20", offset: "5", source: "ContactCenterProvider", status: "completed" },
       }),
     );
 
@@ -136,7 +136,7 @@ describe("GET /api/calls — real data path", () => {
     const args = vi.mocked(callDb.getCallRecords).mock.calls[0]?.[0]!;
     expect(args.limit).toBe(20);
     expect(args.offset).toBe(5);
-    expect(args.source).toBe("five9");
+    expect(args.source).toBe("ContactCenterProvider");
     expect(args.status).toBe("completed");
   });
 

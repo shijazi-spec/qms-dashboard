@@ -85,7 +85,7 @@
 // header without DB-backed session lookup.
 process.env.ADMIN_API_KEY = process.env.ADMIN_API_KEY || "a".repeat(64);
 process.env.RATE_LIMIT_DISABLED = "true";
-process.env.REPLIT_DOMAINS = process.env.REPLIT_DOMAINS || "localhost:5000";
+process.env.HostingPlatform_DOMAINS = process.env.HostingPlatform_DOMAINS || "localhost:5000";
 
 import { Hono, type MiddlewareHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
@@ -141,7 +141,7 @@ function buildApp(): Hono {
   // Mastra-installed `app.onError` (mirrored below) converts this to a
   // static "Internal Server Error" body — the secret never reaches the wire.
   app.get("/api/admin/health/throw-secret", () => {
-    throw new Error(`Stripe rejected token ${SECRET}`);
+    throw new Error(`PaymentProvider rejected token ${SECRET}`);
   });
 
   // Route #3 — uncaught HTTPException with secret in `.message`. Mastra's

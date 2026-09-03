@@ -19,11 +19,11 @@ The ExampleOrg platform is **operationally healthy and shipping at a steady week
 
 **Three things to know this week:**
 
-1. **The Infographic Generator is shipped end-to-end** — CCO/CEO can pick any of 6 sections, get a polished SVG/PNG of live platform data, and share to Slack or Email in one click. PNG output is print-ready (1200×1500, ~700 KB–1 MB).
+1. **The Infographic Generator is shipped end-to-end** — CCO/CEO can pick any of 6 sections, get a polished SVG/PNG of live platform data, and share to ChatProvider or Email in one click. PNG output is print-ready (1200×1500, ~700 KB–1 MB).
 
 2. **A product-level audit identified a gap between what the platform *does* and what users *use*.** 33 dashboards exist; only ~5 modules show real data activity. The remediation plan is small, fast, and started this week (4 of 7 quick wins shipped — see §3).
 
-3. **One small operational ask for the manager**: the Slack bot needs the `files:write` permission added (5-minute admin task at <REDACTED_HOST>/apps). Until then, Slack sharing falls back gracefully to a styled text message rather than a PNG attachment — no user-visible breakage. Details in §6.
+3. **One small operational ask for the manager**: the ChatProvider bot needs the `files:write` permission added (5-minute admin task at <REDACTED_HOST>/apps). Until then, ChatProvider sharing falls back gracefully to a styled text message rather than a PNG attachment — no user-visible breakage. Details in §6.
 
 ---
 
@@ -32,7 +32,7 @@ The ExampleOrg platform is **operationally healthy and shipping at a steady week
 ### 2.1 Infographic Generator (new feature, fully delivered)
 - **6 shareable sections**: Platform Health, KPIs, Risks, Audits, Compliance, Quality Audits.
 - **Two output formats**: SVG (10–13 KB, web-perfect) and PNG (1200×1500, presentation-perfect).
-- **Two share channels**: Slack (with graceful fallback when scopes are missing) and Email (Resend with PNG attachment, up to 20 recipients).
+- **Two share channels**: ChatProvider (with graceful fallback when scopes are missing) and Email (EmailProvider with PNG attachment, up to 20 recipients).
 - **Validation**: covers missing fields, invalid emails, unknown sections, and recipient cap. All tested.
 
 ### 2.2 Quality Audit moved to a weekly cadence
@@ -51,7 +51,7 @@ The Risk Register is currently empty (0 enterprise risks logged). Instead of sho
 | 1 | Renamed `Audit Reports` → **Quality Audits (AI)** with an "AI" badge, and renamed `Audits` → **ISO Internal Audits** | Eliminated the long-standing naming collision between two different audit modules |
 | 2 | Executives (CEO, CCO, CFO, board, executive roles) now land directly on `/executive` instead of the generic dashboard | Cuts the time-to-first-insight for senior users from clicks-and-search to instant |
 | 3 | **Page-view telemetry** wired into every dashboard load via `access_audit_log` | We will finally have data on which dashboards are actually used — basis for the next prioritization conversation |
-| 4 | Slack share now shows a friendly in-app banner explaining how to enable PNG attachments when the scope is missing | Removes a silent confusing failure mode |
+| 4 | ChatProvider share now shows a friendly in-app banner explaining how to enable PNG attachments when the scope is missing | Removes a silent confusing failure mode |
 
 ---
 
@@ -64,7 +64,7 @@ The Risk Register is currently empty (0 enterprise risks logged). Instead of sho
   - **Quality Audits (AI)** — 26 weekly audits run on ~180,000 records
   - **AI Alerts** — 260 alerts surfaced across 14 monitoring checks
 - **Policy library is well-populated**: 147 controlled documents under change control.
-- **Security posture is strong**: Replit OIDC, signed sessions, RBAC with 11 roles, tiered rate limiting, CSP nonces, input sanitization.
+- **Security posture is strong**: HostingPlatform OIDC, signed sessions, RBAC with 11 roles, tiered rate limiting, CSP nonces, input sanitization.
 
 ### 3.2 Where the gap is
 The platform exposes **33 dashboards across 6 navigation categories**, but the database tells us only ~5 are seeing real activity. The rest are *capability without consumption*. A few examples:
@@ -90,7 +90,7 @@ Scored using RICE (Reach × Impact × Confidence ÷ Effort). Top items are delib
 | # | Initiative | Effort | Status |
 |---|---|---|---|
 | **In flight (this sprint)** | | | |
-| 1 | In-app Slack-scope guidance banner | XS | ✅ Shipped |
+| 1 | In-app ChatProvider-scope guidance banner | XS | ✅ Shipped |
 | 2 | Disambiguate Quality Audits vs. ISO Internal Audits | XS | ✅ Shipped |
 | 3 | Default `/executive` landing for CCO/CEO/CFO/board roles | XS | ✅ Shipped |
 | 4 | Page-view telemetry wired to `access_audit_log` | S | ✅ Shipped |
@@ -129,10 +129,10 @@ Scored using RICE (Reach × Impact × Confidence ÷ Effort). Top items are delib
 
 Two small items, neither blocking:
 
-### 6.1 Slack `files:write` permission (5-minute admin task)
-**What**: Add the `files:write` scope to our Slack bot at <REDACTED_HOST>/apps → OAuth & Permissions → Reinstall.
-**Why**: Today, sharing an infographic to Slack works, but posts as a styled text message rather than a PNG attachment. The fallback is graceful and users see clear in-app guidance, but the full visual experience requires this scope.
-**Risk**: None. Read-only on the Slack side; only allows our bot to upload files to channels it has been added to.
+### 6.1 ChatProvider `files:write` permission (5-minute admin task)
+**What**: Add the `files:write` scope to our ChatProvider bot at <REDACTED_HOST>/apps → OAuth & Permissions → Reinstall.
+**Why**: Today, sharing an infographic to ChatProvider works, but posts as a styled text message rather than a PNG attachment. The fallback is graceful and users see clear in-app guidance, but the full visual experience requires this scope.
+**Risk**: None. Read-only on the ChatProvider side; only allows our bot to upload files to channels it has been added to.
 
 ### 6.2 30-minute review next week
 Once 7 days of telemetry have accumulated, I would like 30 minutes to walk through **which dashboards are actually used vs. which are not**, and agree on whether to prune, merge, or invest in the long tail. This is the single highest-leverage product conversation we can have right now.
@@ -146,7 +146,7 @@ Once 7 days of telemetry have accumulated, I would like 30 minutes to walk throu
 | Empty Risk Register and 0 Audit Findings make compliance reporting incomplete | Medium | Medium | Empty-state coaching shipped; first-run wizard planned. Consider a brief team workshop to seed the register. |
 | Long tail of unused dashboards inflates maintenance load | Medium | Low | Telemetry now collecting; pruning decision in 2 weeks |
 | KPI engine running with mostly-empty inputs gives a false sense of measurement | Low | Medium | Input-binding UI in next sprint |
-| Slack scope dependency on external admin action | Low | Low | Graceful fallback in place; no user-visible breakage |
+| ChatProvider scope dependency on external admin action | Low | Low | Graceful fallback in place; no user-visible breakage |
 
 ---
 
@@ -156,7 +156,7 @@ Once 7 days of telemetry have accumulated, I would like 30 minutes to walk throu
 |---|---|---|---|
 | 1.0 | 2026-04-18 | Product & Eng | Initial weekly report — covers Infographic Generator launch, Quality Audit cadence change, audits data fix, empty-state UX, and 4 product quick-wins |
 | 1.1 | 2026-04-18 | Product & Eng | Appended §9 v4.5 update block (Internal Audits re-architecture, Manual Intake, External Audits, Admin & Tools, +8 DB tables, ~111+ total). |
-| 1.2 | 2026-04-18 | Product & Eng | Appended §10 v4.5.1 hotfix — CRM Owner Roster wired (117-owner seed + Zoho Users API merge); closes the long-standing "every owner shows Unknown / falls back to SDR or Sales" defect on the `/` dashboard. |
+| 1.2 | 2026-04-18 | Product & Eng | Appended §10 v4.5.1 hotfix — CRM Owner Roster wired (117-owner seed + CRMProvider Users API merge); closes the long-standing "every owner shows Unknown / falls back to SDR or Sales" defect on the `/` dashboard. |
 
 ---
 
@@ -248,8 +248,8 @@ The "CRM Owner Data Quality" widget on `/` (and any page calling `GET /api/agent
 | Stream | Headline |
 |---|---|
 | **117-owner seed roster** | New `src/data/seedUsers.ts` loaded from the official `CRM_Users_Complete_117_Updated.xlsx` snapshot (2026-04-18). Each entry carries `name`, `team`, `status` (Active/Inactive), `totalRecords`, `modules`. Source of truth for department + activity. |
-| **Live Zoho Users API bridge** | New `fetchZohoUsers()` in `src/utils/zohoCRM.ts` (`GET /crm/v2/users?type=AllUsers`) — provides Zoho User ID ↔ display-name lookup so CRM record `Owner` IDs resolve correctly. |
-| **Two-tier merge in `getUsers()`** | Seed wins on team/status/modules. Zoho fills in any owner not yet on the seed (covers brand-new hires). If Zoho is unreachable, seed is used standalone with synthetic IDs. |
+| **Live CRMProvider Users API bridge** | New `fetchCRMProviderUsers()` in `src/utils/CRMProviderCRM.ts` (`GET /crm/v2/users?type=AllUsers`) — provides CRMProvider User ID ↔ display-name lookup so CRM record `Owner` IDs resolve correctly. |
+| **Two-tier merge in `getUsers()`** | Seed wins on team/status/modules. CRMProvider fills in any owner not yet on the seed (covers brand-new hires). If CRMProvider is unreachable, seed is used standalone with synthetic IDs. |
 | **API now returns `status`** | `/api/agents/performance` adds the `status` field to every agent so the dashboard activity badge shows "Active" / "Inactive" instead of "Unknown". |
 | **Docs aligned** | New SOP §11.1 *Owner Roster*, Feature Book §1.B *CRM Owner Data Quality Widget*, Gaps §7.A *CRM Owner Roster status*. All three include the data-steward refresh procedure. |
 
@@ -277,13 +277,13 @@ The "CRM Owner Data Quality" widget on `/` (and any page calling `GET /api/agent
 ### 10.5 Code delta
 
 - +118-line seed file (`src/data/seedUsers.ts`, generated)
-- +47-line `fetchZohoUsers()` in `src/utils/zohoCRM.ts`
+- +47-line `fetchCRMProviderUsers()` in `src/utils/CRMProviderCRM.ts`
 - ~+45 LOC rewrite of `getUsers()` in `src/data/index.ts`
 - ~+10 LOC patch to `/api/agents/performance` handler (status propagation + name-fallback resolver)
 
 ### 10.6 Manager ask
 
-Confirm by **2026-04-23** that the 7 unassigned owners have either been (a) assigned a team in Zoho or (b) flagged as system/test accounts to exclude from the next seed re-import.
+Confirm by **2026-04-23** that the 7 unassigned owners have either been (a) assigned a team in CRMProvider or (b) flagged as system/test accounts to exclude from the next seed re-import.
 
 ---
 

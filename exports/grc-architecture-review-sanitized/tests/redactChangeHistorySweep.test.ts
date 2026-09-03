@@ -153,8 +153,8 @@ async function runForTable(tableName: string): Promise<void> {
     {
       id: 3,
       field_changed: 'integration_notes',
-      old_value: 'GitHub PAT pending issue',
-      new_value: `GitHub PAT issued: ${GHP_TOKEN}`,
+      old_value: 'SourceControlProvider PAT pending issue',
+      new_value: `SourceControlProvider PAT issued: ${GHP_TOKEN}`,
       change_reason: null,
     },
     // change_reason scrubbing — non-sensitive field, non-secret values, but the

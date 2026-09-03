@@ -131,7 +131,7 @@ async function run(): Promise<void> {
   const SECRET_GH = "<REDACTED_TOKEN>";
   const SECRET_JWT =
     "<REDACTED_TOKEN>";
-  const SAFE_PROSE = "Rotate API key for zoho_books integration";
+  const SAFE_PROSE = "Rotate API key for CRMProvider_books integration";
 
   const initial: RowState[] = [
     {
@@ -139,7 +139,7 @@ async function run(): Promise<void> {
       id: 1,
       action_code: "act_legacy_001",
       payload: {
-        target_integration: "zoho_books",
+        target_integration: "CRMProvider_books",
         note: `previous=${SECRET_KEY}`,
       },
       payload_preview: `${SAFE_PROSE} (gh=${SECRET_GH})`,
@@ -157,8 +157,8 @@ async function run(): Promise<void> {
       // Legacy row: clean — nothing for the detector to flag.
       id: 3,
       action_code: "act_legacy_003_clean",
-      payload: { target_integration: "stripe", note: "no secret here" },
-      payload_preview: "Rotate Stripe webhook signing key (id=we_abc123)",
+      payload: { target_integration: "PaymentProvider", note: "no secret here" },
+      payload_preview: "Rotate PaymentProvider webhook signing key (id=we_abc123)",
       credential_warnings: [],
     },
     {
@@ -166,7 +166,7 @@ async function run(): Promise<void> {
       // the backfill must NOT touch it (would double-warn or clobber).
       id: 4,
       action_code: "act_modern_004",
-      payload: { target: "zoho_books", note: SAFE_PROSE },
+      payload: { target: "CRMProvider_books", note: SAFE_PROSE },
       payload_preview: SAFE_PROSE,
       credential_warnings: [{ path: "payload.api_key", kind: "sensitive-key" }],
     },

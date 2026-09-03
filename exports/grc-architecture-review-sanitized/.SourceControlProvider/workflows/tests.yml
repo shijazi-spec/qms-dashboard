@@ -1,0 +1,294 @@
+name: Tests
+
+# Runs the platform test suite on every push and PR.
+#
+# WHY THIS EXISTS
+# ---------------
+# The repo carries ~241 test files (171 under tests/*.test.ts, 70 colocated
+# under src/**/*.test.ts) plus the vitest suites in tests/vitest/**. Before
+# this workflow, NONE of them ran in CI — `typecheck.yml` only type-checks
+# them (`tsc -p tsconfig.tests.json`), which proves they COMPILE but never
+# that they PASS. All the test-writing effort produced zero regression
+# protection on ~245K lines of code.
+#
+# Two real regressions that a running suite would have caught:
+#   - the `.wp-topstrip button { display: inline-flex }` rule silently
+#     out-specified `.wp-mobile-menu-btn { display: none }`, so two hamburger
+#     icons rendered side-by-side on desktop for weeks;
+#   - a concurrent session's commit swept up half a feature's edits without
+#     the type definition that made them compile, reddening CI on the
+#     NEXT commit rather than its own.
+#
+# ROLLOUT: NON-BLOCKING FIRST
+# ---------------------------
+# The test step runs with `continue-on-error: true` so this workflow reports
+# the true pass/fail baseline WITHOUT blocking merges on day one. Once the
+# baseline is green (or the known-failing files are fixed/quarantined), drop
+# the `continue-on-error` line to make it a hard gate — same pattern
+# typecheck.yml used when it was introduced against ~900 pre-existing errors.
+#
+# ENTRY POINT
+# -----------
+# `npm test` → `npx tsx tests/runIntegrationTests.ts`, which discovers every
+# tests/*.test.ts + src/**/*.test.ts, runs each in its own tsx subprocess
+# (so DB pools / env mutation stay isolated), then invokes `npx vitest run`
+# for the mock-dependent suites. It exits non-zero if any file fails. The
+# heavy end-to-end suites are opt-in behind RUN_*_E2E env vars and skip
+# cleanly when unset — we deliberately do NOT set them here; they have their
+# own dedicated workflows (streaming-download-smoke.yml et al).
+
+on:
+  push:
+    branches: [main, QMS]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ SourceControlProvider.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # Real Postgres rather than the dummy connection string the test files
+    # fall back to (`postgres://test:test@localhost:5432/test`). Strictly
+    # better: files that only need a parseable URL are unaffected, while
+    # files that actually connect exercise real SQL — which is what catches
+    # the schema-drift class of bug at test time instead of at deploy time.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: qms_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ROOT CAUSE (found via the annotation diagnostics below on run
+      # <REDACTED_PHONE>: `npm ci` installs the packages but leaves
+      # `node_modules/.bin` completely EMPTY — 0 entries. So every package is
+      # present on disk (node's own `require.resolve('tsx/package.json')`
+      # resolves fine) but nothing is on PATH, and `npm test`'s
+      # `npx tsx …` dies with `sh: 1: tsx: not found` -> exit 127.
+      #
+      # It is not a config problem: `npm config get bin-links` is `true` and
+      # package-lock.json does record tsx's bin (`{"tsx": "dist/cli.mjs"}`).
+      # The same empty-.bin state reproduces on a local Windows checkout, so
+      # it is repo/lockfile-specific rather than a CI quirk.
+      #
+      # `npm rebuild` is npm's documented way to recreate bin links from the
+      # already-installed tree. It is cheap (no network — nothing is
+      # re-downloaded) and idempotent, so it is safe to run unconditionally:
+      # if a future npm version fixes the underlying bug this step simply
+      # becomes a no-op.
+      #
+      # This also matters for more than the top-level command:
+      # tests/runIntegrationTests.ts spawns `npx tsx <file>` per test file and
+      # `npx vitest run` for the vitest suites, so .bin has to be populated
+      # for the suite to work at all — pointing the top-level call at an
+      # absolute path would not have been enough.
+      # `npm rebuild` alone is NOT sufficient: on the runner it exits 1 after
+      # about a second (some package's rebuild fails), and because SourceControlProvider
+      # applies `set -e` to bash steps that aborted the whole job and skipped
+      # everything downstream. So this step is tolerant by design:
+      #   1. try `npm rebuild`, capturing its exit code + output instead of
+      #      letting a partial failure kill the run;
+      #   2. if the shims we actually need are still missing, synthesise them
+      #      directly from each package's own `bin` field — that is all npm
+      #      would have done anyway;
+      #   3. only hard-fail if tsx is STILL unusable afterwards.
+      # `continue-on-error` keeps the diagnostics + baseline running even then.
+      - name: Repair node_modules/.bin (npm ci leaves it empty)
+        continue-on-error: true
+        run: |
+          echo "::warning title=bin-1-before::entries=$(ls node_modules/.bin 2>/dev/null | wc -l)"
+
+          npm rebuild > /tmp/rebuild.log 2>&1 && RC=0 || RC=$?
+          echo "::warning title=bin-2-rebuild::exit=${RC} tail=$(tail -c 400 /tmp/rebuild.log | tr '\n' ' ' | tr -d '\r')"
+          echo "::warning title=bin-3-after-rebuild::entries=$(ls node_modules/.bin 2>/dev/null | wc -l)"
+
+          # Fallback: build the shims ourselves from each package's `bin`
+          # field. Writes a tiny `exec node <abs-path>` wrapper, which is
+          # exactly what npx/PATH need and is immune to whatever made
+          # `npm rebuild` fail.
+          cat > /tmp/mkshims.cjs <<'NODEEOF'
+          const fs = require("fs");
+          const path = require("path");
+          const binDir = path.join(process.cwd(), "node_modules", ".bin");
+          fs.mkdirSync(binDir, { recursive: true });
+          for (const name of ["tsx", "vitest"]) {
+            let pkgPath;
+            try {
+              pkgPath = require.resolve(name + "/package.json", { paths: [process.cwd()] });
+            } catch (e) {
+              console.log("SKIP " + name + " (not installed)");
+              continue;
+            }
+            const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+            const dir = path.dirname(pkgPath);
+            let bins = pkg.bin;
+            if (typeof bins === "string") bins = { [pkg.name]: bins };
+            for (const [binName, rel] of Object.entries(bins || {})) {
+              const target = path.join(dir, rel);
+              const shim = path.join(binDir, binName);
+              if (fs.existsSync(shim)) { console.log("KEEP " + binName); continue; }
+              fs.writeFileSync(shim, '#!/bin/sh\nexec node "' + target + '" "$@"\n');
+              fs.chmodSync(shim, 0o755);
+              console.log("SHIM " + binName + " -> " + target);
+            }
+          }
+          NODEEOF
+          node /tmp/mkshims.cjs > /tmp/shims.log 2>&1 && SRC=0 || SRC=$?
+          echo "::warning title=bin-4-shims::exit=${SRC} $(tr '\n' ' ' < /tmp/shims.log | tr -d '\r' | cut -c1-400)"
+
+          FINAL=$(ls node_modules/.bin 2>/dev/null | wc -l)
+          HITS=$(ls node_modules/.bin 2>/dev/null | grep -E '^(tsx|vitest|tsc)$' | tr '\n' ',')
+          VER=$(npx tsx --version 2>&1 | tr '\n' ' ' | cut -c1-160)
+          echo "::warning title=bin-5-final::entries=${FINAL} hits=[${HITS}] npx_tsx=${VER}"
+
+          if ! npx tsx --version > /dev/null 2>&1; then
+            echo "::error title=bin-repair-failed::tsx is still not runnable after rebuild + shim fallback; the suite cannot start"
+            exit 1
+          fi
+
+      # The first run of this workflow exited 127 ("command not found") in
+      # ~40s without running a single test, and `continue-on-error` masked it
+      # as a green job. Downloading the raw log needs repo-admin rights, so
+      # this step makes the runner self-diagnosing instead: it prints exactly
+      # which of node / npm / npx / tsx is missing. Cheap (a few seconds) and
+      # it runs unconditionally so a future 127 is never a mystery again.
+      # Findings are emitted as `::warning::` workflow commands, NOT plain
+      # stdout. Raw step logs need repo-admin rights to download, but
+      # annotations are readable anonymously via
+      # `GET /repos/:o/:r/check-runs/:id/annotations` — so this is the one
+      # channel that actually surfaces the answer without admin access.
+      # Each message is truncated so it can't blow the annotation size cap.
+      - name: Environment diagnostics
+        continue-on-error: true
+        run: |
+          trunc() { tr '\n' ' ' | tr -d '\r' | cut -c1-700; }
+
+          NODE_V=$(node -v 2>&1 | trunc)
+          NPM_V=$(npm -v 2>&1 | trunc)
+          NPX_V=$(npx --version 2>&1 | trunc)
+          echo "::warning title=diag-1-versions::node=${NODE_V} npm=${NPM_V} npx=${NPX_V}"
+
+          WHICH_TSX=$(command -v tsx 2>&1 || echo 'NOT-ON-PATH')
+          BIN_HITS=$(ls node_modules/.bin 2>/dev/null | grep -E '^(tsx|vitest|tsc|prettier)$' | tr '\n' ',' || echo 'NONE')
+          BIN_COUNT=$(ls node_modules/.bin 2>/dev/null | wc -l || echo 0)
+          echo "::warning title=diag-2-tsx-resolution::which=${WHICH_TSX} | .bin hits=[${BIN_HITS}] | .bin total entries=${BIN_COUNT}"
+
+          RESOLVE=$(node -e "console.log(require.resolve('tsx/package.json'))" 2>&1 | trunc)
+          echo "::warning title=diag-3-require-resolve::${RESOLVE}"
+
+          NPX_TSX=$(npx tsx --version 2>&1 | trunc)
+          echo "::warning title=diag-4-npx-tsx-version::${NPX_TSX}"
+
+          # NOTE: this step used to also run `timeout 90 npm test` to capture
+          # the failure. That was how the exit-127 and the missing-vite
+          # breakage were found — but now that the suite genuinely runs, it is
+          # pure duplication that burned 90s of every run. The real
+          # "Run test suite" step below reports the tally itself.
+
+      # Non-blocking while we establish the baseline. Remove
+      # `continue-on-error` to promote this to a hard gate.
+      - name: Run test suite
+        id: tests
+        continue-on-error: true
+        env:
+          # The four vars test files self-default (`process.env.X || "..."`).
+          # Setting them explicitly means the suite runs against known values
+          # rather than per-file fallbacks that drift over time.
+          DATABASE_URL: postgres://test:test@localhost:5432/qms_test
+          SESSION_SECRET: ci-test-session-secret-not-a-real-secret
+          ADMIN_API_KEY: ci-test-admin-key-not-a-real-secret
+          HostingPlatform_DOMAINS: localhost:5000
+          # Bounded so a runaway suite can't eat the whole 30-minute budget
+          # on a 2-core runner.
+          TEST_CONCURRENCY: "4"
+        # Tee the run so the tally + failing-file list can be republished as
+        # annotations. Raw step logs need repo-admin rights to download, so
+        # without this the baseline numbers would be invisible from the API.
+        # `PIPESTATUS[0]` is npm's status (not tee's), captured before any
+        # other command can clobber it.
+        run: |
+          set +e
+          npm test 2>&1 | tee /tmp/test-output.log
+          RC=${PIPESTATUS[0]}
+          set -e
+
+          SUMMARY=$(grep -a 'test files passed' /tmp/test-output.log | tail -1 | tr -d '\r')
+          FAILS=$(grep -a 'FAIL' /tmp/test-output.log | head -25 | tr '\n' ' ' | tr -d '\r' | cut -c1-900)
+
+          echo "::warning title=test-1-exit::exit_code=${RC}"
+          echo "::warning title=test-2-tally::${SUMMARY:-<no summary line — suite likely crashed before finishing>}"
+          echo "::warning title=test-3-failing-files::${FAILS:-<none captured>}"
+
+          # Per-assertion detail. The failing-files list alone says WHICH file
+          # broke but never WHY, and the raw log needs repo-admin rights to
+          # download — so triage previously meant reproducing locally, which
+          # is impossible for the DB-backed suites when the dev box has no
+          # Postgres. These two annotations carry the actual assertion text.
+          DETAIL=$(grep -a '✗' /tmp/test-output.log | head -12 | tr '\n' ' ' | tr -d '\r' | cut -c1-900)
+          echo "::warning title=test-4-assertions::${DETAIL:-<no ✗ lines captured>}"
+          ERRS=$(grep -aoE "(Cannot find package '[^']*'|ECONNREFUSED [0-9.:]+|relation \"[a-z_]+\" does not exist|[A-Za-z]*Error: [^\\\"]{0,90})" /tmp/test-output.log | sort | uniq -c | sort -rn | head -8 | tr '\n' ' ' | tr -d '\r' | cut -c1-900)
+          echo "::warning title=test-5-error-kinds::${ERRS:-<none>}"
+
+          {
+            echo "### Test baseline"
+            echo ""
+            echo "- exit code: \`${RC}\`"
+            echo "- tally: ${SUMMARY:-_no summary line_}"
+            echo ""
+            echo "<details><summary>Failing files (first 25)</summary>"
+            echo ""
+            echo '```'
+            grep -a 'FAIL' /tmp/test-output.log | head -25 || echo "(none)"
+            echo '```'
+            echo "</details>"
+          } >> "$SourceControlProvider_STEP_SUMMARY"
+
+          exit $RC
+
+      # Always surface the outcome in the job summary so the baseline is
+      # readable at a glance without opening the raw log.
+      - name: Report outcome
+        if: always()
+        run: |
+          if [ "${{ steps.tests.outcome }}" = "success" ]; then
+            echo "### ✅ Test suite passed" >> "$SourceControlProvider_STEP_SUMMARY"
+            echo "" >> "$SourceControlProvider_STEP_SUMMARY"
+            echo "The suite is green. Promote this workflow to a hard gate by removing \`continue-on-error: true\` from the *Run test suite* step in \`.SourceControlProvider/workflows/tests.yml\`." >> "$SourceControlProvider_STEP_SUMMARY"
+          else
+            echo "### ⚠️ Test suite did not pass (non-blocking)" >> "$SourceControlProvider_STEP_SUMMARY"
+            echo "" >> "$SourceControlProvider_STEP_SUMMARY"
+            echo "Merges are **not** blocked while the baseline is being established." >> "$SourceControlProvider_STEP_SUMMARY"
+            echo "" >> "$SourceControlProvider_STEP_SUMMARY"
+            echo "**Distinguish two very different cases before triaging:**" >> "$SourceControlProvider_STEP_SUMMARY"
+            echo "" >> "$SourceControlProvider_STEP_SUMMARY"
+            echo "| Symptom | Meaning |" >> "$SourceControlProvider_STEP_SUMMARY"
+            echo "|---|---|" >> "$SourceControlProvider_STEP_SUMMARY"
+            echo "| Exit **127**, finishes in well under a minute, no per-file output | Tests **never ran** — a command was not found. Check the *Environment diagnostics* step above. This is infrastructure, not a real test failure. |" >> "$SourceControlProvider_STEP_SUMMARY"
+            echo "| Per-file \`PASS\`/\`FAIL\` lines and an \`N/M test files passed\` tally | Tests **did run**; the listed files genuinely failed. Triage into fix / quarantine / delete. |" >> "$SourceControlProvider_STEP_SUMMARY"
+          fi

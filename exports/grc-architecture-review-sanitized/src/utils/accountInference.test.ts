@@ -12,7 +12,7 @@
  *     derived columns (deal_id, candidate account_id, suggested_account_name,
  *     suggested_domain, evidence_contact_id, evidence_contact_email,
  *     confidence). Critically, the deal's `raw_data` JSON blob — which can
- *     contain arbitrary Zoho payload fields — is NEVER part of the INSERT
+ *     contain arbitrary CRMProvider payload fields — is NEVER part of the INSERT
  *     params vector.
  *   • setHintStatus(hintId, status) — UPDATE with [hintId, status] only.
  *
@@ -68,7 +68,7 @@ const REDACTED_SENTINEL = "***REDACTED***";
 //                     this fixture)
 //   • mfa_secret    → 32-char mixed case+digit string, high Shannon entropy
 //                     (caught by the high-entropy heuristic, not by key name)
-//   • access_token  → `ya29.…` matches the google-oauth regex
+//   • access_token  → `ya29.…` matches the IdentityProvider-oauth regex
 //   • refresh_token → 40-char mixed case+digit, high Shannon entropy
 //   • api_key       → `sk-…` matches the sk-key regex
 const SECRETS = {
@@ -167,10 +167,10 @@ console.log(
 {
   captured.length = 0;
 
-  // Build a raw_data blob that contains every deny-list key plus a Zoho
+  // Build a raw_data blob that contains every deny-list key plus a CRMProvider
   // Contact_Name reference so the inference path completes through to INSERT.
   const dirtyRawData: Record<string, unknown> = {
-    Contact_Name: { id: "zoho-contact-1", name: "Alice" },
+    Contact_Name: { id: "CRMProvider-contact-1", name: "Alice" },
   };
   for (const k of REQUIRED_DENY_KEYS) {
     dirtyRawData[k] = SECRETS[k];
@@ -180,11 +180,11 @@ console.log(
   handler = (sql, params) => {
     const s = sql.replace(/\s+/g, " ").trim();
     // 1. Deal scan
-    if (s.startsWith("SELECT r.id, r.zoho_record_id, r.account_name")) {
+    if (s.startsWith("SELECT r.id, r.CRMProvider_record_id, r.account_name")) {
       return [
         {
           id: 101,
-          zoho_record_id: "deal-z-1",
+          CRMProvider_record_id: "deal-z-1",
           account_name: null,
           company_name: null,
           domain: null,
@@ -194,14 +194,14 @@ console.log(
         },
       ];
     }
-    // 2. Contact lookup by zoho ids
-    if (s.startsWith("SELECT id, zoho_record_id, email, domain")) {
+    // 2. Contact lookup by CRMProvider ids
+    if (s.startsWith("SELECT id, CRMProvider_record_id, email, domain")) {
       return [
         {
           id: 202,
-          zoho_record_id: "zoho-contact-1",
+          CRMProvider_record_id: "CRMProvider-contact-1",
           email: "user@example.invalid",
-          domain: "acme.example",
+          domain: "Example Organization.example",
         },
       ];
     }
@@ -210,10 +210,10 @@ console.log(
       return [
         {
           id: 303,
-          zoho_record_id: "acct-z-1",
+          CRMProvider_record_id: "acct-z-1",
           account_name: "Example Organization",
           company_name: "Example Organization",
-          domain: "acme.example",
+          domain: "Example Organization.example",
           email: "user@example.invalid",
           has_explicit_domain: true,
           related_record_count: 5,
@@ -244,7 +244,7 @@ console.log(
     }
     // Anti-tautology: the legitimate derived values DID make it in.
     assert(
-      blob.includes("Acme Corp") || blob.includes("acme.example"),
+      blob.includes("Example Organization") || blob.includes("Example Organization.example"),
       "raw_data/derived: legitimate suggested_account_name or domain IS present (test isn't a tautology)",
     );
   }
@@ -270,32 +270,32 @@ for (const key of REQUIRED_DENY_KEYS) {
 
   // Place the raw secret inside the account_name and contact email so it
   // flows naturally into the INSERT.
-  const pollutedAccountName = `Acme ${raw} Holdings`;
-  const pollutedEmail = `ops+${raw}@acme.example`;
+  const pollutedAccountName = `Example Organization ${raw} Holdings`;
+  const pollutedEmail = `ops+${raw}@Example Organization.example`;
 
   handler = (sql) => {
     const s = sql.replace(/\s+/g, " ").trim();
-    if (s.startsWith("SELECT r.id, r.zoho_record_id, r.account_name")) {
+    if (s.startsWith("SELECT r.id, r.CRMProvider_record_id, r.account_name")) {
       return [
         {
           id: 101,
-          zoho_record_id: "deal-z-1",
+          CRMProvider_record_id: "deal-z-1",
           account_name: null,
           company_name: null,
           domain: null,
-          raw_data: { Contact_Name: { id: "zoho-contact-1", name: "Alice" } },
+          raw_data: { Contact_Name: { id: "CRMProvider-contact-1", name: "Alice" } },
           cluster_id: null,
           cluster_domain: null,
         },
       ];
     }
-    if (s.startsWith("SELECT id, zoho_record_id, email, domain")) {
+    if (s.startsWith("SELECT id, CRMProvider_record_id, email, domain")) {
       return [
         {
           id: 202,
-          zoho_record_id: "zoho-contact-1",
+          CRMProvider_record_id: "CRMProvider-contact-1",
           email: pollutedEmail,
-          domain: "acme.example",
+          domain: "Example Organization.example",
         },
       ];
     }
@@ -303,10 +303,10 @@ for (const key of REQUIRED_DENY_KEYS) {
       return [
         {
           id: 303,
-          zoho_record_id: "acct-z-1",
+          CRMProvider_record_id: "acct-z-1",
           account_name: pollutedAccountName,
           company_name: "Example Organization",
-          domain: "acme.example",
+          domain: "Example Organization.example",
           email: "user@example.invalid",
           has_explicit_domain: true,
           related_record_count: 5,

@@ -101,7 +101,7 @@
  * expose as logical variants.
  *
  * Convention: prefer these classes over any physical-direction equivalent
- * for any element whose appearance should mirror in RTL.  See replit.md
+ * for any element whose appearance should mirror in RTL.  See HostingPlatform.md
  * "RTL Layout Convention" for the full style-guide note. */
 .text-start  { text-align: start; }
 .text-end    { text-align: end; }

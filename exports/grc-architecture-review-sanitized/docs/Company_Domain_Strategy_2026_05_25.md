@@ -11,7 +11,7 @@
 
 For a B2B SaaS like ExampleOrg, **a company's email domain is its canonical identity** — more stable and useful than name, phone, or CRM record ID.
 
-Today, Company_Domain exists in your Zoho deals but is used only for one purpose: as a deduplication signal inside the Duplicate Radar. Everywhere else (Call Evaluation, Coaching, Topic Clustering, CS handoff visibility) it is invisible. This doc proposes treating Company_Domain as a **first-class primitive** across the platform.
+Today, Company_Domain exists in your CRMProvider deals but is used only for one purpose: as a deduplication signal inside the Duplicate Radar. Everywhere else (Call Evaluation, Coaching, Topic Clustering, CS handoff visibility) it is invisible. This doc proposes treating Company_Domain as a **first-class primitive** across the platform.
 
 ---
 
@@ -21,10 +21,10 @@ Today, Company_Domain exists in your Zoho deals but is used only for one purpose
 |---|---|---|---|---|
 | Company name | ❌ — "Aramco" vs "Saudi Aramco" vs "ارامكو" | ❌ — many subsidiaries share a name | ⚠️ — fuzzy match needed | Translates, gets misspelled |
 | Phone number | ⚠️ — changes when numbers are ported | ❌ — switchboards shared by thousands | ✅ | Many companies use cellular numbers |
-| Zoho record ID | ✅ — never changes | ❌ — same company often has 3-5 records (duplicates) | ✅ | Internal-only, no business meaning |
+| CRMProvider record ID | ✅ — never changes | ❌ — same company often has 3-5 records (duplicates) | ✅ | Internal-only, no business meaning |
 | **Email domain** | ✅ — companies rarely change | ✅ — one company = one primary domain | ✅ — RFC-defined | The standard for B2B identity |
 
-Mature platforms (Gong, Chorus, Salesforce ABM, ZoomInfo) all use domain as the primary key for company-level aggregation. ExampleOrg should too.
+Mature platforms (Gong, Chorus, CRMProvider ABM, ZoomInfo) all use domain as the primary key for company-level aggregation. ExampleOrg should too.
 
 ---
 
@@ -34,9 +34,9 @@ Mature platforms (Gong, Chorus, Salesforce ABM, ZoomInfo) all use domain as the 
 SOURCES                       LOCAL SNAPSHOT              FEATURES THAT CONSUME
 ───────                       ──────────────              ─────────────────────
 
-Zoho Lead.Company_Domain ──┐                              ┌── Duplicate Radar
-Zoho Deal.Company_Domain ──┼──> zoho_sync_records         ├── CS Lifecycle Compliance
-Zoho Account.Website     ──┘    (Postgres cache)          │
+CRMProvider Lead.Company_Domain ──┐                              ┌── Duplicate Radar
+CRMProvider Deal.Company_Domain ──┼──> CRMProvider_sync_records         ├── CS Lifecycle Compliance
+CRMProvider Account.Website     ──┘    (Postgres cache)          │
                                        │                  │   [current: ✅ both wired]
                                        │
 SDR call recording                     ├──> call_records  ├── Auto-link (P1)
@@ -83,19 +83,19 @@ Four phases. P0 is the foundation; P1–P3 each layer additional value on top.
 **Effort:** ~4 hours. **Risk:** medium (touches the auto-link matcher). **Dependency:** P0 + the 3-point verification step rollout.
 
 **What it does:** today's auto-link order is:
-1. Phone match against Zoho Leads/Deals
+1. Phone match against CRMProvider Leads/Deals
 2. Activity fallback (same agent + same day touched a CRM record)
 3. Give up — call stays unlinked
 
 **Proposed new order:**
 1. Phone match
-2. **NEW: Email domain match** — when the SDR captured the customer's work email during the 3-point verification, parse the domain and query Zoho for any Lead/Deal/Account with that domain
+2. **NEW: Email domain match** — when the SDR captured the customer's work email during the 3-point verification, parse the domain and query CRMProvider for any Lead/Deal/Account with that domain
 3. Activity fallback
 4. Give up
 
 **Recovery rate (estimate):** 10–20% of currently unlinkable calls.
 
-Concretely: a customer calls from a non-Zoho-registered cell phone but identifies as `user@example.invalid` during the verification step. Phone match: fails (cell isn't on file). Email domain match: hits Account = STC. Call links automatically.
+Concretely: a customer calls from a non-CRMProvider-registered cell phone but identifies as `user@example.invalid` during the verification step. Phone match: fails (cell isn't on file). Email domain match: hits Account = STC. Call links automatically.
 
 **Why this matters:**
 - Increases compliance coverage (more linked calls = more compliance checks fire)
@@ -142,8 +142,8 @@ Concretely: a customer calls from a non-Zoho-registered cell phone but identifie
 **Proposed:**
 - New tab or page: **Account View** (URL: `/account/<domain>`)
 - Sections:
-  - **Identity card** — company name, primary domain, industry, primary Zoho Account record, deal stage
-  - **Activity timeline** — chronological list of every touch: SDR calls, CS lifecycle phase transitions, marketing emails (if Mailchimp/Resend integrated), notes, compliance checks
+  - **Identity card** — company name, primary domain, industry, primary CRMProvider Account record, deal stage
+  - **Activity timeline** — chronological list of every touch: SDR calls, CS lifecycle phase transitions, marketing emails (if Mailchimp/EmailProvider integrated), notes, compliance checks
   - **Coaching context** — every coaching plan whose evidence calls were to this domain
   - **Compliance health** — Duplicate Radar status, CS Lifecycle violations, calls awaiting compliance check
 
@@ -185,7 +185,7 @@ These COULD use Company_Domain but I'm not recommending them in this phase plan:
 1. **Fund P0 now (~2h)?** — yes/no
 2. **Industry-lookup table for P2** — who maintains the mapping (~50 domains → industry)? CS Ops team or built into the platform?
 3. **P3 prerequisite** — do you actually want marketing-channel data in the timeline, or is SDR+CS sufficient? If just SDR+CS, P3 effort drops to ~1 day.
-4. **Domain canonicalisation** — `<REDACTED_HOST>` vs `<REDACTED_HOST>` vs `<REDACTED_HOST>` — same company, different domains. Need a "primary domain" concept maintained somewhere. Cheapest: a small column on the Account record in Zoho marked `is_primary_domain`. More complete: a separate `company_domains` table mapping all variants to a canonical entity.
+4. **Domain canonicalisation** — `<REDACTED_HOST>` vs `<REDACTED_HOST>` vs `<REDACTED_HOST>` — same company, different domains. Need a "primary domain" concept maintained somewhere. Cheapest: a small column on the Account record in CRMProvider marked `is_primary_domain`. More complete: a separate `company_domains` table mapping all variants to a canonical entity.
 
 ---
 

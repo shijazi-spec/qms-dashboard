@@ -1,14 +1,14 @@
 import { createHash } from "crypto";
 import {
-  fetchAllZohoRecords,
+  fetchAllCRMProviderRecords,
   fetchRecordAttachments,
   analyzeRecordHygiene,
   calculateQualityScores,
   DEFAULT_GOVERNANCE_RULES,
-  type ZohoCRMRecord,
+  type CRMProviderCRMRecord,
   type HygieneIssue,
-  type ZohoAttachmentMeta,
-} from "./zohoCRM";
+  type CRMProviderAttachmentMeta,
+} from "./CRMProviderCRM";
 import { ExampleOrgAttachmentAuditRules } from "./governanceRules";
 import { saveAuditResult, getGovernanceDocumentByModule } from "./database";
 
@@ -66,7 +66,7 @@ const MAX_RECORDS_PER_MODULE = 50000;
 const MAX_DETAILED_PER_MODULE = 200;
 
 function analyzeRecordBatch(
-  records: ZohoCRMRecord[],
+  records: CRMProviderCRMRecord[],
   governanceRules: any[],
   issueTypeCounts: Record<string, { count: number; severity: string; module: string }>,
   detailedIssues?: Array<{ recordId: string; module: string; owner: string; layouts: string; products: string; createdBy: string; createdTime: string; stage?: string; pipeline?: string; leadStatus?: string; fieldName: string; issueType: string; description: string; severity: string; suggestedFix: string }>,
@@ -99,8 +99,8 @@ function analyzeRecordBatch(
         const createdByData = record.data?.Created_By;
         const createdByName = createdByData ? (createdByData.name || createdByData.id || '') : '';
         const layoutData = record.data?.Layout;
-        // Zoho's REST API does not return a Layout field for Tasks records, so fall back
-        // to "Standard" (the default layout name in Zoho) whenever the value is missing.
+        // CRMProvider's REST API does not return a Layout field for Tasks records, so fall back
+        // to "Standard" (the default layout name in CRMProvider) whenever the value is missing.
         // This keeps the dashboard's Issues by Layout view from showing a "(No Layout)" bucket.
         const layoutName = (layoutData ? (layoutData.name || (typeof layoutData === 'string' ? layoutData : '')) : '') || 'Standard';
         const productsRaw = record.data?.Product_Details;
@@ -143,7 +143,7 @@ function analyzeRecordBatch(
 // Returns aggregate counts and pushes per-record issues into the same data
 // structures used by the field-rule pass (issueTypeCounts, detailedIssues).
 async function runAttachmentAudit(
-  records: ZohoCRMRecord[],
+  records: CRMProviderCRMRecord[],
   issueTypeCounts: Record<string, { count: number; severity: string; module: string }>,
   detailedIssues: Array<any>,
   detailedCountsByModule: Map<string, number>,
@@ -186,7 +186,7 @@ async function runAttachmentAudit(
       if (!stageKey) continue;
       const stageRule = cfg.stages[stageKey];
 
-      let attachments: ZohoAttachmentMeta[] = [];
+      let attachments: CRMProviderAttachmentMeta[] = [];
       try {
         attachments = await fetchRecordAttachments(cfg.module, rec.id);
       } catch (e) {
@@ -351,7 +351,7 @@ function hasAnyAuditFilter(f?: AuditDateFilters): boolean {
 // Strictly parse a YYYY-MM-DD string into a KSA-anchored midnight Date.
 // Returns null when the input is not a calendar-valid date. Plain regex +
 // `new Date()` is not enough because JS silently rolls invalid days
-// (e.g. "2026-02-31" → 2026-03-03), which would make the Slack header
+// (e.g. "2026-02-31" → 2026-03-03), which would make the ChatProvider header
 // quietly lie. We round-trip the parsed components and compare back to
 // the input to reject any normalized values.
 function parseKsaDateOnly(input: string, endOfDay: boolean): Date | null {
@@ -389,7 +389,7 @@ function pickValidPair(
 }
 
 // Build a DigestWindow that mirrors the user-selected Created and/or Modified
-// period from the upper-area filter so the Slack "Period Covered" header on
+// period from the upper-area filter so the ChatProvider "Period Covered" header on
 // a manual audit run shows the dd/mm/yyyy KSA range(s) the user actually
 // picked. Returns null when no fully-formed pair is set, in which case the
 // caller falls back to computeDigestWindow() (cron-style window).
@@ -450,12 +450,12 @@ function buildUserPeriodDigestWindow(
 // Apply the user-selected created/modified window to the records actually
 // scanned by this audit run. Mirrors the semantics of
 // isRecordInSeparateDateFilters in src/data/index.ts but operates on
-// ZohoCRMRecord (which nests timestamps under .data) so the live Zoho
+// CRMProviderCRMRecord (which nests timestamps under .data) so the live CRMProvider
 // pipeline and the cached-leads pipeline stay consistent.
 function filterRecordsByAuditDateFilters(
-  records: ZohoCRMRecord[],
+  records: CRMProviderCRMRecord[],
   filters: AuditDateFilters,
-): ZohoCRMRecord[] {
+): CRMProviderCRMRecord[] {
   const cStart = filters.created?.start || null;
   const cEnd = filters.created?.end || null;
   const mStart = filters.modified?.start || null;
@@ -494,7 +494,7 @@ export async function runDirectAudit(
     filters: dateFilters || null,
   });
 
-  const hasZohoCredentials = !!(process.env.ZOHO_ACCESS_TOKEN || (process.env.ZOHO_CLIENT_ID && process.env.ZOHO_CLIENT_SECRET && process.env.ZOHO_REFRESH_TOKEN));
+  const hasCRMProviderCredentials = !!(process.env.CRMProvider_ACCESS_TOKEN || (process.env.CRMProvider_CLIENT_ID && process.env.CRMProvider_CLIENT_SECRET && process.env.CRMProvider_REFRESH_TOKEN));
 
   let qualityScores = {
     peopleScore: 0,
@@ -527,8 +527,8 @@ export async function runDirectAudit(
   // effectively constant regardless of CRM data changes).
   const recordCountsByModule: Record<string, number> = {};
 
-  if (!hasZohoCredentials) {
-    logger?.warn("⚠️ [DirectAudit] Zoho CRM credentials not configured - running with sample metrics");
+  if (!hasCRMProviderCredentials) {
+    logger?.warn("⚠️ [DirectAudit] CRMProvider CRM credentials not configured - running with sample metrics");
     skipReason = "CRM integration not configured.";
 
     qualityScores = {
@@ -547,16 +547,16 @@ export async function runDirectAudit(
       for (const moduleName of modules) {
         logger?.info(`📊 [DirectAudit] Auditing ${moduleName} (paginated, up to ${MAX_RECORDS_PER_MODULE} records)...`);
         try {
-          // Transient Zoho/network failures (e.g. "fetch failed" mid-pagination)
+          // Transient CRMProvider/network failures (e.g. "fetch failed" mid-pagination)
           // were previously fatal for an entire module — the module silently
           // dropped out of recordCountsByModule and the dashboard rendered "0"
           // for it. Retry up to 2 extra times with a short backoff before
           // giving up so a single flaky request no longer zeroes a module.
-          let allRecords: ZohoCRMRecord[] | null = null;
+          let allRecords: CRMProviderCRMRecord[] | null = null;
           let lastErr: any = null;
           for (let attempt = 1; attempt <= 3; attempt++) {
             try {
-              allRecords = await fetchAllZohoRecords(moduleName, { maxRecords: MAX_RECORDS_PER_MODULE });
+              allRecords = await fetchAllCRMProviderRecords(moduleName, { maxRecords: MAX_RECORDS_PER_MODULE });
               break;
             } catch (e) {
               lastErr = e;
@@ -748,34 +748,34 @@ export async function runDirectAudit(
     });
     logger?.info("✅ [DirectAudit] Audit results saved to database successfully");
 
-    // Slack notification — audit completed. Posts to SLACK_CHANNEL_ID using
-    // SLACK_BOT_TOKEN. Failures are swallowed so a Slack outage never blocks
+    // ChatProvider notification — audit completed. Posts to ChatProvider_CHANNEL_ID using
+    // ChatProvider_BOT_TOKEN. Failures are swallowed so a ChatProvider outage never blocks
     // the audit pipeline. This is in addition to the internal audit_notifications
     // table updated by fireAuditCompletedTrigger below.
     try {
-      const slackFlag = String(
-        process.env.DIRECT_AUDIT_SLACK_NOTIFY ?? "true",
+      const ChatProviderFlag = String(
+        process.env.DIRECT_AUDIT_ChatProvider_NOTIFY ?? "true",
       ).toLowerCase();
-      const directAuditSlackEnabled = !["0", "false", "off", "no"].includes(
-        slackFlag,
+      const directAuditChatProviderEnabled = !["0", "false", "off", "no"].includes(
+        ChatProviderFlag,
       );
-      const slackToken = process.env.SLACK_BOT_TOKEN || process.env.SLACK_API_TOKEN;
-      const slackChannel =
-        process.env.DIRECT_AUDIT_SLACK_CHANNEL ||
-        process.env.SLACK_CHANNEL_ID ||
-        process.env.SLACK_DEFAULT_CHANNEL;
+      const ChatProviderToken = process.env.ChatProvider_BOT_TOKEN || process.env.ChatProvider_API_TOKEN;
+      const ChatProviderChannel =
+        process.env.DIRECT_AUDIT_ChatProvider_CHANNEL ||
+        process.env.ChatProvider_CHANNEL_ID ||
+        process.env.ChatProvider_DEFAULT_CHANNEL;
 
-      if (directAuditSlackEnabled && slackToken && slackChannel && totalRecordsAudited === 0) {
+      if (directAuditChatProviderEnabled && ChatProviderToken && ChatProviderChannel && totalRecordsAudited === 0) {
         // ROOT-CAUSE GUARD (2026-05-28):
-        // If the audit returned ZERO records (Zoho rate-limited, token
+        // If the audit returned ZERO records (CRMProvider rate-limited, token
         // expired, network failure that survived all 3 retry attempts,
         // or a genuinely empty source) the downstream score math
         // collapses to 100% because (records - issues) / records is
-        // 0/0 → fallback 100. The unconditional Slack success message
+        // 0/0 → fallback 100. The unconditional ChatProvider success message
         // below would then page operators with a misleading
         // "Quality Audit Completed — 100% / Records: 0" — exactly the
         // false-positive that prompted this fix after operators saw a
-        // 100% success on Slack while the dashboard showed 143k records
+        // 100% success on ChatProvider while the dashboard showed 143k records
         // with 21.6% compliance.
         //
         // When records=0, send a DIFFERENT "audit yielded no data"
@@ -785,20 +785,20 @@ export async function runDirectAudit(
         // mutually exclusive and the success message never fires on
         // an empty-source run.
         const {
-          enqueueSlackOutboxMessage,
+          enqueueChatProviderOutboxMessage,
           processOutboxMessageById,
           processDueOutboxMessages,
         } = await import("./notificationOutbox");
-        const dashUrl = process.env.PUBLIC_DASHBOARD_URL || "https://<REDACTED_HOST>/";
+        const dashUrl = process.env.PUBLIC_DASHBOARD_URL || "<REDACTED_URL_SCHEME><REDACTED_HOST>/";
         const generatedAtKsa = new Date().toLocaleTimeString("en-US", {
           timeZone: "Asia/Riyadh",
           hour: "2-digit",
           minute: "2-digit",
           hour12: true,
         });
-        const reason = !hasZohoCredentials
-          ? "Zoho CRM credentials are not configured"
-          : "Zoho returned zero records across all modules (likely rate-limited / 429 or token expired)";
+        const reason = !hasCRMProviderCredentials
+          ? "CRMProvider CRM credentials are not configured"
+          : "CRMProvider returned zero records across all modules (likely rate-limited / 429 or token expired)";
         const warningBlocks: any[] = [
           {
             type: "header",
@@ -810,7 +810,7 @@ export async function runDirectAudit(
               { type: "mrkdwn", text: `*Records Audited:*\n0` },
               { type: "mrkdwn", text: `*Reason:*\n${reason}` },
               { type: "mrkdwn", text: `*Generated at (KSA):*\n${generatedAtKsa}` },
-              { type: "mrkdwn", text: `*Action:*\nVerify the Zoho integration on /integrations and re-run the audit. The numeric score is suppressed because dividing-by-zero falls back to 100% which would be misleading.` },
+              { type: "mrkdwn", text: `*Action:*\nVerify the CRMProvider integration on /integrations and re-run the audit. The numeric score is suppressed because dividing-by-zero falls back to 100% which would be misleading.` },
             ],
           },
           {
@@ -826,12 +826,12 @@ export async function runDirectAudit(
         ];
         try {
           await processDueOutboxMessages(20);
-          const outboxEntry = await enqueueSlackOutboxMessage({
+          const outboxEntry = await enqueueChatProviderOutboxMessage({
             source: "direct_audit_no_data",
-            destination: slackChannel,
+            destination: ChatProviderChannel,
             text: `⚠️ ExampleOrg Quality Audit — no records audited (${reason})`,
             blocks: warningBlocks,
-            dedupeKey: savedResult.id ? `direct-audit:${savedResult.id}:slack-no-data` : undefined,
+            dedupeKey: savedResult.id ? `direct-audit:${savedResult.id}:ChatProvider-no-data` : undefined,
             metadata: {
               auditId: savedResult.id || null,
               reason,
@@ -839,15 +839,15 @@ export async function runDirectAudit(
             maxAttempts: Number.parseInt(process.env.DIRECT_AUDIT_OUTBOX_MAX_ATTEMPTS || "4", 10),
           });
           await processOutboxMessageById(outboxEntry.id);
-          logger?.warn("⚠️ [DirectAudit] Audit completed with 0 records — sent 'no data' warning to Slack instead of fake-success message", {
+          logger?.warn("⚠️ [DirectAudit] Audit completed with 0 records — sent 'no data' warning to ChatProvider instead of fake-success message", {
             reason,
           });
         } catch (warnErr) {
           logger?.error("❌ [DirectAudit] Failed to enqueue 'no data' warning:", warnErr);
         }
-      } else if (directAuditSlackEnabled && slackToken && slackChannel && totalRecordsAudited > 0) {
+      } else if (directAuditChatProviderEnabled && ChatProviderToken && ChatProviderChannel && totalRecordsAudited > 0) {
         const {
-          enqueueSlackOutboxMessage,
+          enqueueChatProviderOutboxMessage,
           processOutboxMessageById,
           processDueOutboxMessages,
         } = await import("./notificationOutbox");
@@ -891,7 +891,7 @@ export async function runDirectAudit(
           }
           if (currentChunk) findingTypeChunks.push(currentChunk);
         }
-        const dashUrl = process.env.PUBLIC_DASHBOARD_URL || "https://<REDACTED_HOST>/";
+        const dashUrl = process.env.PUBLIC_DASHBOARD_URL || "<REDACTED_URL_SCHEME><REDACTED_HOST>/";
         const generatedAtKsa = new Date().toLocaleTimeString("en-US", {
           timeZone: "Asia/Riyadh",
           hour: "2-digit",
@@ -903,7 +903,7 @@ export async function runDirectAudit(
         try {
           const { generateDigestData } = await import("./executiveDigest");
           // When the user picked a Created/Modified period from the upper-area
-          // filter, override the digest window so the Slack "Period Covered"
+          // filter, override the digest window so the ChatProvider "Period Covered"
           // header reflects that exact selection instead of the auto-computed
           // weekly window. Falls back to the cron-style weekly window when no
           // user period is set (scheduled runs / admin-key triggers).
@@ -927,7 +927,7 @@ export async function runDirectAudit(
           // but the scope has to be stated or the number misleads by omission.
           executiveSectionText = `*Period Covered (KSA):*\n${digestData.window_start} -> ${digestData.window_end}\n\n*Executive Segments (Dashboard-aligned):*\n_These segments cover ONLY records CREATED in the period above — not the whole CRM. The health percentages describe new records; the module breakdown and issue totals above cover every audited record._\n${sectionLines.join("\n")}\n\n*Definitions:*\n*Progressed = records in advancing stages (Qualified, Proposal, Negotiation, Won/Converted/Contract/Onboarding).*\n*Stalled = records in non-progress stages (On hold, Lost, Not Interested, Junk, Unqualified, Inactive).*`;
         } catch (digestErr) {
-          logger?.warn("⚠️ [DirectAudit] Could not build executive sections for Slack message", {
+          logger?.warn("⚠️ [DirectAudit] Could not build executive sections for ChatProvider message", {
             error: digestErr instanceof Error ? digestErr.message : String(digestErr),
           });
         }
@@ -995,12 +995,12 @@ export async function runDirectAudit(
         });
 
         await processDueOutboxMessages(20);
-        const outboxEntry = await enqueueSlackOutboxMessage({
+        const outboxEntry = await enqueueChatProviderOutboxMessage({
           source: "direct_audit_completed",
-          destination: slackChannel,
+          destination: ChatProviderChannel,
           text: `${scoreEmoji} ExampleOrg Quality Audit Completed — Score ${score.toFixed(1)}%`,
           blocks,
-          dedupeKey: savedResult.id ? `direct-audit:${savedResult.id}:slack` : undefined,
+          dedupeKey: savedResult.id ? `direct-audit:${savedResult.id}:ChatProvider` : undefined,
           metadata: {
             auditId: savedResult.id || null,
             overallScore: score,
@@ -1009,43 +1009,43 @@ export async function runDirectAudit(
         });
         const delivered = await processOutboxMessageById(outboxEntry.id);
         if (delivered?.status === "sent") {
-          logger?.info("✅ [DirectAudit] Slack notification sent via outbox");
+          logger?.info("✅ [DirectAudit] ChatProvider notification sent via outbox");
         } else if (delivered?.status === "pending" || delivered?.status === "processing") {
-          logger?.warn("⚠️ [DirectAudit] Slack queued for retry via outbox", {
+          logger?.warn("⚠️ [DirectAudit] ChatProvider queued for retry via outbox", {
             outboxId: delivered.id,
             lastError: delivered.last_error,
           });
         } else {
-          logger?.warn("⚠️ [DirectAudit] Slack notification failed via outbox", {
+          logger?.warn("⚠️ [DirectAudit] ChatProvider notification failed via outbox", {
             outboxId: delivered?.id || outboxEntry.id,
             lastError: delivered?.last_error || null,
           });
         }
-      } else if (!directAuditSlackEnabled) {
-        logger?.info("ℹ️ [DirectAudit] DIRECT_AUDIT_SLACK_NOTIFY=false — sending digest-format fallback notification");
+      } else if (!directAuditChatProviderEnabled) {
+        logger?.info("ℹ️ [DirectAudit] DIRECT_AUDIT_ChatProvider_NOTIFY=false — sending digest-format fallback notification");
         try {
-          const { sendDigestSlack, computeDigestWindow } = await import("./executiveDigest");
+          const { sendDigestChatProvider, computeDigestWindow } = await import("./executiveDigest");
           const now = new Date();
           const cadence = "weekly" as const;
           // Mirror the user-selected period (if any) into the digest window so
-          // the Slack "Period Covered" header on this fallback path matches
+          // the ChatProvider "Period Covered" header on this fallback path matches
           // the dates the user picked when clicking "Run AI Audit". Scheduled
           // runs (no dateFilters) keep the standard auto-computed weekly window.
           const window =
             buildUserPeriodDigestWindow(dateFilters) ||
             computeDigestWindow(cadence, now);
-          const fallbackResult = await sendDigestSlack({
+          const fallbackResult = await sendDigestChatProvider({
             cadence,
             now,
             window,
             // Direct-audit fallback should notify immediately for this audit run.
             enforceIdempotency: false,
             channelOverride:
-              process.env.DIRECT_AUDIT_SLACK_CHANNEL ||
-              process.env.DIGEST_SLACK_CHANNEL_WEEKLY ||
-              process.env.DIGEST_SLACK_CHANNEL ||
-              process.env.SLACK_CHANNEL_ID ||
-              process.env.SLACK_DEFAULT_CHANNEL ||
+              process.env.DIRECT_AUDIT_ChatProvider_CHANNEL ||
+              process.env.DIGEST_ChatProvider_CHANNEL_WEEKLY ||
+              process.env.DIGEST_ChatProvider_CHANNEL ||
+              process.env.ChatProvider_CHANNEL_ID ||
+              process.env.ChatProvider_DEFAULT_CHANNEL ||
               undefined,
           });
           logger?.info("✅ [DirectAudit] Digest-format fallback notification attempted", {
@@ -1059,11 +1059,11 @@ export async function runDirectAudit(
           });
         }
       } else {
-        logger?.info("ℹ️ [DirectAudit] Slack not configured (SLACK_BOT_TOKEN / SLACK_CHANNEL_ID missing) — skipping Slack notification");
+        logger?.info("ℹ️ [DirectAudit] ChatProvider not configured (ChatProvider_BOT_TOKEN / ChatProvider_CHANNEL_ID missing) — skipping ChatProvider notification");
       }
-    } catch (slackErr) {
-      logger?.warn("⚠️ [DirectAudit] Slack notification failed (audit data was saved)", {
-        error: slackErr instanceof Error ? slackErr.message : String(slackErr),
+    } catch (ChatProviderErr) {
+      logger?.warn("⚠️ [DirectAudit] ChatProvider notification failed (audit data was saved)", {
+        error: ChatProviderErr instanceof Error ? ChatProviderErr.message : String(ChatProviderErr),
       });
     }
 

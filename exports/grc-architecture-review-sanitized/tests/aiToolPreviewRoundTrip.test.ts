@@ -62,8 +62,8 @@ async function main(): Promise<void> {
   // / `redactSensitiveDeep()`. They are placed under innocuously-named keys
   // (`note`, `commitMessage`) so the key-based deny-list cannot match — only
   // the regex / value-based redaction can save us.
-  const RICH_OPENAI_KEY = '<REDACTED_TOKEN>';
-  const RICH_GITHUB_PAT = '<REDACTED_TOKEN>';
+  const RICH_LLMProvider_KEY = '<REDACTED_TOKEN>';
+  const RICH_SourceControlProvider_PAT = '<REDACTED_TOKEN>';
 
   try {
     // ── SUCCESS PATH ──────────────────────────────────────────────────
@@ -76,7 +76,7 @@ async function main(): Promise<void> {
         // Richer secret embedded under an innocuous key — only the regex
         // deny-list inside `redactSecretLikeStrings()` can scrub this on
         // the OUTPUT side.
-        commitMessage: `deploy: rotated key ${RICH_GITHUB_PAT}`,
+        commitMessage: `deploy: rotated key ${RICH_SourceControlProvider_PAT}`,
       }),
     };
     const wrappedHappy = wrapToolWithTelemetry(happyTool, agentName);
@@ -92,7 +92,7 @@ async function main(): Promise<void> {
       // Richer secret embedded under an innocuous key — only the regex
       // deny-list inside `redactSensitiveDeep()` can scrub this on the
       // INPUT side.
-      note: `Reset attempted with key ${RICH_OPENAI_KEY}`,
+      note: `Reset attempted with key ${RICH_LLMProvider_KEY}`,
     });
 
     // Wait for the fire-and-forget INSERT to land.
@@ -157,19 +157,19 @@ async function main(): Promise<void> {
     // boundary instead of actually being scrubbed.
     assert(
       typeof hr?.tool_input_preview === 'string'
-        && !hr.tool_input_preview.includes(RICH_OPENAI_KEY)
+        && !hr.tool_input_preview.includes(RICH_LLMProvider_KEY)
         && !hr.tool_input_preview.includes('<REDACTED_TOKEN>')
         && (hr.tool_input_preview.includes('***REDACTED***')
             || hr.tool_input_preview.includes('[REDACTED]')),
-      'persisted tool_input_preview redacts richer secrets (sk-… OpenAI key)',
+      'persisted tool_input_preview redacts richer secrets (sk-… LLMProvider key)',
     );
     assert(
       typeof hr?.tool_output_preview === 'string'
-        && !hr.tool_output_preview.includes(RICH_GITHUB_PAT)
+        && !hr.tool_output_preview.includes(RICH_SourceControlProvider_PAT)
         && !hr.tool_output_preview.includes('<REDACTED_TOKEN>')
         && (hr.tool_output_preview.includes('***REDACTED***')
             || hr.tool_output_preview.includes('[REDACTED]')),
-      'persisted tool_output_preview redacts richer secrets (ghp_… GitHub PAT)',
+      'persisted tool_output_preview redacts richer secrets (ghp_… SourceControlProvider PAT)',
     );
     assert(
       (hr?.tool_input_preview?.length ?? 0) <= 300

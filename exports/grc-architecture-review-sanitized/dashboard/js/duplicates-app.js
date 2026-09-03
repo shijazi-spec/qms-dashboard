@@ -125,14 +125,14 @@
                 } else if (['leads','deals','contacts','accounts'].includes(activeTab)) {
                     await loadRecordTab(activeTab);
                 } else if (activeTab === 'cs-lifecycle') {
-                    // Sync the visible deals live from Zoho the same way the
-                    // green "Refresh from Zoho (live)" button does, so the
+                    // Sync the visible deals live from CRMProvider the same way the
+                    // green "Refresh from CRMProvider (live)" button does, so the
                     // CS Lifecycle radar stays consistent with the other
-                    // radars (which already read from a fresh Zoho scan via
+                    // radars (which already read from a fresh CRMProvider scan via
                     // Sync Now). loadCsLifecycle runs first to populate the
-                    // visible-id list that refreshCsLifecycleFromZoho needs.
+                    // visible-id list that refreshCsLifecycleFromCRMProvider needs.
                     await loadCsLifecycle(window._csLifecycleFilter || 'all');
-                    await refreshCsLifecycleFromZoho({ silent: true });
+                    await refreshCsLifecycleFromCRMProvider({ silent: true });
                 } else if (activeTab === 'cs-overlap') {
                     loadCsOverlap(window._csOverlapFilter || 'all');
                 } else if (activeTab === 'deal-lifecycle') {
@@ -326,16 +326,16 @@
             loadCrossModule();
         }
 
-        // Verify a batch of records against live Zoho and prune the ones deleted
+        // Verify a batch of records against live CRMProvider and prune the ones deleted
         // in the CRM. Incremental sync never reports deletions, so this is what
-        // clears rows that were resolved/deleted in Zoho but still show here.
+        // clears rows that were resolved/deleted in CRMProvider but still show here.
         async function reconcileDeletedRecords() {
             const btn = document.getElementById('cmoReconcileDeletedBtn');
             const orig = btn ? btn.innerHTML : '';
             if (btn) { btn.disabled = true; btn.innerHTML = '🧹 Verifying…'; }
             try {
                 // 1) IMMEDIATE, observable pass over the clusters loaded on THIS tab:
-                //    live-check their records against Zoho and prune the deleted ones
+                //    live-check their records against CRMProvider and prune the deleted ones
                 //    now, with a real count (Sample User 2026-07-15) — so you can SEE it work.
                 const visibleIds = (crossModuleClusters || []).map(function (c) { return c.id; }).filter(function (v) { return v != null; });
                 const j = await erAdminPost('/api/duplicates/reconcile-deleted', { clusterIds: visibleIds, limit: 400 });
@@ -364,14 +364,14 @@
         // pass over ALL open/visible clusters (observable pruned count) AND
         // launches the platform-wide id-set reconcile in the background, then
         // refreshes whatever tab is active so pruned rows disappear now. The
-        // platform never deletes in Zoho — it only drops its own copy of records
+        // platform never deletes in CRMProvider — it only drops its own copy of records
         // already gone.
         async function verifyPruneDeletedGlobal() {
             const btn = document.getElementById('globalPruneDeletedBtn');
             const out = document.getElementById('globalPruneResult');
             const orig = btn ? btn.innerHTML : '';
             if (btn) { btn.disabled = true; btn.innerHTML = '🧹 Verifying…'; }
-            if (out) out.textContent = 'Live-checking open clusters against Zoho…';
+            if (out) out.textContent = 'Live-checking open clusters against CRMProvider…';
             try {
                 // 1) Immediate pass over EVERY open/visible cluster (all modules).
                 const j = await erAdminPost('/api/duplicates/reconcile-deleted', { activeClustersOnly: true, limit: 500 });
@@ -398,12 +398,12 @@
         // #4 fix): it only acknowledges the cross-module relationship (e.g.
         // Lead<->Account) — it does NOT resolve the whole cluster, so a
         // same-module duplicate also living in this cluster (e.g. 2 Leads)
-        // stays visible in Domain Clusters / the per-module tabs. No Zoho
+        // stays visible in Domain Clusters / the per-module tabs. No CRMProvider
         // write here; it just drops the row from the Cross-Module open queue
         // (still reviewable under "Handled" and reversible via Un-handle).
         async function markCrossModuleHandled(clusterId) {
-            if (!confirm('Mark this cross-module overlap as resolved?\n\nUse this once you have CONVERTED / LINKED / CLOSED the records in Zoho. The cluster itself stays active, so any same-module duplicate (e.g. 2 Leads) keeps showing up where it belongs. Reviewable under "Resolved" and reversible (Re-open). No Zoho changes are made here.')) return;
-            const payload = JSON.stringify({ notes: 'Cross-module overlap handled in Zoho (convert / link / close) — marked from the Cross-Module tab.' });
+            if (!confirm('Mark this cross-module overlap as resolved?\n\nUse this once you have CONVERTED / LINKED / CLOSED the records in CRMProvider. The cluster itself stays active, so any same-module duplicate (e.g. 2 Leads) keeps showing up where it belongs. Reviewable under "Resolved" and reversible (Re-open). No CRMProvider changes are made here.')) return;
+            const payload = JSON.stringify({ notes: 'Cross-module overlap handled in CRMProvider (convert / link / close) — marked from the Cross-Module tab.' });
             try {
                 let res = await fetch('/api/duplicates/clusters/' + clusterId + '/cross-module-handled', {
                     method: 'POST', credentials: 'same-origin',
@@ -426,9 +426,9 @@
         }
 
         // Reverse of markCrossModuleHandled — clears cross_module_handled_at so
-        // the cluster reappears in the Cross-Module open queue. No Zoho changes.
+        // the cluster reappears in the Cross-Module open queue. No CRMProvider changes.
         async function unhandleCrossModule(clusterId) {
-            if (!confirm('Move this cross-module overlap back to the open queue?\n\nNo Zoho changes.')) return;
+            if (!confirm('Move this cross-module overlap back to the open queue?\n\nNo CRMProvider changes.')) return;
             try {
                 let res = await fetch('/api/duplicates/clusters/' + clusterId + '/cross-module-unhandle', {
                     method: 'POST', credentials: 'same-origin',
@@ -584,7 +584,7 @@
                 if (crossModuleLoadError) {
                     emptyRow = rrEmptyRow(10, { glyph: '⚠', title: 'Cross-module fetch failed', desc: escapeHtml(crossModuleLoadError) + ' — click <strong>Run scan</strong> to rebuild, or check the server logs for <code>cross-module-overlaps</code>.' });
                 } else if ((crossModuleClusters || []).length === 0) {
-                    emptyRow = rrEmptyRow(10, { glyph: '✓', title: 'No cross-module overlaps detected', desc: 'Either the latest sync found none, or no Zoho scan has been run yet. Click <strong>Run scan</strong> to rebuild clusters.' });
+                    emptyRow = rrEmptyRow(10, { glyph: '✓', title: 'No cross-module overlaps detected', desc: 'Either the latest sync found none, or no CRMProvider scan has been run yet. Click <strong>Run scan</strong> to rebuild clusters.' });
                 } else {
                     emptyRow = rrEmptyRow(10, { glyph: '🔍', title: 'No overlaps match this filter', desc: 'Try the <strong>All</strong> chip.' });
                 }
@@ -624,12 +624,12 @@
                 // badge is shown OUT-OF-BAND beside the pairing chip when
                 // any deal is in Paid / Agreement Signed (CS-owned).
                 // Phase-3 pairing badge: one neutral-info pill; row severity is
-                // carried by the leading-cell stripe, not the chip colour.
+                // carried by the leading-cell PaymentProvider, not the chip colour.
                 const pairingChip = '<span class="rr-badge rr-info">' + escapeHtml(meta.label) + '</span>'
                     + (c.has_client_deal
                         ? ' <span class="rr-badge rr-warn rr-dot" title="Cluster contains a Paid / Agreement Signed deal — owned by Customer Success. Do NOT pursue from Sales.">Existing client · CS</span>'
                         : '');
-                // Severity stripe on the leading cell: existing-client (CS-owned)
+                // Severity PaymentProvider on the leading cell: existing-client (CS-owned)
                 // is the most urgent → red; Lead↔Active-Deal → red (strategic);
                 // 3+ modules → amber; plain link queue → info.
                 let sev = 'rr-sev-info';
@@ -680,9 +680,9 @@
         }
 
         // Per-row tracking cell. In the open queue: ✓ Handled (mark resolved —
-        // I converted/linked/closed it in Zoho) + 🚫 Dismiss (false positive /
+        // I converted/linked/closed it in CRMProvider) + 🚫 Dismiss (false positive /
         // intentional). In the Resolved/Dismissed views: a status tag + 🔓 Re-open.
-        // No Zoho writes — this only tracks the cluster's status so handled items
+        // No CRMProvider writes — this only tracks the cluster's status so handled items
         // leave "Total open" and the KPIs stay honest, while staying auditable.
         function _crossModuleTrackCell(c) {
             const st = window._crossModuleStatusFilter || 'active';
@@ -693,8 +693,8 @@
             // Open filter, so a row here is genuinely open.)
             if (st === 'active') {
                 return '<td class="rr-num" style="white-space:nowrap"><div class="rr-actions">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
-                    + '<button data-on-click="markCrossModuleHandled" data-args="[' + c.id + ']" title="Mark resolved — I converted / linked / closed this in Zoho. Removes it from the open queue (the cluster stays active so any same-module duplicate still shows elsewhere). Reversible." class="rr-btn rr-btn-primary">✓ Resolved</button>'
-                    + '<button data-on-click="dismissCluster" data-args="[&quot;cross-module&quot;,' + c.id + ']" title="Dismiss — not the same company / intentional. No Zoho changes." class="rr-btn rr-btn-ghost rr-btn-icon">🚫</button>'
+                    + '<button data-on-click="markCrossModuleHandled" data-args="[' + c.id + ']" title="Mark resolved — I converted / linked / closed this in CRMProvider. Removes it from the open queue (the cluster stays active so any same-module duplicate still shows elsewhere). Reversible." class="rr-btn rr-btn-primary">✓ Resolved</button>'
+                    + '<button data-on-click="dismissCluster" data-args="[&quot;cross-module&quot;,' + c.id + ']" title="Dismiss — not the same company / intentional. No CRMProvider changes." class="rr-btn rr-btn-ghost rr-btn-icon">🚫</button>'
                     + '</div></td>';
             }
             // Resolved (merged: whole-cluster resolved OR cross-module marked-done).
@@ -702,21 +702,21 @@
                 // Re-open uses the right reversal: un-handle for a marked-done
                 // cross-module overlap, reopen for a whole-cluster resolution.
                 const reopen = isHandled && !isResolvedCluster
-                    ? '<button data-on-click="unhandleCrossModule" data-args="[' + c.id + ']" title="Re-open — return this overlap to the open queue. No Zoho changes." class="rr-btn rr-btn-ghost rr-btn-icon">🔓</button>'
-                    : '<button data-on-click="reopenCluster" data-args="[&quot;cross-module&quot;,' + c.id + ']" title="Re-open — return this overlap to the open queue. No Zoho changes." class="rr-btn rr-btn-ghost rr-btn-icon">🔓</button>';
+                    ? '<button data-on-click="unhandleCrossModule" data-args="[' + c.id + ']" title="Re-open — return this overlap to the open queue. No CRMProvider changes." class="rr-btn rr-btn-ghost rr-btn-icon">🔓</button>'
+                    : '<button data-on-click="reopenCluster" data-args="[&quot;cross-module&quot;,' + c.id + ']" title="Re-open — return this overlap to the open queue. No CRMProvider changes." class="rr-btn rr-btn-ghost rr-btn-icon">🔓</button>';
                 return '<td class="rr-num" style="white-space:nowrap"><div class="rr-actions">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     + '<span class="rr-badge rr-good rr-dot">Resolved</span>' + reopen + '</div></td>';
             }
             if (isDismissed) {
                 return '<td class="rr-num" style="white-space:nowrap"><div class="rr-actions">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     + '<span class="rr-badge rr-neutral">Dismissed</span>'
-                    + '<button data-on-click="reopenCluster" data-args="[&quot;cross-module&quot;,' + c.id + ']" title="Re-open — return this overlap to the open queue. No Zoho changes." class="rr-btn rr-btn-ghost rr-btn-icon">🔓</button>'
+                    + '<button data-on-click="reopenCluster" data-args="[&quot;cross-module&quot;,' + c.id + ']" title="Re-open — return this overlap to the open queue. No CRMProvider changes." class="rr-btn rr-btn-ghost rr-btn-icon">🔓</button>'
                     + '</div></td>';
             }
             // Fallback (e.g. All view, still-open cluster): the open-queue actions.
             return '<td class="rr-num" style="white-space:nowrap"><div class="rr-actions">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
-                + '<button data-on-click="markCrossModuleHandled" data-args="[' + c.id + ']" title="Mark resolved — I converted / linked / closed this in Zoho. Reversible." class="rr-btn rr-btn-primary">✓ Resolved</button>'
-                + '<button data-on-click="dismissCluster" data-args="[&quot;cross-module&quot;,' + c.id + ']" title="Dismiss — not the same company / intentional. No Zoho changes." class="rr-btn rr-btn-ghost rr-btn-icon">🚫</button>'
+                + '<button data-on-click="markCrossModuleHandled" data-args="[' + c.id + ']" title="Mark resolved — I converted / linked / closed this in CRMProvider. Reversible." class="rr-btn rr-btn-primary">✓ Resolved</button>'
+                + '<button data-on-click="dismissCluster" data-args="[&quot;cross-module&quot;,' + c.id + ']" title="Dismiss — not the same company / intentional. No CRMProvider changes." class="rr-btn rr-btn-ghost rr-btn-icon">🚫</button>'
                 + '</div></td>';
         }
 
@@ -765,14 +765,14 @@
         // Bulk Dismiss / Mark-Resolved for the selected clusters (Sample User
         // 2026-07-13 "let me select all in the page to dismiss / act faster").
         // Mirrors the per-row Track buttons: Dismiss → /resolve action=ignore;
-        // Mark Resolved → /cross-module-handled. No Zoho changes — radar status
+        // Mark Resolved → /cross-module-handled. No CRMProvider changes — radar status
         // only, reversible (Re-open). Prompts for the admin key at most once.
         async function bulkCrossModuleStatus(action) {
             const ids = Array.from(crossModuleSelected);
             if (ids.length === 0) return;
             const isDismiss = action === 'ignore';
             const verb = isDismiss ? 'Dismiss' : 'Mark Resolved';
-            if (!confirm(verb + ' ' + ids.length + ' selected cluster' + (ids.length === 1 ? '' : 's') + '?\n\nNo Zoho changes — this only sets the radar status. Reversible via Re-open.')) return;
+            if (!confirm(verb + ' ' + ids.length + ' selected cluster' + (ids.length === 1 ? '' : 's') + '?\n\nNo CRMProvider changes — this only sets the radar status. Reversible via Re-open.')) return;
             const urlFor = (id) => isDismiss
                 ? '/api/duplicates/clusters/' + id + '/resolve'
                 : '/api/duplicates/clusters/' + id + '/cross-module-handled';
@@ -809,7 +809,7 @@
             const n = crossModuleSelected.size;
             if (n === 0) return;
             const ok = confirm(
-                `Close lead records in Zoho for ${n} cluster${n === 1 ? '' : 's'}?\n\n` +
+                `Close lead records in CRMProvider for ${n} cluster${n === 1 ? '' : 's'}?\n\n` +
                 `This will set Lead_Status = "Lost Lead" on every Lead in these clusters and mark each cluster Resolved.\n\n` +
                 `Already-Lost / already-Junk leads will be skipped silently.\n\n` +
                 `Cancel and run "Dry run" first if you want to preview the impact.`
@@ -871,7 +871,7 @@
                     + '</tr></thead><tbody>'
                     + per.map(c => {
                         const errPart = c.errors && c.errors.length > 0
-                            ? '<div class="text-[10px] text-red-600 mt-1">' + escapeHtml(c.errors.map(e => `${e.zoho_lead_id || '—'}: ${e.message}`).join(' · ')) + '</div>'
+                            ? '<div class="text-[10px] text-red-600 mt-1">' + escapeHtml(c.errors.map(e => `${e.CRMProvider_lead_id || '—'}: ${e.message}`).join(' · ')) + '</div>'
                             : '';
                         return `<tr class="border-t border-gray-100">
                             <td class="px-2 py-1 font-mono">${escapeHtml(String(c.cluster_id))}</td>
@@ -902,7 +902,7 @@
             { key: 'dealDuplicates',       label: 'Deal Duplicates',       icon: '🟣', tab: 'deals',            desc: 'Duplicate Deals grouped into clusters.' },
             { key: 'contactDuplicates',    label: 'Contact Duplicates',    icon: '⚪', tab: 'contacts',         desc: 'Duplicate Contacts grouped into clusters.' },
             { key: 'accountDuplicates',    label: 'Account Duplicates',    icon: '🟢', tab: 'accounts',         desc: 'Duplicate Accounts grouped into clusters.' },
-            { key: 'crossModule',          label: 'Cross-Module',          icon: '🔗', tab: 'cross-module',     desc: 'Same company across ≥2 Zoho modules.' },
+            { key: 'crossModule',          label: 'Cross-Module',          icon: '🔗', tab: 'cross-module',     desc: 'Same company across ≥2 CRMProvider modules.' },
             { key: 'csOverlap',            label: 'CS Pipeline Overlap',   icon: '🛑', tab: 'cs-overlap',       desc: 'Open Sales Deal + Paid/Agreement-Signed handoff on the same customer.' },
             { key: 'csLifecycle',          label: 'CS Lifecycle',          icon: '🌱', tab: 'cs-lifecycle',     desc: 'Customer Success deals deviating from GRQ-defined lifecycle rules.' },
             { key: 'dealsLifecycle',       label: 'Deals Lifecycle',       icon: '📐', tab: 'deal-lifecycle',   desc: 'Sales-pipeline stage aging vs Sales SOP §7.' },
@@ -1040,7 +1040,7 @@
             renderList('spikeByOwner', data.by_owner);
             renderList('spikeByModule', data.by_module);
 
-            // Provenance — is the rise a real NEW leak (created in Zoho this
+            // Provenance — is the rise a real NEW leak (created in CRMProvider this
             // window) or re-detection of OLD records only recently synced?
             const prov = data.provenance || {};
             const pEl = document.getElementById('spikeProvenance');
@@ -1051,20 +1051,20 @@
                 const oldSar = prov.exposure_old_sar || 0;
                 const back = prov.back_detected || 0;
                 const caveat = prov.synced_view_unreliable
-                    ? '<div class="text-[11px] text-amber-700 mt-1">⚠ A full mirror rebuild landed inside this window (records last synced ' + escapeHtml(prov.last_synced || '—') + '), so the “synced/back-detected” figure is unreliable right now — trust the created-in-Zoho split above.</div>'
+                    ? '<div class="text-[11px] text-amber-700 mt-1">⚠ A full mirror rebuild landed inside this window (records last synced ' + escapeHtml(prov.last_synced || '—') + '), so the “synced/back-detected” figure is unreliable right now — trust the created-in-CRMProvider split above.</div>'
                     : '';
                 pEl.innerHTML =
                     '<div class="rounded-lg border border-red-200 bg-red-50 p-3">'
-                        + '<div class="text-xs font-semibold text-red-800 uppercase tracking-wide">Real new leak — created in Zoho this window</div>'
+                        + '<div class="text-xs font-semibold text-red-800 uppercase tracking-wide">Real new leak — created in CRMProvider this window</div>'
                         + '<div class="text-2xl font-bold text-red-700 mt-1">' + _fn(newN) + ' <span class="text-sm font-medium text-red-600">records</span></div>'
                         + '<div class="text-xs text-red-700 mt-0.5">' + formatCurrency(newSar) + ' of duplicate deal value</div>'
-                        + '<div class="text-[11px] text-gray-500 mt-1">Records actually born in Zoho in the last ' + (data.window_weeks||0) + ' week(s). This is the leak to stop at source.</div>'
+                        + '<div class="text-[11px] text-gray-500 mt-1">Records actually born in CRMProvider in the last ' + (data.window_weeks||0) + ' week(s). This is the leak to stop at source.</div>'
                     + '</div>'
                     + '<div class="rounded-lg border border-gray-200 bg-gray-50 p-3">'
                         + '<div class="text-xs font-semibold text-gray-700 uppercase tracking-wide">Pre-existing — older records</div>'
                         + '<div class="text-2xl font-bold text-gray-700 mt-1">' + _fn(oldN) + ' <span class="text-sm font-medium text-gray-500">records</span></div>'
                         + '<div class="text-xs text-gray-600 mt-0.5">' + formatCurrency(oldSar) + ' of duplicate deal value</div>'
-                        + '<div class="text-[11px] text-gray-500 mt-1">Created in Zoho BEFORE this window' + (back ? ' · ' + _fn(back) + ' only recently synced/detected' : '') + '. A rising inflation number driven by these is DETECTION improving, not a new leak.</div>'
+                        + '<div class="text-[11px] text-gray-500 mt-1">Created in CRMProvider BEFORE this window' + (back ? ' · ' + _fn(back) + ' only recently synced/detected' : '') + '. A rising inflation number driven by these is DETECTION improving, not a new leak.</div>'
                         + caveat
                     + '</div>';
             }
@@ -1372,7 +1372,7 @@
 
             // Sync Activity card — top line is the most recent sync of any
             // kind (incremental Sync Now / scheduled cron / full rebuild),
-            // sourced from zoho_sync_state.last_sync_at. The bottom line is
+            // sourced from CRMProvider_sync_state.last_sync_at. The bottom line is
             // the most recent FULL rebuild from duplicate_detection_logs.
             // Pre-fix the card only showed the latter, which made the
             // dashboard look frozen on the last rebuild date even though
@@ -1563,7 +1563,7 @@
         //     (no real Company_Domain available at sync time)
         //   - placeholder: routed to the quarantine bucket because the company
         //     name was a sentinel value like "N/A" / "لا يوجد" — needs CS to
-        //     backfill the real name in Zoho
+        //     backfill the real name in CRMProvider
         //   - mixed: 2+ distinct corporate email domains across the cluster's
         //     records (domain_count comes from the list-endpoint subquery).
         //     Almost always means unrelated companies sharing a name fragment.
@@ -1573,7 +1573,7 @@
             const isSynthetic = typeof c.domain === 'string' && c.domain.endsWith('.cluster') && !isPlaceholder;
             const isMixed = Number(c.domain_count || 0) >= 2;
             if (isPlaceholder) {
-                flags.push('<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-200 text-gray-800" title="Placeholder company name — CS needs to backfill the real name in Zoho">❓ placeholder</span>');
+                flags.push('<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-200 text-gray-800" title="Placeholder company name — CS needs to backfill the real name in CRMProvider">❓ placeholder</span>');
             } else if (isSynthetic) {
                 flags.push('<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800" title="Synthetic cluster — built from normalized company name, not a real corporate domain. Going forward these only form when there is no email/phone identity either.">🔧 synthetic</span>');
             }
@@ -1904,9 +1904,9 @@
                 el.textContent = (st && st.key === k) ? (st.dir === 'asc' ? ' ↑' : ' ↓') : '';
             });
         }
-        // Generic "Refresh from Zoho (live)" engine — scrapes the visible
-        // Zoho ids out of a tbody (via the data-testid="link-zoho-<id>"
-        // anchors emitted by zohoLink()), infers each row's Zoho module
+        // Generic "Refresh from CRMProvider (live)" engine — scrapes the visible
+        // CRMProvider ids out of a tbody (via the data-testid="link-CRMProvider-<id>"
+        // anchors emitted by CRMProviderLink()), infers each row's CRMProvider module
         // from the anchor's href (/tab/Leads/... etc), groups ids by
         // module, and posts each group to /api/duplicates/refresh-records.
         // This lets tabs that mix record types (Cross-Module, CS Overlap,
@@ -1919,14 +1919,14 @@
         //            left as-is and only the refreshed values land in
         //            the underlying duplicate_records table.
         //   silent — suppress alert popups (for chained callers).
-        async function refreshTbodyFromZoho(tbodyId, btnId, opts) {
+        async function refreshTbodyFromCRMProvider(tbodyId, btnId, opts) {
             const silent = !!(opts && opts.silent);
             const reload = opts && opts.reload;
             const tbody = document.getElementById(tbodyId);
             const btn = btnId ? document.getElementById(btnId) : null;
             if (!tbody) return { refreshed: 0, skipped: true };
 
-            // Collect (module, id) pairs from every Zoho-link anchor in
+            // Collect (module, id) pairs from every CRMProvider-link anchor in
             // the table body. The module name is read from the href so
             // mixed-module tabs (Cross-Module, CS Overlap, Account Hints)
             // are dispatched correctly without needing tab-specific code.
@@ -1937,9 +1937,9 @@
                 Accounts: 'accounts',
             };
             const byModule = { leads: new Set(), deals: new Set(), contacts: new Set(), accounts: new Set() };
-            const anchors = tbody.querySelectorAll('a[data-testid^="link-zoho-"]');
+            const anchors = tbody.querySelectorAll('a[data-testid^="link-CRMProvider-"]');
             for (const a of anchors) {
-                const id = (a.getAttribute('data-testid') || '').replace(/^link-zoho-/, '');
+                const id = (a.getAttribute('data-testid') || '').replace(/^link-CRMProvider-/, '');
                 if (!id || id.startsWith('test_') || id.startsWith('LEAD_') || id.startsWith('DEAL_')) continue;
                 const href = a.getAttribute('href') || '';
                 const m = href.match(/\/tab\/(Leads|Deals|Contacts|Accounts)\//);
@@ -1950,7 +1950,7 @@
             }
             const totalIds = Object.values(byModule).reduce((n, s) => n + s.size, 0);
             if (totalIds === 0) {
-                if (!silent) rrToast('No Zoho records on this view to refresh.');
+                if (!silent) rrToast('No CRMProvider records on this view to refresh.');
                 return { refreshed: 0, skipped: true };
             }
 
@@ -1970,7 +1970,7 @@
                         const res = await fetch('/api/duplicates/refresh-records', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ module: moduleKey, zohoIds: slice }),
+                            body: JSON.stringify({ module: moduleKey, CRMProviderIds: slice }),
                         });
                         if (!res.ok) {
                             const err = await res.json().catch(() => ({}));
@@ -1984,7 +1984,7 @@
                 }
                 const notes = [];
                 if (totalFailed) notes.push(totalFailed + ' failed');
-                if (totalMissing) notes.push(totalMissing + ' not found in Zoho');
+                if (totalMissing) notes.push(totalMissing + ' not found in CRMProvider');
                 if (btn) {
                     btn.innerHTML = '✓ Refreshed ' + totalRefreshed + (notes.length ? ' (' + notes.join(', ') + ')' : '');
                 }
@@ -1999,9 +1999,9 @@
                     setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
                 }
                 if (!silent) {
-                    rrToast('Refresh from Zoho failed: ' + (e.message || e));
+                    rrToast('Refresh from CRMProvider failed: ' + (e.message || e));
                 } else {
-                    try { console.error('Refresh from Zoho failed:', e); } catch (_) {}
+                    try { console.error('Refresh from CRMProvider failed:', e); } catch (_) {}
                 }
                 return { refreshed: 0, error: String(e && e.message || e) };
             }
@@ -2009,12 +2009,12 @@
 
         // Cluster-aware live refresh — used by Cross-Module and CS Overlap
         // tabs where each visible row represents a cluster (not a single
-        // Zoho record) and links to showClusterDetails(clusterId). For
+        // CRMProvider record) and links to showClusterDetails(clusterId). For
         // each visible cluster we fetch its constituent records via the
         // existing /api/duplicates/clusters/:id endpoint, group those
-        // records' Zoho ids by module, and reuse the same per-module
+        // records' CRMProvider ids by module, and reuse the same per-module
         // refresh-records endpoint as every other tab.
-        async function refreshClustersFromZoho(tbodyId, btnId, opts) {
+        async function refreshClustersFromCRMProvider(tbodyId, btnId, opts) {
             const silent = !!(opts && opts.silent);
             const reload = opts && opts.reload;
             const tbody = document.getElementById(tbodyId);
@@ -2061,7 +2061,7 @@
                             const j = await r.json();
                             for (const rec of (j.records || [])) {
                                 const mod = RECORD_TYPE_TO_MODULE[String(rec.record_type || '').toLowerCase()];
-                                const zid = rec.zoho_record_id;
+                                const zid = rec.CRMProvider_record_id;
                                 if (!mod || !zid || typeof zid !== 'string') continue;
                                 if (zid.startsWith('test_') || zid.startsWith('LEAD_') || zid.startsWith('DEAL_')) continue;
                                 byModule[mod].add(zid);
@@ -2074,7 +2074,7 @@
                 const totalIds = Object.values(byModule).reduce((n, s) => n + s.size, 0);
                 if (totalIds === 0) {
                     if (btn) {
-                        btn.innerHTML = 'No Zoho records resolved';
+                        btn.innerHTML = 'No CRMProvider records resolved';
                         setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
                     }
                     return { refreshed: 0, skipped: true };
@@ -2090,7 +2090,7 @@
                         const res = await fetch('/api/duplicates/refresh-records', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ module: moduleKey, zohoIds: slice }),
+                            body: JSON.stringify({ module: moduleKey, CRMProviderIds: slice }),
                         });
                         if (!res.ok) {
                             const err = await res.json().catch(() => ({}));
@@ -2104,7 +2104,7 @@
                 }
                 const notes = [];
                 if (totalFailed) notes.push(totalFailed + ' failed');
-                if (totalMissing) notes.push(totalMissing + ' not found in Zoho');
+                if (totalMissing) notes.push(totalMissing + ' not found in CRMProvider');
                 if (btn) btn.innerHTML = '✓ Refreshed ' + totalRefreshed + (notes.length ? ' (' + notes.join(', ') + ')' : '');
                 if (typeof reload === 'function') { try { await reload(); } catch (_) {} }
                 if (btn) setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
@@ -2114,44 +2114,44 @@
                     btn.innerHTML = '✗ Failed';
                     setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
                 }
-                if (!silent) rrToast('Refresh from Zoho failed: ' + (e.message || e));
+                if (!silent) rrToast('Refresh from CRMProvider failed: ' + (e.message || e));
                 return { refreshed: 0, error: String(e && e.message || e) };
             }
         }
 
         // Tab-specific wrappers that point the generic engines at the
         // right tbody / button / reload function for each tab.
-        async function refreshCrossModuleFromZoho(opts) {
-            // Each Cross-Module row is a cluster (no per-record Zoho
+        async function refreshCrossModuleFromCRMProvider(opts) {
+            // Each Cross-Module row is a cluster (no per-record CRMProvider
             // anchors), so resolve cluster IDs to constituent records.
-            return refreshClustersFromZoho('crossModuleTable', 'crossModuleZohoRefreshBtn', {
+            return refreshClustersFromCRMProvider('crossModuleTable', 'crossModuleCRMProviderRefreshBtn', {
                 reload: () => loadCrossModule(),
                 silent: !!(opts && opts.silent),
             });
         }
-        async function refreshCsOverlapFromZoho(opts) {
+        async function refreshCsOverlapFromCRMProvider(opts) {
             // Each CS Overlap row is also a cluster — same resolution path.
-            return refreshClustersFromZoho('csOverlapTable', 'csOverlapZohoRefreshBtn', {
+            return refreshClustersFromCRMProvider('csOverlapTable', 'csOverlapCRMProviderRefreshBtn', {
                 reload: () => loadCsOverlap(window._csOverlapFilter || 'all'),
                 silent: !!(opts && opts.silent),
             });
         }
-        async function refreshAccountHintsFromZoho(opts) {
-            // Account Hints rows render Deal/Account/Contact Zoho links
+        async function refreshAccountHintsFromCRMProvider(opts) {
+            // Account Hints rows render Deal/Account/Contact CRMProvider links
             // directly, so the anchor-scrape engine works as-is.
-            return refreshTbodyFromZoho('accountHintsTable', 'accountHintsZohoRefreshBtn', {
+            return refreshTbodyFromCRMProvider('accountHintsTable', 'accountHintsCRMProviderRefreshBtn', {
                 reload: () => loadAccountHints(),
                 silent: !!(opts && opts.silent),
             });
         }
-        // Owner Accountability has no per-record Zoho ids in its table
+        // Owner Accountability has no per-record CRMProvider ids in its table
         // (it's an aggregate per-owner scorecard computed from the locally
         // synced duplicate_records). The button reloads the aggregate so
         // owners see whatever the most-recent global sync produced; for a
         // true live re-pull of every record the user should click the
         // top-header "Sync Now" button which scans the whole CRM.
-        async function refreshOwnersFromZoho() {
-            const btn = document.getElementById('ownersZohoRefreshBtn');
+        async function refreshOwnersFromCRMProvider() {
+            const btn = document.getElementById('ownersCRMProviderRefreshBtn');
             const orig = btn ? btn.innerHTML : null;
             if (btn) {
                 btn.disabled = true;
@@ -2174,15 +2174,15 @@
             }
         }
 
-        // Per-module live refresh from Zoho. Same UX as the green
-        // "Refresh from Zoho (live)" button on the CS Lifecycle tab, but
+        // Per-module live refresh from CRMProvider. Same UX as the green
+        // "Refresh from CRMProvider (live)" button on the CS Lifecycle tab, but
         // generic so every per-module tab (Leads / Deals / Contacts /
-        // Accounts) gets the same one-click sync. Reads the Zoho IDs of
+        // Accounts) gets the same one-click sync. Reads the CRMProvider IDs of
         // every row currently rendered in the module's table (via the
-        // data-testid="link-zoho-<id>" anchors that zohoLink() emits),
+        // data-testid="link-CRMProvider-<id>" anchors that CRMProviderLink() emits),
         // POSTs them to /api/duplicates/refresh-records, then reloads the
         // visible page so updated values appear immediately.
-        async function refreshModuleTableFromZoho(module, opts) {
+        async function refreshModuleTableFromCRMProvider(module, opts) {
             const silent = !!(opts && opts.silent);
             const TABLE_BY_MODULE = {
                 leads: 'leadsTable',
@@ -2191,17 +2191,17 @@
                 accounts: 'accountsTable',
             };
             const BTN_BY_MODULE = {
-                leads: 'leadsZohoRefreshBtn',
-                deals: 'dealsZohoRefreshBtn',
-                contacts: 'contactsZohoRefreshBtn',
-                accounts: 'accountsZohoRefreshBtn',
+                leads: 'leadsCRMProviderRefreshBtn',
+                deals: 'dealsCRMProviderRefreshBtn',
+                contacts: 'contactsCRMProviderRefreshBtn',
+                accounts: 'accountsCRMProviderRefreshBtn',
             };
             const tbody = document.getElementById(TABLE_BY_MODULE[module]);
             const btn = document.getElementById(BTN_BY_MODULE[module]);
             if (!tbody) return { refreshed: 0, skipped: true };
             const ids = Array.from(new Set(
-                Array.from(tbody.querySelectorAll('a[data-testid^="link-zoho-"]'))
-                    .map(a => (a.getAttribute('data-testid') || '').replace(/^link-zoho-/, ''))
+                Array.from(tbody.querySelectorAll('a[data-testid^="link-CRMProvider-"]'))
+                    .map(a => (a.getAttribute('data-testid') || '').replace(/^link-CRMProvider-/, ''))
                     .filter(id => id && !id.startsWith('test_') && !id.startsWith('LEAD_') && !id.startsWith('DEAL_'))
             ));
             if (ids.length === 0) {
@@ -2222,7 +2222,7 @@
                     const res = await fetch('/api/duplicates/refresh-records', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ module: module, zohoIds: slice }),
+                        body: JSON.stringify({ module: module, CRMProviderIds: slice }),
                     });
                     if (!res.ok) {
                         const err = await res.json().catch(() => ({}));
@@ -2235,7 +2235,7 @@
                 }
                 const notes = [];
                 if (totalFailed) notes.push(totalFailed + ' failed');
-                if (totalMissing) notes.push(totalMissing + ' not found in Zoho');
+                if (totalMissing) notes.push(totalMissing + ' not found in CRMProvider');
                 if (btn) {
                     btn.innerHTML = '✓ Refreshed ' + totalRefreshed + (notes.length ? ' (' + notes.join(', ') + ')' : '');
                 }
@@ -2248,9 +2248,9 @@
                     setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
                 }
                 if (!silent) {
-                    rrToast('Refresh from Zoho failed: ' + (e.message || e));
+                    rrToast('Refresh from CRMProvider failed: ' + (e.message || e));
                 } else {
-                    try { console.error('Refresh from Zoho failed:', e); } catch (_) {}
+                    try { console.error('Refresh from CRMProvider failed:', e); } catch (_) {}
                 }
                 return { refreshed: 0, error: String(e && e.message || e) };
             }
@@ -2331,7 +2331,7 @@
 
         // Background live-verify for a record tab (Sample User 2026-07-15): re-request
         // the SAME page with ?verify=1 so the server live-checks this page's
-        // records against Zoho, prunes any already-deleted ghosts + marks
+        // records against CRMProvider, prunes any already-deleted ghosts + marks
         // converted leads, and returns the corrected set. If the load hasn't been
         // superseded (loadId still current) we re-render in place — so the four
         // inline lists self-clean on open exactly like the cluster preview modal.
@@ -2414,7 +2414,7 @@
 
                     // Instant render from the mirror…
                     _renderRecordTabData(type, page, data);
-                    // …then silently live-verify THIS page's records against Zoho
+                    // …then silently live-verify THIS page's records against CRMProvider
                     // and refresh in place if a ghost was pruned (Sample User 2026-07-15).
                     // Non-blocking so the list never hangs on live CRM calls.
                     _bgVerifyRecordTab(type, page, url, loadId, loadKey);
@@ -2434,17 +2434,17 @@
             }
         }
 
-        function zohoLink(id, module, label) {
+        function CRMProviderLink(id, module, label) {
             // When a custom label is provided (e.g. "render the account name as
-            // the clickable text rather than the Zoho record id"), it must be
-            // HTML-escaped — the id-only path is safe because Zoho ids are
+            // the clickable text rather than the CRMProvider record id"), it must be
+            // HTML-escaped — the id-only path is safe because CRMProvider ids are
             // numeric, but free-text labels can contain quotes/brackets.
             const text = label != null ? escapeHtml(String(label)) : (id || '-');
             if (!id || id.startsWith('test_') || id.startsWith('LEAD_') || id.startsWith('DEAL_')) return `<span class="text-xs font-mono text-gray-400">${text}</span>`;
-            return `<a href="<REDACTED_URL>" target="_blank" class="text-blue-600 hover:underline text-xs font-mono" data-testid="link-zoho-${id}">${text}</a>`;
+            return `<a href="<REDACTED_URL>" target="_blank" class="text-blue-600 hover:underline text-xs font-mono" data-testid="link-CRMProvider-${id}">${text}</a>`;
         }
 
-        // Render the "Created By" cell from the Zoho raw_data payload.
+        // Render the "Created By" cell from the CRMProvider raw_data payload.
         // Shows the creator's name on top and the formatted date/time below.
         function createdByCell(r) {
             const raw = r && r.raw_data ? r.raw_data : {};
@@ -2480,7 +2480,7 @@
             return `<td class="px-4 py-3 text-sm font-medium"><a href="javascript:void(0)" data-on-click="showClusterDetails" data-args="[${cid}]" class="text-blue-600 hover:text-blue-800 hover:underline" title="View this cluster's full record set + recommendations" data-testid="link-record-cluster-${cid}">${label}</a></td>`;
         }
 
-        // Pull a usable phone for a lead row. Zoho exposes both Phone and
+        // Pull a usable phone for a lead row. CRMProvider exposes both Phone and
         // Mobile separately, and the duplicate scan should treat either as
         // a match key — many reps put the cell number in the wrong field.
         function leadPhone(r) {
@@ -2563,7 +2563,7 @@
             try {
                 let s = String(w).trim().toLowerCase();
                 if (!s) return '';
-                if (!/^https?:\/\//.test(s)) s = 'http://' + s;
+                if (!/^https?:\/\//.test(s)) s = '<REDACTED_URL_SCHEME>' + s;
                 const u = new URL(s);
                 return u.hostname.replace(/^www\./, '');
             } catch { return String(w).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]; }
@@ -2582,7 +2582,7 @@
         // ── Newest-first ordering (every module tab) ───────────────────
         // Sample User: each tab must list the NEWEST duplicates first (by real CRM
         // creation time) so fresh dupes are caught first, newest → oldest,
-        // down to the last match. A record's time = Zoho Created_Time, falling
+        // down to the last match. A record's time = CRMProvider Created_Time, falling
         // back to our stored created_date / created_at; epoch ms, 0 when
         // unknown so undated rows sink. A group ranks by its NEWEST member,
         // mirroring the server's recency pagination (getDuplicateRecordsByType
@@ -2635,11 +2635,11 @@
                 }
             }
             const primary = recs.find(r => r.is_primary) || recs[0];
-            // The exact Zoho ids of THIS sub-group's members — passed to the AI
+            // The exact CRMProvider ids of THIS sub-group's members — passed to the AI
             // plan so it scopes to what the tab shows, not the whole cluster
             // (fixes "tab shows 2 contacts, plan opens the 21-record cluster").
-            const zohoIds = recs.map(r => String((r && (r.zoho_record_id || r.zohoId)) || '')).filter(Boolean);
-            return { sharedKeys, primary, count: recs.length, zohoIds };
+            const CRMProviderIds = recs.map(r => String((r && (r.CRMProvider_record_id || r.CRMProviderId)) || '')).filter(Boolean);
+            return { sharedKeys, primary, count: recs.length, CRMProviderIds };
         }
 
         // Yellow collapsible group-header row.
@@ -2651,7 +2651,7 @@
             const _aiCid = summary.primary && summary.primary.cluster_id;
             // AI-state badge — visible at-a-glance so the operator can tell
             // which clusters were already AI-applied (and are just waiting
-            // for the Zoho admin to physically delete the tagged records)
+            // for the CRMProvider admin to physically delete the tagged records)
             // vs. truly untouched. Comes from the new merge_action sidecar
             // on the list endpoint.
             const aiState = clusterMeta && clusterMeta.ai_state;
@@ -2661,44 +2661,44 @@
                 : '';
             let aiStateBadge = '';
             if (aiState === 'tagged_pending_delete') {
-                aiStateBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300" title="Apply was already run on this cluster${lastAt ? ' (' + lastAt + ')' : ''}. ${tagged} duplicate(s) carry the Duplicate-Delete tag in Zoho — the cluster keeps re-appearing here on every scan until the Zoho admin physically deletes those tagged records.">🤖 AI-Applied · ${tagged} pending Zoho delete</span>`;
+                aiStateBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300" title="Apply was already run on this cluster${lastAt ? ' (' + lastAt + ')' : ''}. ${tagged} duplicate(s) carry the Duplicate-Delete tag in CRMProvider — the cluster keeps re-appearing here on every scan until the CRMProvider admin physically deletes those tagged records.">🤖 AI-Applied · ${tagged} pending CRMProvider delete</span>`;
             } else if (aiState === 'resolved') {
                 aiStateBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300" title="Cluster status='resolved' — confirmed via agentic apply / CRM verification.">✅ Resolved</span>`;
             }
-            // Button label clarified: "🔍 Open AI Plan" instead of
+            // Button label clarified: "🔍 LLMProvider Plan" instead of
             // "🔍 Resolve with AI" — the original wording made operators
             // believe one click would auto-apply, when it actually only
             // opens the merge plan preview.
             const aiBtnLabel = aiState === 'tagged_pending_delete'
-                ? '🔁 Re-open AI Plan'
-                : '🔍 Open AI Plan';
+                ? '🔁 Re-LLMProvider Plan'
+                : '🔍 LLMProvider Plan';
             // Pass the exact ids of THIS sub-group so the plan scopes to what the
             // operator sees here, not every record in a (possibly synthetic /
             // multi-company) cluster. JSON of numeric ids — safe inside the
             // single-quoted data-args attribute.
-            const _aiIds = JSON.stringify((summary.zohoIds || []).map(String));
+            const _aiIds = JSON.stringify((summary.CRMProviderIds || []).map(String));
             const aiBtn = _aiCid
-                ? `<button data-on-click="resolveGroupWithAI" data-args='["${_aiMod}",${_aiCid},${_aiIds}]' data-testid="btn-resolve-ai-${gid}" class="px-2 py-1 rounded text-[11px] font-semibold bg-purple-600 text-white hover:bg-purple-700" title="Open the AI merge-plan modal scoped to these records. You still need to click Apply in Zoho inside the modal to actually tag duplicates.">${aiBtnLabel}</button>`
+                ? `<button data-on-click="resolveGroupWithAI" data-args='["${_aiMod}",${_aiCid},${_aiIds}]' data-testid="btn-resolve-ai-${gid}" class="px-2 py-1 rounded text-[11px] font-semibold bg-purple-600 text-white hover:bg-purple-700" title="Open the AI merge-plan modal scoped to these records. You still need to click Apply in CRMProvider inside the modal to actually tag duplicates.">${aiBtnLabel}</button>`
                 : '';
             // Dismiss — mark as a false positive (e.g. intentionally separate
             // accounts: a Corporate-Accounts account vs a Marketplace account).
             const dismissBtn = _aiCid
                 ? `<button data-on-click="dismissCluster" data-args='["${_aiMod}",${_aiCid}]' data-testid="btn-dismiss-${gid}" class="px-2 py-1 rounded text-[11px] font-semibold bg-gray-200 text-gray-700 hover:bg-gray-300" title="Dismiss as a false positive — use when these are intentionally separate accounts (e.g. Corporate-Accounts vs Marketplace: Sales B2B/B2C account vs Merchants account). Moves it to the Dismissed filter; it stops appearing as a duplicate to action.">🚫 Dismiss</button>`
                 : '';
-            // Verify in CRM — the trustworthy "resolve": re-query Zoho for every
+            // Verify in CRM — the trustworthy "resolve": re-query CRMProvider for every
             // record this cluster tagged Duplicate-Delete and, ONLY if the admin
             // has actually deleted them all, mark the cluster Resolved. Shown on
-            // AI-Applied (pending Zoho delete) clusters across every module tab —
+            // AI-Applied (pending CRMProvider delete) clusters across every module tab —
             // this replaces the old "assert it's done" Mark Resolved.
             const verifyBtn = (_aiCid && aiState === 'tagged_pending_delete')
-                ? `<button data-on-click="verifyAndResolveCluster" data-args='["${_aiMod}",${_aiCid}]' data-testid="btn-verify-crm-${gid}" class="px-2 py-1 rounded text-[11px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700" title="Check Zoho: has the admin actually deleted the Duplicate-Delete records? If every tagged duplicate is gone, this marks the cluster Resolved. If any are still in Zoho, it tells you which — and does NOT resolve.">✅ Verify in CRM</button>`
+                ? `<button data-on-click="verifyAndResolveCluster" data-args='["${_aiMod}",${_aiCid}]' data-testid="btn-verify-crm-${gid}" class="px-2 py-1 rounded text-[11px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700" title="Check CRMProvider: has the admin actually deleted the Duplicate-Delete records? If every tagged duplicate is gone, this marks the cluster Resolved. If any are still in CRMProvider, it tells you which — and does NOT resolve.">✅ Verify in CRM</button>`
                 : '';
             // Re-open — set a resolved/dismissed cluster back to active so it can
             // be merged. Shown on resolved clusters and in the Resolved/Dismissed
             // filter views (for clusters marked done but not actually merged).
             const _viewFilter = (window._aiStatusByTab && window._currentTab && window._aiStatusByTab[window._currentTab]) || 'active';
             const reopenBtn = (_aiCid && (aiState === 'resolved' || _viewFilter === 'resolved' || _viewFilter === 'dismissed'))
-                ? `<button data-on-click="reopenCluster" data-args='["${_aiMod}",${_aiCid}]' data-testid="btn-reopen-${gid}" class="px-2 py-1 rounded text-[11px] font-semibold bg-blue-100 text-blue-800 hover:bg-blue-200" title="Re-open this cluster (set it back to active) so you can merge it — for clusters marked Resolved/Dismissed but not actually merged in Zoho.">🔓 Re-open</button>`
+                ? `<button data-on-click="reopenCluster" data-args='["${_aiMod}",${_aiCid}]' data-testid="btn-reopen-${gid}" class="px-2 py-1 rounded text-[11px] font-semibold bg-blue-100 text-blue-800 hover:bg-blue-200" title="Re-open this cluster (set it back to active) so you can merge it — for clusters marked Resolved/Dismissed but not actually merged in CRMProvider.">🔓 Re-open</button>`
                 : '';
             return `<tr class="bg-yellow-50 hover:bg-yellow-100 cursor-pointer border-t-2 border-yellow-300" data-on-click="toggleDupGroup" data-args='["${gid}"]' data-testid="row-dup-group-${gid}">
                 <td class="px-4 py-3 text-sm" colspan="${colspan}">
@@ -2715,18 +2715,18 @@
             </tr>`;
         }
 
-        // Identity column: ★ primary, bold name, secondary line, tiny ↗ Zoho link.
-        function _dupIdentityCell(r, moduleZoho, secondaryText, nameIsDup) {
+        // Identity column: ★ primary, bold name, secondary line, tiny ↗ CRMProvider link.
+        function _dupIdentityCell(r, moduleCRMProvider, secondaryText, nameIsDup) {
             const star = r.is_primary
                 ? `<span class="text-yellow-500 me-1" title="${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.primary'))} — system-chosen master record for this cluster">★</span>`
                 : '';
-            const idStr = String(r.zoho_record_id || '');
+            const idStr = String(r.CRMProvider_record_id || '');
             const isSynthetic = !idStr || idStr.startsWith('test_') || idStr.startsWith('LEAD_') || idStr.startsWith('DEAL_') || idStr.startsWith('CONTACT_') || idStr.startsWith('ACCOUNT_');
-            const zohoIconLink = isSynthetic ? ''
-                : `<a href="<REDACTED_URL>" target="_blank" class="text-blue-500 hover:text-blue-700 ms-1 text-xs" title="Open in Zoho CRM (id ${escapeHtml(idStr)})" data-testid="link-zoho-${idStr}">↗</a>`;
+            const CRMProviderIconLink = isSynthetic ? ''
+                : `<a href="<REDACTED_URL>" target="_blank" class="text-blue-500 hover:text-blue-700 ms-1 text-xs" title="Open in CRMProvider CRM (id ${escapeHtml(idStr)})" data-testid="link-CRMProvider-${idStr}">↗</a>`;
             const nameColorCls = nameIsDup ? 'text-purple-700' : 'text-gray-900';
             return `<td class="px-4 py-3 text-sm">
-                <div class="flex items-center font-medium ${nameColorCls}">${star}<span>${escapeHtml(r.record_name || '-')}</span>${zohoIconLink}</div>
+                <div class="flex items-center font-medium ${nameColorCls}">${star}<span>${escapeHtml(r.record_name || '-')}</span>${CRMProviderIconLink}</div>
                 ${secondaryText ? `<div class="text-xs text-gray-500">${escapeHtml(secondaryText)}</div>` : ''}
             </td>`;
         }
@@ -2734,12 +2734,12 @@
         function _dupLayoutCell(r) {
             const raw = r && r.raw_data ? r.raw_data : {};
             const layoutName = (raw.Layout && (raw.Layout.name || raw.Layout.display_label)) || r.layout || '-';
-            return `<td class="px-4 py-3 text-sm text-gray-600" title="Zoho layout">${escapeHtml(layoutName || '-')}</td>`;
+            return `<td class="px-4 py-3 text-sm text-gray-600" title="CRMProvider layout">${escapeHtml(layoutName || '-')}</td>`;
         }
 
         // Account PRODUCT (Sample User 2026-08-11) — corporate accounts share the
         // "Corporate Accounts" layout, so the product (ExampleOrg vs WalaOne) is
-        // NOT in the layout: it lives in the account's Zoho multi-select
+        // NOT in the layout: it lives in the account's CRMProvider multi-select
         // "Products" field (e.g. ["WalaOne"]). A populated "ExampleOrg Products"
         // sub-field is a secondary ExampleOrg signal. Returns 'ExampleOrg' |
         // 'walaone' | 'both' | null, read entirely client-side from raw_data.
@@ -2751,7 +2751,7 @@
                 if (typeof v === 'object') return [v.name || v.display_label || ''];
                 return String(v).split(/[,;|]/);
             };
-            // Normalise away EVERY separator, not just spaces: Zoho holds the
+            // Normalise away EVERY separator, not just spaces: CRMProvider holds the
             // same product as "WalaOne" in one cell and "Wala One" in another
             // (and "wala-one" turns up too), so strip to letters+digits.
             const norm = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -2781,7 +2781,7 @@
             // "ExampleOrg Products" value that names neither family (a bare SKU
             // like "Gold Package"). It must NOT fire when the cells already
             // identify a product — that presence-means-ExampleOrg shortcut is what
-            // labelled the WalaOne account ديمه (Zoho 5146753000131556104,
+            // labelled the WalaOne account ديمه (CRMProvider 5146753000131556104,
             // Products "Wala One" / ExampleOrg Products "WalaOne") as ExampleOrg.
             if (!hasWP && !hasWO && wppVals.length) hasWP = true;
             if (hasWO && hasWP) return 'both';
@@ -2790,21 +2790,21 @@
             return null;
         }
         function _accountProductChip(prod) {
-            if (prod === 'walaone') return '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-sky-100 text-sky-800" title="Account product (Zoho Products field): WalaOne">WalaOne</span>';
-            if (prod === 'ExampleOrg') return '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-800" title="Account product (Zoho Products field): ExampleOrg">ExampleOrg</span>';
-            if (prod === 'both') return '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800" title="Account product (Zoho Products field): ExampleOrg + WalaOne">ExampleOrg + WalaOne</span>';
+            if (prod === 'walaone') return '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-sky-100 text-sky-800" title="Account product (CRMProvider Products field): WalaOne">WalaOne</span>';
+            if (prod === 'ExampleOrg') return '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-800" title="Account product (CRMProvider Products field): ExampleOrg">ExampleOrg</span>';
+            if (prod === 'both') return '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800" title="Account product (CRMProvider Products field): ExampleOrg + WalaOne">ExampleOrg + WalaOne</span>';
             return '';
         }
-        // Accounts-only layout cell: the Zoho layout PLUS the product chip below.
+        // Accounts-only layout cell: the CRMProvider layout PLUS the product chip below.
         function _dupAccountLayoutCell(r) {
             const raw = r && r.raw_data ? r.raw_data : {};
             const layoutName = (raw.Layout && (raw.Layout.name || raw.Layout.display_label)) || r.layout || '-';
             const chip = _accountProductChip(_accountProduct(r));
-            return `<td class="px-4 py-3 text-sm text-gray-600" title="Zoho layout + product"><div>${escapeHtml(layoutName || '-')}</div>${chip ? '<div class="mt-1">' + chip + '</div>' : ''}</td>`;
+            return `<td class="px-4 py-3 text-sm text-gray-600" title="CRMProvider layout + product"><div>${escapeHtml(layoutName || '-')}</div>${chip ? '<div class="mt-1">' + chip + '</div>' : ''}</td>`;
         }
 
         // 2026-06-09 — Contact-only variant of _dupLayoutCell. Reads the
-        // Zoho Contacts module's "Contact_Type" field instead of Layout
+        // CRMProvider Contacts module's "Contact_Type" field instead of Layout
         // because operators triaging contact dupes care about WHICH KIND
         // of contact (Customer / Prospect / Vendor / Partner / etc.) far
         // more than which UI layout was used. The Layout column on this
@@ -2819,7 +2819,7 @@
                 raw.contact_type ??
                 r.contact_type ??
                 null;
-            // Zoho returns the field as either a plain string or a
+            // CRMProvider returns the field as either a plain string or a
             // {id, name, display_label} object depending on the field
             // type + tenant config. Handle both shapes defensively.
             let val = '';
@@ -2829,7 +2829,7 @@
                 val = String(ctRaw.name || ctRaw.display_label || '');
             }
             val = (val || '').trim();
-            return `<td class="px-4 py-3 text-sm text-gray-600" title="Zoho Contacts → Contact Type field">${escapeHtml(val || '-')}</td>`;
+            return `<td class="px-4 py-3 text-sm text-gray-600" title="CRMProvider Contacts → Contact Type field">${escapeHtml(val || '-')}</td>`;
         }
 
         function _dupCreatedCell(r) {
@@ -2875,7 +2875,7 @@
 
             // Counts per match-key so each row can show 👤/📧/📞/🆔 badges.
             // OR rule: a row is a duplicate if ANY of name, email, phone, or
-            // Zoho CRM ID matches another lead on this page. A repeated Zoho
+            // CRMProvider CRM ID matches another lead on this page. A repeated CRMProvider
             // ID is normally an indexer/sync bug (the same record stored
             // twice in our DB) — worth surfacing explicitly.
             const nameCounts = {};
@@ -2886,7 +2886,7 @@
                 const n = _normName(r.record_name);
                 const e = _normEmail(r.email);
                 const p = _normPhone(leadPhone(r));
-                const id = String(r.zoho_record_id || '').trim();
+                const id = String(r.CRMProvider_record_id || '').trim();
                 if (n) nameCounts[n] = (nameCounts[n] || 0) + 1;
                 if (e) emailCounts[e] = (emailCounts[e] || 0) + 1;
                 if (p) phoneCounts[p] = (phoneCounts[p] || 0) + 1;
@@ -2894,7 +2894,7 @@
             }
 
             // Union-find: merge any two leads that share at least one of
-            // name / email / phone / Zoho ID. This way a lead matching
+            // name / email / phone / CRMProvider ID. This way a lead matching
             // another by phone AND a third by email all end up in the same
             // group. Index-into-allLeads is the node identifier.
             const parent = allLeads.map((_, i) => i);
@@ -2907,7 +2907,7 @@
                     if (keyName === 'name') k = _normName(r.record_name);
                     else if (keyName === 'email') k = _normEmail(r.email);
                     else if (keyName === 'phone') k = _normPhone(leadPhone(r));
-                    else if (keyName === 'id') k = String(r.zoho_record_id || '').trim();
+                    else if (keyName === 'id') k = String(r.CRMProvider_record_id || '').trim();
                     if (!k) return;
                     if (map[k] === undefined) map[k] = i;
                     else union(map[k], i);
@@ -2937,14 +2937,14 @@
                 const nameVals = new Set(recs.map(r => _normName(r.record_name)).filter(Boolean));
                 const emailVals = new Set(recs.map(r => _normEmail(r.email)).filter(Boolean));
                 const phoneVals = new Set(recs.map(r => _normPhone(leadPhone(r))).filter(Boolean));
-                const idVals = new Set(recs.map(r => String(r.zoho_record_id || '').trim()).filter(Boolean));
+                const idVals = new Set(recs.map(r => String(r.CRMProvider_record_id || '').trim()).filter(Boolean));
                 if (nameVals.size === 1) sharedKeys.push({ k: '👤', label: 'name', color: 'bg-purple-100 text-purple-800', value: [...nameVals][0] });
                 if (emailVals.size === 1) sharedKeys.push({ k: '📧', label: 'email', color: 'bg-red-100 text-red-800', value: [...emailVals][0] });
                 if (phoneVals.size === 1) sharedKeys.push({ k: '📞', label: 'phone', color: 'bg-orange-100 text-orange-800', value: [...phoneVals][0] });
                 if (idVals.size === 1 && recs.length > 1) sharedKeys.push({ k: '🆔', label: 'CRM ID', color: 'bg-rose-200 text-rose-900', value: [...idVals][0] });
                 const primary = recs.find(r => r.is_primary) || recs[0];
-                const zohoIds = recs.map(r => String((r && (r.zoho_record_id || r.zohoId)) || '')).filter(Boolean);
-                return { sharedKeys, primary, count: recs.length, zohoIds };
+                const CRMProviderIds = recs.map(r => String((r && (r.CRMProvider_record_id || r.CRMProviderId)) || '')).filter(Boolean);
+                return { sharedKeys, primary, count: recs.length, CRMProviderIds };
             }
 
             let rows = '';
@@ -2952,9 +2952,9 @@
                 const summary = _groupSummary(idxs);
                 // Use the shared _dupGroupHeaderRow helper (same one the
                 // Deals/Contacts/Accounts tabs use) so Leads gets parity:
-                //   - "🤖 AI-Applied · N pending Zoho delete" badge when
+                //   - "🤖 AI-Applied · N pending CRMProvider delete" badge when
                 //     the cluster already has a merge_action against it
-                //   - "🔍 Open AI Plan" / "🔁 Re-open AI Plan" button
+                //   - "🔍 LLMProvider Plan" / "🔁 Re-LLMProvider Plan" button
                 //     label (NOT the misleading old "Resolve with AI")
                 //   - "✅ Verify in CRM" button on AI-applied clusters
                 //   - "🔓 Re-open" button on resolved/dismissed clusters
@@ -2973,24 +2973,24 @@
                 const n = _normName(r.record_name);
                 const e = _normEmail(r.email);
                 const p = _normPhone(phone);
-                const idKey = String(r.zoho_record_id || '').trim();
+                const idKey = String(r.CRMProvider_record_id || '').trim();
                 const nDup = n && nameCounts[n] > 1 ? nameCounts[n] : 0;
                 const eDup = e && emailCounts[e] > 1 ? emailCounts[e] : 0;
                 const pDup = p && phoneCounts[p] > 1 ? phoneCounts[p] : 0;
                 const idDup = idKey && idCounts[idKey] > 1 ? idCounts[idKey] : 0;
 
                 // Lead cell — name (bold) + company (small grey) + primary
-                // star + tiny Zoho-link icon. Single identity column instead
-                // of four separate ones (Zoho ID / Domain / Name / Company).
+                // star + tiny CRMProvider-link icon. Single identity column instead
+                // of four separate ones (CRMProvider ID / Domain / Name / Company).
                 const star = r.is_primary
                     ? `<span class="text-yellow-500 me-1" title="${escapeHtml(ExampleOrgI18n.t('dyn.duplicates.primary'))} — system-chosen master record for this cluster">★</span>`
                     : '';
-                const zohoIconLink = r.zoho_record_id && !String(r.zoho_record_id).startsWith('test_') && !String(r.zoho_record_id).startsWith('LEAD_')
-                    ? `<a href="<REDACTED_URL>" target="_blank" class="text-blue-500 hover:text-blue-700 ms-1 text-xs" title="Open in Zoho CRM (id ${escapeHtml(String(r.zoho_record_id))})" data-testid="link-zoho-${r.zoho_record_id}">↗</a>`
+                const CRMProviderIconLink = r.CRMProvider_record_id && !String(r.CRMProvider_record_id).startsWith('test_') && !String(r.CRMProvider_record_id).startsWith('LEAD_')
+                    ? `<a href="<REDACTED_URL>" target="_blank" class="text-blue-500 hover:text-blue-700 ms-1 text-xs" title="Open in CRMProvider CRM (id ${escapeHtml(String(r.CRMProvider_record_id))})" data-testid="link-CRMProvider-${r.CRMProvider_record_id}">↗</a>`
                     : '';
                 const nameColorCls = nDup ? 'text-purple-700' : 'text-gray-900';
                 const leadCell = `<td class="px-4 py-3 text-sm">
-                    <div class="flex items-center font-medium ${nameColorCls}">${star}<span title="${nDup ? nDup + ' leads on this page share this exact name' : ''}">${escapeHtml(r.record_name || '-')}</span>${zohoIconLink}</div>
+                    <div class="flex items-center font-medium ${nameColorCls}">${star}<span title="${nDup ? nDup + ' leads on this page share this exact name' : ''}">${escapeHtml(r.record_name || '-')}</span>${CRMProviderIconLink}</div>
                     <div class="text-xs text-gray-500">${escapeHtml(r.company_name || '-')}</div>
                 </td>`;
 
@@ -2999,7 +2999,7 @@
                 if (nDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800" title="${nDup} leads on this page share this exact name">👤 name ×${nDup}</span>`);
                 if (eDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-800" title="${eDup} leads on this page share this exact email">📧 email ×${eDup}</span>`);
                 if (pDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-800" title="${pDup} leads on this page share this exact phone">📞 phone ×${pDup}</span>`);
-                if (idDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-200 text-rose-900 border border-rose-400" title="${idDup} rows reference the same Zoho CRM ID — usually an indexer/sync bug, not a true CRM duplicate. Investigate before merging.">🆔 dup CRM ID ×${idDup}</span>`);
+                if (idDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-200 text-rose-900 border border-rose-400" title="${idDup} rows reference the same CRMProvider CRM ID — usually an indexer/sync bug, not a true CRM duplicate. Investigate before merging.">🆔 dup CRM ID ×${idDup}</span>`);
                 if (!signals.length) signals.push('<span class="text-gray-400 text-xs" title="No name/email/phone/ID collisions with other leads on this page">-</span>');
                 const signalCell = `<td class="px-4 py-3 text-sm"><div class="flex flex-wrap gap-1">${signals.join('')}</div></td>`;
 
@@ -3023,7 +3023,7 @@
                 </td>`;
 
                     const layoutName = (raw.Layout && (raw.Layout.name || raw.Layout.display_label)) || r.layout || '-';
-                    const layoutCell = `<td class="px-4 py-3 text-sm text-gray-600" title="Zoho layout">${escapeHtml(layoutName || '-')}</td>`;
+                    const layoutCell = `<td class="px-4 py-3 text-sm text-gray-600" title="CRMProvider layout">${escapeHtml(layoutName || '-')}</td>`;
                     rows += `<tr data-dup-group="${_gid}" class="hidden bg-white">${leadCell}${signalCell}${emailCell}${phoneCell}${layoutCell}<td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(r.owner_name||'-')}</td><td class="px-4 py-3 text-sm"><span class="px-2 py-1 rounded text-xs bg-gray-100">${escapeHtml(r.status||'-')}</span></td>${createdCell}</tr>`;
                 });
             });
@@ -3032,7 +3032,7 @@
 
         // ─── DEALS ───
         // Match keys: name+account (combined — same deal name on the same
-        // account is a strong duplicate signal) and Zoho CRM ID. We do NOT
+        // account is a strong duplicate signal) and CRMProvider CRM ID. We do NOT
         // group by bare deal name alone, because "Renewal 2025" naturally
         // recurs across many accounts and would balloon the groups.
         function renderDealRows(groups) {
@@ -3057,7 +3057,7 @@
                     const a = accountIdOf(r);
                     return n && a ? (n + '|' + a) : '';
                 },
-                id: r => String(r.zoho_record_id || '').trim(),
+                id: r => String(r.CRMProvider_record_id || '').trim(),
             };
             const keyDefs = {
                 nameAccount: { emoji: '👤', label: 'name + account', color: 'bg-purple-100 text-purple-800' },
@@ -3083,7 +3083,7 @@
                     const identity = _dupIdentityCell(r, 'Deals', r.company_name || '-', !!naDup);
                     const signals = [];
                     if (naDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800" title="${naDup} deals on this page share the same name on the same account">👤 name+account ×${naDup}</span>`);
-                    if (idDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-200 text-rose-900 border border-rose-400" title="${idDup} rows reference the same Zoho CRM ID — usually an indexer/sync bug, not a true CRM duplicate. Investigate before merging.">🆔 dup CRM ID ×${idDup}</span>`);
+                    if (idDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-200 text-rose-900 border border-rose-400" title="${idDup} rows reference the same CRMProvider CRM ID — usually an indexer/sync bug, not a true CRM duplicate. Investigate before merging.">🆔 dup CRM ID ×${idDup}</span>`);
                     if (!signals.length) signals.push('<span class="text-gray-400 text-xs">-</span>');
                     const signalCell = `<td class="px-4 py-3 text-sm"><div class="flex flex-wrap gap-1">${signals.join('')}</div></td>`;
 
@@ -3098,7 +3098,7 @@
         }
 
         // ─── CONTACTS ───
-        // Match keys: name, email, phone, Zoho CRM ID (same OR rule as leads).
+        // Match keys: name, email, phone, CRMProvider CRM ID (same OR rule as leads).
         function renderContactRows(groups) {
             const tbody = document.getElementById('contactsTable');
             const items = [];
@@ -3116,7 +3116,7 @@
                 name:  r => _normName(r.record_name),
                 email: r => _normEmail(r.email),
                 phone: r => _normPhone(contactPhone(r)),
-                id:    r => String(r.zoho_record_id || '').trim(),
+                id:    r => String(r.CRMProvider_record_id || '').trim(),
             };
             const keyDefs = {
                 name:  { emoji: '👤', label: 'name',  color: 'bg-purple-100 text-purple-800' },
@@ -3158,7 +3158,7 @@
                     if (nDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800" title="${nDup} contacts on this page share this exact name">👤 name ×${nDup}</span>`);
                     if (eDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-800" title="${eDup} contacts on this page share this exact email">📧 email ×${eDup}</span>`);
                     if (pDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-800" title="${pDup} contacts on this page share this exact phone">📞 phone ×${pDup}</span>`);
-                    if (idDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-200 text-rose-900 border border-rose-400" title="${idDup} rows reference the same Zoho CRM ID — usually an indexer/sync bug, not a true CRM duplicate.">🆔 dup CRM ID ×${idDup}</span>`);
+                    if (idDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-200 text-rose-900 border border-rose-400" title="${idDup} rows reference the same CRMProvider CRM ID — usually an indexer/sync bug, not a true CRM duplicate.">🆔 dup CRM ID ×${idDup}</span>`);
                     if (!signals.length) signals.push('<span class="text-gray-400 text-xs">-</span>');
                     const signalCell = `<td class="px-4 py-3 text-sm"><div class="flex flex-wrap gap-1">${signals.join('')}</div></td>`;
 
@@ -3186,12 +3186,12 @@
         }
 
         // ─── ACCOUNTS ───
-        // Match keys: account name, email, phone, website hostname, Zoho CRM ID.
+        // Match keys: account name, email, phone, website hostname, CRMProvider CRM ID.
         function renderAccountRows(groups) {
             const tbody = document.getElementById('accountsTable');
             const items = [];
             // Build cluster-meta lookup so _dupGroupHeaderRow can render the
-            // AI-state badge ("🤖 AI-Applied · N pending Zoho delete" vs
+            // AI-state badge ("🤖 AI-Applied · N pending CRMProvider delete" vs
             // "✅ Resolved" vs default).
             const clusterMetaById = {};
             const _serverGroupIdx = [];
@@ -3212,7 +3212,7 @@
                 email:   r => _normEmail(r.email),
                 phone:   r => _normPhone(r.phone),
                 website: r => _normWebsite(websiteOf(r)),
-                id:      r => String(r.zoho_record_id || '').trim(),
+                id:      r => String(r.CRMProvider_record_id || '').trim(),
             };
             const keyDefs = {
                 name:    { emoji: '👤', label: 'name',    color: 'bg-purple-100 text-purple-800' },
@@ -3270,7 +3270,7 @@
                     if (eDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-800" title="${eDup} accounts on this page share this exact email">📧 email ×${eDup}</span>`);
                     if (pDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-800" title="${pDup} accounts on this page share this exact phone">📞 phone ×${pDup}</span>`);
                     if (wDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-cyan-100 text-cyan-800" title="${wDup} accounts on this page share the same website hostname">🌐 website ×${wDup}</span>`);
-                    if (idDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-200 text-rose-900 border border-rose-400" title="${idDup} rows reference the same Zoho CRM ID — usually an indexer/sync bug, not a true CRM duplicate.">🆔 dup CRM ID ×${idDup}</span>`);
+                    if (idDup) signals.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-200 text-rose-900 border border-rose-400" title="${idDup} rows reference the same CRMProvider CRM ID — usually an indexer/sync bug, not a true CRM duplicate.">🆔 dup CRM ID ×${idDup}</span>`);
                     if (!signals.length) signals.push('<span class="text-gray-400 text-xs">-</span>');
                     const signalCell = `<td class="px-4 py-3 text-sm"><div class="flex flex-wrap gap-1">${signals.join('')}</div></td>`;
 
@@ -3479,7 +3479,7 @@
                     <td class="px-6 py-3 text-sm"><span class="rag-${ragClass} px-2 py-1 rounded text-xs font-bold">${_fn(o.duplicate_rate)}%</span></td>
                     <td class="px-6 py-3 text-sm">${_fn(o.high_confidence_duplicates)}</td>
                     <td class="px-6 py-3 text-sm">${formatCurrency(o.estimated_waste_value)}
-                        <button data-on-click="openOwnerOffboard" data-args='${escAttr(JSON.stringify([o.owner_name || '']))}' title="Offboard: review this owner's OPEN-pipeline deals grouped by stage, then bulk-close (Closed Lost / Old Data) or move them in Zoho." class="ms-2 px-2 py-0.5 rounded text-[11px] font-semibold bg-red-100 text-red-800 hover:bg-red-200 align-middle">⚑ Offboard</button>
+                        <button data-on-click="openOwnerOffboard" data-args='${escAttr(JSON.stringify([o.owner_name || '']))}' title="Offboard: review this owner's OPEN-pipeline deals grouped by stage, then bulk-close (Closed Lost / Old Data) or move them in CRMProvider." class="ms-2 px-2 py-0.5 rounded text-[11px] font-semibold bg-red-100 text-red-800 hover:bg-red-200 align-middle">⚑ Offboard</button>
                     </td>
                 </tr>`;
             }).join('') || rrEmptyRow(9, { glyph: '—', title: escapeHtml(ExampleOrgI18n.t('dyn.duplicates.no_owner_data')) });
@@ -3759,7 +3759,7 @@
         }
 
         // ══ Owner offboarding — review & bulk-close a (resigned) owner's OPEN
-        // pipeline deals in Zoho (Sample User 2026-07-30). DESTRUCTIVE write behind a
+        // pipeline deals in CRMProvider (Sample User 2026-07-30). DESTRUCTIVE write behind a
         // confirm gate; server re-checks each deal before updating. ═══════════
         async function openOwnerOffboard(ownerName) {
             let modal = document.getElementById('ownerOffboardModal');
@@ -3834,9 +3834,9 @@
                 + '<label class="text-sm">Action <select id="ooAction" data-on-change="ooActionChanged" class="ms-1 border rounded px-2 py-1 text-sm"><option value="close_lost">Close Lost</option><option value="move">Move to stage…</option></select></label>'
                 + '<span id="ooActionExtra"><label class="text-sm">Lost reason <input id="ooReason" value="Old Data" class="ms-1 border rounded px-2 py-1 text-sm" style="width:120px"></label></span>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 + '<span id="ooSelCount" class="text-sm text-gray-600 ms-auto">Selected: 0 · SAR 0</span>'
-                + '<button id="ooApplyBtn" data-on-click="ooApply" class="px-3 py-1.5 rounded text-sm font-semibold text-white" style="background:#dc2626">⚑ Apply to Zoho</button>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
+                + '<button id="ooApplyBtn" data-on-click="ooApply" class="px-3 py-1.5 rounded text-sm font-semibold text-white" style="background:#dc2626">⚑ Apply to CRMProvider</button>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 + '</div>'
-                + '<div class="text-[11px] text-gray-400 mt-1">Writes to Zoho. Each deal is re-checked (still owned by this rep AND still open) before updating; already-changed deals are skipped. Audit-logged.</div>';
+                + '<div class="text-[11px] text-gray-400 mt-1">Writes to CRMProvider. Each deal is re-checked (still owned by this rep AND still open) before updating; already-changed deals are skipped. Audit-logged.</div>';
             ooRecalc();
         }
         function ooActionChanged() {
@@ -3872,7 +3872,7 @@
                 payload.lostReason = reason;
                 desc = 'set ' + ids.length + ' deal(s) to Closed Lost (reason: "' + reason + '")';
             }
-            if (!window.confirm('This WRITES to Zoho and cannot be auto-undone.\n\nOwner: ' + window._ooOwner + '\nAction: ' + desc + '\n\nProceed?')) return;
+            if (!window.confirm('This WRITES to CRMProvider and cannot be auto-undone.\n\nOwner: ' + window._ooOwner + '\nAction: ' + desc + '\n\nProceed?')) return;
             const btn = document.getElementById('ooApplyBtn');
             const orig = btn ? btn.textContent : '';
             if (btn) { btn.disabled = true; btn.textContent = 'Applying…'; }
@@ -4130,7 +4130,7 @@
                 if (t === 'ignore')          return '<span class="px-2 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-700">Mark Dismissed</span>';
                 if (t === 'module_resolved') return '<span class="px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800" title="One module of a cross-module cluster applied; other modules still open">Partial apply</span>';
                 if (t === 'split')           return '<span class="px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-violet-800" title="Bulk-split contacts cleanup re-shaped this cluster">Bulk-split</span>';
-                if (t === 'auto_merge_pending') return '<span class="px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800" title="Auto-merge tagged the duplicates Duplicate-Delete — pending the Zoho admin actually deleting them">Auto-merge · pending</span>';
+                if (t === 'auto_merge_pending') return '<span class="px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800" title="Auto-merge tagged the duplicates Duplicate-Delete — pending the CRMProvider admin actually deleting them">Auto-merge · pending</span>';
                 if (t === 'merge')           return '<span class="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Merge</span>';
                 return '<span class="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">' + escapeHtml(String(t || '—')) + '</span>';
             };
@@ -4178,7 +4178,7 @@
             let data, res;
             try {
                 // ?verify=1 → the server live-checks this cluster's records against
-                // Zoho and prunes any already deleted BEFORE returning, so the
+                // CRMProvider and prunes any already deleted BEFORE returning, so the
                 // preview never shows a ghost record (Sample User 2026-07-15, ARGAS).
                 // &segment=<seg> → the preview shows ONLY the active segment's
                 // records (ExampleOrg / Marketplace / WalaOne); "all" shows every
@@ -4245,8 +4245,8 @@
             return;
         }
 
-        // After the cluster-detail modal renders, decorate each record's Zoho
-        // link (data-testid="link-zoho-<id>") with a 📎 attachment count, so
+        // After the cluster-detail modal renders, decorate each record's CRMProvider
+        // link (data-testid="link-CRMProvider-<id>") with a 📎 attachment count, so
         // manual operators see evidence-richness when deciding the survivor —
         // the same signal the autonomous agent reads. Bounded: one fetch per
         // module present in the cluster.
@@ -4254,22 +4254,22 @@
             try {
                 const modal = document.getElementById('modalContent');
                 if (!modal) return;
-                // Leads (Sample User 2026-07-16): show the Lead Status next to the Zoho
+                // Leads (Sample User 2026-07-16): show the Lead Status next to the CRMProvider
                 // link INSTEAD of a 📎 attachment chip — status (Converted / Junk /
                 // …) is the merge signal for leads, not file count. Rendered
                 // synchronously from raw_data; no fetch needed.
                 (records || []).forEach(function (r) {
                     if (String(r.record_type || '').toLowerCase() !== 'lead') return;
-                    const zid = r.zoho_record_id;
+                    const zid = r.CRMProvider_record_id;
                     if (!zid) return;
                     const raw = r.raw_data || {};
                     const status = raw.Lead_Status || r.status || r.stage || '';
                     if (!status) return;
-                    modal.querySelectorAll('a[data-testid="link-zoho-' + zid + '"]').forEach(function (a) {
+                    modal.querySelectorAll('a[data-testid="link-CRMProvider-' + zid + '"]').forEach(function (a) {
                         if (a.nextSibling && a.nextSibling.classList && a.nextSibling.classList.contains('leadstatus-chip')) return;
                         const chip = document.createElement('span');
                         chip.className = 'leadstatus-chip ms-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800';
-                        chip.title = 'Lead Status in Zoho';
+                        chip.title = 'Lead Status in CRMProvider';
                         chip.textContent = String(status);
                         a.insertAdjacentElement('afterend', chip);
                     });
@@ -4290,7 +4290,7 @@
                     Object.keys(counts).forEach(function (zid) {
                         const n = counts[zid] | 0;
                         if (n <= 0) return; // only badge records that actually carry files
-                        modal.querySelectorAll('a[data-testid="link-zoho-' + zid + '"]').forEach(function (a) {
+                        modal.querySelectorAll('a[data-testid="link-CRMProvider-' + zid + '"]').forEach(function (a) {
                             if (a.nextSibling && a.nextSibling.classList && a.nextSibling.classList.contains('att-chip')) return;
                             const chip = document.createElement('span');
                             chip.className = 'att-chip ms-1 text-xs font-semibold text-amber-700';
@@ -4344,7 +4344,7 @@
                     <strong>MERGE</strong>. ${ExampleOrgI18n.t('dyn.duplicates.cross_module_cross_children')}
                     <strong>LINK</strong> ${ExampleOrgI18n.t('dyn.duplicates.cross_module_set_the')}
                     <code class="bg-amber-100 px-1 rounded">Account_Name</code> /
-                    <code class="bg-amber-100 px-1 rounded">Contact_Name</code> ${ExampleOrgI18n.t('dyn.duplicates.cross_module_field_in_zoho')}
+                    <code class="bg-amber-100 px-1 rounded">Contact_Name</code> ${ExampleOrgI18n.t('dyn.duplicates.cross_module_field_in_CRMProvider')}
                     ${ExampleOrgI18n.t('dyn.duplicates.cross_module_lead_superseded')} <strong>CLOSED</strong> ${ExampleOrgI18n.t('dyn.duplicates.cross_module_or_converted')}
                 </div>`;
             }
@@ -4363,7 +4363,7 @@
                             <div class="mt-1">${domainBadges}</div>
                             <p class="mt-2 text-xs text-red-800">
                                 These records were grouped by name similarity but appear to belong to different companies.
-                                Review each row before any merge / link in Zoho. The largest domain group will stay in this
+                                Review each row before any merge / link in CRMProvider. The largest domain group will stay in this
                                 cluster; the others will move to fresh clusters.
                             </p>
                         </div>
@@ -4386,7 +4386,7 @@
 
             const fields = [
                 { key: 'record_name', label: ExampleOrgI18n.t('dyn.duplicates.field_name') },
-                { key: 'zoho_record_id', label: ExampleOrgI18n.t('dyn.duplicates.field_zoho_id'), render: (v, r) => zohoLink(v, r.record_type === 'lead' ? 'Leads' : r.record_type === 'deal' ? 'Deals' : r.record_type === 'contact' ? 'Contacts' : 'Accounts') },
+                { key: 'CRMProvider_record_id', label: ExampleOrgI18n.t('dyn.duplicates.field_CRMProvider_id'), render: (v, r) => CRMProviderLink(v, r.record_type === 'lead' ? 'Leads' : r.record_type === 'deal' ? 'Deals' : r.record_type === 'contact' ? 'Contacts' : 'Accounts') },
                 { key: 'company_name', label: ExampleOrgI18n.t('dyn.duplicates.field_company') },
                 { key: 'email', label: ExampleOrgI18n.t('dyn.duplicates.field_email') },
                 { key: 'phone', label: ExampleOrgI18n.t('dyn.duplicates.field_phone') },
@@ -4397,7 +4397,7 @@
                 { key: 'deal_value', label: ExampleOrgI18n.t('dyn.duplicates.field_value'), render: v => v ? formatCurrency(v) : '-' },
                 { key: 'source', label: ExampleOrgI18n.t('dyn.duplicates.field_source') },
                 { key: 'layout_name', label: ExampleOrgI18n.t('dyn.duplicates.field_layout') },
-                { key: 'zoho_module', label: ExampleOrgI18n.t('dyn.duplicates.field_module') },
+                { key: 'CRMProvider_module', label: ExampleOrgI18n.t('dyn.duplicates.field_module') },
                 { key: 'pipeline', label: ExampleOrgI18n.t('dyn.duplicates.field_pipeline') },
                 { key: 'contact_name', label: ExampleOrgI18n.t('dyn.duplicates.field_contact') },
                 { key: 'account_name', label: ExampleOrgI18n.t('dyn.duplicates.field_account') },
@@ -4450,7 +4450,7 @@
             } else if (cluster.verification_state) {
                 // R3: surface verification outcome on already-resolved clusters
                 // so operators can audit whether previous Mark-Resolved actions
-                // actually landed in Zoho.
+                // actually landed in CRMProvider.
                 const v = cluster.verification_state;
                 const badgeCls = v === 'verified'
                     ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
@@ -4492,9 +4492,9 @@
                             <p class="text-xs text-gray-500">Proposes a survivor, migrates winning fields, reparents related records + notes, and flags duplicates with <code class="bg-gray-100 px-1 rounded">Duplicate-Delete</code> for the admin. Preview first — then dry-run or apply. The platform never deletes.</p>
                         </div>
                         <div class="flex items-center gap-2 flex-wrap">
-                            <button data-on-click="recheckCluster" data-args='[${cluster.id}]' data-testid="button-recheck-cluster-${cluster.id}" class="px-3 py-2 bg-white border border-blue-300 text-blue-700 hover:bg-blue-50 rounded-lg text-sm font-medium" title="Re-fetch every record in this cluster from Zoho fresh — confirms the post-merge state (Account_Name, Duplicate-Delete tag, still-alive vs. deleted) without waiting for the next 6h scan.">🔁 Re-check cluster</button>
-                            <button data-on-click="verifyTaggedRecords" data-args='[${cluster.id}]' data-testid="button-verify-tags-${cluster.id}" class="px-3 py-2 bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-lg text-sm font-medium" title="Re-query Zoho for every record this cluster has tagged Duplicate-Delete — shows how many the admin has actually deleted vs. still pending.">✅ Verify tags in Zoho</button>
-                            <button data-on-click="previewMergePlan" data-args='["${am.module}",${cluster.id}]' data-testid="button-preview-merge-plan-${am.module}-${cluster.id}" title="Loads the AI merge plan into the panel below. You still need to click Apply in Zoho inside the plan to actually tag duplicates." class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-semibold">🔍 Preview ${escapeHtml(am.label)} Plan <span class="text-[10px] font-normal opacity-80">(then Apply inside)</span></button>
+                            <button data-on-click="recheckCluster" data-args='[${cluster.id}]' data-testid="button-recheck-cluster-${cluster.id}" class="px-3 py-2 bg-white border border-blue-300 text-blue-700 hover:bg-blue-50 rounded-lg text-sm font-medium" title="Re-fetch every record in this cluster from CRMProvider fresh — confirms the post-merge state (Account_Name, Duplicate-Delete tag, still-alive vs. deleted) without waiting for the next 6h scan.">🔁 Re-check cluster</button>
+                            <button data-on-click="verifyTaggedRecords" data-args='[${cluster.id}]' data-testid="button-verify-tags-${cluster.id}" class="px-3 py-2 bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-lg text-sm font-medium" title="Re-query CRMProvider for every record this cluster has tagged Duplicate-Delete — shows how many the admin has actually deleted vs. still pending.">✅ Verify tags in CRMProvider</button>
+                            <button data-on-click="previewMergePlan" data-args='["${am.module}",${cluster.id}]' data-testid="button-preview-merge-plan-${am.module}-${cluster.id}" title="Loads the AI merge plan into the panel below. You still need to click Apply in CRMProvider inside the plan to actually tag duplicates." class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-semibold">🔍 Preview ${escapeHtml(am.label)} Plan <span class="text-[10px] font-normal opacity-80">(then Apply inside)</span></button>
                         </div>
                     </div>
                     <div id="recheckPanel-${cluster.id}" class="text-sm mb-2"></div>
@@ -4688,7 +4688,7 @@
             const rowsHtml = records.length === 0
                 ? '<div class="text-xs text-gray-400 italic">No records were attached to this cluster at snapshot time.</div>'
                 : '<div class="overflow-x-auto"><table class="min-w-full text-xs border border-gray-200"><thead class="bg-gray-50"><tr>'
-                    + ['Zoho ID','Type','Name','Company','Owner','Status/Stage','Primary'].map(h => `<th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">${escapeHtml(h)}</th>`).join('')
+                    + ['CRMProvider ID','Type','Name','Company','Owner','Status/Stage','Primary'].map(h => `<th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">${escapeHtml(h)}</th>`).join('')
                     + '</tr></thead><tbody>'
                     + records.map(r => {
                         const rt = (r.record_type || '').toLowerCase();
@@ -4697,9 +4697,9 @@
                                   : rt === 'contact' ? 'Contacts'
                                   : rt === 'account' ? 'Accounts'
                                   : null;
-                        const idCell = (r.zoho_record_id && tab)
-                            ? `<td class="px-2 py-1">${zohoLink(r.zoho_record_id, tab)}</td>`
-                            : `<td class="px-2 py-1 font-mono text-gray-400">${escapeHtml(r.zoho_record_id || '—')}</td>`;
+                        const idCell = (r.CRMProvider_record_id && tab)
+                            ? `<td class="px-2 py-1">${CRMProviderLink(r.CRMProvider_record_id, tab)}</td>`
+                            : `<td class="px-2 py-1 font-mono text-gray-400">${escapeHtml(r.CRMProvider_record_id || '—')}</td>`;
                         return `<tr class="border-t border-gray-100">${idCell}<td class="px-2 py-1">${escapeHtml(r.record_type || '—')}</td><td class="px-2 py-1">${escapeHtml(r.record_name || '—')}</td><td class="px-2 py-1 text-gray-600">${escapeHtml(r.company_name || '—')}</td><td class="px-2 py-1 text-gray-600">${escapeHtml(r.owner_name || '—')}</td><td class="px-2 py-1 text-gray-600">${escapeHtml(r.status || r.stage || '—')}</td><td class="px-2 py-1">${r.is_primary ? '<span class="text-green-700 font-medium">Yes</span>' : '<span class="text-gray-400">No</span>'}</td></tr>`;
                     }).join('')
                     + '</tbody></table></div>';
@@ -4786,7 +4786,7 @@
         // group's cluster modal and auto-preview that module's Agentic plan.
         // The cluster may hold more records than the on-page group — use the
         // plan's checkboxes to pick exactly which to merge.
-        async function resolveGroupWithAI(module, clusterId, groupZohoIds) {
+        async function resolveGroupWithAI(module, clusterId, groupCRMProviderIds) {
             if (!clusterId) {
                 rrToast('This group has no cluster id yet — run a scan first, then try again.');
                 return;
@@ -4794,10 +4794,10 @@
             try { await showClusterDetails(clusterId); } catch (_) { /* modal still opens */ }
             // Modal now has an "Agentic Resolution — <module>" section
             // (#mergePlanPanel-<module>) when the cluster has >=2 of that module.
-            try { await previewMergePlan(module, clusterId, groupZohoIds); } catch (_) { /* user can click Preview */ }
+            try { await previewMergePlan(module, clusterId, groupCRMProviderIds); } catch (_) { /* user can click Preview */ }
         }
 
-        async function previewMergePlan(module, clusterId, seedZohoIds) {
+        async function previewMergePlan(module, clusterId, seedCRMProviderIds) {
             const panel = document.getElementById('mergePlanPanel-' + module);
             if (!panel) return;
             // Reset all module selections when previewing a different cluster.
@@ -4807,17 +4807,17 @@
             }
             const st = _planSt(module);
             // First open from a tab group: scope the plan to exactly that sub-group's
-            // records (seedZohoIds) instead of the whole cluster. Only on a fresh
+            // records (seedCRMProviderIds) instead of the whole cluster. Only on a fresh
             // open (st.selected not set yet) so re-previews after the operator
             // ticks/unticks keep their own selection.
-            if (Array.isArray(seedZohoIds) && seedZohoIds.length >= 2 && !Array.isArray(st.selected)) {
-                st.selected = seedZohoIds.map(String);
+            if (Array.isArray(seedCRMProviderIds) && seedCRMProviderIds.length >= 2 && !Array.isArray(st.selected)) {
+                st.selected = seedCRMProviderIds.map(String);
             }
             panel.innerHTML = '<div class="py-4 text-gray-400">Building plan…</div>';
             const reqBody = { module: module };
-            if (Array.isArray(st.selected)) reqBody.record_zoho_ids = st.selected;
-            if (st.master) reqBody.master_zoho_id = st.master;
-            if (st.linkAccount !== undefined) reqBody.link_account_zoho_id = st.linkAccount;
+            if (Array.isArray(st.selected)) reqBody.record_CRMProvider_ids = st.selected;
+            if (st.master) reqBody.master_CRMProvider_id = st.master;
+            if (st.linkAccount !== undefined) reqBody.link_account_CRMProvider_id = st.linkAccount;
             let res, data;
             try {
                 res = await fetch('/api/duplicates/clusters/' + encodeURIComponent(clusterId) + '/plan', {
@@ -4838,8 +4838,8 @@
             }
             // Sync selection state to what the plan actually included, so the
             // checkboxes and subsequent dry-run/apply stay consistent.
-            st.selected = (data.plan.records || []).filter(r => r.included && r.zohoId).map(r => r.zohoId);
-            st.planRecords = data.plan.records || []; // for the Split action (zohoId → dbId)
+            st.selected = (data.plan.records || []).filter(r => r.included && r.CRMProviderId).map(r => r.CRMProviderId);
+            st.planRecords = data.plan.records || []; // for the Split action (CRMProviderId → dbId)
             panel.innerHTML = __renderMergePlan(data.plan);
             // Middle-column lazy fill:
             //   Contacts → "Account" column reads from the planner; no fetch.
@@ -4854,7 +4854,7 @@
             }
             // Reparent preview — Accounts/Contacts merges repoint child
             // Deals/Contacts onto the survivor. Fetch the count separately
-            // so the plan render isn't blocked on Zoho calls.
+            // so the plan render isn't blocked on CRMProvider calls.
             if (data.plan.module === 'Accounts' || data.plan.module === 'Contacts') {
                 loadReparentPreview(data.plan.module, data.plan.clusterId);
             }
@@ -5009,27 +5009,27 @@
             detail.style.display = open ? 'none' : '';
             if (caret) caret.textContent = open ? '▸' : '▾';
         }
-        function setContactSurvivor(gi, zohoId) {
+        function setContactSurvivor(gi, CRMProviderId) {
             const g = (window._contactMergeGroups || [])[gi];
             if (!g) return;
-            if (g._excluded && g._excluded[zohoId]) return; // an excluded contact can't be the survivor
+            if (g._excluded && g._excluded[CRMProviderId]) return; // an excluded contact can't be the survivor
             window._contactMergeOverrides = window._contactMergeOverrides || {};
-            const def = (g.members.find(function (m) { return m.isSurvivor; }) || {}).zohoId;
-            if (zohoId === def) { delete window._contactMergeOverrides[g.key]; }
-            else { window._contactMergeOverrides[g.key] = zohoId; }
+            const def = (g.members.find(function (m) { return m.isSurvivor; }) || {}).CRMProviderId;
+            if (CRMProviderId === def) { delete window._contactMergeOverrides[g.key]; }
+            else { window._contactMergeOverrides[g.key] = CRMProviderId; }
             document.querySelectorAll('.ctcgrp-radio-' + gi).forEach(function (el) {
-                const on = el.getAttribute('data-mid') === zohoId;
+                const on = el.getAttribute('data-mid') === CRMProviderId;
                 el.textContent = on ? '●' : '○';
                 el.className = 'ctcgrp-radio-' + gi + ' ' + (on ? 'text-emerald-600' : 'text-gray-300');
             });
             document.querySelectorAll('.ctcgrp-badge-' + gi).forEach(function (el) {
-                const on = el.getAttribute('data-mid') === zohoId;
+                const on = el.getAttribute('data-mid') === CRMProviderId;
                 el.innerHTML = on ? '<span class="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded">SURVIVOR</span>' : '';
             });
             document.querySelectorAll('.ctcgrp-member-' + gi).forEach(function (tr) {
-                tr.classList.toggle('bg-emerald-50', tr.getAttribute('data-mid') === zohoId);
+                tr.classList.toggle('bg-emerald-50', tr.getAttribute('data-mid') === CRMProviderId);
             });
-            const chosen = g.members.find(function (m) { return m.zohoId === zohoId; });
+            const chosen = g.members.find(function (m) { return m.CRMProviderId === CRMProviderId; });
             if (chosen) {
                 const nm = document.getElementById('ctcgrp-survname-' + gi);
                 if (nm) nm.textContent = chosen.name || '—';
@@ -5046,27 +5046,27 @@
         // Toggle a single contact in/out of its group's merge. An EXCLUDED contact
         // is left completely untouched; the rest still merge. If the excluded one
         // was the survivor, the survivor moves to the next included (most-complete).
-        function toggleContactMemberInclude(gi, zohoId) {
+        function toggleContactMemberInclude(gi, CRMProviderId) {
             const g = (window._contactMergeGroups || [])[gi];
             if (!g) return;
             g._excluded = g._excluded || {};
-            const nowExcluded = !g._excluded[zohoId];
-            if (nowExcluded) g._excluded[zohoId] = true; else delete g._excluded[zohoId];
+            const nowExcluded = !g._excluded[CRMProviderId];
+            if (nowExcluded) g._excluded[CRMProviderId] = true; else delete g._excluded[CRMProviderId];
             document.querySelectorAll('.ctcgrp-incl-' + gi).forEach(function (el) {
-                if (el.getAttribute('data-mid') !== zohoId) return;
+                if (el.getAttribute('data-mid') !== CRMProviderId) return;
                 el.textContent = nowExcluded ? '☐' : '☑';
                 el.className = 'ctcgrp-incl-' + gi + ' cursor-pointer ' + (nowExcluded ? 'text-gray-300' : 'text-emerald-600');
             });
             document.querySelectorAll('.ctcgrp-member-' + gi).forEach(function (tr) {
-                if (tr.getAttribute('data-mid') === zohoId) {
+                if (tr.getAttribute('data-mid') === CRMProviderId) {
                     tr.classList.toggle('opacity-40', nowExcluded);
                     tr.classList.toggle('line-through', nowExcluded);
                 }
             });
-            const cur = (window._contactMergeOverrides && window._contactMergeOverrides[g.key]) || (g.members.find(function (m) { return m.isSurvivor; }) || {}).zohoId;
-            if (nowExcluded && zohoId === cur) {
-                const next = g.members.find(function (m) { return !g._excluded[m.zohoId]; });
-                if (next) setContactSurvivor(gi, next.zohoId);
+            const cur = (window._contactMergeOverrides && window._contactMergeOverrides[g.key]) || (g.members.find(function (m) { return m.isSurvivor; }) || {}).CRMProviderId;
+            if (nowExcluded && CRMProviderId === cur) {
+                const next = g.members.find(function (m) { return !g._excluded[m.CRMProviderId]; });
+                if (next) setContactSurvivor(gi, next.CRMProviderId);
             }
         }
         function _contactExcludesAll() {
@@ -5082,7 +5082,7 @@
         function _renderContactMergeGroups(sample) {
             return (sample || []).map(function (g) {
                 const gi = window._contactMergeGroups.length;
-                window._contactMergeGroups.push({ key: g.key, survivorZohoId: g.survivorZohoId, members: g.members || [] });
+                window._contactMergeGroups.push({ key: g.key, survivorCRMProviderId: g.survivorCRMProviderId, members: g.members || [] });
                 const survivor = (g.members || []).find(function (m) { return m.isSurvivor; }) || (g.members || [])[0] || {};
                 const signal = (g.email ? '✉ ' + g.email : '') + (g.email && g.phone ? ' · ' : '') + (g.phone ? '☎ ' + g.phone : '');
                 const headRow = '<tr class="border-t hover:bg-emerald-50 cursor-pointer" data-on-click="toggleContactGroup" data-args=\'[' + gi + ']\'>'
@@ -5093,10 +5093,10 @@
                     + '</tr>';
                 const memberRows = (g.members || []).map(function (m) {
                     const created = m.createdMs ? new Date(m.createdMs * 1000).toISOString().slice(0, 10) : '—';
-                    return '<tr class="border-t ctcgrp-member-' + gi + ' ' + (m.isSurvivor ? 'bg-emerald-50' : '') + '" data-mid="' + escapeHtml(m.zohoId) + '" data-on-click="setContactSurvivor" data-args=\'[' + gi + ',"' + escapeHtml(m.zohoId) + '"]\' style="cursor:pointer">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
-                        + '<td class="px-2 py-1 text-center"><span class="ctcgrp-incl-' + gi + ' text-emerald-600 cursor-pointer" data-mid="' + escapeHtml(m.zohoId) + '" data-on-click="toggleContactMemberInclude" data-args=\'[' + gi + ',"' + escapeHtml(m.zohoId) + '"]\' title="Included in the merge — click to EXCLUDE (leave this contact untouched)">☑</span></td>'
-                        + '<td class="px-2 py-1"><span class="ctcgrp-radio-' + gi + ' ' + (m.isSurvivor ? 'text-emerald-600' : 'text-gray-300') + '" data-mid="' + escapeHtml(m.zohoId) + '">' + (m.isSurvivor ? '●' : '○') + '</span></td>'
-                        + '<td class="px-2 py-1">' + escapeHtml(m.name || '—') + ' <span class="ctcgrp-badge-' + gi + '" data-mid="' + escapeHtml(m.zohoId) + '">' + (m.isSurvivor ? '<span class="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded">SURVIVOR</span>' : '') + '</span></td>'
+                    return '<tr class="border-t ctcgrp-member-' + gi + ' ' + (m.isSurvivor ? 'bg-emerald-50' : '') + '" data-mid="' + escapeHtml(m.CRMProviderId) + '" data-on-click="setContactSurvivor" data-args=\'[' + gi + ',"' + escapeHtml(m.CRMProviderId) + '"]\' style="cursor:pointer">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
+                        + '<td class="px-2 py-1 text-center"><span class="ctcgrp-incl-' + gi + ' text-emerald-600 cursor-pointer" data-mid="' + escapeHtml(m.CRMProviderId) + '" data-on-click="toggleContactMemberInclude" data-args=\'[' + gi + ',"' + escapeHtml(m.CRMProviderId) + '"]\' title="Included in the merge — click to EXCLUDE (leave this contact untouched)">☑</span></td>'
+                        + '<td class="px-2 py-1"><span class="ctcgrp-radio-' + gi + ' ' + (m.isSurvivor ? 'text-emerald-600' : 'text-gray-300') + '" data-mid="' + escapeHtml(m.CRMProviderId) + '">' + (m.isSurvivor ? '●' : '○') + '</span></td>'
+                        + '<td class="px-2 py-1">' + escapeHtml(m.name || '—') + ' <span class="ctcgrp-badge-' + gi + '" data-mid="' + escapeHtml(m.CRMProviderId) + '">' + (m.isSurvivor ? '<span class="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded">SURVIVOR</span>' : '') + '</span></td>'
                         + '<td class="px-2 py-1 font-mono text-[10px] text-gray-600">' + escapeHtml(m.email || '—') + '</td>'
                         + '<td class="px-2 py-1 font-mono text-[10px] text-gray-600">' + escapeHtml(m.phone || '—') + '</td>'
                         + '<td class="px-2 py-1 text-gray-600">' + escapeHtml(m.account || '—') + '</td>'
@@ -5149,7 +5149,7 @@
                     if (!data.more) break;
                 }
                 const tone = totals.errors > 0 ? 'text-amber-700' : 'text-emerald-800';
-                render('✓ Done — ' + totals.acctMerged.toLocaleString() + ' account(s) merged, ' + totals.contactsTagged.toLocaleString() + ' contact duplicate(s) tagged across ' + totals.passes + ' batch(es)' + (totals.errors > 0 ? ' · ' + totals.errors + ' error(s) (re-run to retry)' : '') + '. Tagged records await the Zoho admin delete; nothing was deleted by the platform.', tone);
+                render('✓ Done — ' + totals.acctMerged.toLocaleString() + ' account(s) merged, ' + totals.contactsTagged.toLocaleString() + ' contact duplicate(s) tagged across ' + totals.passes + ' batch(es)' + (totals.errors > 0 ? ' · ' + totals.errors + ' error(s) (re-run to retry)' : '') + '. Tagged records await the CRMProvider admin delete; nothing was deleted by the platform.', tone);
             } catch (e) {
                 render('Stopped: ' + escapeHtml(String(e && e.message || e)), 'text-red-600');
             } finally {
@@ -5386,7 +5386,7 @@
                     // Register the group by a stable integer index so the click
                     // handlers never have to embed the (Arabic / spaced) key.
                     const gi = window._accountMergeGroups.length;
-                    window._accountMergeGroups.push({ scope: scopeKey, key: g.key, label: g.label, survivorZohoId: g.survivorZohoId, members: g.members || [] });
+                    window._accountMergeGroups.push({ scope: scopeKey, key: g.key, label: g.label, survivorCRMProviderId: g.survivorCRMProviderId, members: g.members || [] });
                     const others = (g.names || []).filter(function (n) { return (n || '').trim() && n !== g.label; });
                     const survivor = (g.members || []).find(function (m) { return m.isSurvivor; }) || (g.members || [])[0] || {};
                     const headRow = '<tr id="acctgrp-head-' + gi + '" class="border-t hover:bg-teal-50 cursor-pointer" data-on-click="toggleAccountGroup" data-args=\'[' + gi + ']\'>'
@@ -5398,10 +5398,10 @@
                         + '</tr>';
                     const memberRows = (g.members || []).map(function (m) {
                         const created = m.createdMs ? new Date(m.createdMs * 1000).toISOString().slice(0, 10) : '—';
-                        return '<tr class="border-t acctgrp-member-' + gi + '" data-mid="' + escapeHtml(m.zohoId) + '" data-on-click="setAccountSurvivor" data-args=\'[' + gi + ',"' + escapeHtml(m.zohoId) + '"]\' style="cursor:pointer">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
-                            + '<td class="px-2 py-1 text-center"><span class="acctgrp-incl-' + gi + ' text-emerald-600 cursor-pointer" data-mid="' + escapeHtml(m.zohoId) + '" data-on-click="toggleAccountMemberInclude" data-args=\'[' + gi + ',"' + escapeHtml(m.zohoId) + '"]\' title="Included in the merge — click to EXCLUDE (leave this account untouched)">☑</span></td>'
-                            + '<td class="px-2 py-1"><span class="acctgrp-radio-' + gi + ' ' + (m.isSurvivor ? 'text-emerald-600' : 'text-gray-300') + '" data-mid="' + escapeHtml(m.zohoId) + '">' + (m.isSurvivor ? '●' : '○') + '</span></td>'
-                            + '<td class="px-2 py-1">' + escapeHtml(m.name || '—') + ' <span class="acctgrp-badge-' + gi + '" data-mid="' + escapeHtml(m.zohoId) + '">' + (m.isSurvivor ? '<span class="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded">SURVIVOR</span>' : '') + '</span></td>'
+                        return '<tr class="border-t acctgrp-member-' + gi + '" data-mid="' + escapeHtml(m.CRMProviderId) + '" data-on-click="setAccountSurvivor" data-args=\'[' + gi + ',"' + escapeHtml(m.CRMProviderId) + '"]\' style="cursor:pointer">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
+                            + '<td class="px-2 py-1 text-center"><span class="acctgrp-incl-' + gi + ' text-emerald-600 cursor-pointer" data-mid="' + escapeHtml(m.CRMProviderId) + '" data-on-click="toggleAccountMemberInclude" data-args=\'[' + gi + ',"' + escapeHtml(m.CRMProviderId) + '"]\' title="Included in the merge — click to EXCLUDE (leave this account untouched)">☑</span></td>'
+                            + '<td class="px-2 py-1"><span class="acctgrp-radio-' + gi + ' ' + (m.isSurvivor ? 'text-emerald-600' : 'text-gray-300') + '" data-mid="' + escapeHtml(m.CRMProviderId) + '">' + (m.isSurvivor ? '●' : '○') + '</span></td>'
+                            + '<td class="px-2 py-1">' + escapeHtml(m.name || '—') + ' <span class="acctgrp-badge-' + gi + '" data-mid="' + escapeHtml(m.CRMProviderId) + '">' + (m.isSurvivor ? '<span class="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded">SURVIVOR</span>' : '') + '</span></td>'
                             + '<td class="px-2 py-1 text-[10px] text-gray-500">' + escapeHtml(m.layout || '—') + '</td>'
                             + '<td class="px-2 py-1 text-gray-600">' + escapeHtml(m.owner || '—') + '</td>'
                             + '<td class="px-2 py-1 font-mono text-[10px] text-gray-600">' + escapeHtml(m.website || '—') + '</td>'
@@ -5447,29 +5447,29 @@
         // override (keyed by the group's stable key) and updates the UI; the
         // override travels to the backend on Apply, where it FORCES the merge
         // master so what you selected is exactly what is kept.
-        function setAccountSurvivor(gi, zohoId) {
+        function setAccountSurvivor(gi, CRMProviderId) {
             const g = (window._accountMergeGroups || [])[gi];
             if (!g) return;
-            if (g._excluded && g._excluded[zohoId]) return; // an excluded account can't be the survivor
+            if (g._excluded && g._excluded[CRMProviderId]) return; // an excluded account can't be the survivor
             window._accountMergeOverrides = window._accountMergeOverrides || {};
-            const def = (g.members.find(function (m) { return m.isSurvivor; }) || {}).zohoId;
-            if (zohoId === def) { delete window._accountMergeOverrides[g.key]; }
-            else { window._accountMergeOverrides[g.key] = zohoId; }
+            const def = (g.members.find(function (m) { return m.isSurvivor; }) || {}).CRMProviderId;
+            if (CRMProviderId === def) { delete window._accountMergeOverrides[g.key]; }
+            else { window._accountMergeOverrides[g.key] = CRMProviderId; }
             // Update radios + SURVIVOR badges within this group.
             document.querySelectorAll('.acctgrp-radio-' + gi).forEach(function (el) {
-                const on = el.getAttribute('data-mid') === zohoId;
+                const on = el.getAttribute('data-mid') === CRMProviderId;
                 el.textContent = on ? '●' : '○';
                 el.className = 'acctgrp-radio-' + gi + ' ' + (on ? 'text-emerald-600' : 'text-gray-300');
             });
             document.querySelectorAll('.acctgrp-badge-' + gi).forEach(function (el) {
-                const on = el.getAttribute('data-mid') === zohoId;
+                const on = el.getAttribute('data-mid') === CRMProviderId;
                 el.innerHTML = on ? '<span class="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded">SURVIVOR</span>' : '';
             });
             document.querySelectorAll('.acctgrp-member-' + gi).forEach(function (tr) {
-                tr.classList.toggle('bg-emerald-50', tr.getAttribute('data-mid') === zohoId);
+                tr.classList.toggle('bg-emerald-50', tr.getAttribute('data-mid') === CRMProviderId);
             });
             // Reflect the choice in the collapsed header (name + completion %).
-            const chosen = g.members.find(function (m) { return m.zohoId === zohoId; });
+            const chosen = g.members.find(function (m) { return m.CRMProviderId === CRMProviderId; });
             if (chosen) {
                 const nm = document.getElementById('acctgrp-survname-' + gi);
                 if (nm) nm.textContent = chosen.name || '—';
@@ -5478,7 +5478,7 @@
             }
         }
 
-        // Collect the survivor overrides for one scope as { key: zohoId }.
+        // Collect the survivor overrides for one scope as { key: CRMProviderId }.
         function _accountOverridesForScope(scope) {
             const out = {};
             const ov = window._accountMergeOverrides || {};
@@ -5492,28 +5492,28 @@
         // is left completely untouched (not survivor, not tagged); the rest still
         // merge. If the excluded one was the survivor, the survivor moves to the
         // next included (highest-%) account.
-        function toggleAccountMemberInclude(gi, zohoId) {
+        function toggleAccountMemberInclude(gi, CRMProviderId) {
             const g = (window._accountMergeGroups || [])[gi];
             if (!g) return;
             g._excluded = g._excluded || {};
-            const nowExcluded = !g._excluded[zohoId];
-            if (nowExcluded) g._excluded[zohoId] = true; else delete g._excluded[zohoId];
+            const nowExcluded = !g._excluded[CRMProviderId];
+            if (nowExcluded) g._excluded[CRMProviderId] = true; else delete g._excluded[CRMProviderId];
             document.querySelectorAll('.acctgrp-incl-' + gi).forEach(function (el) {
-                if (el.getAttribute('data-mid') !== zohoId) return;
+                if (el.getAttribute('data-mid') !== CRMProviderId) return;
                 el.textContent = nowExcluded ? '☐' : '☑';
                 el.className = 'acctgrp-incl-' + gi + ' cursor-pointer ' + (nowExcluded ? 'text-gray-300' : 'text-emerald-600');
             });
             document.querySelectorAll('.acctgrp-member-' + gi).forEach(function (tr) {
-                if (tr.getAttribute('data-mid') === zohoId) {
+                if (tr.getAttribute('data-mid') === CRMProviderId) {
                     tr.classList.toggle('opacity-40', nowExcluded);
                     tr.classList.toggle('line-through', nowExcluded);
                 }
             });
             // If we just excluded the current survivor, promote the first included.
-            const cur = (window._accountMergeOverrides && window._accountMergeOverrides[g.key]) || (g.members.find(function (m) { return m.isSurvivor; }) || {}).zohoId;
-            if (nowExcluded && zohoId === cur) {
-                const next = g.members.find(function (m) { return !g._excluded[m.zohoId]; });
-                if (next) setAccountSurvivor(gi, next.zohoId);
+            const cur = (window._accountMergeOverrides && window._accountMergeOverrides[g.key]) || (g.members.find(function (m) { return m.isSurvivor; }) || {}).CRMProviderId;
+            if (nowExcluded && CRMProviderId === cur) {
+                const next = g.members.find(function (m) { return !g._excluded[m.CRMProviderId]; });
+                if (next) setAccountSurvivor(gi, next.CRMProviderId);
             }
         }
 
@@ -5530,19 +5530,19 @@
 
         // Dismiss a group as "NOT duplicates" — records the accounts as mutually
         // separated (durable) so the group is excluded from this AND every future
-        // auto-merge. No Zoho write. The apply re-derives groups server-side, so a
+        // auto-merge. No CRMProvider write. The apply re-derives groups server-side, so a
         // dismissed group is skipped automatically; here we just clear it from view.
         async function dismissAccountGroup(gi) {
             const g = (window._accountMergeGroups || [])[gi];
             if (!g) return;
-            const ids = (g.members || []).map(function (m) { return m.zohoId; });
+            const ids = (g.members || []).map(function (m) { return m.CRMProviderId; });
             if (ids.length < 2) return;
-            if (!window.confirm('Mark these ' + ids.length + ' account(s) as NOT duplicates of each other?\n\nThey will be excluded from this and all FUTURE auto-merges (recorded in the separation ledger). Nothing is written to Zoho.')) return;
+            if (!window.confirm('Mark these ' + ids.length + ' account(s) as NOT duplicates of each other?\n\nThey will be excluded from this and all FUTURE auto-merges (recorded in the separation ledger). Nothing is written to CRMProvider.')) return;
             try {
                 const res = await fetch('/api/duplicates/accounts/dismiss-merge-group', {
                     method: 'POST', credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ zohoIds: ids }),
+                    body: JSON.stringify({ CRMProviderIds: ids }),
                 });
                 const d = await res.json().catch(function () { return {}; });
                 if (!res.ok || !d.success) throw new Error((d && d.error) || ('HTTP ' + res.status));
@@ -5590,7 +5590,7 @@
             note.className = 'text-teal-700 mt-1';
             const ovCount = Object.keys(overrides).length;
             const exCount = Object.keys(excludes).reduce(function (n, k) { return n + excludes[k].length; }, 0);
-            note.textContent = 'Applying ' + scope + ' merges…' + (ovCount ? ' (' + ovCount + ' survivor override' + (ovCount === 1 ? '' : 's') + ')' : '') + (exCount ? ' (' + exCount + ' excluded)' : '') + ' (this re-parents records in Zoho — give it a moment)';
+            note.textContent = 'Applying ' + scope + ' merges…' + (ovCount ? ' (' + ovCount + ' survivor override' + (ovCount === 1 ? '' : 's') + ')' : '') + (exCount ? ' (' + exCount + ' excluded)' : '') + ' (this re-parents records in CRMProvider — give it a moment)';
             panel.appendChild(note);
             let live;
             try {
@@ -5615,14 +5615,14 @@
         }
 
         // Re-check Cluster — for every record currently in the cluster,
-        // re-fetch from Zoho fresh and report live state per row. Confirms
+        // re-fetch from CRMProvider fresh and report live state per row. Confirms
         // the post-merge cascade actually landed (Account_Name on every
         // contact, Duplicate-Delete tag on every duplicate) without waiting
         // for the next 6h scan.
         async function recheckCluster(clusterId) {
             const panel = document.getElementById('recheckPanel-' + clusterId);
             if (!panel) return;
-            panel.innerHTML = '<div class="py-2 text-blue-700 text-xs">Re-fetching every record in this cluster from Zoho…</div>';
+            panel.innerHTML = '<div class="py-2 text-blue-700 text-xs">Re-fetching every record in this cluster from CRMProvider…</div>';
             let res, data;
             try {
                 res = await fetch('/api/duplicates/clusters/' + clusterId + '/recheck', { credentials: 'same-origin' });
@@ -5645,11 +5645,11 @@
                 + data.alive + ' alive · '
                 + data.deleted + ' deleted · '
                 + data.tagged + ' carry Duplicate-Delete tag'
-                + (data.errors ? ' · ' + data.errors + ' Zoho error(s)' : '')
+                + (data.errors ? ' · ' + data.errors + ' CRMProvider error(s)' : '')
                 + truncNote
                 + purgedNote
                 + '</div>';
-            // Records confirmed deleted in Zoho were just purged server-side —
+            // Records confirmed deleted in CRMProvider were just purged server-side —
             // re-render the cluster so it collapses to the survivor(s) only.
             if (data.purged > 0 && typeof showClusterDetails === 'function') {
                 setTimeout(function () { showClusterDetails(clusterId); }, 1400);
@@ -5661,12 +5661,12 @@
                         ? '<span class="px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-[11px] font-semibold">DELETED</span>'
                         : r.status === 'error'
                             ? '<span class="px-2 py-0.5 rounded bg-red-100 text-red-800 text-[11px] font-semibold">ERROR</span>'
-                            : '<span class="px-2 py-0.5 rounded bg-gray-100 text-gray-600 text-[11px] font-semibold">NO ZOHO</span>';
+                            : '<span class="px-2 py-0.5 rounded bg-gray-100 text-gray-600 text-[11px] font-semibold">NO CRMProvider</span>';
                 const primaryBadge = r.isPrimary ? ' <span class="text-emerald-700 text-[11px] font-semibold">★ SURVIVOR</span>' : '';
                 const tab = r.module === 'Deals' ? 'Potentials' : r.module;
-                const link = (r.zohoId && tab) ? zohoLink(r.zohoId, tab) : '<span class="text-gray-400">—</span>';
+                const link = (r.CRMProviderId && tab) ? CRMProviderLink(r.CRMProviderId, tab) : '<span class="text-gray-400">—</span>';
                 const acctCell = r.status === 'alive'
-                    ? '<td class="px-2 py-1 text-xs text-gray-700" title="Current Zoho Account_Name (post-merge)">' + escapeHtml(r.currentAccountName || '—') + '</td>'
+                    ? '<td class="px-2 py-1 text-xs text-gray-700" title="Current CRMProvider Account_Name (post-merge)">' + escapeHtml(r.currentAccountName || '—') + '</td>'
                     : '<td class="px-2 py-1 text-gray-300">—</td>';
                 return '<tr class="border-t border-gray-100"><td class="px-2 py-1">' + statusBadge + primaryBadge + '</td>'
                     + '<td class="px-2 py-1 text-gray-700">' + escapeHtml(r.name || '—') + '</td>'
@@ -5676,19 +5676,19 @@
                     + '</tr>';
             }).join('');
             panel.innerHTML = header + (rows
-                ? '<div class="overflow-x-auto"><table class="min-w-full text-xs border border-gray-200"><thead class="bg-gray-50"><tr><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Status</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Record</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Module</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Zoho</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Account (now)</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+                ? '<div class="overflow-x-auto"><table class="min-w-full text-xs border border-gray-200"><thead class="bg-gray-50"><tr><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Status</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Record</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Module</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">CRMProvider</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Account (now)</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
                 : '');
         }
 
-        // Verify Tags — re-query Zoho for every record this cluster has
+        // Verify Tags — re-query CRMProvider for every record this cluster has
         // tagged Duplicate-Delete (via prior Apply / Agentic runs). Renders
         // a small status panel in #verifyTagsPanel-<clusterId> with totals
-        // + per-record alive/deleted badges, plus clickable Zoho links so
+        // + per-record alive/deleted badges, plus clickable CRMProvider links so
         // the user can chase down anything still pending admin delete.
         async function verifyTaggedRecords(clusterId) {
             const panel = document.getElementById('verifyTagsPanel-' + clusterId);
             if (!panel) return;
-            panel.innerHTML = '<div class="py-2 text-emerald-700 text-xs">Verifying tags in Zoho…</div>';
+            panel.innerHTML = '<div class="py-2 text-emerald-700 text-xs">Verifying tags in CRMProvider…</div>';
             let res, data;
             try {
                 res = await fetch('/api/duplicates/clusters/' + clusterId + '/verify-tags', { credentials: 'same-origin' });
@@ -5709,9 +5709,9 @@
                        : (data.deleted === 0) ? 'amber'
                        : 'indigo';
             const header = '<div class="px-3 py-2 rounded-lg bg-' + tone + '-50 border border-' + tone + '-200 text-xs mb-2">'
-                + '<strong class="text-' + tone + '-800">' + data.deleted + ' of ' + data.total + ' tagged records have been deleted in Zoho.</strong>'
+                + '<strong class="text-' + tone + '-800">' + data.deleted + ' of ' + data.total + ' tagged records have been deleted in CRMProvider.</strong>'
                 + (data.alive ? ' <span class="text-' + tone + '-700">' + data.alive + ' still pending admin delete.</span>' : '')
-                + (data.errors ? ' <span class="text-amber-700">' + data.errors + ' could not be verified (Zoho error).</span>' : '')
+                + (data.errors ? ' <span class="text-amber-700">' + data.errors + ' could not be verified (CRMProvider error).</span>' : '')
                 + (data.purged > 0 ? ' <strong class="text-emerald-700">' + data.purged + ' removed from this cluster — refreshing…</strong>' : '')
                 + '</div>';
             // Deleted records were purged server-side — re-render so the
@@ -5724,11 +5724,11 @@
                     ? '<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[11px] font-semibold">DELETED</span>'
                     : r.status === 'alive'
                         ? '<span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[11px] font-semibold">PENDING</span>'
-                        : r.status === 'no-zoho-id'
-                            ? '<span class="px-2 py-0.5 rounded bg-gray-100 text-gray-600 text-[11px] font-semibold">NO ZOHO ID</span>'
+                        : r.status === 'no-CRMProvider-id'
+                            ? '<span class="px-2 py-0.5 rounded bg-gray-100 text-gray-600 text-[11px] font-semibold">NO CRMProvider ID</span>'
                             : '<span class="px-2 py-0.5 rounded bg-red-100 text-red-800 text-[11px] font-semibold">ERROR</span>';
                 const tab = r.module === 'Deals' ? 'Potentials' : r.module;
-                const link = (r.zohoId && tab) ? zohoLink(r.zohoId, tab) : '<span class="text-gray-400">—</span>';
+                const link = (r.CRMProviderId && tab) ? CRMProviderLink(r.CRMProviderId, tab) : '<span class="text-gray-400">—</span>';
                 return '<tr class="border-t border-gray-100"><td class="px-2 py-1">' + badge + '</td>'
                     + '<td class="px-2 py-1 text-gray-700">' + escapeHtml(r.name || '—') + '</td>'
                     + '<td class="px-2 py-1 text-xs text-gray-500">' + escapeHtml(r.module || '—') + '</td>'
@@ -5737,14 +5737,14 @@
                     + '</tr>';
             }).join('');
             panel.innerHTML = header + (rows
-                ? '<div class="overflow-x-auto"><table class="min-w-full text-xs border border-gray-200"><thead class="bg-gray-50"><tr><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Status</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Record</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Module</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Zoho</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Note</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+                ? '<div class="overflow-x-auto"><table class="min-w-full text-xs border border-gray-200"><thead class="bg-gray-50"><tr><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Status</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Record</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Module</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">CRMProvider</th><th scope="col" class="px-2 py-1 text-start font-medium text-gray-600">Note</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
                 : '');
         }
 
         // Fill the "Will reparent: X Deals · Y Contacts" line in the merge
-        // plan. Called AFTER __renderMergePlan paints — fans out to Zoho
+        // plan. Called AFTER __renderMergePlan paints — fans out to CRMProvider
         // related lists, then updates the placeholder span. Best-effort:
-        // a Zoho rate-limit or 5xx leaves the placeholder as "…" rather
+        // a CRMProvider rate-limit or 5xx leaves the placeholder as "…" rather
         // than blocking the dry-run / apply flow.
         async function loadReparentPreview(module, clusterId) {
             const slot = document.getElementById('reparent-preview-' + module);
@@ -5766,11 +5766,11 @@
         }
 
         // Lazily fill the "Deals" column on the Accounts merge modal with the
-        // child-Deal count for each Account (via Zoho related list). Sample User
+        // child-Deal count for each Account (via CRMProvider related list). Sample User
         // Hijazi (2026-06-10): "instead of attachments here we can add the
         // no. of deals that inside the account itself" — the bigger Deals
         // book is a stronger survivor signal than attachment counts for
-        // Accounts. Best-effort: a Zoho rate-limit / error leaves the cell
+        // Accounts. Best-effort: a CRMProvider rate-limit / error leaves the cell
         // as a neutral dash instead of blocking the plan.
         async function loadAccountDealCounts(clusterId) {
             try {
@@ -5778,19 +5778,19 @@
                 if (!res.ok) return;
                 const data = await res.json();
                 const counts = (data && data.counts) || {};
-                Object.keys(counts).forEach(function (zohoId) {
-                    const el = document.getElementById('dealcount-Accounts-' + zohoId);
+                Object.keys(counts).forEach(function (CRMProviderId) {
+                    const el = document.getElementById('dealcount-Accounts-' + CRMProviderId);
                     if (!el) return;
-                    const n = Number(counts[zohoId]);
+                    const n = Number(counts[CRMProviderId]);
                     if (n < 0) {
-                        // -1 sentinel = Zoho error; neutral dash.
+                        // -1 sentinel = CRMProvider error; neutral dash.
                         el.textContent = '—';
                         el.className = 'text-xs text-gray-300';
-                        el.title = 'Could not fetch Deals from Zoho.';
+                        el.title = 'Could not fetch Deals from CRMProvider.';
                     } else if (n > 0) {
                         el.textContent = '💼 ' + n;
                         el.className = 'text-xs font-semibold text-indigo-700';
-                        el.title = n + ' Deal(s) linked to this Account in Zoho';
+                        el.title = n + ' Deal(s) linked to this Account in CRMProvider';
                     } else {
                         el.textContent = '0';
                         el.className = 'text-xs text-gray-400';
@@ -5809,10 +5809,10 @@
                 if (!res.ok) return;
                 const data = await res.json();
                 const counts = (data && data.counts) || {};
-                Object.keys(counts).forEach(function (zohoId) {
-                    const el = document.getElementById('att-' + module + '-' + zohoId);
+                Object.keys(counts).forEach(function (CRMProviderId) {
+                    const el = document.getElementById('att-' + module + '-' + CRMProviderId);
                     if (!el) return;
-                    const n = counts[zohoId] | 0;
+                    const n = counts[CRMProviderId] | 0;
                     if (n > 0) {
                         el.textContent = '📎 ' + n;
                         el.className = 'text-xs font-semibold text-amber-700';
@@ -5827,10 +5827,10 @@
 
         // Toggle one record in/out of the merge set, then re-preview. Enforces
         // at least 2 selected — you can't merge fewer than two records.
-        function toggleMergeRecord(module, zohoId) {
+        function toggleMergeRecord(module, CRMProviderId) {
             const st = _planSt(module);
             const sel = new Set(Array.isArray(st.selected) ? st.selected : []);
-            const key = String(zohoId);
+            const key = String(CRMProviderId);
             if (sel.has(key)) sel.delete(key); else sel.add(key);
             // A link-only cascade (an Account is chosen to link to) is valid
             // with a single contact (the survivor) — it just sets Account_Name,
@@ -5851,28 +5851,28 @@
 
         // Link the survivor to a cluster Account (Contacts/Deals set Account_Name).
         // "" = don't link. Re-previews so the choice persists into dry-run/apply.
-        function setMergeLinkAccount(module, zohoId) {
+        function setMergeLinkAccount(module, CRMProviderId) {
             const st = _planSt(module);
-            st.linkAccount = String(zohoId);
+            st.linkAccount = String(CRMProviderId);
             previewMergePlan(module, window.__planClusterId);
         }
 
         // Move a single Deal/Contact under an Account NOW (sets Account_Name in
-        // Zoho via the proven link primitive). Powers the per-row "move to →"
+        // CRMProvider via the proven link primitive). Powers the per-row "move to →"
         // buttons in the Deals/Contacts merge pop-up and the Account pop-up's
         // deal list. Confirm-gated; writes live, deletes nothing.
-        async function linkRecordToAccount(module, recordZohoId, accountZohoId, accountName) {
+        async function linkRecordToAccount(module, recordCRMProviderId, accountCRMProviderId, accountName) {
             const noun = String(module).replace(/s$/, '');
-            if (!confirm('Move this ' + noun + ' under "' + (accountName || 'the selected account') + '"?\n\nThis sets the ' + noun + "'s Account_Name in Zoho. Nothing is deleted.")) return;
+            if (!confirm('Move this ' + noun + ' under "' + (accountName || 'the selected account') + '"?\n\nThis sets the ' + noun + "'s Account_Name in CRMProvider. Nothing is deleted.")) return;
             try {
                 const res = await fetch('/api/duplicates/link-record-to-account', {
                     method: 'POST', credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ module: module, record_zoho_id: String(recordZohoId), account_zoho_id: String(accountZohoId) })
+                    body: JSON.stringify({ module: module, record_CRMProvider_id: String(recordCRMProviderId), account_CRMProvider_id: String(accountCRMProviderId) })
                 });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
-                rrToast('Done — linked to "' + (accountName || accountZohoId) + '" in Zoho. The next sync will reflect it.');
+                rrToast('Done — linked to "' + (accountName || accountCRMProviderId) + '" in CRMProvider. The next sync will reflect it.');
                 if (window.__planClusterId) previewMergePlan(module, window.__planClusterId);
             } catch (e) {
                 rrToast('Could not link: ' + (e && e.message || e) + (/403|401|admin/i.test(String(e && e.message || e)) ? '\n(Admin access is required to link records.)' : ''));
@@ -5895,11 +5895,11 @@
                 if (!accounts.length) { panel.innerHTML = '<div class="text-xs text-gray-500 p-2">No accounts in this cluster.</div>'; return; }
                 const esc = (s) => escapeHtml(String(s == null ? '' : s));
                 panel.innerHTML = accounts.map(function (a) {
-                    const ds = deals[a.zohoId] || [];
-                    const others = accounts.filter(function (x) { return x.zohoId !== a.zohoId; });
+                    const ds = deals[a.CRMProviderId] || [];
+                    const others = accounts.filter(function (x) { return x.CRMProviderId !== a.CRMProviderId; });
                     const rows = ds.length ? ds.map(function (d) {
                         const moveBtns = others.map(function (o) {
-                            return '<button data-on-click="linkRecordToAccount" data-args=\'["Deals","' + esc(d.id) + '","' + esc(o.zohoId) + '","' + esc(String(o.name).replace(/"/g, '')) + '"]\' class="px-1.5 py-0.5 rounded text-[10px] bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 ms-1" title="Move this deal under ' + esc(o.name) + '">→ ' + esc(o.name) + '</button>';
+                            return '<button data-on-click="linkRecordToAccount" data-args=\'["Deals","' + esc(d.id) + '","' + esc(o.CRMProviderId) + '","' + esc(String(o.name).replace(/"/g, '')) + '"]\' class="px-1.5 py-0.5 rounded text-[10px] bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 ms-1" title="Move this deal under ' + esc(o.name) + '">→ ' + esc(o.name) + '</button>';
                         }).join('');
                         return '<div class="flex flex-wrap items-center gap-1 py-1 border-t border-gray-100"><span class="text-xs text-gray-800">' + esc(d.name) + '</span>' + (d.stage ? '<span class="text-[10px] text-gray-500">(' + esc(d.stage) + ')</span>' : '') + '<span class="ms-auto"></span>' + moveBtns + '</div>';
                     }).join('') : '<div class="text-[11px] text-gray-400 py-1">No deals on this account.</div>';
@@ -5912,11 +5912,11 @@
 
         // Split the TICKED records into a brand-new cluster — for name-collision
         // false positives (two real companies sharing a word). Platform-only:
-        // re-points cluster membership; no Zoho writes.
+        // re-points cluster membership; no CRMProvider writes.
         async function splitMergeSelection(module, clusterId) {
             const st = _planSt(module);
             const selected = new Set(Array.isArray(st.selected) ? st.selected : []);
-            const recs = (st.planRecords || []).filter(r => r.zohoId && selected.has(String(r.zohoId)));
+            const recs = (st.planRecords || []).filter(r => r.CRMProviderId && selected.has(String(r.CRMProviderId)));
             const dbIds = recs.map(r => r.dbId).filter(x => x !== null && x !== undefined);
             if (dbIds.length < 1) {
                 rrToast('Tick the records you want to move into a new cluster first (e.g. the accounts that belong to the OTHER company), then click Split.');
@@ -5926,7 +5926,7 @@
                 rrToast('Leave at least one record behind — splitting every record would just move the cluster. Untick the records that should stay.');
                 return;
             }
-            if (!confirm('Move the ' + dbIds.length + ' ticked record(s) into a NEW cluster?\n\nThey become a separate cluster you can resolve on their own. This changes nothing in Zoho.')) return;
+            if (!confirm('Move the ' + dbIds.length + ' ticked record(s) into a NEW cluster?\n\nThey become a separate cluster you can resolve on their own. This changes nothing in CRMProvider.')) return;
             try {
                 const res = await fetch('/api/duplicates/clusters/' + clusterId + '/split', {
                     method: 'POST', credentials: 'same-origin',
@@ -5946,7 +5946,7 @@
         // Auto-split a cluster by distinct company name (largest group stays,
         // each other name becomes its own cluster). For name-collision clusters.
         async function splitClusterByName(module, clusterId) {
-            if (!confirm('Auto-split this cluster by company name?\n\nRecords are grouped by company name; the largest group stays here and each other name becomes its own cluster. Best for name-collision clusters (e.g. "Andalusia Group" vs "Andalusia Hospital").\n\nNo Zoho changes.')) return;
+            if (!confirm('Auto-split this cluster by company name?\n\nRecords are grouped by company name; the largest group stays here and each other name becomes its own cluster. Best for name-collision clusters (e.g. "Andalusia Group" vs "Andalusia Hospital").\n\nNo CRMProvider changes.')) return;
             try {
                 const res = await fetch('/api/duplicates/clusters/' + clusterId + '/split', {
                     method: 'POST', credentials: 'same-origin',
@@ -5965,9 +5965,9 @@
 
         // Force a specific record to be the survivor (overrides the auto-pick).
         // Ensures it's part of the merge set, then re-previews.
-        function setMergeSurvivor(module, zohoId) {
+        function setMergeSurvivor(module, CRMProviderId) {
             const st = _planSt(module);
-            const key = String(zohoId);
+            const key = String(CRMProviderId);
             st.master = key;
             if (Array.isArray(st.selected) && !st.selected.includes(key)) st.selected.push(key);
             previewMergePlan(module, window.__planClusterId);
@@ -5978,22 +5978,22 @@
         // writes but enumerates exactly what a real run would do.
         async function dryRunMergePlan(module, clusterId) {
             const st = _planSt(module);
-            await _runMergeExec(module, clusterId, { module: module, dry_run: true, record_zoho_ids: st.selected || undefined, master_zoho_id: st.master || undefined, link_account_zoho_id: st.linkAccount }, false);
+            await _runMergeExec(module, clusterId, { module: module, dry_run: true, record_CRMProvider_ids: st.selected || undefined, master_CRMProvider_id: st.master || undefined, link_account_CRMProvider_id: st.linkAccount }, false);
         }
         // applyMergePlan: explicit confirm → POST /execute with confirm:true →
-        // real Zoho writes (migrate fields, reparent, tag, stamp, resolve).
+        // real CRMProvider writes (migrate fields, reparent, tag, stamp, resolve).
         async function applyMergePlan(module, clusterId) {
             const ok = window.confirm(
-                'Apply this ' + module + ' merge in Zoho?\n\n' +
+                'Apply this ' + module + ' merge in CRMProvider?\n\n' +
                 '• Winning field values are written onto the survivor.\n' +
                 '• Related records + notes are reparented to the survivor.\n' +
                 '• Duplicates are tagged "Duplicate-Delete" for the admin.\n' +
                 '• Nothing is deleted by the platform.\n\n' +
-                'This writes to production Zoho.'
+                'This writes to production CRMProvider.'
             );
             if (!ok) return;
             const st = _planSt(module);
-            await _runMergeExec(module, clusterId, { module: module, confirm: true, record_zoho_ids: st.selected || undefined, master_zoho_id: st.master || undefined, link_account_zoho_id: st.linkAccount }, true);
+            await _runMergeExec(module, clusterId, { module: module, confirm: true, record_CRMProvider_ids: st.selected || undefined, master_CRMProvider_id: st.master || undefined, link_account_CRMProvider_id: st.linkAccount }, true);
         }
         // Force-merge override — tag the TICKED contacts as the same person even
         // when they share fewer than 2 of {email, phone, name}. Verified by the
@@ -6012,15 +6012,15 @@
                 '• ' + sel.length + ' selected contact(s): the survivor keeps its data; the rest are tagged "Duplicate-Delete".\n' +
                 '• Migrate-then-tag — nothing is deleted by the platform.\n' +
                 '• Logged in the action timeline as an operator-forced merge.\n\n' +
-                'Proceed with the force-merge in Zoho?'
+                'Proceed with the force-merge in CRMProvider?'
             );
             if (!ok) return;
-            await _runMergeExec(module, clusterId, { module: module, confirm: true, force_merge: true, record_zoho_ids: st.selected || undefined, master_zoho_id: st.master || undefined, link_account_zoho_id: st.linkAccount }, true);
+            await _runMergeExec(module, clusterId, { module: module, confirm: true, force_merge: true, record_CRMProvider_ids: st.selected || undefined, master_CRMProvider_id: st.master || undefined, link_account_CRMProvider_id: st.linkAccount }, true);
         }
         async function _runMergeExec(module, clusterId, body, isApply) {
             const panel = document.getElementById('mergeExecPanel-' + module);
             if (!panel) return;
-            panel.innerHTML = '<div class="py-3 text-gray-400">' + (isApply ? 'Applying in Zoho…' : 'Running dry-run…') + '</div>';
+            panel.innerHTML = '<div class="py-3 text-gray-400">' + (isApply ? 'Applying in CRMProvider…' : 'Running dry-run…') + '</div>';
             let res, data;
             try {
                 res = await fetch('/api/duplicates/clusters/' + encodeURIComponent(clusterId) + '/execute', {
@@ -6055,7 +6055,7 @@
             panel.innerHTML = __renderExecReport(data.report);
             // After a successful real apply, refresh the active tab so the
             // page recompacts to 20 visible clusters — the just-applied
-            // cluster moves from "Untouched" to "AI-Applied · pending Zoho
+            // cluster moves from "Untouched" to "AI-Applied · pending CRMProvider
             // admin delete" (cross-module case) or "Resolved" (single-module
             // case). Either way, with the default Untouched chip selected
             // the cluster leaves the page and the backend slides the next
@@ -6140,10 +6140,10 @@
         function __renderExecReport(rep) {
             const esc = (v) => escapeHtml(v === null || v === undefined || v === '' ? '—' : String(v));
             const banner = rep.dryRun
-                ? '<div class="rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-sm p-2 mb-2">Dry-run — no changes were written to Zoho. This is what a real apply would do.</div>'
+                ? '<div class="rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-sm p-2 mb-2">Dry-run — no changes were written to CRMProvider. This is what a real apply would do.</div>'
                 : (rep.errors && rep.errors.length
                     ? '<div class="rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-sm p-2 mb-2">Applied with ' + rep.errors.length + ' error(s) — see below.</div>'
-                    : '<div class="rounded-lg bg-green-50 border border-green-300 text-green-900 text-sm p-2 mb-2">Applied successfully in Zoho.</div>');
+                    : '<div class="rounded-lg bg-green-50 border border-green-300 text-green-900 text-sm p-2 mb-2">Applied successfully in CRMProvider.</div>');
             const fields = (rep.fieldsMigrated || []).length
                 ? (rep.fieldsMigrated || []).map(f => esc(f.field) + '=' + esc(f.value)).join(', ')
                 : 'none';
@@ -6186,8 +6186,8 @@
             // were soft-excluded by the strict rule are now rendered as
             // "→ Link" rows instead of "Excluded", because the executor's
             // cascade still updates their Account_Name.
-            const dupCount = Array.isArray(plan.duplicateZohoIds) ? plan.duplicateZohoIds.length : 0;
-            const cascadeIds = new Set(plan.cascadeOnlyZohoIds || []);
+            const dupCount = Array.isArray(plan.duplicateCRMProviderIds) ? plan.duplicateCRMProviderIds.length : 0;
+            const cascadeIds = new Set(plan.cascadeOnlyCRMProviderIds || []);
             const linkOnlyMode = isContacts && dupCount === 0;
 
             // "Link survivor to Account" control — only when the cluster has
@@ -6196,9 +6196,9 @@
                 ? '<div class="mb-3 p-2 rounded-lg border border-indigo-100 bg-indigo-50">' +
                     '<div class="text-xs uppercase tracking-wide text-indigo-700 mb-1">Link survivor to Account</div>' +
                     '<div class="flex flex-wrap gap-2 items-center">' +
-                        '<button data-on-click="setMergeLinkAccount" data-args=\'["' + esc(plan.module) + '",""]\' class="px-2 py-1 rounded text-xs ' + (!plan.linkAccountZohoId ? 'bg-gray-300 text-gray-900 font-semibold' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-100') + '">Don\'t link</button>' +
+                        '<button data-on-click="setMergeLinkAccount" data-args=\'["' + esc(plan.module) + '",""]\' class="px-2 py-1 rounded text-xs ' + (!plan.linkAccountCRMProviderId ? 'bg-gray-300 text-gray-900 font-semibold' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-100') + '">Don\'t link</button>' +
                         plan.accountCandidates.map(a =>
-                            '<button data-on-click="setMergeLinkAccount" data-args=\'["' + esc(plan.module) + '","' + esc(a.zohoId) + '"]\' class="px-2 py-1 rounded text-xs ' + (plan.linkAccountZohoId === a.zohoId ? 'bg-indigo-600 text-white font-semibold' : 'bg-white border border-indigo-300 text-indigo-700 hover:bg-indigo-100') + '">' + esc(a.name) + '</button>'
+                            '<button data-on-click="setMergeLinkAccount" data-args=\'["' + esc(plan.module) + '","' + esc(a.CRMProviderId) + '"]\' class="px-2 py-1 rounded text-xs ' + (plan.linkAccountCRMProviderId === a.CRMProviderId ? 'bg-indigo-600 text-white font-semibold' : 'bg-white border border-indigo-300 text-indigo-700 hover:bg-indigo-100') + '">' + esc(a.name) + '</button>'
                         ).join('') +
                     '</div>' +
                     '<div class="text-[11px] text-gray-500 mt-1">On apply, the surviving ' + (plan.module === 'Deals' ? 'deal' : 'contact') + ' gets its <code class="bg-white px-1 rounded">Account_Name</code> set to the chosen account.</div>' +
@@ -6207,9 +6207,9 @@
 
             const recRows = (plan.records || []).map(r => {
                 const included = r.included !== false;
-                const isCascadeOnly = !!(r.zohoId && cascadeIds.has(r.zohoId));
-                const makeSurvivorBtn = (included && !r.isMaster && r.zohoId)
-                    ? ' <button data-on-click="setMergeSurvivor" data-args=\'["' + esc(plan.module) + '","' + esc(r.zohoId) + '"]\' class="ms-1 text-[11px] text-indigo-600 hover:underline cursor-pointer" title="' + (linkOnlyMode ? 'Make this the contact that is KEPT' : 'Make this the surviving record') + '">' + (linkOnlyMode ? '★ make KEEP' : '★ make survivor') + '</button>'
+                const isCascadeOnly = !!(r.CRMProviderId && cascadeIds.has(r.CRMProviderId));
+                const makeSurvivorBtn = (included && !r.isMaster && r.CRMProviderId)
+                    ? ' <button data-on-click="setMergeSurvivor" data-args=\'["' + esc(plan.module) + '","' + esc(r.CRMProviderId) + '"]\' class="ms-1 text-[11px] text-indigo-600 hover:underline cursor-pointer" title="' + (linkOnlyMode ? 'Make this the contact that is KEPT' : 'Make this the surviving record') + '">' + (linkOnlyMode ? '★ make KEEP' : '★ make survivor') + '</button>'
                     : '';
                 // Outcome label — three branches:
                 //   1) cascadeOnly (Contacts soft-excluded by ≥2-attribute rule)
@@ -6240,16 +6240,16 @@
                 // Per-row "move to account" — Deals/Contacts only. Sets THIS
                 // record's Account_Name to any cluster account immediately (not
                 // just the survivor). Writes live via linkRecordToAccount.
-                const perRowLink = (r.zohoId && (plan.module === 'Deals' || plan.module === 'Contacts') && Array.isArray(plan.accountCandidates) && plan.accountCandidates.length)
+                const perRowLink = (r.CRMProviderId && (plan.module === 'Deals' || plan.module === 'Contacts') && Array.isArray(plan.accountCandidates) && plan.accountCandidates.length)
                     ? '<div class="mt-1 flex flex-wrap items-center gap-1"><span class="text-[10px] text-gray-400">move to:</span>'
                         + plan.accountCandidates.map(function (a) {
-                            return '<button data-on-click="linkRecordToAccount" data-args=\'["' + esc(plan.module) + '","' + esc(r.zohoId) + '","' + esc(a.zohoId) + '","' + esc(String(a.name).replace(/"/g, '')) + '"]\' class="px-1.5 py-0.5 rounded text-[10px] bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50" title="Set this record\'s Account_Name to ' + esc(a.name) + ' in Zoho">→ ' + esc(a.name) + '</button>';
+                            return '<button data-on-click="linkRecordToAccount" data-args=\'["' + esc(plan.module) + '","' + esc(r.CRMProviderId) + '","' + esc(a.CRMProviderId) + '","' + esc(String(a.name).replace(/"/g, '')) + '"]\' class="px-1.5 py-0.5 rounded text-[10px] bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50" title="Set this record\'s Account_Name to ' + esc(a.name) + ' in CRMProvider">→ ' + esc(a.name) + '</button>';
                         }).join('')
                         + '</div>'
                     : '';
-                const cb = r.zohoId
-                    ? '<input type="checkbox" data-on-click="toggleMergeRecord" data-args=\'["' + esc(plan.module) + '","' + esc(r.zohoId) + '"]\'' + (included ? ' checked' : '') + ' class="cursor-pointer w-4 h-4" title="' + (linkOnlyMode ? 'Include this contact in the link cascade' : 'Include this record in the merge') + '">'
-                    : '<span class="text-gray-300" title="No Zoho id — cannot be ' + (linkOnlyMode ? 'linked' : 'merged') + '">—</span>';
+                const cb = r.CRMProviderId
+                    ? '<input type="checkbox" data-on-click="toggleMergeRecord" data-args=\'["' + esc(plan.module) + '","' + esc(r.CRMProviderId) + '"]\'' + (included ? ' checked' : '') + ' class="cursor-pointer w-4 h-4" title="' + (linkOnlyMode ? 'Include this contact in the link cascade' : 'Include this record in the merge') + '">'
+                    : '<span class="text-gray-300" title="No CRMProvider id — cannot be ' + (linkOnlyMode ? 'linked' : 'merged') + '">—</span>';
                 // Middle cell — three flavours by module:
                 //   Contacts → "Account" (parent Account_Name)
                 //   Accounts → "Deals" (count of child Deals — stronger
@@ -6257,27 +6257,27 @@
                 //   Leads / Deals → 📎 attachments
                 let midCell;
                 if (isContacts) {
-                    midCell = '<td class="px-3 py-2 text-xs text-gray-700" title="Zoho Contacts → Account_Name (parent Account this contact is linked to)">' + esc(r.accountName) + '</td>';
+                    midCell = '<td class="px-3 py-2 text-xs text-gray-700" title="CRMProvider Contacts → Account_Name (parent Account this contact is linked to)">' + esc(r.accountName) + '</td>';
                 } else if (plan.module === 'Accounts') {
-                    midCell = '<td class="px-3 py-2 text-center">' + (r.zohoId ? '<span id="dealcount-Accounts-' + esc(r.zohoId) + '" class="text-xs text-gray-400" title="Number of Deals linked to this Account (Zoho related list)">…</span>' : '<span class="text-gray-300">—</span>') + '</td>';
+                    midCell = '<td class="px-3 py-2 text-center">' + (r.CRMProviderId ? '<span id="dealcount-Accounts-' + esc(r.CRMProviderId) + '" class="text-xs text-gray-400" title="Number of Deals linked to this Account (CRMProvider related list)">…</span>' : '<span class="text-gray-300">—</span>') + '</td>';
                 } else if (plan.module === 'Deals') {
                     // Deal Stage — the key signal when merging deals (don't merge
                     // away an open/won deal). Shown in place of attachments.
-                    midCell = '<td class="px-3 py-2" title="Deal Stage in Zoho">' + (r.stage ? '<span class="inline-block px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-xs">' + esc(r.stage) + '</span>' : '<span class="text-gray-300">—</span>') + '</td>';
+                    midCell = '<td class="px-3 py-2" title="Deal Stage in CRMProvider">' + (r.stage ? '<span class="inline-block px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-xs">' + esc(r.stage) + '</span>' : '<span class="text-gray-300">—</span>') + '</td>';
                 } else if (plan.module === 'Leads') {
                     // Lead Status — the key signal when merging leads (don't merge
                     // a Converted / qualified lead away). Shown in place of
                     // attachments (Sample User 2026-07-16, mirrors the Deals Stage cell).
-                    midCell = '<td class="px-3 py-2" title="Lead Status in Zoho">' + (r.leadStatus ? '<span class="inline-block px-2 py-0.5 rounded bg-purple-100 text-purple-800 text-xs">' + esc(r.leadStatus) + '</span>' : '<span class="text-gray-300">—</span>') + '</td>';
+                    midCell = '<td class="px-3 py-2" title="Lead Status in CRMProvider">' + (r.leadStatus ? '<span class="inline-block px-2 py-0.5 rounded bg-purple-100 text-purple-800 text-xs">' + esc(r.leadStatus) + '</span>' : '<span class="text-gray-300">—</span>') + '</td>';
                 } else {
-                    midCell = '<td class="px-3 py-2 text-center">' + (r.zohoId ? '<span id="att-' + esc(plan.module) + '-' + esc(r.zohoId) + '" class="text-xs text-gray-400" title="Attachments on this record">…</span>' : '<span class="text-gray-300">—</span>') + '</td>';
+                    midCell = '<td class="px-3 py-2 text-center">' + (r.CRMProviderId ? '<span id="att-' + esc(plan.module) + '-' + esc(r.CRMProviderId) + '" class="text-xs text-gray-400" title="Attachments on this record">…</span>' : '<span class="text-gray-300">—</span>') + '</td>';
                 }
-                // Make the Zoho ID clickable — every CRM id in the platform
-                // should jump straight to that Zoho record. The merge modal
+                // Make the CRMProvider ID clickable — every CRM id in the platform
+                // should jump straight to that CRMProvider record. The merge modal
                 // was the worst offender (id was monospaced plain text).
-                const zohoTab = plan.module === 'Deals' ? 'Potentials' : plan.module;
-                const idCell = r.zohoId
-                    ? '<td class="px-3 py-2">' + zohoLink(r.zohoId, zohoTab) + '</td>'
+                const CRMProviderTab = plan.module === 'Deals' ? 'Potentials' : plan.module;
+                const idCell = r.CRMProviderId
+                    ? '<td class="px-3 py-2">' + CRMProviderLink(r.CRMProviderId, CRMProviderTab) + '</td>'
                     : '<td class="px-3 py-2 text-gray-300 text-xs">—</td>';
                 return '<tr class="border-t' + (included ? '' : ' opacity-50') + '">' +
                     '<td class="px-3 py-2 text-center">' + cb + '</td>' +
@@ -6309,24 +6309,24 @@
                 ? '<ul class="list-disc ms-5 mt-1 space-y-1 text-amber-800">' + plan.warnings.map(w => '<li>' + esc(w) + '</li>').join('') + '</ul>'
                 : '<span class="text-gray-400">None</span>';
 
-            // Survivor headline — render the master Zoho id as a clickable
+            // Survivor headline — render the master CRMProvider id as a clickable
             // CRM link so the operator can open the surviving record in one
-            // click instead of copying the id and pasting it into Zoho.
+            // click instead of copying the id and pasting it into CRMProvider.
             const survivorTab = plan.module === 'Deals' ? 'Potentials' : plan.module;
-            const survivorIdLink = plan.masterZohoId
-                ? ' <span class="ms-1">' + zohoLink(plan.masterZohoId, survivorTab) + '</span>'
+            const survivorIdLink = plan.masterCRMProviderId
+                ? ' <span class="ms-1">' + CRMProviderLink(plan.masterCRMProviderId, survivorTab) + '</span>'
                 : '';
             // Reparent-preview slot — lazily filled by loadReparentPreview
-            // after Zoho returns. Only Accounts/Contacts merges have child
+            // after CRMProvider returns. Only Accounts/Contacts merges have child
             // records to repoint; the slot stays empty otherwise.
             const reparentSlot = (plan.module === 'Accounts' || plan.module === 'Contacts')
-                ? '<div class="mb-3 p-2 rounded-lg border border-indigo-100 bg-indigo-50 text-xs text-indigo-900"><span class="uppercase tracking-wide text-indigo-700 font-semibold">Cascade to survivor</span> · <span id="reparent-preview-' + esc(plan.module) + '">Checking Zoho related records…</span></div>'
+                ? '<div class="mb-3 p-2 rounded-lg border border-indigo-100 bg-indigo-50 text-xs text-indigo-900"><span class="uppercase tracking-wide text-indigo-700 font-semibold">Cascade to survivor</span> · <span id="reparent-preview-' + esc(plan.module) + '">Checking CRMProvider related records…</span></div>'
                 : '';
             // Account pop-up only — list the Deals under each Account and move
             // any Deal to another Account in this cluster (sets Account_Name).
             const accountDealsMover = (plan.module === 'Accounts')
                 ? '<div class="mb-3 p-2 rounded-lg border border-emerald-100 bg-emerald-50">'
-                    + '<button data-on-click="loadAccountDealsMover" data-args=\'[' + plan.clusterId + ']\' class="text-xs font-semibold text-emerald-800 hover:underline" title="List the Deals under each Account and move any Deal to another Account in this cluster (sets Account_Name in Zoho).">💼 Move deals between these accounts ▾</button>'
+                    + '<button data-on-click="loadAccountDealsMover" data-args=\'[' + plan.clusterId + ']\' class="text-xs font-semibold text-emerald-800 hover:underline" title="List the Deals under each Account and move any Deal to another Account in this cluster (sets Account_Name in CRMProvider).">💼 Move deals between these accounts ▾</button>'
                     + '<div id="accountDealsPanel-' + plan.clusterId + '" class="mt-2"></div>'
                     + '</div>'
                 : '';
@@ -6345,15 +6345,15 @@
                 ? '<th scope="col" class="px-3 py-2 text-start" title="Include this contact in the link cascade">Link</th>'
                 : '<th scope="col" class="px-3 py-2 text-start">Merge</th>';
             const applyBtn = linkOnlyMode
-                ? '<button data-on-click="applyMergePlan" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' data-testid="button-apply-merge-' + plan.module + '-' + plan.clusterId + '" class="px-4 py-2 bg-emerald-700 text-white hover:bg-emerald-800 rounded-lg text-sm font-semibold">🔗 Link contacts in Zoho</button>'
-                : '<button data-on-click="applyMergePlan" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' data-testid="button-apply-merge-' + plan.module + '-' + plan.clusterId + '" class="px-4 py-2 bg-purple-700 text-white hover:bg-purple-800 rounded-lg text-sm font-semibold">⚡ Apply in Zoho</button>';
+                ? '<button data-on-click="applyMergePlan" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' data-testid="button-apply-merge-' + plan.module + '-' + plan.clusterId + '" class="px-4 py-2 bg-emerald-700 text-white hover:bg-emerald-800 rounded-lg text-sm font-semibold">🔗 Link contacts in CRMProvider</button>'
+                : '<button data-on-click="applyMergePlan" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' data-testid="button-apply-merge-' + plan.module + '-' + plan.clusterId + '" class="px-4 py-2 bg-purple-700 text-white hover:bg-purple-800 rounded-lg text-sm font-semibold">⚡ Apply in CRMProvider</button>';
             const trailingNote = linkOnlyMode
                 ? '<span class="text-xs text-gray-500">Apply only writes <code class="bg-gray-100 px-1 rounded">Account_Name</code> on each contact. No tagging, no deletion.</span>'
                 : '<span class="text-xs text-gray-400">Apply migrates fields, reparents Deals/Contacts/Notes, and tags duplicates <code class="bg-gray-100 px-1 rounded">Duplicate-Delete</code>. No deletions.</span>';
             // FORCE-MERGE override — only for Contacts where the ≥2-attribute rule
             // soft-excluded some (link-only or cascade-only). Lets the operator
             // tag verified same-person contacts that share only 1 signal.
-            const hasSoftExcluded = isContacts && (linkOnlyMode || (Array.isArray(plan.cascadeOnlyZohoIds) && plan.cascadeOnlyZohoIds.length > 0));
+            const hasSoftExcluded = isContacts && (linkOnlyMode || (Array.isArray(plan.cascadeOnlyCRMProviderIds) && plan.cascadeOnlyCRMProviderIds.length > 0));
             const forceBtn = hasSoftExcluded
                 ? '<button data-on-click="forceMergePlan" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' title="Override the ≥2-attribute rule: MERGE the TICKED contacts as the same person (for verified cases — e.g. the same person entered twice sharing only a phone). Migrate-then-tag; nothing deleted. Logged in the action timeline." class="px-3 py-2 bg-rose-600 text-white hover:bg-rose-700 rounded-lg text-sm font-semibold">⚠ Force-merge (same person)</button>'
                 : '';
@@ -6366,7 +6366,7 @@
                     : ' <span class="text-[10px] text-emerald-700">(from ' + esc(s.from) + ')</span>'))
                 : '<span class="text-gray-400">—</span>';
             const _cdExtras = (arr, label) => (arr && arr.length)
-                ? '<div class="text-[11px] text-amber-700 mt-1">⚠ ' + arr.length + ' more ' + label + ' can\'t be stored (Zoho holds 2) — capture manually: ' + arr.map(x => esc(x.value)).join(', ') + '</div>'
+                ? '<div class="text-[11px] text-amber-700 mt-1">⚠ ' + arr.length + ' more ' + label + ' can\'t be stored (CRMProvider holds 2) — capture manually: ' + arr.map(x => esc(x.value)).join(', ') + '</div>'
                 : '';
             const contactDataPanel = cds
                 ? '<div class="mb-3 p-3 rounded-lg border border-teal-200 bg-teal-50">'
@@ -6394,15 +6394,15 @@
                 accountDealsMover +
                 linkControl +
                 instructionLine +
-                '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500">' + mergeColHeader + '<th scope="col" class="px-3 py-2 text-start">Outcome</th><th scope="col" class="px-3 py-2 text-start">Record</th><th scope="col" class="px-3 py-2 text-start">Zoho ID</th>' + (
+                '<div class="overflow-x-auto mb-4"><table class="min-w-full text-sm"><thead><tr class="text-xs text-gray-500">' + mergeColHeader + '<th scope="col" class="px-3 py-2 text-start">Outcome</th><th scope="col" class="px-3 py-2 text-start">Record</th><th scope="col" class="px-3 py-2 text-start">CRMProvider ID</th>' + (
                     isContacts
-                        ? '<th scope="col" class="px-3 py-2 text-start" title="Zoho Contacts → Account_Name (parent Account this contact is linked to)">Account</th>'
+                        ? '<th scope="col" class="px-3 py-2 text-start" title="CRMProvider Contacts → Account_Name (parent Account this contact is linked to)">Account</th>'
                         : plan.module === 'Accounts'
-                            ? '<th scope="col" class="px-3 py-2 text-center" title="Number of Deals linked to each Account in Zoho. Stronger survivor signal than attachment counts — the Account with the bigger Deals book is usually the one to keep.">Deals</th>'
+                            ? '<th scope="col" class="px-3 py-2 text-center" title="Number of Deals linked to each Account in CRMProvider. Stronger survivor signal than attachment counts — the Account with the bigger Deals book is usually the one to keep.">Deals</th>'
                             : plan.module === 'Deals'
-                                ? '<th scope="col" class="px-3 py-2 text-start" title="Deal Stage in Zoho — check each deal\'s stage before merging an open/won deal away">Stage</th>'
+                                ? '<th scope="col" class="px-3 py-2 text-start" title="Deal Stage in CRMProvider — check each deal\'s stage before merging an open/won deal away">Stage</th>'
                                 : plan.module === 'Leads'
-                                    ? '<th scope="col" class="px-3 py-2 text-start" title="Zoho Lead_Status — check each lead\'s status before merging (e.g. don\'t merge a Converted lead away)">Lead Status</th>'
+                                    ? '<th scope="col" class="px-3 py-2 text-start" title="CRMProvider Lead_Status — check each lead\'s status before merging (e.g. don\'t merge a Converted lead away)">Lead Status</th>'
                                     : '<th scope="col" class="px-3 py-2 text-center" title="Attachments on the record (📎)">📎</th>'
                 ) + '<th scope="col" class="px-3 py-2 text-end">Complete</th><th scope="col" class="px-3 py-2 text-start">Owner</th><th scope="col" class="px-3 py-2 text-start">Layout</th></tr></thead><tbody>' + recRows + '</tbody></table></div>' +
                 (linkOnlyMode
@@ -6416,9 +6416,9 @@
                     '<button data-on-click="dryRunMergePlan" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' data-testid="button-dryrun-merge-' + plan.module + '-' + plan.clusterId + '" class="px-3 py-2 bg-white border border-purple-300 text-purple-700 hover:bg-purple-50 rounded-lg text-sm font-medium">Dry-run (no writes)</button>' +
                     applyBtn +
                     forceBtn +
-                    '<button data-on-click="splitMergeSelection" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' title="Move the TICKED records into a brand-new cluster — for name-collision false positives (two real companies sharing a word, e.g. Andalusia Group vs Andalusia Hospital). No Zoho changes; they just become a separate cluster to resolve." class="px-3 py-2 bg-white border border-amber-300 text-amber-800 hover:bg-amber-50 rounded-lg text-sm font-medium">✂️ Split ticked → new cluster</button>' +
-                    '<button data-on-click="splitClusterByName" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' title="Auto-detect the distinct company-name groups and split each into its own cluster (largest stays here). One click for name-collision clusters like Andalusia Group vs Andalusia Hospital. No Zoho changes." class="px-3 py-2 bg-white border border-amber-300 text-amber-800 hover:bg-amber-50 rounded-lg text-sm font-medium">🪪 Split by company name</button>' +
-                    '<button data-on-click="dismissCluster" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' title="Dismiss this whole cluster as a false positive — intentionally separate records (e.g. a Corporate-Accounts account vs a Marketplace account). Moves it to the Dismissed filter; no merge, no Zoho changes." class="px-3 py-2 bg-white border border-gray-400 text-gray-700 hover:bg-gray-100 rounded-lg text-sm font-medium">🚫 Dismiss (false positive)</button>' +
+                    '<button data-on-click="splitMergeSelection" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' title="Move the TICKED records into a brand-new cluster — for name-collision false positives (two real companies sharing a word, e.g. Andalusia Group vs Andalusia Hospital). No CRMProvider changes; they just become a separate cluster to resolve." class="px-3 py-2 bg-white border border-amber-300 text-amber-800 hover:bg-amber-50 rounded-lg text-sm font-medium">✂️ Split ticked → new cluster</button>' +
+                    '<button data-on-click="splitClusterByName" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' title="Auto-detect the distinct company-name groups and split each into its own cluster (largest stays here). One click for name-collision clusters like Andalusia Group vs Andalusia Hospital. No CRMProvider changes." class="px-3 py-2 bg-white border border-amber-300 text-amber-800 hover:bg-amber-50 rounded-lg text-sm font-medium">🪪 Split by company name</button>' +
+                    '<button data-on-click="dismissCluster" data-args=\'["' + esc(plan.module) + '",' + plan.clusterId + ']\' title="Dismiss this whole cluster as a false positive — intentionally separate records (e.g. a Corporate-Accounts account vs a Marketplace account). Moves it to the Dismissed filter; no merge, no CRMProvider changes." class="px-3 py-2 bg-white border border-gray-400 text-gray-700 hover:bg-gray-100 rounded-lg text-sm font-medium">🚫 Dismiss (false positive)</button>' +
                     trailingNote +
                 '</div>' +
                 '<div id="mergeExecPanel-' + esc(plan.module) + '" class="text-sm mt-3"></div>' +
@@ -6429,7 +6429,7 @@
         // For intentionally-separate accounts (e.g. a Corporate-Accounts account
         // and a Marketplace account — Sales B2B/B2C vs Merchants). Uses the
         // admin SESSION (no key prompt); falls back to a key prompt if needed.
-        // Verify-in-CRM resolve: re-query Zoho for the cluster's Duplicate-Delete
+        // Verify-in-CRM resolve: re-query CRMProvider for the cluster's Duplicate-Delete
         // records and mark the cluster Resolved ONLY if the admin has actually
         // deleted every one. This is the trustworthy replacement for the manual
         // "Mark Resolved" — a cluster is only "done" once the CRM proves it.
@@ -6447,21 +6447,21 @@
                 return;
             }
             if (data.message || (data.total || 0) === 0) {
-                rrToast(data.message || 'No tagged duplicates on this cluster yet — run Apply first, then have the Zoho admin delete the tagged records.');
+                rrToast(data.message || 'No tagged duplicates on this cluster yet — run Apply first, then have the CRMProvider admin delete the tagged records.');
                 return;
             }
             const total = data.total || 0, deleted = data.deleted || 0, alive = data.alive || 0, errors = data.errors || 0;
             if (errors > 0) {
-                rrToast('Could not verify ' + errors + ' of ' + total + ' tagged record(s) (Zoho error). Try again in a moment — not marking Resolved until every record is confirmed.');
+                rrToast('Could not verify ' + errors + ' of ' + total + ' tagged record(s) (CRMProvider error). Try again in a moment — not marking Resolved until every record is confirmed.');
                 return;
             }
             if (alive > 0) {
-                rrToast(deleted + ' of ' + total + ' tagged duplicate(s) have been deleted in Zoho.\n\n' + alive + ' are STILL in Zoho — the admin hasn\'t removed these yet. Open the cluster to see which records, share them with the admin, and re-run Verify once deleted.\n\nNot marked Resolved.');
+                rrToast(deleted + ' of ' + total + ' tagged duplicate(s) have been deleted in CRMProvider.\n\n' + alive + ' are STILL in CRMProvider — the admin hasn\'t removed these yet. Open the cluster to see which records, share them with the admin, and re-run Verify once deleted.\n\nNot marked Resolved.');
                 return;
             }
             // All tagged duplicates confirmed deleted → mark Resolved (verified).
-            if (!confirm('✓ All ' + total + ' tagged duplicate(s) are confirmed deleted in Zoho.\n\nMark this cluster Resolved? (Reversible via Re-open.)')) return;
-            const payload = JSON.stringify({ action: 'resolve', notes: 'Verified in CRM: all ' + total + ' Duplicate-Delete record(s) confirmed deleted in Zoho by the admin.' });
+            if (!confirm('✓ All ' + total + ' tagged duplicate(s) are confirmed deleted in CRMProvider.\n\nMark this cluster Resolved? (Reversible via Re-open.)')) return;
+            const payload = JSON.stringify({ action: 'resolve', notes: 'Verified in CRM: all ' + total + ' Duplicate-Delete record(s) confirmed deleted in CRMProvider by the admin.' });
             try {
                 let r2 = await fetch('/api/duplicates/clusters/' + clusterId + '/resolve', {
                     method: 'POST', credentials: 'same-origin',
@@ -6492,12 +6492,12 @@
 
         // Bulk Verify-in-CRM: check ALL AI-Applied clusters in a module at once
         // and resolve every one whose Duplicate-Delete records the admin has
-        // fully deleted. For when a batch is cleared in Zoho. Server-side +
-        // bounded, so one click can't fan out into thousands of Zoho calls.
+        // fully deleted. For when a batch is cleared in CRMProvider. Server-side +
+        // bounded, so one click can't fan out into thousands of CRMProvider calls.
         async function bulkVerifyResolveInCRM(module) {
             const mod = ({ leads: 'Leads', deals: 'Deals', contacts: 'Contacts', accounts: 'Accounts' })[String(module || '').toLowerCase()] || null;
             const btn = document.getElementById('verifyAllCrm-' + String(module || '').toLowerCase());
-            if (!confirm('Verify all AI-Applied ' + (mod || '') + ' clusters against Zoho?\n\nThis checks each cluster\'s Duplicate-Delete records in the CRM and marks Resolved ONLY the ones the admin has fully deleted. Clusters with records still in Zoho are left untouched. No Zoho changes are made.')) return;
+            if (!confirm('Verify all AI-Applied ' + (mod || '') + ' clusters against CRMProvider?\n\nThis checks each cluster\'s Duplicate-Delete records in the CRM and marks Resolved ONLY the ones the admin has fully deleted. Clusters with records still in CRMProvider are left untouched. No CRMProvider changes are made.')) return;
             const origLabel = btn ? btn.textContent : '';
             if (btn) { btn.disabled = true; btn.textContent = '⏳ Verifying…'; }
             const payload = JSON.stringify({ module: mod, maxClusters: 50 });
@@ -6517,9 +6517,9 @@
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
                 let msg = 'Checked ' + data.checked + ' AI-Applied cluster(s):\n'
-                    + '• ' + data.resolved + ' fully deleted in Zoho → marked Resolved\n'
-                    + '• ' + data.pending + ' still have records in Zoho → left open\n'
-                    + (data.errored ? ('• ' + data.errored + ' had Zoho errors → left open (retry later)\n') : '');
+                    + '• ' + data.resolved + ' fully deleted in CRMProvider → marked Resolved\n'
+                    + '• ' + data.pending + ' still have records in CRMProvider → left open\n'
+                    + (data.errored ? ('• ' + data.errored + ' had CRMProvider errors → left open (retry later)\n') : '');
                 if (data.more) msg += '\nThere are more AI-Applied clusters than processed this run — click again to continue.';
                 rrToast(msg);
                 var tab = String(module || '').toLowerCase();
@@ -6535,7 +6535,7 @@
         }
 
         async function dismissCluster(module, clusterId) {
-            if (!confirm('Dismiss this cluster as a false positive?\n\nUse this when the records are intentionally separate accounts (e.g. a Corporate-Accounts account and a Marketplace account). It moves to the "Dismissed" filter and stops appearing as a duplicate to action.\n\nNo Zoho changes.')) return;
+            if (!confirm('Dismiss this cluster as a false positive?\n\nUse this when the records are intentionally separate accounts (e.g. a Corporate-Accounts account and a Marketplace account). It moves to the "Dismissed" filter and stops appearing as a duplicate to action.\n\nNo CRMProvider changes.')) return;
             const payload = JSON.stringify({ action: 'ignore', notes: 'Dismissed from list — intentional separate accounts (e.g. different layout: Corporate Accounts vs Marketplace).' });
             try {
                 let res = await fetch('/api/duplicates/clusters/' + clusterId + '/resolve', {
@@ -6572,9 +6572,9 @@
 
         // Re-open a resolved/dismissed cluster (set status back to active) so it
         // can be merged. For clusters marked resolved before they were actually
-        // merged in Zoho, or dismissed by mistake.
+        // merged in CRMProvider, or dismissed by mistake.
         async function reopenCluster(module, clusterId) {
-            if (!confirm('Re-open this cluster so you can merge it?\n\nUse this if it was marked Resolved/Dismissed but the records still need merging. It returns to the active "Untouched" list. No Zoho changes.')) return;
+            if (!confirm('Re-open this cluster so you can merge it?\n\nUse this if it was marked Resolved/Dismissed but the records still need merging. It returns to the active "Untouched" list. No CRMProvider changes.')) return;
             const payload = JSON.stringify({ action: 'reopen' });
             try {
                 let res = await fetch('/api/duplicates/clusters/' + clusterId + '/resolve', {
@@ -6645,7 +6645,7 @@
         async function bulkReopenSelected() {
             const ids = Array.from(window._dupBulkSel || []).map(Number).filter(function (x) { return Number.isFinite(x); });
             if (!ids.length) { rrToast('Select at least one cluster (tick the checkboxes or "Select all on page").'); return; }
-            if (!confirm('Re-open ' + ids.length + ' selected cluster(s)?\n\nThey return to the active "Untouched" list so you can action them. No Zoho changes.')) return;
+            if (!confirm('Re-open ' + ids.length + ' selected cluster(s)?\n\nThey return to the active "Untouched" list so you can action them. No CRMProvider changes.')) return;
             const payload = JSON.stringify({ cluster_ids: ids, action: 'reopen' });
             try {
                 let res = await fetch('/api/duplicates/bulk-resolve', {
@@ -6676,7 +6676,7 @@
         async function bulkDismissSelected() {
             const ids = Array.from(window._dupBulkSel || []).map(Number).filter(function (x) { return Number.isFinite(x); });
             if (!ids.length) return;
-            if (!confirm('Dismiss ' + ids.length + ' selected cluster(s) as false positives?\n\nThey move to the "Dismissed" filter and stop appearing as duplicates to action. No Zoho changes.')) return;
+            if (!confirm('Dismiss ' + ids.length + ' selected cluster(s) as false positives?\n\nThey move to the "Dismissed" filter and stop appearing as duplicates to action. No CRMProvider changes.')) return;
             const payload = JSON.stringify({ cluster_ids: ids, action: 'ignore' });
             try {
                 let res = await fetch('/api/duplicates/bulk-resolve', {
@@ -6875,16 +6875,16 @@
         });
 
         // D1: Scan with progress bar
-        async function scanZohoCRM() {
+        async function scanCRMProviderCRM() {
             const adminKey = prompt(ExampleOrgI18n.t('dyn.duplicates.prompt_admin_key_scan'));
             if (!adminKey) return;
 
-            const btn = document.getElementById('scanZohoBtn');
+            const btn = document.getElementById('scanCRMProviderBtn');
             btn.disabled = true;
             btn.textContent = ExampleOrgI18n.t('dyn.duplicates.scanning');
 
             try {
-                const res = await fetch('/api/duplicates/scan-zoho', {
+                const res = await fetch('/api/duplicates/scan-CRMProvider', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey }
                 });
@@ -6892,7 +6892,7 @@
                 if (!data.success && data.error) {
                     rrToast(data.error);
                     btn.disabled = false;
-                    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 <REDACTED_PHONE> 4s8-1.79 8-4V7M4 7c0 <REDACTED_PHONE> 4s8-1.79 8-4M4 7c0-<REDACTED_PHONE>-4s8 1.79 8 4m0 5c0 <REDACTED_PHONE> 4s-8-1.79-8-4"/></svg> Scan from Zoho';
+                    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 <REDACTED_PHONE> 4s8-1.79 8-4V7M4 7c0 <REDACTED_PHONE> 4s8-1.79 8-4M4 7c0-<REDACTED_PHONE>-4s8 1.79 8 4m0 5c0 <REDACTED_PHONE> 4s-8-1.79-8-4"/></svg> Scan from CRMProvider';
                     return;
                 }
 
@@ -6902,7 +6902,7 @@
             } catch (e) {
                 rrToast(ExampleOrgI18n.t('dyn.duplicates.error_starting_scan'));
                 btn.disabled = false;
-                btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 <REDACTED_PHONE> 4s8-1.79 8-4V7M4 7c0 <REDACTED_PHONE> 4s8-1.79 8-4M4 7c0-<REDACTED_PHONE>-4s8 1.79 8 4m0 5c0 <REDACTED_PHONE> 4s-8-1.79-8-4"/></svg> ' + escapeHtml(ExampleOrgI18n.t('dyn.duplicates.scan_zoho_btn'));
+                btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 <REDACTED_PHONE> 4s8-1.79 8-4V7M4 7c0 <REDACTED_PHONE> 4s8-1.79 8-4M4 7c0-<REDACTED_PHONE>-4s8 1.79 8 4m0 5c0 <REDACTED_PHONE> 4s-8-1.79-8-4"/></svg> ' + escapeHtml(ExampleOrgI18n.t('dyn.duplicates.scan_CRMProvider_btn'));
             }
         }
 
@@ -6941,7 +6941,7 @@
         }
 
         // R7: real-time scan progress via SSE. Function name kept ("startScanPolling")
-        // so existing callers (scanZohoCRM, rebuildClusters, syncNowZohoCRM) don't
+        // so existing callers (scanCRMProviderCRM, rebuildClusters, syncNowCRMProviderCRM) don't
         // need to change. Internally it now opens an EventSource on
         // /api/duplicates/scan-stream, which the server already emits to.
         //
@@ -7036,10 +7036,10 @@
                         document.getElementById('scanProgressBar').classList.add('hidden');
                     }, 3000);
                 }
-                const btn = document.getElementById('scanZohoBtn');
+                const btn = document.getElementById('scanCRMProviderBtn');
                 if (btn) {
                     btn.disabled = false;
-                    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 <REDACTED_PHONE> 4s8-1.79 8-4V7M4 7c0 <REDACTED_PHONE> 4s8-1.79 8-4M4 7c0-<REDACTED_PHONE>-4s8 1.79 8 4m0 5c0 <REDACTED_PHONE> 4s-8-1.79-8-4"/></svg> ' + escapeHtml(ExampleOrgI18n.t('dyn.duplicates.scan_zoho_btn'));
+                    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 <REDACTED_PHONE> 4s8-1.79 8-4V7M4 7c0 <REDACTED_PHONE> 4s8-1.79 8-4M4 7c0-<REDACTED_PHONE>-4s8 1.79 8 4m0 5c0 <REDACTED_PHONE> 4s-8-1.79-8-4"/></svg> ' + escapeHtml(ExampleOrgI18n.t('dyn.duplicates.scan_CRMProvider_btn'));
                 }
                 if (status === 'completed') refreshData();
             };
@@ -7477,9 +7477,9 @@
         // When the same company is split across separate clusters (different
         // domain/identity keys), the per-cluster Account merge can't span them.
         // Tick the clusters and Combine: re-groups their records into the
-        // largest cluster (radar-only, NO Zoho changes — snapshotted + undoable
+        // largest cluster (radar-only, NO CRMProvider changes — snapshotted + undoable
         // on the Logs tab), then opens it so the Accounts can be merged with the
-        // normal Apply-in-Zoho flow.
+        // normal Apply-in-CRMProvider flow.
         function updateCombineBtn() {
             const btn = document.getElementById('combineClustersBtn');
             if (!btn) return;
@@ -7500,7 +7500,7 @@
                 if (recs > best) { best = recs; target = Number(b.getAttribute('data-cid')); }
             }
             const sources = ids.filter(id => id !== target);
-            if (!confirm('Combine ' + sources.length + ' cluster(s) into cluster #' + target + ' (the largest).\n\nThis only RE-GROUPS the radar records so the Accounts can be merged together — it makes NO Zoho changes and is undoable from the Logs tab.\n\nAfterwards #' + target + ' opens so you can merge the Accounts (Apply in Zoho).')) return;
+            if (!confirm('Combine ' + sources.length + ' cluster(s) into cluster #' + target + ' (the largest).\n\nThis only RE-GROUPS the radar records so the Accounts can be merged together — it makes NO CRMProvider changes and is undoable from the Logs tab.\n\nAfterwards #' + target + ' opens so you can merge the Accounts (Apply in CRMProvider).')) return;
             const btn = document.getElementById('combineClustersBtn');
             const orig = btn ? btn.innerHTML : '';
             if (btn) { btn.disabled = true; btn.innerHTML = 'Combining…'; }
@@ -7540,10 +7540,10 @@
         // Headline counts + scope of the last load, so the printable report
         // quotes the same figures the operator saw on the cards.
         var _adcMeta = null;
-        // Deep link straight to the deal in Zoho, so every recommendation on
+        // Deep link straight to the deal in CRMProvider, so every recommendation on
         // this tab can be checked against the record before anyone acts on it.
         // Same /tab/Deals/<id> form the stale-deals and CS sections already use.
-        function _adcZohoUrl(id) {
+        function _adcCRMProviderUrl(id) {
             return '<REDACTED_URL>' + encodeURIComponent(String(id || ''));
         }
 
@@ -7623,12 +7623,12 @@
                         escapeHtml(String(a.account_name || '—')) +
                         // Domain under the company name — from the linked
                         // Account record, since deal rows carry none. Shown as
-                        // the account id only when Zoho holds no domain at all,
+                        // the account id only when CRMProvider holds no domain at all,
                         // so the row is still traceable back to one Account.
                         '<div class="rr-sub">' +
                             (a.domain
                                 ? escapeHtml(String(a.domain))
-                                : '<span class="text-gray-400" title="No Website/Domain on this Account in Zoho — grouped by Account id instead.">no domain in CRM' +
+                                : '<span class="text-gray-400" title="No Website/Domain on this Account in CRMProvider — grouped by Account id instead.">no domain in CRM' +
                                   (a.account_id ? ' · acct ' + escapeHtml(String(a.account_id)) : '') + '</span>') +
                         '</div></td>' +
                     '<td class="rr-num">' + (a.open_deals || 0) + '</td>' +
@@ -7647,9 +7647,9 @@
                     // KEEP/close call without opening the record first.
                     var label = escapeHtml(String(d.name || d.id || '—'));
                     var link = d.id
-                        ? '<a href="' + _adcZohoUrl(d.id) + '" target="_blank" rel="noopener" ' +
+                        ? '<a href="' + _adcCRMProviderUrl(d.id) + '" target="_blank" rel="noopener" ' +
                           'class="text-blue-600 hover:underline" ' +
-                          'title="Open this deal in Zoho CRM (id ' + escapeHtml(String(d.id)) + ')">' +
+                          'title="Open this deal in CRMProvider CRM (id ' + escapeHtml(String(d.id)) + ')">' +
                           label + ' <span class="text-xs">↗</span></a>'
                         : label;
                     return '<tr class="hidden align-top bg-gray-50" data-dup-group="' + gid + '">' +
@@ -7689,7 +7689,7 @@
             if (!_adcRows.length) return;
             var head = ['Company', 'Domain', 'Open deals', 'Distinct owners', 'Owners',
                 'Deal', 'Stage', 'Owner', 'Layout', 'Created', 'Last activity', 'Amount (SAR)',
-                'Suggestion', 'Why', 'Deal ID', 'Zoho link'];
+                'Suggestion', 'Why', 'Deal ID', 'CRMProvider link'];
             var lines = [head.join(',')];
             var cell = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
             // ONE ROW PER DEAL, not per company: the recipient has to act on
@@ -7704,7 +7704,7 @@
                         cell(d.created || ''), cell(d.last_activity || ''),
                         Math.round(d.amount || 0),
                         cell(d.suggestion || ''), cell(d.suggestion_reason || ''),
-                        cell(d.id || ''), cell(d.id ? _adcZohoUrl(d.id) : ''),
+                        cell(d.id || ''), cell(d.id ? _adcCRMProviderUrl(d.id) : ''),
                     ].join(','));
                 });
             });
@@ -7751,9 +7751,9 @@
                     // Live link in the on-screen/PDF report, and the URL printed
                     // underneath so it survives being printed on paper.
                     var deal = d.id
-                        ? '<a href="' + _adcZohoUrl(d.id) + '" target="_blank" rel="noopener">' +
+                        ? '<a href="' + _adcCRMProviderUrl(d.id) + '" target="_blank" rel="noopener">' +
                           escapeHtml(String(d.name || d.id)) + ' ↗</a>' +
-                          '<div class="url">' + escapeHtml(_adcZohoUrl(d.id)) + '</div>'
+                          '<div class="url">' + escapeHtml(_adcCRMProviderUrl(d.id)) + '</div>'
                         : escapeHtml(String(d.name || '—'));
                     return '<tr class="' + (keep ? 'keep' : '') + '">' +
                         '<td class="tag">' + (keep ? 'KEEP' : 'CLOSE') + '</td>' +
@@ -7772,13 +7772,13 @@
                         (a.open_deals || 0) + ' open deals · ' + (a.distinct_owners || 0) + ' owners · SAR ' +
                         money(a.total_open_value) + ' open</div>' +
                     '<div class="sub owners">Owners: ' + escapeHtml((a.owners || []).join(', ')) + '</div>' +
-                    '<table><thead><tr><th></th><th>Deal (opens in Zoho)</th><th>Stage</th><th>Owner</th>' +
+                    '<table><thead><tr><th></th><th>Deal (opens in CRMProvider)</th><th>Stage</th><th>Owner</th>' +
                         '<th class="num">Amount (SAR)</th>' +
                         '<th>Created</th><th>Last activity</th><th>Why</th></tr></thead>' +
                         '<tbody>' + deals + '</tbody></table></div>';
             }).join('');
             return '<meta charset="utf-8"><style>' +
-                'body{font:13px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111;margin:28px;}' +
+                'body{font:13px/1.5 -IdentityProvider-system,Segoe UI,Roboto,Arial,sans-serif;color:#111;margin:28px;}' +
                 'h1{font-size:20px;margin:0 0 2px;} h2{font-size:15px;margin:22px 0 8px;border-bottom:1px solid #ddd;padding-bottom:4px;}' +
                 'h3{font-size:13px;margin:0 0 2px;} .meta{color:#666;font-size:11px;margin-bottom:16px;}' +
                 '.kpis{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 4px;}' +
@@ -7815,7 +7815,7 @@
                 '<h2>The conflicts</h2>' + rowsHtml +
                 '<div class="note"><b>How this was produced.</b> Open deals only — closed, lost, won and ' +
                 'activated stages are excluded, so a company with one live deal and five Closed Lost does not appear. ' +
-                'Deals are grouped by domain, then by Zoho Account id, then by company name. ' +
+                'Deals are grouped by domain, then by CRMProvider Account id, then by company name. ' +
                 'KEEP / CLOSE is a <b>recommendation</b> ranked by pipeline position, then most recent activity, ' +
                 'then whether a value is recorded, then age — nothing has been written to the CRM.</div>';
         }
@@ -7863,7 +7863,7 @@
                         (d.amount ? '  ·  SAR ' + Number(d.amount).toLocaleString() : ''));
                     // The link on its own line: pasted into an email body it
                     // stays clickable, and the recipient can open the record.
-                    if (d.id) out.push('        ' + _adcZohoUrl(d.id));
+                    if (d.id) out.push('        ' + _adcCRMProviderUrl(d.id));
                 });
                 out.push('');
             });
@@ -7974,7 +7974,7 @@
         }
 
         // Render the in-tab Stage filter: the 3 defaults always shown, plus any
-        // other stage that actually exists in Zoho (so she can add docs to more
+        // other stage that actually exists in CRMProvider (so she can add docs to more
         // stages later). `wanted` = the stages currently applied (kept ticked).
         function _dcRenderStageFilter(distinct, wanted) {
             var box = document.getElementById('dcStageFilter');
@@ -8220,17 +8220,17 @@
             });
         }
 
-        // `live` = true only when the operator clicks "Refresh from Zoho (live)".
+        // `live` = true only when the operator clicks "Refresh from CRMProvider (live)".
         // The default load reads the local mirror, which is why the tab no longer
         // waits ~10s on every open and every stage Apply.
         // States where the deal LIST came from. A mirror-backed list is only as
         // fresh as the last sync, and a compliance surface must not imply it is
-        // showing Zoho as of this second. Attachment checks are always live.
+        // showing CRMProvider as of this second. Attachment checks are always live.
         function _dcSourceLabel(data) {
-            if (!data || data.source === 'zoho_live') return '<span class="text-gray-500">live from Zoho</span>';
+            if (!data || data.source === 'CRMProvider_live') return '<span class="text-gray-500">live from CRMProvider</span>';
             var when = data.last_sync_at ? _dcFmtDate(data.last_sync_at) : 'unknown';
             return '<span class="text-gray-500">deal list from last CRM sync (' + escapeHtml(String(when)) +
-                ') — click “Refresh from Zoho (live)” for this second</span>';
+                ') — click “Refresh from CRMProvider (live)” for this second</span>';
         }
 
         async function loadDealCompliance(live) {
@@ -8255,7 +8255,7 @@
                 body.innerHTML = '<tr><td colspan="7" class="px-3 py-4 text-amber-700">Could not load: ' + escapeHtml(String(e && e.message || e)) + '</td></tr>';
                 return;
             }
-            // Render the in-tab Stage filter (defaults + any other Zoho stage).
+            // Render the in-tab Stage filter (defaults + any other CRMProvider stage).
             _dcRenderStageFilter(data.distinct_stages || [], data.wanted || []);
             window._loadedTabs.add('deal-compliance');
             var deals = (data && data.deals) || [];
@@ -8302,7 +8302,7 @@
                 var _sev = _dcRec ? (_dcRec.compliant ? ' rr-sev-good' : ' rr-sev-warn') : '';
                 return '<tr class="align-top' + _sev + '" data-deal-id="' + escapeHtml(String(d.id)) + '" data-deal-stage="' + escapeHtml(String(d.stage)) + '" data-deal-owner="' + escapeHtml(String(d.owner || '—')) + '">' +
                     '<td class="rr-lead rr-primary">' +
-                        '<a href="<REDACTED_URL>' + encodeURIComponent(String(d.id)) + '" target="_blank" rel="noopener" class="rr-primary text-blue-600 hover:underline" title="Open this deal in Zoho CRM to review before acting">' + escapeHtml(d.name) + ' <span class="text-xs">↗</span></a>' +
+                        '<a href="<REDACTED_URL>' + encodeURIComponent(String(d.id)) + '" target="_blank" rel="noopener" class="rr-primary text-blue-600 hover:underline" title="Open this deal in CRMProvider CRM to review before acting">' + escapeHtml(d.name) + ' <span class="text-xs">↗</span></a>' +
                         (d.accountName ? '<div class="rr-sub">' + escapeHtml(d.accountName) + '</div>' : '') + '</td>' +
                     '<td><span class="rr-badge rr-neutral">' + escapeHtml(d.stage) + '</span></td>' +
                     '<td class="rr-muted">' + escapeHtml(d.owner) + '</td>' +
@@ -8329,12 +8329,12 @@
         }
 
         // Sequentially verify documents for every loaded deal (bounded, paced to
-        // respect Zoho rate limits). Documents is the whole point of this tab.
+        // respect CRMProvider rate limits). Documents is the whole point of this tab.
         // Verify documents for the loaded deals via the SERVER-side BATCH
         // endpoint. The browser sends ~10 light requests (25 deals each) instead
         // of firing 200 individual fetches with heavy per-row work — that old
         // pattern hung the whole device / crashed the browser (Sample User 2026-07-29).
-        // The server does the paced Zoho attachment calls with bounded concurrency.
+        // The server does the paced CRMProvider attachment calls with bounded concurrency.
         async function checkAllDealDocs() {
             if (window._dcScanRunning) return; // re-entrancy guard — no stacked scans
             var btn = document.getElementById('checkAllDocsBtn');
@@ -8398,7 +8398,7 @@
             }
         }
 
-        // Lazily fetch a deal's Zoho attachments and show which required docs are present/missing.
+        // Lazily fetch a deal's CRMProvider attachments and show which required docs are present/missing.
         // opts.deferPersist (used by the bulk Run Scan): update the in-memory result
         // + the row cell, but SKIP the whole-store localStorage write and the
         // cards/charts re-render — the bulk caller batches both at the end so we
@@ -8457,7 +8457,7 @@
         }
         function erCbToggle(cb) {
             var set = _erSelSet(cb.getAttribute('data-kind'));
-            var id = String(cb.getAttribute('data-zoho-id'));
+            var id = String(cb.getAttribute('data-CRMProvider-id'));
             if (cb.checked) set[id] = true; else delete set[id];
             erSelChanged();
         }
@@ -8512,7 +8512,7 @@
             const lbl = ExampleOrgI18n.t('duplicates.er_badge_' + (m[reason] ? reason : 'empty'));
             return '<span class="rr-badge ' + cls + (cls === 'rr-neutral' ? '' : ' rr-dot') + '">' + lbl + '</span>';
         }
-        function erZohoUrl(kind, id) {
+        function erCRMProviderUrl(kind, id) {
             const tab = kind === 'deals' ? 'Potentials' : kind === 'accounts' ? 'Accounts' : 'Contacts';
             return '<REDACTED_URL>' + tab + '/' + encodeURIComponent(id);
         }
@@ -8560,10 +8560,10 @@
             const pageRows = rows.slice(start, start + ER_PAGE_SIZE);
             const selSet = _erSelSet(moduleOf);
             const rowsHtml = pageRows.map(function (r) {
-                const cbId = 'er-cb-' + kind + '-' + r.zohoId;
-                const isSel = !!selSet[String(r.zohoId)];
-                const cb = '<input type="checkbox" class="er-cb" id="' + escapeHtml(cbId) + '" data-kind="' + moduleOf + '" data-zoho-id="' + escapeHtml(String(r.zohoId)) + '"' + (isSel ? ' checked' : '') + (r.deleteEligible ? '' : ' disabled title="Not delete-eligible yet"') + '>';
-                const args = escapeHtml(JSON.stringify([String(r.zohoId)]));
+                const cbId = 'er-cb-' + kind + '-' + r.CRMProviderId;
+                const isSel = !!selSet[String(r.CRMProviderId)];
+                const cb = '<input type="checkbox" class="er-cb" id="' + escapeHtml(cbId) + '" data-kind="' + moduleOf + '" data-CRMProvider-id="' + escapeHtml(String(r.CRMProviderId)) + '"' + (isSel ? ' checked' : '') + (r.deleteEligible ? '' : ' disabled title="Not delete-eligible yet"') + '>';
+                const args = escapeHtml(JSON.stringify([String(r.CRMProviderId)]));
                 let action;
                 if (kind === 'accounts' || kind === 'deals') {
                     if (r.deleteEligible) {
@@ -8576,16 +8576,16 @@
                         // "Check documents" — live-verify this one record (no account/
                         // contact/docs) before it becomes delete-eligible. Same gate for
                         // Accounts and Deals.
-                        var _kargs = escapeHtml(JSON.stringify([kind, String(r.zohoId)]));
-                        action = '<span id="eratt-' + escapeHtml(String(r.zohoId)) + '"><button data-on-click="erCheckDocuments" data-args=\'' + _kargs + '\' class="rr-btn rr-btn-ghost">📎 ' + escapeHtml(ExampleOrgI18n.t('duplicates.er_check_att')) + '</button></span>';
+                        var _kargs = escapeHtml(JSON.stringify([kind, String(r.CRMProviderId)]));
+                        action = '<span id="eratt-' + escapeHtml(String(r.CRMProviderId)) + '"><button data-on-click="erCheckDocuments" data-args=\'' + _kargs + '\' class="rr-btn rr-btn-ghost">📎 ' + escapeHtml(ExampleOrgI18n.t('duplicates.er_check_att')) + '</button></span>';
                     }
                 } else {
                     action = '';
                 }
                 // Per-row Dismiss — "this isn't empty, keep it" (false positive,
                 // e.g. a deal that actually has data). Removes it from the list
-                // durably without any Zoho write.
-                const dismissBtn = '<button data-on-click="erDismiss" data-args=\'' + escapeHtml(JSON.stringify([kind, String(r.zohoId)])) + '\' class="rr-btn rr-btn-ghost" title="Not empty — keep this record and remove it from the cleanup list">✕ ' + escapeHtml(ExampleOrgI18n.t('duplicates.er_dismiss')) + '</button>';
+                // durably without any CRMProvider write.
+                const dismissBtn = '<button data-on-click="erDismiss" data-args=\'' + escapeHtml(JSON.stringify([kind, String(r.CRMProviderId)])) + '\' class="rr-btn rr-btn-ghost" title="Not empty — keep this record and remove it from the cleanup list">✕ ' + escapeHtml(ExampleOrgI18n.t('duplicates.er_dismiss')) + '</button>';
                 // Stage column — Deals only. Protected stages (Agreement Signed /
                 // Paid) are highlighted so the operator sees at a glance a deal that
                 // should NEVER be tagged.
@@ -8600,7 +8600,7 @@
                 return '<tr>'
                     + '<td>' + cb + '</td>'
                     + '<td>' + erReasonBadge(r.reason) + '</td>'
-                    + '<td class="rr-primary"><a href="' + erZohoUrl(kind, r.zohoId) + '" target="_blank" rel="noopener" class="hover:underline" style="color:inherit">' + escapeHtml(r.name || '(no name)') + '</a></td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
+                    + '<td class="rr-primary"><a href="' + erCRMProviderUrl(kind, r.CRMProviderId) + '" target="_blank" rel="noopener" class="hover:underline" style="color:inherit">' + escapeHtml(r.name || '(no name)') + '</a></td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     + stageCell
                     + createdCell
                     + '<td class="rr-muted">' + escapeHtml(r.owner || '—') + '</td>'
@@ -8665,7 +8665,7 @@
                 const res = await fetch('/api/duplicates/empty-records/check-batch', {
                     method: 'POST', credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ module: module, zohoIds: ids }),
+                    body: JSON.stringify({ module: module, CRMProviderIds: ids }),
                 });
                 j = await res.json();
                 if (!res.ok || !j.success) throw new Error((j && j.error) || ('HTTP ' + res.status));
@@ -8678,7 +8678,7 @@
             (j.results || []).forEach(function (r) {
                 window._erAutoChecked[kind][r.id] = true;
                 if (r.ghost) { ghosts.push(String(r.id)); return; }
-                const row = (window['_er_' + kind] || []).find(function (x) { return String(x.zohoId) === String(r.id); });
+                const row = (window['_er_' + kind] || []).find(function (x) { return String(x.CRMProviderId) === String(r.id); });
                 const cell = document.getElementById('eratt-' + r.id);
                 if (r.tagged) { kept++; return; } // handled by the tagged-move flow on demand
                 if (r.empty) {
@@ -8721,7 +8721,7 @@
             // Only ENABLED (delete-ready) rows — disabled ones aren't taggable yet.
             body.querySelectorAll('input.er-cb:not([disabled])').forEach(function (rowCb) {
                 rowCb.checked = on;
-                const id = String(rowCb.getAttribute('data-zoho-id'));
+                const id = String(rowCb.getAttribute('data-CRMProvider-id'));
                 if (on) set[id] = true; else delete set[id];
             });
             erSelChanged();
@@ -8748,7 +8748,7 @@
             const module = kind === 'deals' ? 'Deals' : kind === 'accounts' ? 'Accounts' : 'Contacts';
             const n = (window['_er_' + kind] || []).length;
             if (!n) return;
-            if (!confirm('AI-Apply ALL ' + n + ' empty ' + module + '?\n\nFor each one it verifies live in Zoho, tags the genuinely-empty as Empty-Delete (Adam, pending admin delete), prunes any already deleted, and removes any that turn out to have data. It runs batch-after-batch until the whole list is done.\n\nThe platform never deletes — the admin removes the tagged records.')) return;
+            if (!confirm('AI-Apply ALL ' + n + ' empty ' + module + '?\n\nFor each one it verifies live in CRMProvider, tags the genuinely-empty as Empty-Delete (Adam, pending admin delete), prunes any already deleted, and removes any that turn out to have data. It runs batch-after-batch until the whole list is done.\n\nThe platform never deletes — the admin removes the tagged records.')) return;
             // Visible progress lives in a per-section span next to the button (the
             // shared #erBulkResult sits in a hidden bar, so the operator couldn't
             // see anything happening — Sample User 2026-06-30). Also disable the button +
@@ -8764,7 +8764,7 @@
                 // Loop the batched endpoint until nothing is left (or no progress).
                 while (true) {
                     iter++;
-                    setProg('⏳ Batch ' + iter + ' — verifying live in Zoho… (' + tagged + ' tagged so far)');
+                    setProg('⏳ Batch ' + iter + ' — verifying live in CRMProvider… (' + tagged + ' tagged so far)');
                     if (btn) btn.innerHTML = '⏳ AI-Applying… (' + tagged + ' tagged)';
                     const j = await erAdminPost('/api/duplicates/empty-records/ai-apply', { module: module });
                     if (!j) { setProg('Cancelled after ' + tagged + ' tagged.'); break; }
@@ -8790,7 +8790,7 @@
             erReload(kind);
             erLoadTaggedStatus();
         }
-        // Live-verify ONLY the rows currently visible on this page against Zoho
+        // Live-verify ONLY the rows currently visible on this page against CRMProvider
         // (bounded — the same gate AI-Apply uses). Confirmed-empty rows stay; rows
         // that turn out to have deals/contacts are auto-Dismissed and removed;
         // already-deleted rows are pruned. No tagging.
@@ -8801,7 +8801,7 @@
             const pages = Math.max(1, Math.ceil(rows.length / ER_PAGE_SIZE));
             const cur = Math.min(pages - 1, Math.max(0, window['_erPage_' + kind] || 0));
             const pageRows = rows.slice(cur * ER_PAGE_SIZE, cur * ER_PAGE_SIZE + ER_PAGE_SIZE);
-            const ids = pageRows.map(function (r) { return String(r.zohoId); });
+            const ids = pageRows.map(function (r) { return String(r.CRMProviderId); });
             if (!ids.length) return;
             // Write status to the ALWAYS-VISIBLE per-section progress span next to
             // the button — NOT #erBulkResult, which lives inside #erBulkBar and is
@@ -8811,10 +8811,10 @@
             const result = document.getElementById('erAiProgress-' + kind)
                 || document.getElementById('erBulkResult');
             const setStatus = function (t) { if (result) result.textContent = t; };
-            setStatus('Verifying ' + ids.length + ' ' + module + ' against Zoho… (live check — may pause while a sync is running)');
+            setStatus('Verifying ' + ids.length + ' ' + module + ' against CRMProvider… (live check — may pause while a sync is running)');
             let j;
             try {
-                j = await erAdminPost('/api/duplicates/empty-records/verify-page', { module: module, zohoIds: ids });
+                j = await erAdminPost('/api/duplicates/empty-records/verify-page', { module: module, CRMProviderIds: ids });
             } catch (e) {
                 setStatus('Error: ' + String(e && e.message || e) + ' — if a sync is running, try again once it finishes.');
                 return;
@@ -8824,7 +8824,7 @@
             // Confirmed-empty accounts → enable their checkbox (delete-eligible).
             if (kind === 'accounts') {
                 (j.empty || []).forEach(function (id) {
-                    const row = (window['_er_accounts'] || []).find(function (r) { return String(r.zohoId) === String(id); });
+                    const row = (window['_er_accounts'] || []).find(function (r) { return String(r.CRMProviderId) === String(id); });
                     if (row) row.deleteEligible = true;
                 });
             }
@@ -8844,9 +8844,9 @@
             if ((j.tagged || []).length) erLoadTaggedStatus();
         }
         // Per-row "Check documents" for an Account OR a Deal — live-verify it has
-        // no account/contact/email/documents in Zoho (the shared empty gate). On
+        // no account/contact/email/documents in CRMProvider (the shared empty gate). On
         // confirmed-empty it becomes delete-eligible; if it has data we show why
-        // and keep it; if it was deleted in Zoho the row is pruned on the spot.
+        // and keep it; if it was deleted in CRMProvider the row is pruned on the spot.
         async function erCheckDocuments(kind, id) {
             const module = kind === 'deals' ? 'Deals' : kind === 'accounts' ? 'Accounts' : 'Contacts';
             const cell = document.getElementById('eratt-' + id);
@@ -8866,27 +8866,27 @@
                 return;
             }
             if (data.ghost) {
-                // Deleted in Zoho. The server prunes our mirror copy on this same
+                // Deleted in CRMProvider. The server prunes our mirror copy on this same
                 // call (check-empty → pruned:true), so the removal is DURABLE —
                 // it no longer reappears on the next Refresh (Sample User 2026-07-19).
                 _erRemoveLocal(kind, [String(id)]);
                 rrToast(data.pruned
-                    ? '🧹 Already deleted in Zoho — removed from the list for good.'
-                    : '🧹 Already deleted in Zoho — removed. (Mirror prune did not confirm; it may reappear until the next sweep.)');
+                    ? '🧹 Already deleted in CRMProvider — removed from the list for good.'
+                    : '🧹 Already deleted in CRMProvider — removed. (Mirror prune did not confirm; it may reappear until the next sweep.)');
                 return;
             }
             if (data.tagged) {
-                // Already tagged in Zoho (mirror was stale). Don't leave it sitting
+                // Already tagged in CRMProvider (mirror was stale). Don't leave it sitting
                 // here as "keep" — record it properly (Empty-Delete → ledger so it
                 // moves to "Tagged · pending delete"; Duplicate-Delete → dismissed)
                 // and drop it off this active cleanup list.
                 if (cell) cell.innerHTML = '<span class="text-xs text-gray-400">moving to tagged…</span>';
-                await erAdminPost('/api/duplicates/empty-records/verify-page', { module: module, zohoIds: [String(id)] });
+                await erAdminPost('/api/duplicates/empty-records/verify-page', { module: module, CRMProviderIds: [String(id)] });
                 _erRemoveLocal(kind, [String(id)]);
                 erLoadTaggedStatus();
                 return;
             }
-            const row = (window['_er_' + kind] || []).find(function (r) { return String(r.zohoId) === String(id); });
+            const row = (window['_er_' + kind] || []).find(function (r) { return String(r.CRMProviderId) === String(id); });
             if (data.empty) {
                 if (cell) cell.innerHTML = '<span class="text-xs text-emerald-700">' + escapeHtml(ExampleOrgI18n.t('duplicates.er_empty_ready')) + '</span>';
                 const cb = document.getElementById('er-cb-' + kind + '-' + id);
@@ -8917,14 +8917,14 @@
             if (sug && sug.accountId) {
                 html += '<button data-on-click="erDoLinkDeal" data-args=\'' + escapeHtml(JSON.stringify([String(id), String(sug.accountId)])) + '\' class="px-2 py-1 text-xs rounded bg-emerald-600 text-white hover:bg-emerald-700">Link to ' + escapeHtml(sug.accountName || sug.accountId) + ' (' + (sug.confidence || 0) + '%)</button> ';
             }
-            html += '<input id="erlinkacc-' + escapeHtml(String(id)) + '" placeholder="Account Zoho ID" class="px-2 py-1 text-xs border border-gray-300 rounded w-36">'
+            html += '<input id="erlinkacc-' + escapeHtml(String(id)) + '" placeholder="Account CRMProvider ID" class="px-2 py-1 text-xs border border-gray-300 rounded w-36">'
                 + '<button data-on-click="erDoLinkDealManual" data-args=\'' + escapeHtml(JSON.stringify([String(id)])) + '\' class="ml-1 px-2 py-1 text-xs rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50">' + escapeHtml(ExampleOrgI18n.t('duplicates.er_link')) + '</button>';
             if (cell) cell.innerHTML = html;
         }
         function erDoLinkDealManual(id) {
             const inp = document.getElementById('erlinkacc-' + id);
             const accId = inp ? (inp.value || '').trim() : '';
-            if (!accId) { rrToast('Enter an Account Zoho ID.'); return; }
+            if (!accId) { rrToast('Enter an Account CRMProvider ID.'); return; }
             erDoLinkDeal(id, accId);
         }
         async function erDoLinkDeal(dealId, accountId) {
@@ -8935,7 +8935,7 @@
                 if (!j) { if (cell) cell.innerHTML = '<span class="text-xs text-gray-500">cancelled</span>'; return; }
                 if (!j.success) throw new Error(j.error || 'failed');
                 if (cell) cell.innerHTML = '<span class="text-xs text-emerald-700">✓ linked</span>';
-                window._er_deals = (window._er_deals || []).filter(function (r) { return String(r.zohoId) !== String(dealId); });
+                window._er_deals = (window._er_deals || []).filter(function (r) { return String(r.CRMProviderId) !== String(dealId); });
             } catch (e) {
                 if (cell) cell.innerHTML = '<span class="text-xs text-red-600">err: ' + escapeHtml(String(e && e.message || e)) + '</span>';
             }
@@ -8984,7 +8984,7 @@
             _erRenderTaggedPage();
         }
         // Clickable status filter chips for the Tagged · pending-delete view.
-        // 'dismissed' = the operator removed the delete tag in Zoho, so the admin
+        // 'dismissed' = the operator removed the delete tag in CRMProvider, so the admin
         // will never delete it — the re-check moved it out of Pending.
         function _erRenderTaggedHeader() {
             const progress = document.getElementById('erTaggedProgress');
@@ -9013,16 +9013,16 @@
             return f === 'all' ? rows : rows.filter(function (r) { return r.status === f; });
         }
         // Manually dismiss one pending record from the delete queue (local only).
-        async function erDismissTagged(zohoId) {
+        async function erDismissTagged(CRMProviderId) {
             try {
                 const res = await fetch('/api/duplicates/empty-records/dismiss-tagged', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin', body: JSON.stringify({ zohoId: zohoId }),
+                    credentials: 'same-origin', body: JSON.stringify({ CRMProviderId: CRMProviderId }),
                 });
                 const j = await res.json();
                 if (!res.ok || !j.success) throw new Error((j && j.error) || ('HTTP ' + res.status));
                 const rows = window._erTagged || [];
-                const row = rows.find(function (r) { return r.zohoId === zohoId; });
+                const row = rows.find(function (r) { return r.CRMProviderId === CRMProviderId; });
                 if (row) row.status = 'dismissed';
                 const counts = window._erTaggedCounts || {};
                 counts.pending = Math.max(0, (counts.pending || 0) - 1);
@@ -9042,7 +9042,7 @@
         // ── Bulk-dismiss selection for the Tagged·pending table ──────────────
         // Selecting rows and dismissing them in ONE request avoids the 429
         // "Too many requests" the per-row Dismiss hits when clicked in a burst.
-        // Selection persists across pages (set of zoho ids).
+        // Selection persists across pages (set of CRMProvider ids).
         window._erTaggedSel = window._erTaggedSel || new Set();
         function _erTaggedUpdateBulkBtn() {
             const n = window._erTaggedSel ? window._erTaggedSel.size : 0;
@@ -9051,8 +9051,8 @@
             if (cnt) cnt.textContent = n;
             if (btn) btn.classList.toggle('hidden', n === 0);
         }
-        function erTaggedToggleRow(zohoId) {
-            const id = String(zohoId);
+        function erTaggedToggleRow(CRMProviderId) {
+            const id = String(CRMProviderId);
             if (!window._erTaggedSel) window._erTaggedSel = new Set();
             if (window._erTaggedSel.has(id)) window._erTaggedSel.delete(id);
             else window._erTaggedSel.add(id);
@@ -9064,7 +9064,7 @@
             if (!window._erTaggedSel) window._erTaggedSel = new Set();
             document.querySelectorAll('#erTaggedBody input[data-er-tagged-cb]').forEach(function (cb) {
                 cb.checked = checked;
-                const id = cb.getAttribute('data-zoho-id');
+                const id = cb.getAttribute('data-CRMProvider-id');
                 if (!id) return;
                 if (checked) window._erTaggedSel.add(id); else window._erTaggedSel.delete(id);
             });
@@ -9073,14 +9073,14 @@
         async function bulkDismissTagged() {
             const ids = window._erTaggedSel ? Array.from(window._erTaggedSel) : [];
             if (ids.length === 0) return;
-            if (!confirm('Dismiss ' + ids.length + ' pending record(s)? They move to Dismissed — no Zoho change, and they will not be deleted by the admin.')) return;
+            if (!confirm('Dismiss ' + ids.length + ' pending record(s)? They move to Dismissed — no CRMProvider change, and they will not be deleted by the admin.')) return;
             const btn = document.getElementById('erTaggedBulkDismissBtn');
             if (btn) btn.disabled = true;
             try {
                 // ONE request for the whole selection (this is the 429 fix).
                 const res = await fetch('/api/duplicates/empty-records/dismiss-tagged', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin', body: JSON.stringify({ zohoIds: ids }),
+                    credentials: 'same-origin', body: JSON.stringify({ CRMProviderIds: ids }),
                 });
                 const j = await res.json();
                 if (!res.ok || !j.success) throw new Error((j && j.error) || ('HTTP ' + res.status));
@@ -9088,7 +9088,7 @@
                 const rows = window._erTagged || [];
                 let moved = 0;
                 rows.forEach(function (r) {
-                    if (sel.has(String(r.zohoId)) && r.status === 'pending_delete') { r.status = 'dismissed'; moved++; }
+                    if (sel.has(String(r.CRMProviderId)) && r.status === 'pending_delete') { r.status = 'dismissed'; moved++; }
                 });
                 const counts = window._erTaggedCounts || {};
                 counts.pending = Math.max(0, (counts.pending || 0) - moved);
@@ -9124,21 +9124,21 @@
             body.innerHTML = pageRows.map(function (r) {
                 const kindMap = { Deals: 'deals', Accounts: 'accounts', Contacts: 'contacts' };
                 const kind = kindMap[r.module] || 'accounts';
-                const link = '<a href="' + erZohoUrl(kind, r.zohoId) + '" target="_blank" rel="noopener" class="hover:underline" style="color:inherit">' + escapeHtml(r.zohoId) + '</a>'; // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
+                const link = '<a href="' + erCRMProviderUrl(kind, r.CRMProviderId) + '" target="_blank" rel="noopener" class="hover:underline" style="color:inherit">' + escapeHtml(r.CRMProviderId) + '</a>'; // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 const statusChip = r.status === 'deleted'
                     ? '<span class="rr-badge rr-good rr-dot">' + escapeHtml(ExampleOrgI18n.t('duplicates.er_status_deleted')) + '</span>'
                     : r.status === 'dismissed'
-                    ? '<span class="rr-badge rr-neutral" title="Delete tag was removed in Zoho — will NOT be deleted by admin">Dismissed</span>'
+                    ? '<span class="rr-badge rr-neutral" title="Delete tag was removed in CRMProvider — will NOT be deleted by admin">Dismissed</span>'
                     : '<span class="rr-badge rr-amber rr-dot">' + escapeHtml(ExampleOrgI18n.t('duplicates.er_status_pending')) + '</span>';
                 const taggedAt = r.createdAt ? new Date(r.createdAt).toLocaleString() : '—';
-                // Pending rows get a manual Dismiss (local disposition — no Zoho write).
+                // Pending rows get a manual Dismiss (local disposition — no CRMProvider write).
                 const statusCell = r.status === 'pending_delete'
-                    ? '<div class="rr-actions" style="justify-content:flex-start">' + statusChip + '<button data-on-click="erDismissTagged" data-args="[&quot;' + escapeHtml(r.zohoId) + '&quot;]" class="rr-btn rr-btn-ghost" title="Move to Dismissed without changing Zoho — it will not be deleted by admin">Dismiss</button></div>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
+                    ? '<div class="rr-actions" style="justify-content:flex-start">' + statusChip + '<button data-on-click="erDismissTagged" data-args="[&quot;' + escapeHtml(r.CRMProviderId) + '&quot;]" class="rr-btn rr-btn-ghost" title="Move to Dismissed without changing CRMProvider — it will not be deleted by admin">Dismiss</button></div>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     : statusChip;
                 // Checkbox only for PENDING rows (the only ones Dismiss acts on).
                 const isPending = r.status === 'pending_delete';
                 const checkCell = isPending
-                    ? '<td class="rr-num" style="text-align:center"><input type="checkbox" data-er-tagged-cb data-zoho-id="' + escapeHtml(r.zohoId) + '" data-on-change="erTaggedToggleRow" data-args="[&quot;' + escapeHtml(r.zohoId) + '&quot;]"' + (window._erTaggedSel && window._erTaggedSel.has(String(r.zohoId)) ? ' checked' : '') + ' aria-label="Select for bulk dismiss"></td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
+                    ? '<td class="rr-num" style="text-align:center"><input type="checkbox" data-er-tagged-cb data-CRMProvider-id="' + escapeHtml(r.CRMProviderId) + '" data-on-change="erTaggedToggleRow" data-args="[&quot;' + escapeHtml(r.CRMProviderId) + '&quot;]"' + (window._erTaggedSel && window._erTaggedSel.has(String(r.CRMProviderId)) ? ' checked' : '') + ' aria-label="Select for bulk dismiss"></td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     : '<td class="rr-num rr-muted" style="text-align:center">—</td>'; // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 return '<tr>'
                     + checkCell
@@ -9196,19 +9196,19 @@
                 if (ids.length) { byModule[m] = ids; totalSel += ids.length; }
             });
             if (!totalSel) return;
-            if (!confirm('Tag ' + totalSel + ' record(s) with "Empty-Delete"?\n\nThis adds the tag in Zoho for the admin to delete. The platform never deletes.')) return;
+            if (!confirm('Tag ' + totalSel + ' record(s) with "Empty-Delete"?\n\nThis adds the tag in CRMProvider for the admin to delete. The platform never deletes.')) return;
             const result = document.getElementById('erBulkResult');
             const undoPayload = { modules: [] };
             let total = 0;
             for (const m in byModule) {
                 if (result) result.textContent = 'Tagging ' + m + '…';
-                const j = await erAdminPost('/api/duplicates/empty-records/tag', { module: m, zohoIds: byModule[m] });
+                const j = await erAdminPost('/api/duplicates/empty-records/tag', { module: m, CRMProviderIds: byModule[m] });
                 if (!j) { if (result) result.textContent = 'Cancelled.'; return; }
                 if (!j.success) { if (result) result.textContent = 'Error: ' + (j.error || 'failed'); return; }
                 total += j.tagged || 0;
-                undoPayload.modules.push({ module: m, zohoIds: byModule[m] });
+                undoPayload.modules.push({ module: m, CRMProviderIds: byModule[m] });
                 const kind = m.toLowerCase();
-                window['_er_' + kind] = (window['_er_' + kind] || []).filter(function (r) { return byModule[m].indexOf(String(r.zohoId)) === -1; });
+                window['_er_' + kind] = (window['_er_' + kind] || []).filter(function (r) { return byModule[m].indexOf(String(r.CRMProviderId)) === -1; });
                 window._erSel[m] = {}; // tagged records are gone → drop their selection
                 window['_erPage_' + kind] = 0; // counts changed → back to page 1
                 erRender(kind, 'er' + m + 'Body');
@@ -9216,7 +9216,7 @@
                 if (chip) chip.textContent = (window['_er_' + kind] || []).length.toLocaleString();
             }
             window._erLastTagged = undoPayload;
-            if (result) result.textContent = '✓ Tagged ' + total + ' record(s) Empty-Delete. Admin deletes in Zoho.';
+            if (result) result.textContent = '✓ Tagged ' + total + ' record(s) Empty-Delete. Admin deletes in CRMProvider.';
             const undoBtn = document.getElementById('erUndoBtn');
             if (undoBtn) undoBtn.classList.remove('hidden');
             erSelChanged();
@@ -9227,17 +9227,17 @@
             const module = kind === 'deals' ? 'Deals' : kind === 'accounts' ? 'Accounts' : 'Contacts';
             const gone = {};
             ids.forEach(function (x) { gone[String(x)] = true; });
-            window['_er_' + kind] = (window['_er_' + kind] || []).filter(function (r) { return !gone[String(r.zohoId)]; });
+            window['_er_' + kind] = (window['_er_' + kind] || []).filter(function (r) { return !gone[String(r.CRMProviderId)]; });
             if (window._erSel && window._erSel[module]) ids.forEach(function (x) { delete window._erSel[module][String(x)]; });
             erRender(kind, 'er' + module + 'Body');
             const chip = document.getElementById('erCount-' + kind);
             if (chip) chip.textContent = (window['_er_' + kind] || []).length.toLocaleString();
             erSelChanged();
         }
-        // Per-row Dismiss — "not empty, keep it". Durable; no Zoho write.
+        // Per-row Dismiss — "not empty, keep it". Durable; no CRMProvider write.
         async function erDismiss(kind, id) {
             const module = kind === 'deals' ? 'Deals' : kind === 'accounts' ? 'Accounts' : 'Contacts';
-            const j = await erAdminPost('/api/duplicates/empty-records/dismiss', { module: module, zohoIds: [String(id)] });
+            const j = await erAdminPost('/api/duplicates/empty-records/dismiss', { module: module, CRMProviderIds: [String(id)] });
             if (!j) return; // cancelled at admin-key prompt
             if (!j.success) { rrToast('Could not dismiss: ' + (j.error || 'failed')); return; }
             _erRemoveLocal(kind, [String(id)]);
@@ -9252,12 +9252,12 @@
                 if (ids.length) { byModule[m] = ids; total += ids.length; }
             });
             if (!total) return;
-            if (!confirm('Dismiss ' + total + ' record(s) as "not empty — keep"?\n\nThey are removed from the cleanup list and will not reappear. No Zoho changes.')) return;
+            if (!confirm('Dismiss ' + total + ' record(s) as "not empty — keep"?\n\nThey are removed from the cleanup list and will not reappear. No CRMProvider changes.')) return;
             const result = document.getElementById('erBulkResult');
             let done = 0;
             for (const m in byModule) {
                 if (result) result.textContent = 'Dismissing ' + m + '…';
-                const j = await erAdminPost('/api/duplicates/empty-records/dismiss', { module: m, zohoIds: byModule[m] });
+                const j = await erAdminPost('/api/duplicates/empty-records/dismiss', { module: m, CRMProviderIds: byModule[m] });
                 if (!j) { if (result) result.textContent = 'Cancelled.'; return; }
                 if (!j.success) { if (result) result.textContent = 'Error: ' + (j.error || 'failed'); return; }
                 done += byModule[m].length;
@@ -9271,7 +9271,7 @@
             if (!confirm('Remove the Empty-Delete tag from the last batch?')) return;
             const result = document.getElementById('erBulkResult');
             for (const grp of payload.modules) {
-                const j = await erAdminPost('/api/duplicates/empty-records/untag', { module: grp.module, zohoIds: grp.zohoIds });
+                const j = await erAdminPost('/api/duplicates/empty-records/untag', { module: grp.module, CRMProviderIds: grp.CRMProviderIds });
                 if (!j || !j.success) { if (result) result.textContent = 'Undo error.'; return; }
             }
             if (result) result.textContent = '↩ Removed Empty-Delete tag from last batch. Refresh a section to see them again.';
@@ -9281,7 +9281,7 @@
         }
 
         // ── Persisted doc-compliance results (localStorage) ──────────────────
-        // Keyed by Zoho deal id, independent of stage, so re-opening the tab
+        // Keyed by CRMProvider deal id, independent of stage, so re-opening the tab
         // shows prior results without re-scanning. Capped/pruned to stay small.
         var DC_STORE_KEY = 'dc_doc_results_v1';
         function _dcStoreLoad() {
@@ -9316,7 +9316,7 @@
             try { return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
             catch (e) { return iso; }
         }
-        // Row severity stripe reflects the compliance result once scanned
+        // Row severity PaymentProvider reflects the compliance result once scanned
         // (compliant → green, missing docs → red). No-op until a scan exists.
         function _dcSetRowSev(id, compliant) {
             var tr = document.querySelector('#dealComplianceBody tr[data-deal-id="' + String(id) + '"]');
@@ -9348,12 +9348,12 @@
             var files = '';
             if (rec.attachmentNames && rec.attachmentNames.length) {
                 files = '<div class="text-[10px] text-gray-500 mt-0.5" ' +
-                    'title="The files actually attached in Zoho. If a required document is here but ' +
+                    'title="The files actually attached in CRMProvider. If a required document is here but ' +
                     'shown as missing above, the file name did not match — tell Quality rather than the rep.">' +
                     'attached: ' + rec.attachmentNames.map(function (f) { return escapeHtml(String(f)); }).join(', ') +
                     '</div>';
             } else if (rec.attachmentNames && !rec.attachmentNames.length) {
-                files = '<div class="text-[10px] text-gray-500 mt-0.5">no files attached in Zoho</div>';
+                files = '<div class="text-[10px] text-gray-500 mt-0.5">no files attached in CRMProvider</div>';
             }
             return head + present + missing + files + when + recheck;
         }
@@ -9403,7 +9403,7 @@
         }
 
         // Excel report for the Head of Sales — built SERVER-SIDE from the
-        // stored checks, so it makes no Zoho calls and downloads immediately.
+        // stored checks, so it makes no CRMProvider calls and downloads immediately.
         // Sheet per stage (Proposal / Agreement Signed / Paid) plus the
         // per-owner breakdown, which is the part Sales acts on.
         window.exportDealComplianceReport = function () {
@@ -9606,29 +9606,29 @@
                 (p) => { window._accountHintsPage = p; renderAccountHints(window._accountHintsData); },
                 sortedRows.length, 'hints');
             body.innerHTML = accountHintsSlice.map(h => {
-                const dealCell = h.deal_zoho_id
-                    ? zohoLink(h.deal_zoho_id, 'Deals', h.deal_company_name || h.deal_account_name || h.deal_zoho_id)
+                const dealCell = h.deal_CRMProvider_id
+                    ? CRMProviderLink(h.deal_CRMProvider_id, 'Deals', h.deal_company_name || h.deal_account_name || h.deal_CRMProvider_id)
                     : escapeHtml(h.deal_company_name || h.deal_account_name || '—');
-                const suggestedCell = h.suggested_account_zoho_id
-                    ? zohoLink(h.suggested_account_zoho_id, 'Accounts', h.suggested_account_name || h.suggested_account_zoho_id)
+                const suggestedCell = h.suggested_account_CRMProvider_id
+                    ? CRMProviderLink(h.suggested_account_CRMProvider_id, 'Accounts', h.suggested_account_name || h.suggested_account_CRMProvider_id)
                     : escapeHtml(h.suggested_account_name || '—');
-                const evidenceCell = h.evidence_contact_zoho_id && h.evidence_contact_email
-                    ? zohoLink(h.evidence_contact_zoho_id, 'Contacts', h.evidence_contact_email)
+                const evidenceCell = h.evidence_contact_CRMProvider_id && h.evidence_contact_email
+                    ? CRMProviderLink(h.evidence_contact_CRMProvider_id, 'Contacts', h.evidence_contact_email)
                     : escapeHtml(h.evidence_contact_email || '—');
                 const conf = Number(h.confidence || 0);
                 const confBarColor = conf >= 80 ? '#15803D' : conf >= 60 ? '#B45309' : '#9CA3AF';
                 const confCell = '<span class="rr-conf"><span class="rr-bar"><i style="width:' + Math.max(0, Math.min(100, conf)) + '%;background:' + confBarColor + '"></i></span><span class="rr-val">' + conf + '%</span></span>'; // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 // High-confidence rows (≥70%) get the 🤖 Resolve with AI
-                // button — one click writes Account_Name on the Zoho Deal
+                // button — one click writes Account_Name on the CRMProvider Deal
                 // and flips the hint to Applied. Below the threshold, only
                 // the manual Applied / Dismiss path is exposed so the user
                 // doesn't accidentally auto-apply a low-signal guess.
                 const aiEligible = h.status === 'pending' && Number(h.confidence || 0) >= 70;
                 const actions = h.status === 'pending'
                     ? (aiEligible
-                        ? '<button data-on-click="resolveAccountHintWithAi" data-args="[' + h.id + ']" class="rr-btn rr-btn-primary" title="Write the suggested Account_Name on the Zoho Deal automatically — confidence ≥70%, attributed to GRQ Assistant.">🤖 Resolve with AI</button>'
+                        ? '<button data-on-click="resolveAccountHintWithAi" data-args="[' + h.id + ']" class="rr-btn rr-btn-primary" title="Write the suggested Account_Name on the CRMProvider Deal automatically — confidence ≥70%, attributed to GRQ Assistant.">🤖 Resolve with AI</button>'
                         : '')
-                    + '<button data-on-click="markAccountHintApplied" data-args="[' + h.id + ']" class="rr-btn rr-btn-ghost" title="I fixed the Zoho record — mark applied">Applied</button>'
+                    + '<button data-on-click="markAccountHintApplied" data-args="[' + h.id + ']" class="rr-btn rr-btn-ghost" title="I fixed the CRMProvider record — mark applied">Applied</button>'
                     + '<button data-on-click="dismissAccountHint" data-args="[' + h.id + ']" class="rr-btn rr-btn-ghost" title="This suggestion is wrong">Dismiss</button>'
                     : '<span class="rr-badge rr-neutral" style="text-transform:capitalize">' + escapeHtml(h.status) + '</span>'; // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 return '<tr>'
@@ -9678,9 +9678,9 @@
                     explainer = ' — no deals need help (every deal already has a real Account_Name or sits in a cluster with a real corporate domain).';
                 } else if (hinted === 0) {
                     if (noContact === scanned) {
-                        explainer = ' — all problem deals have NO linked Contact in Zoho (the engine walks deal → contact → account; no contact = no inference path). Fix in Zoho: set Contact_Name on each deal, re-sync, re-scan.';
+                        explainer = ' — all problem deals have NO linked Contact in CRMProvider (the engine walks deal → contact → account; no contact = no inference path). Fix in CRMProvider: set Contact_Name on each deal, re-sync, re-scan.';
                     } else if (noMatch === scanned) {
-                        explainer = ' — every problem deal has a linked contact, but their email domains do not match any Account record (or the domains are free-mail). Fix in Zoho: set the Account_Name directly, or set a corporate Company_Domain on the related Account.';
+                        explainer = ' — every problem deal has a linked contact, but their email domains do not match any Account record (or the domains are free-mail). Fix in CRMProvider: set the Account_Name directly, or set a corporate Company_Domain on the related Account.';
                     } else if (noContact > 0 && noMatch > 0) {
                         explainer = ` — ${noContact} deal(s) have no linked Contact; ${noMatch} have contacts whose domain didn't match any Account. Mix of both data-quality gaps above.`;
                     }
@@ -9714,20 +9714,20 @@
         function dismissAccountHint(id)     { return setAccountHintStatus(id, 'dismissed'); }
 
         // Bulk version: loop every pending hint ≥70% confidence and let
-        // the backend write Account_Name on each Zoho Deal. Confirmation
-        // dialog first (this is a Zoho write, not a local-only flag).
+        // the backend write Account_Name on each CRMProvider Deal. Confirmation
+        // dialog first (this is a CRMProvider write, not a local-only flag).
         async function resolveAllAccountHintsWithAi() {
             const btn = document.getElementById('accountHintsAiResolveAllBtn');
             const panel = document.getElementById('accountHintsAiResolveAllPanel');
             if (!btn || !panel) return;
             const hintsList = (window._accountHintsData && window._accountHintsData.hints) || [];
             const pendingTotal = hintsList.filter(h => h.status === 'pending' && Number(h.confidence || 0) >= 70).length;
-            const ok = window.confirm('AI-resolve every pending hint with confidence ≥70% (' + (pendingTotal || 'all') + ' rows)? Each one writes Account_Name on the Zoho Deal and flips the hint to Applied. This is a real Zoho write, attributed to GRQ Assistant.');
+            const ok = window.confirm('AI-resolve every pending hint with confidence ≥70% (' + (pendingTotal || 'all') + ' rows)? Each one writes Account_Name on the CRMProvider Deal and flips the hint to Applied. This is a real CRMProvider write, attributed to GRQ Assistant.');
             if (!ok) return;
             btn.disabled = true;
             const original = btn.textContent;
             btn.textContent = 'Resolving…';
-            panel.innerHTML = '<div class="px-3 py-2 rounded bg-purple-50 border border-purple-200 text-purple-800">Looping through Zoho Deals…</div>';
+            panel.innerHTML = '<div class="px-3 py-2 rounded bg-purple-50 border border-purple-200 text-purple-800">Looping through CRMProvider Deals…</div>';
             try {
                 const res = await fetch('/api/duplicates/account-hints/resolve-all-with-ai', {
                     method: 'POST',
@@ -9746,7 +9746,7 @@
                 panel.innerHTML = '<div class="px-3 py-2 rounded bg-' + tone + '-50 border border-' + tone + '-200 text-' + tone + '-800">'
                     + '<strong>Done.</strong> Resolved ' + data.resolved + ' of ' + data.inspected
                     + (data.refused ? ' · ' + data.refused + ' refused (below threshold)' : '')
-                    + (data.errors ? ' · <span class="text-amber-700">' + data.errors + ' Zoho error(s)</span>' : '')
+                    + (data.errors ? ' · <span class="text-amber-700">' + data.errors + ' CRMProvider error(s)</span>' : '')
                     + '. Reloading list…</div>';
                 await loadAccountHints();
             } catch (e) {
@@ -9758,7 +9758,7 @@
         }
 
         // One-click AI resolve: POST to the new endpoint, the backend
-        // writes Account_Name on the Zoho Deal + marks the hint applied.
+        // writes Account_Name on the CRMProvider Deal + marks the hint applied.
         // We optimistically show "Resolving…" then reload the table so the
         // row moves from Pending → Applied. Refuses inline for sub-threshold
         // confidence (the backend gates at 70% by default) — the reason
@@ -9835,8 +9835,8 @@
         }
         // A row in a handled bucket — disposition badge + who/when + Reopen.
         function _sdHandledRow(d) {
-            const dealZid = escapeHtml(String(d.dealZohoId));
-            const dealLink = '<a href="' + erZohoUrl('deals', d.dealZohoId) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline" title="Open this deal in Zoho CRM">' + escapeHtml(d.dealName) + ' <span class="text-xs">↗</span></a>';
+            const dealZid = escapeHtml(String(d.dealCRMProviderId));
+            const dealLink = '<a href="' + erCRMProviderUrl('deals', d.dealCRMProviderId) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline" title="Open this deal in CRMProvider CRM">' + escapeHtml(d.dealName) + ' <span class="text-xs">↗</span></a>';
             const acctCell = d.accountName ? escapeHtml(d.accountName) : '<span class="text-gray-400">— none —</span>';
             const ownerCell = d.ownerName ? escapeHtml(d.ownerName) : '<span class="text-gray-400">—</span>';
             const createdCell = d.createdTime ? escapeHtml(formatDate(d.createdTime)) : '<span class="text-gray-400">—</span>';
@@ -9848,7 +9848,7 @@
                 dismissed: '<span class="rr-badge rr-neutral">Dismissed</span>',
             }[d.disposition] || ('<span class="rr-badge rr-neutral">' + escapeHtml(d.disposition || '—') + '</span>');
             const whoWhen = ((d.by ? escapeHtml(d.by) : '') + (d.at ? (' · ' + escapeHtml(formatDate(d.at))) : '')).trim();
-            const reopenBtn = '<button data-on-click="reopenStaleDeal" data-args="[&quot;' + dealZid + '&quot;]" title="Re-open — send this deal back to the Open list (removes the radar record; no Zoho change)." class="rr-btn rr-btn-ghost rr-btn-icon">🔓</button>';
+            const reopenBtn = '<button data-on-click="reopenStaleDeal" data-args="[&quot;' + dealZid + '&quot;]" title="Re-open — send this deal back to the Open list (removes the radar record; no CRMProvider change)." class="rr-btn rr-btn-ghost rr-btn-icon">🔓</button>';
             return '<tr style="vertical-align:top">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 + '<td class="rr-lead rr-primary">' + dealLink + '</td>'
                 + '<td class="rr-muted">' + acctCell + '</td>'
@@ -9860,10 +9860,10 @@
                 + '<div class="mt-1"><div class="rr-actions" style="justify-content:flex-start">' + reopenBtn + '</div></div></td>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                 + '</tr>';
         }
-        // ↩ Re-open a handled stale deal back to the Open list. No Zoho change.
-        async function reopenStaleDeal(dealZohoId) {
+        // ↩ Re-open a handled stale deal back to the Open list. No CRMProvider change.
+        async function reopenStaleDeal(dealCRMProviderId) {
             try {
-                const j = await erAdminPost('/api/duplicates/record-hints/stale-deals/reopen', { dealZohoId: dealZohoId });
+                const j = await erAdminPost('/api/duplicates/record-hints/stale-deals/reopen', { dealCRMProviderId: dealCRMProviderId });
                 if (!j) return;
                 if (!j.success) { rrToast('Re-open failed: ' + (j.error || 'unknown')); return; }
                 rrToast('🔓 Re-opened.');
@@ -9927,29 +9927,29 @@
                     return 'rr-sev-info';
                 };
                 body.innerHTML = deals.map(function (d) {
-                    const dealZid = escapeHtml(String(d.dealZohoId));
-                    const dealLink = '<a href="' + erZohoUrl('deals', d.dealZohoId) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline" title="Open this deal in Zoho CRM to review before acting">' + escapeHtml(d.dealName) + ' <span class="text-xs">↗</span></a>';
+                    const dealZid = escapeHtml(String(d.dealCRMProviderId));
+                    const dealLink = '<a href="' + erCRMProviderUrl('deals', d.dealCRMProviderId) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline" title="Open this deal in CRMProvider CRM to review before acting">' + escapeHtml(d.dealName) + ' <span class="text-xs">↗</span></a>';
                     const acctCell = d.accountName ? escapeHtml(d.accountName) : '<span class="text-gray-400">— none —</span>';
                     const ownerCell = d.ownerName ? escapeHtml(d.ownerName) : '<span class="text-gray-400">—</span>';
                     const createdCell = d.createdTime ? escapeHtml(formatDate(d.createdTime)) : '<span class="text-gray-400">—</span>';
                     const layoutCell = d.layout ? escapeHtml(d.layout) : '<span class="text-gray-400">—</span>';
                     // Actions mirror the other Record Hint sections: 🤖 = apply the
                     // AI-suggested disposition, explicit Close / Re-engage overrides,
-                    // ✗ = dismiss (not a stale issue — hides it, no Zoho change).
+                    // ✗ = dismiss (not a stale issue — hides it, no CRMProvider change).
                     const suggested = d.disposition === 'close' ? 'close' : d.disposition === 'reengage' ? 'reengage' : null;
                     const aiBtn = suggested
-                        ? '<button data-on-click="applyStaleDeal" data-args="[&quot;' + dealZid + '&quot;,&quot;' + suggested + '&quot;]" title="AI-apply the suggested action (' + suggested + ') in Zoho." class="rr-btn rr-btn-icon" style="color:#7C3AED">🤖</button>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
+                        ? '<button data-on-click="applyStaleDeal" data-args="[&quot;' + dealZid + '&quot;,&quot;' + suggested + '&quot;]" title="AI-apply the suggested action (' + suggested + ') in CRMProvider." class="rr-btn rr-btn-icon" style="color:#7C3AED">🤖</button>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                         : '';
                     // Consistent action set (mirrors the Cross-Module row: a green
-                    // ✓ Resolved for "I handled it in Zoho" + a Dismiss for false
-                    // positives). 🤖 / Close / Re-engage WRITE to Zoho; ✓ Resolved
-                    // and ✗ Dismiss are radar-only (no Zoho change).
+                    // ✓ Resolved for "I handled it in CRMProvider" + a Dismiss for false
+                    // positives). 🤖 / Close / Re-engage WRITE to CRMProvider; ✓ Resolved
+                    // and ✗ Dismiss are radar-only (no CRMProvider change).
                     const actions = '<div class="mt-1"><div class="rr-actions" style="justify-content:flex-start">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                         + aiBtn
-                        + '<button data-on-click="applyStaleDeal" data-args="[&quot;' + dealZid + '&quot;,&quot;close&quot;]" title="Close — set this deal\'s Stage to Closed Lost in Zoho." class="rr-btn rr-btn-ghost">Close</button>'
-                        + '<button data-on-click="applyStaleDeal" data-args="[&quot;' + dealZid + '&quot;,&quot;reengage&quot;]" title="Re-engage — move this deal\'s Stage forward into the active pipeline in Zoho." class="rr-btn rr-btn-ghost">Re-engage</button>'
-                        + '<button data-on-click="resolveStaleDeal" data-args="[&quot;' + dealZid + '&quot;]" title="Resolved — I already fixed this deal MANUALLY in Zoho. Records it as resolved (not dismissed) and removes it from this list. No Zoho change." class="rr-btn rr-btn-primary">✓ Resolve</button>'
-                        + '<button data-on-click="dismissStaleDeal" data-args="[&quot;' + dealZid + '&quot;]" title="Dismiss — this is not a stale issue (false positive). Hides it from this list. No Zoho change." class="rr-btn rr-btn-ghost rr-btn-icon">✕</button>'
+                        + '<button data-on-click="applyStaleDeal" data-args="[&quot;' + dealZid + '&quot;,&quot;close&quot;]" title="Close — set this deal\'s Stage to Closed Lost in CRMProvider." class="rr-btn rr-btn-ghost">Close</button>'
+                        + '<button data-on-click="applyStaleDeal" data-args="[&quot;' + dealZid + '&quot;,&quot;reengage&quot;]" title="Re-engage — move this deal\'s Stage forward into the active pipeline in CRMProvider." class="rr-btn rr-btn-ghost">Re-engage</button>'
+                        + '<button data-on-click="resolveStaleDeal" data-args="[&quot;' + dealZid + '&quot;]" title="Resolved — I already fixed this deal MANUALLY in CRMProvider. Records it as resolved (not dismissed) and removes it from this list. No CRMProvider change." class="rr-btn rr-btn-primary">✓ Resolve</button>'
+                        + '<button data-on-click="dismissStaleDeal" data-args="[&quot;' + dealZid + '&quot;]" title="Dismiss — this is not a stale issue (false positive). Hides it from this list. No CRMProvider change." class="rr-btn rr-btn-ghost rr-btn-icon">✕</button>'
                         + '</div></div>';
                     return '<tr class="' + dispSev(d.disposition) + '" style="vertical-align:top">' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                         + '<td class="rr-lead rr-primary">' + dealLink + '</td>'
@@ -9971,13 +9971,13 @@
         }
 
         // HITL apply for a stalled deal — close (Closed Lost) or re-engage.
-        async function applyStaleDeal(dealZohoId, action) {
+        async function applyStaleDeal(dealCRMProviderId, action) {
             const what = action === 'close'
                 ? 'CLOSE this deal — set Stage = Closed Lost'
                 : 'RE-ENGAGE this deal — move its Stage forward into the active pipeline';
-            if (!confirm('Apply in Zoho now?\n\n' + what + '.\n\nThis is a real change on the deal in Zoho (reversible by editing the deal). Nothing else is touched.')) return;
+            if (!confirm('Apply in CRMProvider now?\n\n' + what + '.\n\nThis is a real change on the deal in CRMProvider (reversible by editing the deal). Nothing else is touched.')) return;
             try {
-                const j = await erAdminPost('/api/duplicates/record-hints/stale-deals/apply', { dealZohoId: dealZohoId, action: action });
+                const j = await erAdminPost('/api/duplicates/record-hints/stale-deals/apply', { dealCRMProviderId: dealCRMProviderId, action: action });
                 if (!j) return; // cancelled at the admin-key prompt
                 if (!j.success) { rrToast('Apply failed: ' + (j.reason || j.error || 'unknown')); return; }
                 loadStaleDeals(); // re-scan — the deal is now re-staged and drops off
@@ -9987,11 +9987,11 @@
         }
 
         // ✗ "wrong / not stale" — dismiss a stalled-deal suggestion. Hides it from
-        // §4 (persisted in stale_deal_dismissals). No Zoho change (Sample User 2026-07-14).
-        async function dismissStaleDeal(dealZohoId) {
-            if (!confirm('Dismiss this deal from the Unaccounted list?\n\nUse this when it is NOT a real stale issue. It stops appearing here. No Zoho change is made.')) return;
+        // §4 (persisted in stale_deal_dismissals). No CRMProvider change (Sample User 2026-07-14).
+        async function dismissStaleDeal(dealCRMProviderId) {
+            if (!confirm('Dismiss this deal from the Unaccounted list?\n\nUse this when it is NOT a real stale issue. It stops appearing here. No CRMProvider change is made.')) return;
             try {
-                const j = await erAdminPost('/api/duplicates/record-hints/stale-deals/dismiss', { dealZohoId: dealZohoId });
+                const j = await erAdminPost('/api/duplicates/record-hints/stale-deals/dismiss', { dealCRMProviderId: dealCRMProviderId });
                 if (!j) return; // cancelled at the admin-key prompt
                 if (!j.success) { rrToast('Dismiss failed: ' + (j.error || 'unknown')); return; }
                 loadStaleDeals();
@@ -10000,12 +10000,12 @@
             }
         }
 
-        // ✓ Resolved — the operator already fixed the deal MANUALLY in Zoho and
-        // wants it recorded as resolved (not dismissed). Radar-only; no Zoho write.
-        async function resolveStaleDeal(dealZohoId) {
-            if (!confirm('Mark this deal as Resolved?\n\nUse this when you have already handled it MANUALLY in Zoho (e.g. re-staged, linked, or closed it yourself). It is recorded as resolved and removed from this list. No Zoho change is made here.')) return;
+        // ✓ Resolved — the operator already fixed the deal MANUALLY in CRMProvider and
+        // wants it recorded as resolved (not dismissed). Radar-only; no CRMProvider write.
+        async function resolveStaleDeal(dealCRMProviderId) {
+            if (!confirm('Mark this deal as Resolved?\n\nUse this when you have already handled it MANUALLY in CRMProvider (e.g. re-staged, linked, or closed it yourself). It is recorded as resolved and removed from this list. No CRMProvider change is made here.')) return;
             try {
-                const j = await erAdminPost('/api/duplicates/record-hints/stale-deals/resolve', { dealZohoId: dealZohoId });
+                const j = await erAdminPost('/api/duplicates/record-hints/stale-deals/resolve', { dealCRMProviderId: dealCRMProviderId });
                 if (!j) return; // cancelled at the admin-key prompt
                 if (!j.success) { rrToast('Resolve failed: ' + (j.error || 'unknown')); return; }
                 rrToast('✓ Marked resolved.');
@@ -10070,13 +10070,13 @@
                     // names come from source_record_name / suggested_target_name.
                     const srcModule = h.source_type === 'deal' ? 'Deals' : 'Contacts';
                     const tgtModule = h.link_field === 'Contact_Name' ? 'Contacts' : 'Accounts';
-                    const sourceName = h.source_record_name || h.source_zoho_id || '—';
-                    const suggestedName = h.suggested_target_name || h.suggested_target_zoho_id || '—';
-                    const sourceCell = h.source_zoho_id
-                        ? zohoLink(h.source_zoho_id, srcModule, sourceName)
+                    const sourceName = h.source_record_name || h.source_CRMProvider_id || '—';
+                    const suggestedName = h.suggested_target_name || h.suggested_target_CRMProvider_id || '—';
+                    const sourceCell = h.source_CRMProvider_id
+                        ? CRMProviderLink(h.source_CRMProvider_id, srcModule, sourceName)
                         : escapeHtml(sourceName);
-                    const suggestedCell = h.suggested_target_zoho_id
-                        ? zohoLink(h.suggested_target_zoho_id, tgtModule, suggestedName)
+                    const suggestedCell = h.suggested_target_CRMProvider_id
+                        ? CRMProviderLink(h.suggested_target_CRMProvider_id, tgtModule, suggestedName)
                         : escapeHtml(suggestedName);
                     const evidenceCell = escapeHtml(h.evidence_detail || '—');
                     const conf = Number(h.confidence || 0);
@@ -10087,9 +10087,9 @@
                     // scroll (Sample User). Bulk apply/dismiss lives in the bar above.
                     const actions = h.status === 'pending'
                         ? (aiEligible
-                            ? '<button data-on-click="resolveRecordHintWithAi" data-args="[' + h.id + ',&quot;' + type + '&quot;]" class="rr-btn rr-btn-ai rr-btn-icon" title="Resolve with AI — write the suggested value on the Zoho record (confidence ≥70%, as GRQ Assistant).">🤖</button>'
+                            ? '<button data-on-click="resolveRecordHintWithAi" data-args="[' + h.id + ',&quot;' + type + '&quot;]" class="rr-btn rr-btn-ai rr-btn-icon" title="Resolve with AI — write the suggested value on the CRMProvider record (confidence ≥70%, as GRQ Assistant).">🤖</button>'
                             : '')
-                        + '<button data-on-click="markRecordHintApplied" data-args="[' + h.id + ',&quot;' + type + '&quot;]" class="rr-btn rr-btn-ghost rr-btn-icon" title="I fixed the Zoho record — mark applied">✓</button>'
+                        + '<button data-on-click="markRecordHintApplied" data-args="[' + h.id + ',&quot;' + type + '&quot;]" class="rr-btn rr-btn-ghost rr-btn-icon" title="I fixed the CRMProvider record — mark applied">✓</button>'
                         + '<button data-on-click="dismissRecordHint" data-args="[' + h.id + ',&quot;' + type + '&quot;]" class="rr-btn rr-btn-ghost rr-btn-icon" title="This suggestion is wrong — dismiss">✕</button>'
                         : '<span class="rr-badge rr-neutral" style="text-transform:capitalize">' + escapeHtml(h.status) + '</span>'; // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     // Bulk-select checkbox (pending rows only). data-ai marks the
@@ -10239,7 +10239,7 @@
             const skipped = checked.length - eligible.length;
             const ids = eligible.map(function (c) { return c.getAttribute('data-id'); });
             if (!ids.length) { rrToast('None of the selected rows are AI-eligible (need ≥70% confidence).', 'warn'); return; }
-            if (!confirm('Apply ' + ids.length + ' suggestion(s) with AI? This writes the suggested value on each Zoho record.' + (skipped ? '\n(' + skipped + ' below 70% confidence will be skipped.)' : ''))) return;
+            if (!confirm('Apply ' + ids.length + ' suggestion(s) with AI? This writes the suggested value on each CRMProvider record.' + (skipped ? '\n(' + skipped + ' below 70% confidence will be skipped.)' : ''))) return;
             const st = document.getElementById('rhBulkStatus-' + type);
             let done = 0, fail = 0;
             for (let i = 0; i < ids.length; i++) {
@@ -10275,7 +10275,7 @@
             renderRecordHintsSection(type, RECORD_HINT_TBODY_BY_TYPE[type]);
         }
         async function rhResolveAll(type) {
-            if (!confirm('Resolve EVERY pending suggestion with confidence ≥70% in this section with AI? This writes the suggested value on each Zoho record.')) return;
+            if (!confirm('Resolve EVERY pending suggestion with confidence ≥70% in this section with AI? This writes the suggested value on each CRMProvider record.')) return;
             const btn = document.getElementById('rhResolveAllBtn-' + type);
             const orig = btn ? btn.textContent : null;
             if (btn) { btn.disabled = true; btn.textContent = 'Resolving…'; }
@@ -10324,7 +10324,7 @@
             const m = map[v] || { cls: 'rr-neutral', label: (v || '—').toUpperCase() };
             return '<span class="rr-badge ' + m.cls + ' rr-dot">' + m.label + '</span>';
         }
-        // verdict → row severity stripe class (leading cell).
+        // verdict → row severity PaymentProvider class (leading cell).
         function csVerdictSev(v) {
             if (v === 'block') return 'rr-sev-warn';
             if (v === 'review' || v === 'warn') return 'rr-sev-amber';
@@ -10532,7 +10532,7 @@
             const dom = grp ? grp.domain : '(unknown domain)';
             if (!confirm(
                 'Merge ' + sourceIds.length + ' cluster(s) on domain "' + dom + '" INTO master cluster #' + targetId + '?\n\n' +
-                'This reparents every record from the source cluster(s) into the master, snapshots each source first (undo-able from the Logs tab), audit-logs the action, and deletes the now-empty source clusters. No Zoho writes.'
+                'This reparents every record from the source cluster(s) into the master, snapshots each source first (undo-able from the Logs tab), audit-logs the action, and deletes the now-empty source clusters. No CRMProvider writes.'
             )) return;
             try {
                 let res = await fetch('/api/duplicates/clusters/merge-into', {
@@ -10692,7 +10692,7 @@
                 const safeCompany = escapeHtml(r.company_name || r.company_name_arabic || '—');
                 // Company name opens the same cluster-detail modal as the
                 // domain cell, since each CS Overlap row IS a cluster (not a
-                // single Zoho record) — so an external Zoho link would not
+                // single CRMProvider record) — so an external CRMProvider link would not
                 // have a unique target.
                 const companyCell = r.id
                     ? '<a href="javascript:void(0)" data-on-click="showClusterDetails" data-args="[' + r.id + ']" class="rr-primary hover:underline" style="color:inherit" title="View this cluster\'s underlying records">' + safeCompany + '</a>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
@@ -10789,7 +10789,7 @@
             const cursor = human ? ' cursor-help' : '';
             return '<span class="rr-badge ' + m.cls + cursor + '"' + titleAttr + '>' + m.label + '</span>';
         }
-        // preflight verdict → row severity stripe class (leading cell).
+        // preflight verdict → row severity PaymentProvider class (leading cell).
         function preflightVerdictSev(v) {
             if (v === 'block' || v === 'no_contact') return 'rr-sev-warn';
             if (v === 'review' || v === 'warn') return 'rr-sev-amber';
@@ -10937,7 +10937,7 @@
 
                 // Surface within-file dedup result. If we found same-domain
                 // duplicates inside the upload itself, flag it BEFORE the
-                // operator hits Check — saves a Zoho cleanup later.
+                // operator hits Check — saves a CRMProvider cleanup later.
                 const dupInfo = body.intra_file_duplicates || {};
                 const dupDomainRows = dupInfo.by_domain_rows || 0;
                 let dupNote = '';
@@ -11372,7 +11372,7 @@
             if (passXlsxBtn) passXlsxBtn.classList.add('hidden');
         }
 
-        // Replit's gateway returns HTTP 504 if a single request runs past
+        // HostingPlatform's gateway returns HTTP 504 if a single request runs past
         // its ~60s ceiling — sending all 1,668 rows at once hit that wall
         // no matter how fast the backend got. Solution: split into 250-row
         // chunks (≈10-row groups × 25 = well under the per-request budget),
@@ -11400,7 +11400,7 @@
 
         // Merge N chunk responses back into the shape renderPreflight expects.
         // Row indices are RE-NUMBERED to be globally unique across chunks so
-        // the export / push-to-Zoho flows that key off row_index don't
+        // the export / push-to-CRMProvider flows that key off row_index don't
         // collide. top_reasons + pct_actionable are recomputed because they
         // are derived from the merged totals, not summable.
         function _preflightMergeChunks(parts, totalRows) {
@@ -11479,7 +11479,7 @@
                 }
             }
 
-            // Re-index globally so downstream consumers (push-to-Zoho,
+            // Re-index globally so downstream consumers (push-to-CRMProvider,
             // Excel export) can address rows uniquely.
             for (let i = 0; i < rowsOut.length; i++) rowsOut[i].row_index = i;
             const totalActionable = summary.block + summary.review + summary.warn + summary.duplicate + (summary.no_contact || 0);
@@ -11685,7 +11685,7 @@
             const cls = map[s] || 'rr-neutral';
             return '<span class="rr-badge ' + cls + '">' + (s || '—').toUpperCase() + '</span>';
         }
-        // Shared lifecycle severity → row stripe class (CS + Deals lifecycle).
+        // Shared lifecycle severity → row PaymentProvider class (CS + Deals lifecycle).
         function lifeSeveritySev(s) {
             if (s === 'critical') return 'rr-sev-warn';
             if (s === 'warning')  return 'rr-sev-amber';
@@ -11704,7 +11704,7 @@
                     : '';
                 // Segment chip (ExampleOrg / WalaOne / Marketplace) — sent to the
                 // server so BOTH the KPI cards and the rows reflect ONLY deals on
-                // the chosen Zoho Layout, not a mix (Sample User 2026-07-07).
+                // the chosen CRMProvider Layout, not a mix (Sample User 2026-07-07).
                 const _seg = document.getElementById('filterSegment') ? document.getElementById('filterSegment').value : '';
                 const segQ = (_seg && _seg !== 'all') ? ('&segment=' + encodeURIComponent(_seg)) : '';
                 const res = await fetch('/api/duplicates/deal-stage-aging?limit=10000' + sevQ + stageQ + segQ);
@@ -11793,14 +11793,14 @@
                 const slaLabel = v.unit === 'business_days'
                     ? (v.sla_units + ' BD')
                     : (v.sla_units + ' days');
-                // Deal name links straight to the Zoho deal (Sample User 2026-07-14:
+                // Deal name links straight to the CRMProvider deal (Sample User 2026-07-14:
                 // open the deal from here to review before acting). Guards against
                 // synthetic ids so a test/placeholder row stays plain text.
-                const _dealZid = String(r.zoho_record_id || '').trim();
+                const _dealZid = String(r.CRMProvider_record_id || '').trim();
                 const _dealOpenable = _dealZid && !_dealZid.startsWith('test_') && !_dealZid.startsWith('LEAD_');
                 const dealNameHtml = r.deal_name
                     ? (_dealOpenable
-                        ? '<a href="<REDACTED_URL>' + encodeURIComponent(_dealZid) + '" target="_blank" rel="noopener" class="rr-primary text-blue-600 hover:underline" title="Open this deal in Zoho CRM to review before acting">' + escapeHtml(r.deal_name) + ' <span class="text-xs">↗</span></a>'
+                        ? '<a href="<REDACTED_URL>' + encodeURIComponent(_dealZid) + '" target="_blank" rel="noopener" class="rr-primary text-blue-600 hover:underline" title="Open this deal in CRMProvider CRM to review before acting">' + escapeHtml(r.deal_name) + ' <span class="text-xs">↗</span></a>'
                         : '<div class="rr-primary">' + escapeHtml(r.deal_name) + '</div>')
                     : '';
                 const dealCell = dealNameHtml
@@ -11836,36 +11836,36 @@
             loadDealLifecycle();
         }
 
-        async function refreshDealLifecycleFromZoho(opts) {
+        async function refreshDealLifecycleFromCRMProvider(opts) {
             // Pulls a live copy of every Deal currently visible in the
-            // Deals Lifecycle table from Zoho, re-upserts so the next scan
+            // Deals Lifecycle table from CRMProvider, re-upserts so the next scan
             // reflects the latest Stage / Modified_Time. Mirrors the
-            // existing refreshCsLifecycleFromZoho. The underlying endpoint
+            // existing refreshCsLifecycleFromCRMProvider. The underlying endpoint
             // (/api/duplicates/cs-lifecycle/refresh-deals) is module-
-            // agnostic — it refreshes any Deal zoho_record_id passed in.
+            // agnostic — it refreshes any Deal CRMProvider_record_id passed in.
             const data = window._dealLifecycleData || {};
             const ids = Array.from(new Set((data.violations || [])
-                .map(v => v.zoho_record_id)
+                .map(v => v.CRMProvider_record_id)
                 .filter(Boolean))).slice(0, 50); // endpoint caps at 50
             if (ids.length === 0) {
                 if (!opts || !opts.silent) rrToast('No deals on screen to refresh.');
                 return;
             }
-            const btn = document.getElementById('dealLifeZohoRefreshBtn');
+            const btn = document.getElementById('dealLifeCRMProviderRefreshBtn');
             const orig = btn ? btn.innerHTML : '';
-            if (btn) { btn.disabled = true; btn.innerHTML = '🔄 Refreshing from Zoho…'; }
+            if (btn) { btn.disabled = true; btn.innerHTML = '🔄 Refreshing from CRMProvider…'; }
             try {
                 const res = await fetch('/api/duplicates/cs-lifecycle/refresh-deals', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ zohoIds: ids }),
+                    body: JSON.stringify({ CRMProviderIds: ids }),
                 });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 // Recompute the scan over the just-refreshed records.
                 await loadDealLifecycle();
             } catch (e) {
                 try { console.error('Deals Lifecycle live refresh failed:', e); } catch (_) {}
-                if (!opts || !opts.silent) rrToast('Refresh from Zoho failed: ' + (e.message || e));
+                if (!opts || !opts.silent) rrToast('Refresh from CRMProvider failed: ' + (e.message || e));
             } finally {
                 if (btn) { btn.disabled = false; btn.innerHTML = orig; }
             }
@@ -11964,8 +11964,8 @@
                     ? '<p class="text-gray-500">' + escapeHtml(String(d.unknown_segment.verified_merges)) + ' verified merges could not be attributed to a layout (survivor record no longer present).</p>'
                     : '';
                 ex.innerHTML = [
-                    '<p><strong>Verified merges</strong> = duplicate clusters confirmed merged in Zoho (survivor kept, duplicates deleted).</p>',
-                    '<p><strong>Empty/messy records deleted</strong> = records verified removed from Zoho. Shown for <em>all layouts</em> (deletion records carry no layout).</p>',
+                    '<p><strong>Verified merges</strong> = duplicate clusters confirmed merged in CRMProvider (survivor kept, duplicates deleted).</p>',
+                    '<p><strong>Empty/messy records deleted</strong> = records verified removed from CRMProvider. Shown for <em>all layouts</em> (deletion records carry no layout).</p>',
                     '<p><strong>Est. records removed</strong> may undercount cleanup done before per-record tracking existed.</p>',
                     unknownNote,
                 ].join('');
@@ -12066,15 +12066,15 @@
         function filterCsLifecycle(sev) { loadCsLifecycle(sev); }
 
         // Pulls a live copy of every Deal currently visible in the CS Lifecycle
-        // table directly from Zoho's single-record API (which bypasses the
+        // table directly from CRMProvider's single-record API (which bypasses the
         // bulk-read cache that occasionally serves stale Phase / Company_Domain
         // values), upserts each into duplicate_records, then reloads the table.
-        async function refreshCsLifecycleFromZoho(opts) {
+        async function refreshCsLifecycleFromCRMProvider(opts) {
             const silent = !!(opts && opts.silent);
-            const btn = document.getElementById('csLifeZohoRefreshBtn');
+            const btn = document.getElementById('csLifeCRMProviderRefreshBtn');
             const data = window._csLifecycleData || {};
             const violations = data.violations || [];
-            const ids = Array.from(new Set(violations.map(v => v.zoho_record_id).filter(Boolean)));
+            const ids = Array.from(new Set(violations.map(v => v.CRMProvider_record_id).filter(Boolean)));
             if (ids.length === 0) {
                 // When chained from the global Refresh button there's nothing
                 // to do and no need to interrupt the user with an alert.
@@ -12096,7 +12096,7 @@
                     const res = await fetch('/api/duplicates/cs-lifecycle/refresh-deals', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ zohoIds: slice }),
+                        body: JSON.stringify({ CRMProviderIds: slice }),
                     });
                     if (!res.ok) {
                         const err = await res.json().catch(() => ({}));
@@ -12109,7 +12109,7 @@
                 }
                 const notes = [];
                 if (totalFailed) notes.push(totalFailed + ' failed');
-                if (totalMissing) notes.push(totalMissing + ' not found in Zoho');
+                if (totalMissing) notes.push(totalMissing + ' not found in CRMProvider');
                 if (btn) {
                     btn.innerHTML = '✓ Refreshed ' + totalRefreshed + (notes.length ? ' (' + notes.join(', ') + ')' : '');
                 }
@@ -12125,7 +12125,7 @@
                 // green button — when chained from the global Refresh the
                 // error is logged and the table just keeps the prior data.
                 if (!silent) {
-                    rrToast('Refresh from Zoho failed: ' + (e.message || e));
+                    rrToast('Refresh from CRMProvider failed: ' + (e.message || e));
                 } else {
                     try { console.error('CS Lifecycle live refresh failed:', e); } catch (_) {}
                 }
@@ -12146,7 +12146,7 @@
             const body = document.getElementById('csLifecycleTable');
             body.innerHTML = rrSkeletonRows(12);
 
-            // Ask for the full deal corpus. The bulk Zoho sync caps each
+            // Ask for the full deal corpus. The bulk CRMProvider sync caps each
             // module at 5,000 records so 10,000 comfortably covers every
             // Deal currently in duplicate_records. The previous default
             // (server-side 2,000) silently undercounted "CS Deals Scanned"
@@ -12178,17 +12178,17 @@
         // Group flat violation rows from the API into one entry per deal so a
         // single account with two violations renders as ONE table row with
         // both violations stacked, not as duplicate rows. Grouping key is
-        // record_id (stable, unique per Zoho record). Within each group we
+        // record_id (stable, unique per CRMProvider record). Within each group we
         // sort the violations by severity desc so the worst one anchors the
         // row's severity badge and is shown first.
         function groupCsLifecycleByDeal(violations) {
             const map = new Map();
             for (const v of violations) {
-                const key = v.record_id ?? (v.zoho_record_id || '__noid__' + Math.random());
+                const key = v.record_id ?? (v.CRMProvider_record_id || '__noid__' + Math.random());
                 if (!map.has(key)) {
                     map.set(key, {
                         record_id: v.record_id,
-                        zoho_record_id: v.zoho_record_id,
+                        CRMProvider_record_id: v.CRMProvider_record_id,
                         account_name: v.account_name,
                         domain: v.domain,
                         current_phase: v.current_phase,
@@ -12291,8 +12291,8 @@
         // violations yet, but the operator must still be able to filter to
         // them. Any extra tenant-custom phases present in the data are
         // appended after the canonical list (alphabetically) so nothing from
-        // Zoho is hidden. Matching is case/whitespace-insensitive (see
-        // _normCsPhase) so a selection lines up with however Zoho stored the
+        // CRMProvider is hidden. Matching is case/whitespace-insensitive (see
+        // _normCsPhase) so a selection lines up with however CRMProvider stored the
         // phase casing — this is what previously made the filter appear
         // "broken" when a deal's phase was e.g. "onboarding" vs "Onboarding".
         //
@@ -12302,7 +12302,7 @@
         // onCsLifecyclePhaseChange is the data-on-change handler. It stashes
         // the choice on window so a subsequent renderCsLifecycle re-applies
         // it, then triggers a render with the existing in-memory dataset (no
-        // Zoho re-fetch — phase filtering is purely client-side over the data
+        // CRMProvider re-fetch — phase filtering is purely client-side over the data
         // we already loaded).
         const CS_LIFECYCLE_CANONICAL_PHASES = ['New Deal', 'Kickoff', 'Onboarding', 'Adoption', 'Renewal', 'Termination'];
         function _normCsPhase(p) {
@@ -12367,7 +12367,7 @@
             // from the previous (wider) filter.
             window._csLifecyclePage = 0;
             // Re-paint the table from the in-memory dataset with the new
-            // filter applied. No Zoho re-fetch.
+            // filter applied. No CRMProvider re-fetch.
             const data = window._csLifecycleData;
             if (data) renderCsLifecycle(data);
         }
@@ -12449,7 +12449,7 @@
                 dateFields:    ['customer_since', 'renewal_date', 'churn_date'],
                 // 2026-06-08 — wire Layout / Stage / Pipeline filters
                 // explicitly. Backend now surfaces these from the underlying
-                // Zoho Deal's raw_data; groupCsLifecycleByDeal propagates
+                // CRMProvider Deal's raw_data; groupCsLifecycleByDeal propagates
                 // them onto each group.
                 layoutField:   'layout',
                 stageField:    'stage',
@@ -12459,7 +12459,7 @@
 
         // Preferred display order + accent for the CS lifecycle phases. Keys
         // are the lowercase phase names summary.by_phase is keyed by. Any phase
-        // Zoho returns that isn't listed here still renders (appended after the
+        // CRMProvider returns that isn't listed here still renders (appended after the
         // known ones, alphabetically) so a new picklist value can't silently
         // vanish from the census.
         // Kickoff (CS team, 2026-09-03) sits between New Deal and Onboarding:
@@ -12506,10 +12506,10 @@
                 if (chp && typeof chp.file_total === 'number') {
                     const matched = chp.in_qms_same_phase || 0;
                     const gap = matched - chp.file_total;
-                    badge += '<div class="rr-kpi-label" title="Of ' + chp.file_total + ' ClientHub row(s) tagged &quot;' + escapeHtml(p.label) + '&quot;, QMS counts ' + matched + ' as this phase' + ((chp.in_qms_other_phase || 0) > 0 ? '; ' + chp.in_qms_other_phase + ' sit in a different Zoho phase' : '') + '. Source: ' + escapeHtml(rc.fileName || 'last upload') + '.">vs ClientHub: ' + matched + '/' + chp.file_total + (gap < 0 ? ' (−' + Math.abs(gap) + ')' : '') + '</div>';
+                    badge += '<div class="rr-kpi-label" title="Of ' + chp.file_total + ' ClientHub row(s) tagged &quot;' + escapeHtml(p.label) + '&quot;, QMS counts ' + matched + ' as this phase' + ((chp.in_qms_other_phase || 0) > 0 ? '; ' + chp.in_qms_other_phase + ' sit in a different CRMProvider phase' : '') + '. Source: ' + escapeHtml(rc.fileName || 'last upload') + '.">vs ClientHub: ' + matched + '/' + chp.file_total + (gap < 0 ? ' (−' + Math.abs(gap) + ')' : '') + '</div>';
                     const nim = chp.not_in_mirror || 0;
                     if (nim > 0) {
-                        badge += '<div class="rr-kpi-label" data-on-click="openStoredReconcile" title="' + nim + ' ClientHub CRM ID(s) tagged ' + escapeHtml(p.label) + ' are not in the synced Zoho mirror — possible lost data. Click to inspect / verify live.">⚠ ' + nim + ' not in CRM →</div>';
+                        badge += '<div class="rr-kpi-label" data-on-click="openStoredReconcile" title="' + nim + ' ClientHub CRM ID(s) tagged ' + escapeHtml(p.label) + ' are not in the synced CRMProvider mirror — possible lost data. Click to inspect / verify live.">⚠ ' + nim + ' not in CRM →</div>';
                     }
                 } else if (p.key === 'termination' && rc && typeof rc.total === 'number' && !rc.clienthub_phases) {
                     // Backward-compat for a reconcile saved before per-phase support.
@@ -12534,7 +12534,7 @@
             showReconcileResult(rc, rc.fileName || '');
         }
 
-        // ── ClientHub ↔ Zoho reconcile by CRM ID (Sample User 2026-08-03) ──────────
+        // ── ClientHub ↔ CRMProvider reconcile by CRM ID (Sample User 2026-08-03) ──────────
         function pickReconcileFile() { const f = document.getElementById('csReconcileFile'); if (f) { f.value = ''; f.click(); } }
         async function reconcileClientHubFile(ev) {
             const input = (ev && ev.target) ? ev.target : document.getElementById('csReconcileFile');
@@ -12569,7 +12569,7 @@
                 modal.id = 'csReconcileModal';
                 modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4';
                 modal.innerHTML = '<div class="bg-white rounded-xl shadow-xl w-full max-w-2xl">'
-                    + '<div class="flex items-center justify-between px-5 py-3 border-b"><div class="text-lg font-semibold">ClientHub &harr; Zoho reconcile</div><button data-on-click="closeReconcileModal" class="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button></div>'
+                    + '<div class="flex items-center justify-between px-5 py-3 border-b"><div class="text-lg font-semibold">ClientHub &harr; CRMProvider reconcile</div><button data-on-click="closeReconcileModal" class="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button></div>'
                     + '<div id="csReconcileBody" class="px-5 py-4"></div>'
                     + '<div class="px-5 py-3 border-t text-end"><button data-on-click="downloadReconcileCsv" class="rr-btn rr-btn-ghost">&#8595; Download per-ID CSV</button></div>'
                     + '</div>';
@@ -12601,28 +12601,28 @@
                 + line('Non-corporate layout (Marketplace / WalaOne)', s.non_corporate || 0)
                 + line('CRM ID is an Account / Contact / Lead, not a Deal', s.not_a_deal || 0)
                 + line('Corporate Deal but CS Phase is blank', s.blank_phase || 0)
-                + line('Not in the synced Zoho mirror', s.not_in_mirror || 0)
+                + line('Not in the synced CRMProvider mirror', s.not_in_mirror || 0)
                 + '</tbody></table>'
                 + chpTable
-                + '<div class="text-sm font-semibold mb-1">Counted deals by Zoho Phase</div>'
+                + '<div class="text-sm font-semibold mb-1">Counted deals by CRMProvider Phase</div>'
                 + '<table class="w-full mb-3"><tbody>' + (phaseRows || '<tr><td class="text-gray-400 text-sm">—</td></tr>') + '</tbody></table>'
                 + ((s.not_in_mirror || 0) > 0
                     ? '<div class="border-t pt-3 mt-1">'
                         + '<div class="text-sm font-semibold mb-1">Possible lost data — ' + _fn(s.not_in_mirror) + ' CRM ID(s) not in the synced mirror</div>'
-                        + '<div class="text-[11px] text-gray-500 mb-2">These may just be un-synced, or genuinely deleted from Zoho. Check them LIVE against the CRM to tell which.</div>'
-                        + '<button data-on-click="verifyMissingIdsLive" class="rr-btn rr-btn-primary">&#128269; Check if these are lost in Zoho</button>'
+                        + '<div class="text-[11px] text-gray-500 mb-2">These may just be un-synced, or genuinely deleted from CRMProvider. Check them LIVE against the CRM to tell which.</div>'
+                        + '<button data-on-click="verifyMissingIdsLive" class="rr-btn rr-btn-primary">&#128269; Check if these are lost in CRMProvider</button>'
                         + '<div id="csVerifyMissingResult" class="mt-3"></div>'
                       + '</div>'
                     : '');
         }
-        // LIVE "lost data" check: take the not_in_mirror CRM IDs and ask Zoho
+        // LIVE "lost data" check: take the not_in_mirror CRM IDs and ask CRMProvider
         // directly whether each still exists (Sample User 2026-08-04).
         async function verifyMissingIdsLive() {
             const d = window._csReconcileData;
             const ids = (d && d.rows ? d.rows : []).filter(function (r) { return r.verdict === 'not_in_mirror'; }).map(function (r) { return r.crm_id; });
             const host = document.getElementById('csVerifyMissingResult');
             if (!ids.length) { if (host) host.innerHTML = '<div class="text-sm text-gray-500">Nothing to check.</div>'; return; }
-            if (host) host.innerHTML = '<div class="text-sm text-gray-500">Checking ' + _fn(ids.length) + ' ID(s) live against Zoho…</div>';
+            if (host) host.innerHTML = '<div class="text-sm text-gray-500">Checking ' + _fn(ids.length) + ' ID(s) live against CRMProvider…</div>';
             try {
                 const res = await fetch('/api/duplicates/cs-lifecycle/verify-missing-ids', {
                     method: 'POST', credentials: 'same-origin',
@@ -12635,14 +12635,14 @@
                 const lostIds = (r.rows || []).filter(function (x) { return x.verdict === 'lost'; }).map(function (x) { return x.crm_id; });
                 host.innerHTML =
                     '<div class="grid grid-cols-3 gap-2 mb-2">'
-                    + '<div class="border rounded-lg p-2"><div class="text-[11px] text-gray-500">Still in Zoho (sync gap)</div><div class="text-xl font-bold" style="color:#059669">' + _fn(r.in_zoho || 0) + '</div></div>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
+                    + '<div class="border rounded-lg p-2"><div class="text-[11px] text-gray-500">Still in CRMProvider (sync gap)</div><div class="text-xl font-bold" style="color:#059669">' + _fn(r.in_CRMProvider || 0) + '</div></div>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     + '<div class="border rounded-lg p-2"><div class="text-[11px] text-gray-500">LOST — gone from CRM</div><div class="text-xl font-bold" style="color:#dc2626">' + _fn(r.lost || 0) + '</div></div>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     + '<div class="border rounded-lg p-2"><div class="text-[11px] text-gray-500">Could not verify</div><div class="text-xl font-bold" style="color:#a16207">' + _fn(r.errored || 0) + '</div></div>' // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                     + '</div>'
                     + ((r.lost || 0) > 0
                         ? '<div class="text-[11px] text-gray-600 mb-1">Lost CRM IDs: <span class="font-mono break-all">' + lostIds.slice(0, 40).map(escapeHtml).join(', ') + (lostIds.length > 40 ? ' …' : '') + '</span></div>'
                             + '<button data-on-click="downloadVerifyMissingCsv" class="rr-btn rr-btn-ghost">&#8595; Download lost/verify CSV</button>'
-                        : '<div class="text-sm text-emerald-700">None are lost — all still exist in Zoho (just not yet mirrored locally).</div>');
+                        : '<div class="text-sm text-emerald-700">None are lost — all still exist in CRMProvider (just not yet mirrored locally).</div>');
             } catch (e) {
                 host.innerHTML = '<div class="text-sm text-red-600">Verify failed: ' + escapeHtml(e && e.message || String(e)) + '</div>';
             }
@@ -12742,10 +12742,10 @@
 
             body.innerHTML = pageSlice.map(g => {
                 // CS Lifecycle violations are always Deal records (see
-                // scanCsLifecycleViolations: WHERE zoho_module = 'Deals'), so
-                // the Zoho link target is hard-coded to 'Deals'.
-                const accountCell = g.zoho_record_id
-                    ? zohoLink(g.zoho_record_id, 'Deals', g.account_name || '—')
+                // scanCsLifecycleViolations: WHERE CRMProvider_module = 'Deals'), so
+                // the CRMProvider link target is hard-coded to 'Deals'.
+                const accountCell = g.CRMProvider_record_id
+                    ? CRMProviderLink(g.CRMProvider_record_id, 'Deals', g.account_name || '—')
                     : escapeHtml(g.account_name || '—');
                 const violationPills = g.violations.map(v =>
                     '<span class="inline-block px-2 py-0.5 rounded text-[11px] font-medium ' + csLifeSeverityPill(v.severity) + '" title="' + escapeHtml(v.severity) + '">'
@@ -12951,7 +12951,7 @@
 
         // Account Hint row → CAPA. The hint is a radar suggestion that an
         // orphan deal should be linked to a specific Account. Opening a
-        // CAPA here formalises the "fix this Account_Name field in Zoho"
+        // CAPA here formalises the "fix this Account_Name field in CRMProvider"
         // work for the Quality inbox. source_type 'account_hint',
         // source_id = hint DB id (stable across renders).
         function accountHintPayloadFor(h) {
@@ -12964,20 +12964,20 @@
                       : conf >= 80 ? 'major'
                       : conf >= 60 ? 'minor'
                       : 'observation';
-            const dealLabel = h.deal_company_name || h.deal_account_name || h.deal_zoho_id || ('deal #' + h.id);
+            const dealLabel = h.deal_company_name || h.deal_account_name || h.deal_CRMProvider_id || ('deal #' + h.id);
             const suggested = h.suggested_account_name || h.suggested_domain || '—';
             const description = [
                 'Account-Hint id: ' + h.id,
                 'Status: ' + status,
                 'Confidence: ' + conf + '%',
                 '',
-                'Deal: ' + dealLabel + (h.deal_zoho_id ? ' (Zoho id ' + h.deal_zoho_id + ')' : ''),
+                'Deal: ' + dealLabel + (h.deal_CRMProvider_id ? ' (CRMProvider id ' + h.deal_CRMProvider_id + ')' : ''),
                 'Current Account_Name on the deal: ' + (h.deal_account_name || '— missing —'),
-                'Suggested Account: ' + suggested + (h.suggested_account_zoho_id ? ' (Zoho id ' + h.suggested_account_zoho_id + ')' : ''),
+                'Suggested Account: ' + suggested + (h.suggested_account_CRMProvider_id ? ' (CRMProvider id ' + h.suggested_account_CRMProvider_id + ')' : ''),
                 'Suggested domain: ' + (h.suggested_domain || '—'),
-                'Evidence contact: ' + (h.evidence_contact_email || '—') + (h.evidence_contact_zoho_id ? ' (Zoho id ' + h.evidence_contact_zoho_id + ')' : ''),
+                'Evidence contact: ' + (h.evidence_contact_email || '—') + (h.evidence_contact_CRMProvider_id ? ' (CRMProvider id ' + h.evidence_contact_CRMProvider_id + ')' : ''),
                 '',
-                'Recommended action: open the deal in Zoho and set Account_Name',
+                'Recommended action: open the deal in CRMProvider and set Account_Name',
                 'to the suggested Account above. Next radar sync will auto-',
                 'reclassify the hint as Applied.',
                 '',
@@ -13034,13 +13034,13 @@
         }
 
         // Record-tab duplicate group (leads / deals / contacts / accounts).
-        // source_id anchored on the primary's Zoho ID so re-clicking the same
+        // source_id anchored on the primary's CRMProvider ID so re-clicking the same
         // group hits the existing CAPA.
         function recordTabPayloadFor(module, summary) {
             if (!summary || !summary.primary) return null;
             const primary = summary.primary;
-            const zid = String(primary.zoho_record_id || '').trim();
-            const moduleZoho = module === 'leads' ? 'Leads'
+            const zid = String(primary.CRMProvider_record_id || '').trim();
+            const moduleCRMProvider = module === 'leads' ? 'Leads'
                              : module === 'deals' ? 'Deals'
                              : module === 'contacts' ? 'Contacts'
                              : 'Accounts';
@@ -13050,21 +13050,21 @@
             const subject = primary.record_name || primary.company_name || primary.email || ('group of ' + (summary.count || 0));
             const sharedDesc = (summary.sharedKeys || []).map(s => s.label + '=' + (s.value || '')).join(' · ') || '(chained match — no single shared field)';
             const description = [
-                'Module: ' + moduleZoho + ' (page-level duplicate group)',
-                'Primary record: ' + subject + (zid ? ' (Zoho id ' + zid + ')' : ''),
+                'Module: ' + moduleCRMProvider + ' (page-level duplicate group)',
+                'Primary record: ' + subject + (zid ? ' (CRMProvider id ' + zid + ')' : ''),
                 'Members in group: ' + (summary.count || 0),
                 'Shared signals: ' + sharedDesc,
                 '',
-                'Open the ' + moduleZoho + ' Duplicates tab in the radar to see',
+                'Open the ' + moduleCRMProvider + ' Duplicates tab in the radar to see',
                 'every member of this group, then merge / annotate per the SOP.',
                 '',
-                'Opened manually from the Duplicate Radar → ' + moduleZoho + ' Duplicates tab.',
+                'Opened manually from the Duplicate Radar → ' + moduleCRMProvider + ' Duplicates tab.',
             ].join('\n');
             return {
                 sourceType:  'record_duplicate_group',
                 sourceId,
-                sourceLabel: moduleZoho + ' · ' + subject,
-                title:       moduleZoho + ' duplicate group — ' + subject,
+                sourceLabel: moduleCRMProvider + ' · ' + subject,
+                title:       moduleCRMProvider + ' duplicate group — ' + subject,
                 description,
                 severity:    'minor',
                 targetDays:  7,
@@ -13216,7 +13216,7 @@
                     .map(h => {
                         const p = accountHintPayloadFor(h);
                         if (!p) return null;
-                        const dealLabel = h.deal_company_name || h.deal_account_name || h.deal_zoho_id || ('deal #' + h.id);
+                        const dealLabel = h.deal_company_name || h.deal_account_name || h.deal_CRMProvider_id || ('deal #' + h.id);
                         const suggested = h.suggested_account_name || h.suggested_domain || '—';
                         const conf = Number(h.confidence || 0);
                         const status = (h.status || 'pending').toUpperCase();
@@ -13270,7 +13270,7 @@
                 const primaryName = primaryNameEl ? primaryNameEl.textContent.trim() : '(no name)';
                 const countText  = countEl ? countEl.textContent.trim() : '';
                 // Synthesise a minimal summary that recordTabPayloadFor can
-                // consume. The DOM doesn't carry the Zoho ID — fall back to
+                // consume. The DOM doesn't carry the CRMProvider ID — fall back to
                 // the gid-based synthetic source_id, which is stable across
                 // re-renders of the same tab without rescanning.
                 const summary = {
@@ -13436,17 +13436,17 @@
         }
         window.submitOpenCapa = submitOpenCapa;
 
-        // 2026-06-08 — Build a Zoho global-search deep-link for a given term.
+        // 2026-06-08 — Build a CRMProvider global-search deep-link for a given term.
         // Operators want to jump from a preflight verdict row straight into
         // the actual Lead/Deal/Contact/Account in CRM to verify the match
-        // by hand. Zoho's search-by-keyword endpoint takes the term as
+        // by hand. CRMProvider's search-by-keyword endpoint takes the term as
         // ?searchword= and surfaces every module that hits, which is the
         // right entry point when we don't have the exact record id (the
         // preflight engine carries the cluster id, not the per-record id —
-        // the cluster may span multiple Zoho records). The org id is fixed
+        // the cluster may span multiple CRMProvider records). The org id is fixed
         // for this tenant; lifted from renderCrmLinkCell in calls.html to
         // keep the deep-link prefix consistent across pages.
-        function _zohoSearchUrl(term) {
+        function _CRMProviderSearchUrl(term) {
             const t = String(term || '').trim();
             if (!t) return null;
             return '<REDACTED_URL>' + encodeURIComponent(t);
@@ -13454,7 +13454,7 @@
 
         function _preflightDomainCell(domain) {
             if (!domain) return '<span class="text-gray-400">—</span>';
-            const url = _zohoSearchUrl(domain);
+            const url = _CRMProviderSearchUrl(domain);
             if (!url) return escapeHtml(domain);
             // The arrow ↗ is the standard "opens in new tab / leaves the
             // dashboard" affordance used throughout the radar (see also the
@@ -13462,17 +13462,17 @@
             // full destination on hover.
             return '<a href="' + escAttr(url) + '" target="_blank" rel="noopener"'
                 + ' class="text-indigo-600 hover:text-indigo-800 underline decoration-dotted"'
-                + ' title="Open Zoho CRM search for ' + escAttr(domain) + '">'
+                + ' title="Open CRMProvider CRM search for ' + escAttr(domain) + '">'
                 + escapeHtml(domain) + ' <span class="text-[10px] text-gray-400" aria-hidden="true">↗</span></a>';
         }
 
         function _preflightCompanyCell(name) {
             if (!name) return '<span class="text-gray-400">—</span>';
-            const url = _zohoSearchUrl(name);
+            const url = _CRMProviderSearchUrl(name);
             if (!url) return escapeHtml(name);
             return '<a href="' + escAttr(url) + '" target="_blank" rel="noopener"'
                 + ' class="text-indigo-700 hover:text-indigo-900"'
-                + ' title="Open Zoho CRM search for ' + escAttr(name) + '">'
+                + ' title="Open CRMProvider CRM search for ' + escAttr(name) + '">'
                 + escapeHtml(name) + '</a>';
         }
 
@@ -13588,7 +13588,7 @@
                     : '<span class="text-gray-400">—</span>';
                 const execAction = r.executive_action || r.suggested_action || '';
                 // "↻ Re-check from CRM" — only on rows flagged because of a CRM
-                // match the operator may have just corrected in Zoho. (no_contact
+                // match the operator may have just corrected in CRMProvider. (no_contact
                 // is about the uploaded contact itself, so re-fetching deals can't
                 // change it — no button there.)
                 const canRecheck = ['block', 'review', 'warn', 'duplicate'].indexOf(r.verdict) !== -1;
@@ -13596,7 +13596,7 @@
                     ? ' <button class="pf-recheck-btn text-xs text-indigo-600 hover:text-indigo-800 underline ml-1"'
                         + ' data-pf-domain="' + escAttr(r.input.domain || '') + '"'
                         + ' data-pf-company="' + escAttr(r.input.company_name || '') + '"'
-                        + ' title="Re-fetch this company&#39;s deals from Zoho and re-check — use after you corrected it in the CRM">↻ Re-check</button>'
+                        + ' title="Re-fetch this company&#39;s deals from CRMProvider and re-check — use after you corrected it in the CRM">↻ Re-check</button>'
                     : '';
                 return '<tr class="' + preflightVerdictSev(r.verdict) + '">'
                     + '<td class="rr-lead rr-num rr-muted">' + (r.row_index + 1) + '</td>'
@@ -13640,8 +13640,8 @@
         }
 
         // Per-row "↻ Re-check from CRM": re-fetch just THIS company's deals from
-        // Zoho, bust the CS-client directory cache, and re-evaluate every row of
-        // the same company in place. Use after you corrected the record in Zoho —
+        // CRMProvider, bust the CS-client directory cache, and re-evaluate every row of
+        // the same company in place. Use after you corrected the record in CRMProvider —
         // a stale BLOCK flips to PASS without re-uploading or a full scan.
         async function preflightRecheckCompany(domain, companyName, btn) {
             const data = window._preflightLastResult;
@@ -13699,7 +13699,7 @@
 
                 const upd = (j.resync && j.resync.updated) || 0;
                 const co = names[0] || domains[0] || 'company';
-                rrToast('Re-checked ' + co + ':\n• ' + upd + ' deal(s) refreshed from Zoho\n• ' + movedToPass + ' row(s) now PASS');
+                rrToast('Re-checked ' + co + ':\n• ' + upd + ' deal(s) refreshed from CRMProvider\n• ' + movedToPass + ' row(s) now PASS');
             } catch (err) {
                 rrToast('Re-check error: ' + (err && err.message ? err.message : err));
             } finally {
@@ -13712,7 +13712,7 @@
         // rows (for Head of Sales)" button covers the hand-off. The server
         // endpoint /api/duplicates/preflight/export-xlsx is still used by it.)
 
-        async function openPushToZohoModal() {
+        async function openPushToCRMProviderModal() {
             const data = window._preflightLastResult;
             if (!data) { rrToast('Run a Preflight check first.'); return; }
             const passRows = (data.rows || []).filter(r => r.verdict === 'pass');
@@ -13724,62 +13724,62 @@
 
             // Seed the source field with a stamp the operator can edit.
             const stamp = new Date().toISOString().slice(0, 10);
-            const srcEl = document.getElementById('pushZohoSource');
+            const srcEl = document.getElementById('pushCRMProviderSource');
             if (srcEl) srcEl.value = 'Preflight Push — ' + stamp;
-            const eligEl = document.getElementById('pushZohoEligibleCount');
+            const eligEl = document.getElementById('pushCRMProviderEligibleCount');
             if (eligEl) eligEl.textContent = passRows.length.toLocaleString();
-            const resultBox = document.getElementById('pushZohoResult');
+            const resultBox = document.getElementById('pushCRMProviderResult');
             if (resultBox) { resultBox.classList.add('hidden'); resultBox.innerHTML = ''; }
-            document.getElementById('pushZohoDryRun').checked = true;
-            document.querySelector('input[name="pushZohoOwnerMode"][value="self"]').checked = true;
-            onPushZohoOwnerModeChange();
+            document.getElementById('pushCRMProviderDryRun').checked = true;
+            document.querySelector('input[name="pushCRMProviderOwnerMode"][value="self"]').checked = true;
+            onPushCRMProviderOwnerModeChange();
 
-            document.getElementById('pushZohoModal').classList.remove('hidden');
+            document.getElementById('pushCRMProviderModal').classList.remove('hidden');
 
             // Lazy-load layouts + users (one fetch per modal-open is fine).
             try {
                 const [layoutsRes, usersRes] = await Promise.all([
-                    fetch('/api/duplicates/preflight/zoho-layouts?module=Leads'),
-                    fetch('/api/duplicates/preflight/zoho-users'),
+                    fetch('/api/duplicates/preflight/CRMProvider-layouts?module=Leads'),
+                    fetch('/api/duplicates/preflight/CRMProvider-users'),
                 ]);
                 const layouts = layoutsRes.ok ? (await layoutsRes.json()).layouts || [] : [];
                 const users = usersRes.ok ? (await usersRes.json()).users || [] : [];
-                const layoutSel = document.getElementById('pushZohoLayout');
+                const layoutSel = document.getElementById('pushCRMProviderLayout');
                 if (layoutSel) {
                     layoutSel.innerHTML = '<option value="">Select layout…</option>' +
                         layouts.map(l => '<option value="' + escAttr(l.id) + '">' + escapeHtml(l.name) + '</option>').join('');
                 }
-                const customSel = document.getElementById('pushZohoOwnerCustom');
-                const rrSel = document.getElementById('pushZohoOwnerRR');
+                const customSel = document.getElementById('pushCRMProviderOwnerCustom');
+                const rrSel = document.getElementById('pushCRMProviderOwnerRR');
                 const userOpts = users.map(u => '<option value="' + escAttr(u.id) + '">' + escapeHtml(u.name + ' (' + (u.email || '—') + ')') + '</option>').join('');
                 if (customSel) customSel.innerHTML = '<option value="">Select user…</option>' + userOpts;
                 if (rrSel) rrSel.innerHTML = userOpts;
             } catch (e) {
-                console.error('Push-to-Zoho metadata load failed:', e);
+                console.error('Push-to-CRMProvider metadata load failed:', e);
             }
         }
 
-        function closePushZohoModal() {
-            const m = document.getElementById('pushZohoModal');
+        function closePushCRMProviderModal() {
+            const m = document.getElementById('pushCRMProviderModal');
             if (m) m.classList.add('hidden');
         }
 
-        function onPushZohoOwnerModeChange() {
-            const mode = (document.querySelector('input[name="pushZohoOwnerMode"]:checked') || {}).value || 'self';
-            const customSel = document.getElementById('pushZohoOwnerCustom');
-            const rrSel = document.getElementById('pushZohoOwnerRR');
+        function onPushCRMProviderOwnerModeChange() {
+            const mode = (document.querySelector('input[name="pushCRMProviderOwnerMode"]:checked') || {}).value || 'self';
+            const customSel = document.getElementById('pushCRMProviderOwnerCustom');
+            const rrSel = document.getElementById('pushCRMProviderOwnerRR');
             if (customSel) customSel.classList.toggle('hidden', mode !== 'custom');
             if (rrSel) rrSel.classList.toggle('hidden', mode !== 'round_robin');
         }
 
-        async function runPushToZoho() {
+        async function runPushToCRMProvider() {
             const rows = window._preflightPushPassRows || [];
             if (rows.length === 0) { rrToast('Reopen the modal — no rows in memory.'); return; }
-            const layoutId = (document.getElementById('pushZohoLayout') || {}).value || '';
-            if (!layoutId) { rrToast('Pick a Zoho Layout first.'); return; }
-            const mode = (document.querySelector('input[name="pushZohoOwnerMode"]:checked') || {}).value || 'self';
-            const dryRun = !!(document.getElementById('pushZohoDryRun') || {}).checked;
-            const source = ((document.getElementById('pushZohoSource') || {}).value || '').trim();
+            const layoutId = (document.getElementById('pushCRMProviderLayout') || {}).value || '';
+            if (!layoutId) { rrToast('Pick a CRMProvider Layout first.'); return; }
+            const mode = (document.querySelector('input[name="pushCRMProviderOwnerMode"]:checked') || {}).value || 'self';
+            const dryRun = !!(document.getElementById('pushCRMProviderDryRun') || {}).checked;
+            const source = ((document.getElementById('pushCRMProviderSource') || {}).value || '').trim();
 
             const body = {
                 rows,
@@ -13789,20 +13789,20 @@
                 dry_run: dryRun,
             };
             if (mode === 'custom') {
-                body.owner_id = (document.getElementById('pushZohoOwnerCustom') || {}).value || '';
-                if (!body.owner_id) { rrToast('Pick the Zoho user to assign all rows to.'); return; }
+                body.owner_id = (document.getElementById('pushCRMProviderOwnerCustom') || {}).value || '';
+                if (!body.owner_id) { rrToast('Pick the CRMProvider user to assign all rows to.'); return; }
             } else if (mode === 'round_robin') {
-                const sel = document.getElementById('pushZohoOwnerRR');
+                const sel = document.getElementById('pushCRMProviderOwnerRR');
                 body.round_robin_user_ids = sel ? Array.from(sel.selectedOptions).map(o => o.value).filter(Boolean) : [];
                 if (body.round_robin_user_ids.length === 0) { rrToast('Pick at least one user for round-robin.'); return; }
             }
 
-            const btn = document.getElementById('pushZohoRunBtn');
+            const btn = document.getElementById('pushCRMProviderRunBtn');
             const orig = btn ? btn.innerHTML : '';
             if (btn) { btn.disabled = true; btn.innerHTML = (dryRun ? 'Dry-running…' : 'Pushing…'); }
-            const resultBox = document.getElementById('pushZohoResult');
+            const resultBox = document.getElementById('pushCRMProviderResult');
             try {
-                const res = await fetch('/api/duplicates/preflight/push-to-zoho', {
+                const res = await fetch('/api/duplicates/preflight/push-to-CRMProvider', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body),
@@ -13838,7 +13838,7 @@
         }
 
         // ─────────────────────────────────────────────────────────────────
-        // Structured push to Zoho — four dedup-safe, dry-run-first actions.
+        // Structured push to CRMProvider — four dedup-safe, dry-run-first actions.
         // Reads the full classified result rows straight off
         // window._preflightLastResult.rows (the master array). The four
         // actions mirror the server planner's pools:
@@ -13865,7 +13865,7 @@
                 title: r.title || (r.input && r.input.title) || '',
                 verdict: r.verdict || '',
                 cluster_id: (r.cluster_id != null ? r.cluster_id : null),
-                matched_account_zoho_id: (r.matched_account_zoho_id || (r.input && r.input.matched_account_zoho_id) || null),
+                matched_account_CRMProvider_id: (r.matched_account_CRMProvider_id || (r.input && r.input.matched_account_CRMProvider_id) || null),
                 matched_account_name: (r.matched_account_name || (r.input && r.input.matched_account_name) || null),
                 lifecycle_state: (r.lifecycle_state != null ? r.lifecycle_state : null),
             };
@@ -13921,7 +13921,7 @@
                 var emlAnchor = _pfMostCommon(g.rows.map(function (r) { return _pfRealDomainRoot(r.email); }));
                 var anchor = domAnchor || emlAnchor;
                 var verified = !!anchor && g.rows.some(function (r) { return _pfRealDomainRoot(r.email) === anchor; });
-                var crm = g.rows.some(function (r) { return r.lifecycle_state === 'termination_old' || (r.matched_account_zoho_id && String(r.matched_account_zoho_id).trim()) || r.cluster_id != null; });
+                var crm = g.rows.some(function (r) { return r.lifecycle_state === 'termination_old' || (r.matched_account_CRMProvider_id && String(r.matched_account_CRMProvider_id).trim()) || r.cluster_id != null; });
                 meta[g.key] = { anchor: anchor, verified: verified, crm: crm };
             }
             return spRows.map(function (r) {
@@ -13995,7 +13995,7 @@
             // Row-level split: matched rows link to existing accounts (A1),
             // unmatched rows open new accounts (A2/A3). Mirrors the planner.
             var isRowExistingMatch = function (r) {
-                return (r.matched_account_zoho_id && String(r.matched_account_zoho_id).trim()) ||
+                return (r.matched_account_CRMProvider_id && String(r.matched_account_CRMProvider_id).trim()) ||
                        r.lifecycle_state === 'termination_old' || r.cluster_id != null;
             };
             var matched = [], newRows = [];
@@ -14005,7 +14005,7 @@
             // A1 = distinct existing accounts (by resolved id, else company key).
             var accKeys = {};
             matched.forEach(function (r) {
-                var key = (r.matched_account_zoho_id && String(r.matched_account_zoho_id).trim()) || ('name:' + _pfNormCompanyKey(r.company, r.domain));
+                var key = (r.matched_account_CRMProvider_id && String(r.matched_account_CRMProvider_id).trim()) || ('name:' + _pfNormCompanyKey(r.company, r.domain));
                 accKeys[key] = 1;
             });
             var a1 = Object.keys(accKeys).length;
@@ -14067,7 +14067,7 @@
                 else rejected++;
             });
             var isMatch = function (r) {
-                return (r.matched_account_zoho_id && String(r.matched_account_zoho_id).trim()) ||
+                return (r.matched_account_CRMProvider_id && String(r.matched_account_CRMProvider_id).trim()) ||
                        r.lifecycle_state === 'termination_old' || r.cluster_id != null;
             };
             var a1 = 0, newRows = [];
@@ -14204,7 +14204,7 @@
                                 function () { return _erBackfillRun(mod, rows, sliceSize, _off, false); },
                                 8, 30000,
                                 function (secs, att) {
-                                    if (box) box.innerHTML = html + '<div class="text-amber-700">' + mod + ': Zoho is rate-limited by the running sync — waiting ' + secs + 's then retrying (attempt ' + att + ')… <strong>' + tot.updated + '</strong> updated so far.</div>';
+                                    if (box) box.innerHTML = html + '<div class="text-amber-700">' + mod + ': CRMProvider is rate-limited by the running sync — waiting ' + secs + 's then retrying (attempt ' + att + ')… <strong>' + tot.updated + '</strong> updated so far.</div>';
                                 }
                             );
                             tot.updated += (r.updated || 0); tot.failed += (r.failed || 0); tot.not_found += (r.not_found || 0);
@@ -14234,13 +14234,13 @@
         // Read-only diagnostic: pull the exact required fields + api_names for
         // Deals and Leads from the live CRM, so we can confirm the push fills
         // them under the right api_names (no guessing).
-        async function erCheckZohoFields() {
+        async function erCheckCRMProviderFields() {
             var btn = document.getElementById('spFieldsBtn');
             var box = document.getElementById('spRejResult');
             var orig = btn ? btn.innerHTML : '';
             if (btn) { btn.disabled = true; btn.innerHTML = 'Checking…'; }
             try {
-                var res = await fetch('/api/duplicates/preflight/zoho-required-fields');
+                var res = await fetch('/api/duplicates/preflight/CRMProvider-required-fields');
                 var resp = await res.json();
                 if (!res.ok) throw new Error(resp.error || ('HTTP ' + res.status));
                 var fieldRows = function (list) {
@@ -14255,7 +14255,7 @@
                 };
                 if (box) {
                     box.classList.remove('hidden');
-                    box.innerHTML = '<div class="font-semibold text-indigo-800 mb-1">Zoho required fields (live)</div>'
+                    box.innerHTML = '<div class="font-semibold text-indigo-800 mb-1">CRMProvider required fields (live)</div>'
                         + section('Deals', resp.deals || {}) + section('Leads', resp.leads || {});
                 }
             } catch (e) {
@@ -14265,7 +14265,7 @@
             }
         }
 
-        // Layer 1: resolve every contact's existing Zoho Account (email domain →
+        // Layer 1: resolve every contact's existing CRMProvider Account (email domain →
         // company domain → name) so matched people LINK to what we already have
         // instead of being rejected or duplicated. Merges the matched account
         // ids back into the rows, refreshes the badges, and shows the summary.
@@ -14291,10 +14291,10 @@
                 data.rows.forEach(function (r, i) {
                     var idx = (r.row_index != null ? r.row_index : i);
                     if (byIdx[idx]) {
-                        r.matched_account_zoho_id = byIdx[idx].matched_account_zoho_id;
+                        r.matched_account_CRMProvider_id = byIdx[idx].matched_account_CRMProvider_id;
                         r.matched_account_name = byIdx[idx].matched_account_name || '';
                         if (r.input) {
-                            r.input.matched_account_zoho_id = byIdx[idx].matched_account_zoho_id;
+                            r.input.matched_account_CRMProvider_id = byIdx[idx].matched_account_CRMProvider_id;
                             r.input.matched_account_name = byIdx[idx].matched_account_name || '';
                         }
                     }
@@ -14306,7 +14306,7 @@
                 var linkSample = (resp.matches || []).slice(0, 40).map(function (mm) {
                     var src = data.rows[mm.row_index] || {};
                     var who = (src.contact_name || (src.input && src.input.contact_name) || src.email || '(contact)');
-                    return '<tr class="border-b border-gray-100"><td class="pr-2 text-emerald-700">' + escapeHtml(mm.matched_account_name || ('acct ' + mm.matched_account_zoho_id)) + '</td><td class="text-gray-500">← ' + escapeHtml(String(who)) + ' <span class="text-gray-400">(' + escapeHtml(mm.matched_via || '') + ')</span></td></tr>';
+                    return '<tr class="border-b border-gray-100"><td class="pr-2 text-emerald-700">' + escapeHtml(mm.matched_account_name || ('acct ' + mm.matched_account_CRMProvider_id)) + '</td><td class="text-gray-500">← ' + escapeHtml(String(who)) + ' <span class="text-gray-400">(' + escapeHtml(mm.matched_via || '') + ')</span></td></tr>';
                 }).join('');
                 if (box) {
                     box.classList.remove('hidden');
@@ -14368,7 +14368,7 @@
                     if (!res.ok) throw new Error(j.error || ('HTTP ' + res.status));
                     return j;
                 }, 8, 30000, function (secs, att) {
-                    if (box) { box.classList.remove('hidden'); box.innerHTML = '<div class="text-amber-700">Zoho rate-limited by the running sync — waiting ' + secs + 's then retrying deals (attempt ' + att + ')…</div>'; }
+                    if (box) { box.classList.remove('hidden'); box.innerHTML = '<div class="text-amber-700">CRMProvider rate-limited by the running sync — waiting ' + secs + 's then retrying deals (attempt ' + att + ')…</div>'; }
                 });
                 if (box) {
                     box.classList.remove('hidden');
@@ -14385,7 +14385,7 @@
                             + '<div>Created: <span class="text-emerald-700 font-semibold">' + (cr.deals || 0) + '</span> deal(s) · reused ' + (resp.reused_accounts || 0) + ' account(s) · linked ' + (resp.existing_contacts_linked || 0) + ' existing contact(s) · created ' + (cr.contacts || 0) + ' missing contact(s).</div>'
                             + (resp.existing_deals_skipped ? '<div class="text-gray-600">' + resp.existing_deals_skipped + ' company(ies) skipped — already had an open deal.</div>' : '')
                             + (resp.deals_skipped_no_contact ? '<div class="text-amber-700">' + resp.deals_skipped_no_contact + ' skipped — no contact to link (Contact_Name is required). Backfill contacts first, then retry.</div>' : '')
-                            + (resp.deals_skipped_gone_account ? '<div class="text-amber-700">' + resp.deals_skipped_gone_account + ' skipped — the account was deleted/merged in Zoho.</div>' : '')
+                            + (resp.deals_skipped_gone_account ? '<div class="text-amber-700">' + resp.deals_skipped_gone_account + ' skipped — the account was deleted/merged in CRMProvider.</div>' : '')
                             + ((resp.deal_skips && resp.deal_skips.length) ? '<details class="mt-1"><summary class="text-gray-600 cursor-pointer text-[11px]">Why each company got no deal (' + resp.deal_skips.length + ')</summary><div class="mt-1 text-[11px] text-gray-600" style="max-height:200px;overflow:auto">' + resp.deal_skips.map(function (s) { return escapeHtml(String(s.company || '')) + ' — ' + escapeHtml(String(s.reason || '')); }).join('<br>') + '</div></details>' : '') // csp-safe-inline-style: browser-rendered JS template string; dynamic values require CSSOM, static values await CSS-class refactor
                             + (resp.live_clients_rejected ? '<div class="text-rose-700">' + resp.live_clients_rejected + ' live client(s) skipped.</div>' : '')
                             + ((resp.failed && resp.failed.deals) ? '<div class="text-red-700">' + resp.failed.deals + ' deal(s) failed' + ((resp.error_sample && resp.error_sample.length) ? ' — ' + escapeHtml(resp.error_sample.map(function (e) { return (e.code || '') + ' ' + (e.field || ''); }).join(', ')) : '') + '</div>' : '');
@@ -14406,7 +14406,7 @@
         // matches an existing Account by fuzzy core name. These are existing
         // clients the push mislabeled as brand-new Leads (thin row + exact-only
         // name match missed the account). No writes — just the list to review,
-        // each row deep-linking to the Lead and its matched Account in Zoho.
+        // each row deep-linking to the Lead and its matched Account in CRMProvider.
         async function erScanMislabeledLeads() {
             var src = String((document.getElementById('spScanSource') || {}).value || 'Mawsool').trim() || 'Mawsool';
             var btn = document.getElementById('spScanBtn');
@@ -14463,7 +14463,7 @@
         // (no email/phone to dedup on). Dry-run reports the scale; a real run tags
         // every duplicate Duplicate-Delete in slices (the heavy fetch runs once in
         // the report, then ids are tagged 500 at a time). HITL — admin deletes in
-        // Zoho; nothing is auto-deleted.
+        // CRMProvider; nothing is auto-deleted.
         async function erDedupLeads() {
             var src = String((document.getElementById('spDedupSource') || {}).value || 'Mawsool').trim() || 'Mawsool';
             var dedupCreatedBy = String((document.getElementById('spDedupCreatedBy') || {}).value || '').trim();
@@ -14492,7 +14492,7 @@
                 if (box) { box.classList.remove('hidden'); box.innerHTML = head + table; }
 
                 if (dry) {
-                    if (box) box.innerHTML = head + table + '<div class="mt-2 text-amber-700">Uncheck Dry-run and click again to TAG these ' + dupIds.length + ' duplicate(s) Duplicate-Delete for your admin to delete in Zoho.</div>';
+                    if (box) box.innerHTML = head + table + '<div class="mt-2 text-amber-700">Uncheck Dry-run and click again to TAG these ' + dupIds.length + ' duplicate(s) Duplicate-Delete for your admin to delete in CRMProvider.</div>';
                     rrToast('Dedup dry-run — ' + dupIds.length + ' duplicate(s) found.', dupIds.length ? 'warn' : 'good');
                 } else if (dupIds.length) {
                     // Tag in slices of 500 (the endpoint chunks by 100 internally).
@@ -14509,7 +14509,7 @@
                         tagged += (aresp.tagged || 0); failed += (aresp.failed || 0);
                         if (box) box.innerHTML = head + table + '<div class="mt-2 text-emerald-700">Tagged ' + tagged + '/' + dupIds.length + ' Duplicate-Delete…</div>';
                     }
-                    if (box) box.innerHTML = head + table + '<div class="mt-2 font-semibold text-emerald-800">✓ Tagged ' + tagged + ' duplicate(s) Duplicate-Delete' + (failed ? ' · ' + failed + ' failed' : '') + '.</div><div class="text-gray-600">Your admin can now filter Leads by the Duplicate-Delete tag and delete them in Zoho.</div>';
+                    if (box) box.innerHTML = head + table + '<div class="mt-2 font-semibold text-emerald-800">✓ Tagged ' + tagged + ' duplicate(s) Duplicate-Delete' + (failed ? ' · ' + failed + ' failed' : '') + '.</div><div class="text-gray-600">Your admin can now filter Leads by the Duplicate-Delete tag and delete them in CRMProvider.</div>';
                     rrToast('Tagged ' + tagged + ' duplicate lead(s) for removal.', 'good');
                 } else {
                     rrToast('No duplicate leads found.', 'good');
@@ -14536,7 +14536,7 @@
             }
         }
 
-        // True when an error looks like a Zoho rate-limit / throttle (a big sync
+        // True when an error looks like a CRMProvider rate-limit / throttle (a big sync
         // running concurrently exhausts the shared API quota → "Too many
         // requests" / "rate-limited" / OAuth cooldown). Used to WAIT + retry
         // instead of failing, so backfill/deals grind through during a sync.
@@ -14602,7 +14602,7 @@
                     if (!res.ok) throw new Error(j.error || ('HTTP ' + res.status));
                     return j;
                 }, 8, 30000, function (secs, att) {
-                    if (resultBox) { resultBox.classList.remove('hidden'); resultBox.innerHTML = '<div class="text-amber-700">Zoho rate-limited by the running sync — waiting ' + secs + 's then retrying (attempt ' + att + ')…</div>'; }
+                    if (resultBox) { resultBox.classList.remove('hidden'); resultBox.innerHTML = '<div class="text-amber-700">CRMProvider rate-limited by the running sync — waiting ' + secs + 's then retrying (attempt ' + att + ')…</div>'; }
                 });
                 if (resultBox) {
                     resultBox.classList.remove('hidden');
@@ -14653,7 +14653,7 @@
                                 + '</div>'
                             + (resp.live_client_rejected_count ? '<div class="text-rose-700">' + resp.live_client_rejected_count + ' live client(s) → rejected: existing signed/paid deal, routed to CS (not pushed).</div>' : '')
                             + (resp.possible_existing_client_count ? '<div class="text-amber-700 font-medium">⚠ ' + resp.possible_existing_client_count + ' possible existing client(s) — resemble an account we already have; each is tagged in its Description "verify before contacting."</div>' : '')
-                            + (action === 1 ? '<div class="text-gray-500 text-[11px]">On push, contacts already in Zoho (by email) are reused, not duplicated.</div>' : '')
+                            + (action === 1 ? '<div class="text-gray-500 text-[11px]">On push, contacts already in CRMProvider (by email) are reused, not duplicated.</div>' : '')
                             + eligibleHtml
                             + (resp.sample_payload ? '<div class="mt-2 font-mono text-[10px] bg-white border rounded p-2 overflow-x-auto">Sample payload:<br>' + escapeHtml(JSON.stringify(resp.sample_payload, null, 2)) + '</div>' : '')
                             + '<div class="mt-2 text-amber-700">Uncheck the Dry-run box and Push again to actually create the records.</div>';
@@ -14679,7 +14679,7 @@
                         resultBox.innerHTML = ''
                             + '<div class="font-semibold text-emerald-800 mb-1">✓ Push complete</div>'
                             + '<div>' + crLine + '</div>'
-                            + (resp.leads_skipped_existing ? '<div class="text-indigo-700">Skipped ' + resp.leads_skipped_existing + ' lead(s) already in Zoho — not duplicated.</div>' : '')
+                            + (resp.leads_skipped_existing ? '<div class="text-indigo-700">Skipped ' + resp.leads_skipped_existing + ' lead(s) already in CRMProvider — not duplicated.</div>' : '')
                             + (resp.reused_accounts ? '<div class="text-indigo-700">Reused ' + resp.reused_accounts + ' existing account(s) — not duplicated.</div>' : '')
                             + (resp.existing_contacts_linked ? '<div class="text-indigo-700">Reused ' + resp.existing_contacts_linked + ' existing contact(s) — not duplicated.</div>' : '')
                             + (resp.live_clients_rejected ? '<div class="text-rose-700">🚫 ' + resp.live_clients_rejected + ' contact(s) REJECTED — company is a live client (active deal, not churned after its renewal). Not pushed.</div>' : '')
@@ -14763,7 +14763,7 @@
             // line; Adam signs it off. Blank lines are KEPT for readability.
             const passCount = (s.pass || 0);
             const steps = [];
-            steps.push('  ✅  Import the ' + passCount.toLocaleString() + ' safe contacts — the same tab loads them into Zoho on the right Layout.');
+            steps.push('  ✅  Import the ' + passCount.toLocaleString() + ' safe contacts — the same tab loads them into CRMProvider on the right Layout.');
             if (s.duplicate) steps.push('  🔁  Give the ' + s.duplicate + ' duplicates to the owner who already has them — don\'t create a new lead.');
             if (s.block) steps.push('  🏢  Leave the ' + s.block + ' existing clients to Customer Success — no cold contact.');
             if (s.review) steps.push('  🔍  Hold the ' + s.review + ' "review" rows until CS or the deal owner confirms.');
@@ -14961,7 +14961,7 @@
 
         // Generic multi-select dimension check. Selected values are
         // lower-cased; we accept either an exact equality OR substring
-        // hit, because some Zoho fields carry "Done Q4-2025 / Paid" or
+        // hit, because some CRMProvider fields carry "Done Q4-2025 / Paid" or
         // similar composites that the operator picks the leaf of.
         function _advFilterMatchMulti(selected, rowValues) {
             if (!selected || !selected.length) return true;       // no filter on this dim
@@ -15032,7 +15032,7 @@
                 const vals = _advFilterRowValues(row, mapping.stageField, 'stage');
                 if (!_advFilterMatchMulti(s.stages, vals)) return false;
             }
-            // Domain — case-insensitive substring (so 'acme' matches both
+            // Domain — case-insensitive substring (so 'Example Organization' matches both
             // <REDACTED_HOST> and <REDACTED_HOST>).
             if (s.domain && mapping.domainField) {
                 const v = String(row[mapping.domainField] || '').toLowerCase();
@@ -15533,34 +15533,34 @@
             }
         }
 
-        // Phase 4e — Active Zoho connection probe (duplicated from calls.html).
+        // Phase 4e — Active CRMProvider connection probe (duplicated from calls.html).
         //
-        // Hits GET /api/calls/diagnostic/zoho which actively calls
+        // Hits GET /api/calls/diagnostic/CRMProvider which actively calls
         // getValidAccessToken() on the server and surfaces the EXACT
         // error if connection fails. Use when this tab shows no data —
         // surfaces invalid_client / invalid_grant / wrong datacenter /
         // rate-limited / network unreachable in plain language.
-        async function runZohoDiagnostic() {
-            const btn = document.getElementById('btn-diagnose-zoho-duplicates');
+        async function runCRMProviderDiagnostic() {
+            const btn = document.getElementById('btn-diagnose-CRMProvider-duplicates');
             if (btn) btn.disabled = true;
             try {
-                const res = await fetch('/api/calls/diagnostic/zoho');
+                const res = await fetch('/api/calls/diagnostic/CRMProvider');
                 const data = await res.json();
                 if (!data.success) {
-                    rrToast(`Zoho diagnostic failed: ${data.error || 'unknown'}`);
+                    rrToast(`CRMProvider diagnostic failed: ${data.error || 'unknown'}`);
                     return;
                 }
                 const lines = [];
                 lines.push(`DIAGNOSIS: ${data.diagnosis}`);
                 lines.push('');
                 lines.push('--- Environment Secrets ---');
-                lines.push(`  ZOHO_CLIENT_ID:        ${data.env_secrets.ZOHO_CLIENT_ID.present ? `present (length=${data.env_secrets.ZOHO_CLIENT_ID.length})` : 'MISSING'}`);
-                lines.push(`  ZOHO_CLIENT_ID_NEW:    ${data.env_secrets.ZOHO_CLIENT_ID_NEW.present ? `present (length=${data.env_secrets.ZOHO_CLIENT_ID_NEW.length})` : 'not set (optional fallback)'}`);
-                lines.push(`  ZOHO_CLIENT_SECRET:    ${data.env_secrets.ZOHO_CLIENT_SECRET.present ? `present (length=${data.env_secrets.ZOHO_CLIENT_SECRET.length})` : 'MISSING'}`);
-                lines.push(`  ZOHO_REFRESH_TOKEN:    ${data.env_secrets.ZOHO_REFRESH_TOKEN.present ? `present (length=${data.env_secrets.ZOHO_REFRESH_TOKEN.length})` : 'MISSING'}`);
-                lines.push(`  ZOHO_ACCOUNTS_URL:     ${data.env_secrets.ZOHO_ACCOUNTS_URL}`);
-                lines.push(`  ZOHO_API_DOMAIN:       ${data.env_secrets.ZOHO_API_DOMAIN}`);
-                lines.push(`  ZOHO_ACCESS_TOKEN (static): ${data.env_secrets.ZOHO_ACCESS_TOKEN_static.present ? `present (length=${data.env_secrets.ZOHO_ACCESS_TOKEN_static.length})` : 'not set'}`);
+                lines.push(`  CRMProvider_CLIENT_ID:        ${data.env_secrets.CRMProvider_CLIENT_ID.present ? `present (length=${data.env_secrets.CRMProvider_CLIENT_ID.length})` : 'MISSING'}`);
+                lines.push(`  CRMProvider_CLIENT_ID_NEW:    ${data.env_secrets.CRMProvider_CLIENT_ID_NEW.present ? `present (length=${data.env_secrets.CRMProvider_CLIENT_ID_NEW.length})` : 'not set (optional fallback)'}`);
+                lines.push(`  CRMProvider_CLIENT_SECRET:    ${data.env_secrets.CRMProvider_CLIENT_SECRET.present ? `present (length=${data.env_secrets.CRMProvider_CLIENT_SECRET.length})` : 'MISSING'}`);
+                lines.push(`  CRMProvider_REFRESH_TOKEN:    ${data.env_secrets.CRMProvider_REFRESH_TOKEN.present ? `present (length=${data.env_secrets.CRMProvider_REFRESH_TOKEN.length})` : 'MISSING'}`);
+                lines.push(`  CRMProvider_ACCOUNTS_URL:     ${data.env_secrets.CRMProvider_ACCOUNTS_URL}`);
+                lines.push(`  CRMProvider_API_DOMAIN:       ${data.env_secrets.CRMProvider_API_DOMAIN}`);
+                lines.push(`  CRMProvider_ACCESS_TOKEN (static): ${data.env_secrets.CRMProvider_ACCESS_TOKEN_static.present ? `present (length=${data.env_secrets.CRMProvider_ACCESS_TOKEN_static.length})` : 'not set'}`);
                 lines.push('');
                 lines.push('--- Passive State Before Probe ---');
                 lines.push(`  connected: ${data.passive_status_before_probe.connected}`);
@@ -15580,7 +15580,7 @@
                     lines.push(`  errorClass: ${data.active_probe.errorClass || '(none)'}`);
                     lines.push(`  errorHttpStatus: ${data.active_probe.errorHttpStatus || '(none)'}`);
                     lines.push(`  errorMessage: ${data.active_probe.errorMessage || '(none)'}`);
-                    lines.push(`  isZohoRateLimited: ${data.active_probe.isZohoRateLimited}`);
+                    lines.push(`  isCRMProviderRateLimited: ${data.active_probe.isCRMProviderRateLimited}`);
                 }
                 lines.push('');
                 lines.push('--- Passive State After Probe ---');
@@ -15593,32 +15593,32 @@
                 modal.innerHTML = `
                     <div class="bg-white rounded-xl max-w-4xl w-full max-h-[80vh] overflow-hidden flex flex-col">
                         <div class="px-6 py-4 border-b flex items-center justify-between">
-                            <h3 class="text-lg font-semibold">Zoho Connection Diagnostic</h3>
-                            <button class="text-gray-400 hover:text-gray-700" data-zoho-diag-close>
+                            <h3 class="text-lg font-semibold">CRMProvider Connection Diagnostic</h3>
+                            <button class="text-gray-400 hover:text-gray-700" data-CRMProvider-diag-close>
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                             </button>
                         </div>
                         <pre class="px-6 py-4 overflow-auto text-xs font-mono text-gray-800 flex-1"></pre>
                     </div>`;
                 modal.querySelector('pre').textContent = lines.join('\n');
-                modal.querySelector('[data-zoho-diag-close]').addEventListener('click', () => modal.remove());
+                modal.querySelector('[data-CRMProvider-diag-close]').addEventListener('click', () => modal.remove());
                 modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
                 document.body.appendChild(modal);
-                console.log('[Zoho Diagnostic]', data);
+                console.log('[CRMProvider Diagnostic]', data);
             } catch (e) {
-                rrToast('Zoho diagnostic threw: ' + (e.message || e));
+                rrToast('CRMProvider diagnostic threw: ' + (e.message || e));
             } finally {
                 if (btn) btn.disabled = false;
             }
         }
 
-        async function syncNowZohoCRM() {
+        async function syncNowCRMProviderCRM() {
             const btn = document.getElementById('syncNowBtn');
             const originalHTML = btn.innerHTML;
             btn.disabled = true;
             btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.<REDACTED_PHONE> 9m0 0H9m11 11v-5h-.581m0 0a8.<REDACTED_PHONE>-2m15.357 2H15"/></svg> ' + escapeHtml(ExampleOrgI18n.t('dyn.duplicates.syncing'));
             try {
-                const doSync = (force) => fetch('/api/duplicates/scan-zoho', {
+                const doSync = (force) => fetch('/api/duplicates/scan-CRMProvider', {
                     method: 'POST',
                     credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
@@ -15678,7 +15678,7 @@
                 const data = await res.json();
                 if (data.status === 'scanning') {
                     document.getElementById('scanProgressBar').classList.remove('hidden');
-                    const scanBtn = document.getElementById('scanZohoBtn');
+                    const scanBtn = document.getElementById('scanCRMProviderBtn');
                     if (scanBtn) {
                         scanBtn.disabled = true;
                         scanBtn.textContent = ExampleOrgI18n.t('dyn.duplicates.scanning');

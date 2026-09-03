@@ -12,7 +12,7 @@
  * (via `redactMetadataForStorage()`) before `JSON.stringify` at every write
  * site:
  *   • `insertAiCallMetric()`           — direct INSERT
- *   • `openAiCallMetric()`             — INSERT issued by `startTelemetrySpan()`
+ *   • `LLMProviderCallMetric()`             — INSERT issued by `startTelemetrySpan()`
  *
  * This test stubs `pg.Pool.prototype.query` so it captures the SQL parameters
  * that would be sent to Postgres without requiring a live DATABASE_URL,
@@ -244,8 +244,8 @@ async function run(): Promise<void> {
     'missing metadata still serialises to {} (no NULL, no invalid JSON)',
   );
 
-  // ── 3. openAiCallMetric (via startTelemetrySpan) scrubs metadata ───────
-  console.log('\nstartTelemetrySpan() / openAiCallMetric() scrubs params.metadata:');
+  // ── 3. LLMProviderCallMetric (via startTelemetrySpan) scrubs metadata ───────
+  console.log('\nstartTelemetrySpan() / LLMProviderCallMetric() scrubs params.metadata:');
 
   captured.length = 0;
   // Intentionally bypass the BuiltAiCallTelemetryMetadata brand (Task #511)
@@ -270,34 +270,34 @@ async function run(): Promise<void> {
   const openInsert = findLast(c =>
     /INSERT INTO ai_call_metrics/i.test(c.sql) &&
     /RETURNING id/i.test(c.sql) &&
-    // openAiCallMetric uses the 6-column form (no tool_name, no error_*, etc.)
+    // LLMProviderCallMetric uses the 6-column form (no tool_name, no error_*, etc.)
     /\(agent_name, model, success, prompt_preview, user_hash, session_hash, metadata\)/i.test(c.sql),
   );
-  assert(!!openInsert, 'openAiCallMetric INSERT was issued via startTelemetrySpan');
-  // openAiCallMetric param order: agent_name(1), model(2), prompt_preview(3),
+  assert(!!openInsert, 'LLMProviderCallMetric INSERT was issued via startTelemetrySpan');
+  // LLMProviderCallMetric param order: agent_name(1), model(2), prompt_preview(3),
   //                                user_hash(4), session_hash(5), metadata(6)
   // → params[5] is the JSON-stringified metadata.
   const openMetadata = openInsert!.params[5] as string;
   assert(
     typeof openMetadata === 'string' && !openMetadata.includes(SK_KEY),
-    'openAiCallMetric metadata does NOT contain the sk-… key',
+    'LLMProviderCallMetric metadata does NOT contain the sk-… key',
   );
   assert(
     typeof openMetadata === 'string' && !openMetadata.includes(AWS_KEY),
-    'openAiCallMetric metadata does NOT contain the AWS access key',
+    'LLMProviderCallMetric metadata does NOT contain the AWS access key',
   );
   assert(
     typeof openMetadata === 'string' && !openMetadata.includes('$2b$12$'),
-    'openAiCallMetric metadata does NOT contain the bcrypt hash prefix',
+    'LLMProviderCallMetric metadata does NOT contain the bcrypt hash prefix',
   );
   assert(
     typeof openMetadata === 'string' && openMetadata.includes(REDACTED_SENTINEL),
-    'openAiCallMetric metadata contains the redaction sentinel',
+    'LLMProviderCallMetric metadata contains the redaction sentinel',
   );
   const parsedOpen = JSON.parse(openMetadata) as Record<string, unknown>;
   assert(
     parsedOpen.prompt_version === 'v9.9.9',
-    'openAiCallMetric preserves prompt_version (used by dashboard A/B aggregate)',
+    'LLMProviderCallMetric preserves prompt_version (used by dashboard A/B aggregate)',
   );
 
   // Finalise the span to keep the state machine clean for subsequent tests

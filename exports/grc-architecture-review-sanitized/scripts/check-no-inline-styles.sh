@@ -8,7 +8,7 @@
 #
 # How CSP rejects inline styles:
 #   The CSP `style-src` directive is set to `'self' 'nonce-${cspNonce}'` (plus
-#   the Tailwind / Google Fonts CDNs). Browsers reject every `style="..."`
+#   the Tailwind / IdentityProvider Fonts CDNs). Browsers reject every `style="..."`
 #   attribute on an element because the attribute cannot carry a nonce. The
 #   visible symptom is silent layout breakage in the dashboard.
 #
@@ -44,7 +44,7 @@ ALLOWLIST_FILES=(
   "src/mastra/routes/infographicRoutes.ts"
   "src/mastra/tools/emailReportTool.ts"
   "src/mastra/workflows/qualityAuditWorkflow.ts"
-  # Sends prompt-regression / recovery alert emails via Slack/email — the
+  # Sends prompt-regression / recovery alert emails via ChatProvider/email — the
   # `style="..."` attributes go into the HTML body of an email, never into
   # a browser page subject to CSP.
   "src/mastra/workflows/promptRegressionAlertsCron.ts"

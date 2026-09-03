@@ -4,7 +4,7 @@
  * GET /api/kpis/leadership-feed
  *
  * Read-only JSON feed PULLED by the ExampleOrg Leadership Platform (separate
- * Replit app) to auto-refresh the "Current" value of its GRQ KPIs. See
+ * HostingPlatform app) to auto-refresh the "Current" value of its GRQ KPIs. See
  * src/utils/leadershipKpiFeed.ts for the calculators and the omit-on-empty
  * safety contract.
  *
@@ -12,7 +12,7 @@
  * platform session, since the caller is another server), so it does its OWN
  * auth via a shared secret in the `X-Feed-Key` header, compared in constant
  * time against process.env.LEADERSHIP_FEED_KEY. Set the same value in both
- * Replit apps' Secrets. If the key is unset/too short the feed returns 503
+ * HostingPlatform apps' Secrets. If the key is unset/too short the feed returns 503
  * (fail closed — never serve KPI data unauthenticated).
  */
 

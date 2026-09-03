@@ -1,6 +1,6 @@
 import {
   buildDigestRunKey,
-  buildDigestSlackBlocks,
+  buildDigestChatProviderBlocks,
   computeDigestWindow,
   isFirstThursdayInKsa,
   resolveDigestSectionRules,
@@ -32,9 +32,9 @@ await suite.test("monthly and quarterly first-thursday guards are deterministic"
 await suite.test("run key includes cadence, window and channel", async () => {
   const ref = new Date("2026-05-07T14:00:00.000Z");
   const window = computeDigestWindow("weekly", ref);
-  const key = buildDigestRunKey("weekly", window, "slack");
+  const key = buildDigestRunKey("weekly", window, "ChatProvider");
   suite.expect(key.includes("weekly"), "contains cadence");
-  suite.expect(key.endsWith(":slack"), "contains channel suffix");
+  suite.expect(key.endsWith(":ChatProvider"), "contains channel suffix");
 });
 
 await suite.test("section rules can be overridden from env JSON", async () => {
@@ -53,7 +53,7 @@ await suite.test("section rules can be overridden from env JSON", async () => {
   }
 });
 
-await suite.test("slack block payload renders 4 digest sections", async () => {
+await suite.test("ChatProvider block payload renders 4 digest sections", async () => {
   const mockData: DigestData = {
     generated_at: new Date().toISOString(),
     cadence: "weekly",
@@ -149,7 +149,7 @@ await suite.test("slack block payload renders 4 digest sections", async () => {
     ],
   };
 
-  const blocks = buildDigestSlackBlocks(mockData);
+  const blocks = buildDigestChatProviderBlocks(mockData);
   const textBlob = JSON.stringify(blocks);
   suite.expect(textBlob.includes("Period Covered"), "contains period covered label");
   suite.expect(textBlob.includes("SDR Leads only"), "contains SDR section");
@@ -160,18 +160,18 @@ await suite.test("slack block payload renders 4 digest sections", async () => {
   suite.expect(textBlob.includes("All Finding Types"), "contains all finding types section");
 });
 
-await suite.test("fanout isolates channel failures (email fail, slack skipped)", async () => {
+await suite.test("fanout isolates channel failures (email fail, ChatProvider skipped)", async () => {
   const oldDigestEmail = process.env.QUALITY_DIGEST_EMAIL;
   const oldAdminEmail = process.env.ADMIN_EMAIL;
-  const oldSlackToken = process.env.SLACK_BOT_TOKEN;
-  const oldSlackApiToken = process.env.SLACK_API_TOKEN;
-  const oldSlackNotify = process.env.DIGEST_SLACK_NOTIFY;
+  const oldChatProviderToken = process.env.ChatProvider_BOT_TOKEN;
+  const oldChatProviderApiToken = process.env.ChatProvider_API_TOKEN;
+  const oldChatProviderNotify = process.env.DIGEST_ChatProvider_NOTIFY;
 
   delete process.env.QUALITY_DIGEST_EMAIL;
   delete process.env.ADMIN_EMAIL;
-  delete process.env.SLACK_BOT_TOKEN;
-  delete process.env.SLACK_API_TOKEN;
-  process.env.DIGEST_SLACK_NOTIFY = "1";
+  delete process.env.ChatProvider_BOT_TOKEN;
+  delete process.env.ChatProvider_API_TOKEN;
+  process.env.DIGEST_ChatProvider_NOTIFY = "1";
 
   try {
     const result = await runDigestFanout("weekly", {
@@ -179,19 +179,19 @@ await suite.test("fanout isolates channel failures (email fail, slack skipped)",
       enforceIdempotency: false,
     });
     suite.expectEqual(result.email.success, false, "email fails without recipient");
-    suite.expectEqual(result.slack.success, true, "slack branch returns success when skipped");
-    suite.expectEqual(result.slack.skipped, true, "slack skipped without creds");
+    suite.expectEqual(result.ChatProvider.success, true, "ChatProvider branch returns success when skipped");
+    suite.expectEqual(result.ChatProvider.skipped, true, "ChatProvider skipped without creds");
   } finally {
     if (oldDigestEmail === undefined) delete process.env.QUALITY_DIGEST_EMAIL;
     else process.env.QUALITY_DIGEST_EMAIL = oldDigestEmail;
     if (oldAdminEmail === undefined) delete process.env.ADMIN_EMAIL;
     else process.env.ADMIN_EMAIL = oldAdminEmail;
-    if (oldSlackToken === undefined) delete process.env.SLACK_BOT_TOKEN;
-    else process.env.SLACK_BOT_TOKEN = oldSlackToken;
-    if (oldSlackApiToken === undefined) delete process.env.SLACK_API_TOKEN;
-    else process.env.SLACK_API_TOKEN = oldSlackApiToken;
-    if (oldSlackNotify === undefined) delete process.env.DIGEST_SLACK_NOTIFY;
-    else process.env.DIGEST_SLACK_NOTIFY = oldSlackNotify;
+    if (oldChatProviderToken === undefined) delete process.env.ChatProvider_BOT_TOKEN;
+    else process.env.ChatProvider_BOT_TOKEN = oldChatProviderToken;
+    if (oldChatProviderApiToken === undefined) delete process.env.ChatProvider_API_TOKEN;
+    else process.env.ChatProvider_API_TOKEN = oldChatProviderApiToken;
+    if (oldChatProviderNotify === undefined) delete process.env.DIGEST_ChatProvider_NOTIFY;
+    else process.env.DIGEST_ChatProvider_NOTIFY = oldChatProviderNotify;
   }
 });
 

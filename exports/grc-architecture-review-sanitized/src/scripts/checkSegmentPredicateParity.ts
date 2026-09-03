@@ -64,7 +64,7 @@ async function main(): Promise<void> {
     condition: string, params: any[] = [],
   ): Promise<Record<string, number>> => {
     const r = await pool.query(
-      `SELECT COALESCE(r.zoho_module,'(none)') AS m, COUNT(*)::text AS n
+      `SELECT COALESCE(r.CRMProvider_module,'(none)') AS m, COUNT(*)::text AS n
          FROM duplicate_records r WHERE ${condition}
         GROUP BY 1 ORDER BY 1`,
       params,

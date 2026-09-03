@@ -24,7 +24,7 @@
  *      they cannot drift.
  *   3. `runExportTimingAlertCheck()` — Inngest-cron entry point. Writes a
  *      `system_event` (audit trail), emits a structured `logger.warn` (so log
- *      shippers see it), and best-effort fans out to Slack + email. Repeat
+ *      shippers see it), and best-effort fans out to ChatProvider + email. Repeat
  *      suppression keyed on the route label prevents flapping during a
  *      sustained regression.
  *
@@ -32,7 +32,7 @@
  * ----------------------------------------
  * The platform does not currently ship with Prometheus or a hosted metrics
  * sink, and the existing observability primitives (`system_events` table,
- * Slack/email fan-out, Inngest crons) are already used by every other
+ * ChatProvider/email fan-out, Inngest crons) are already used by every other
  * "watch the rolling window for a regression" alert in the codebase
  * (rateLimit429SpikeAlert, toolHealthAlertNotifier). Mirroring that shape
  * keeps a single mental model for on-call.
@@ -53,8 +53,8 @@
  *   EXPORT_TIMING_WINDOW_MAX_AGE_MIN   — drop samples older than this many
  *                                        minutes when computing the snapshot.
  *                                        Default 60.
- *   EXPORT_TIMING_SLACK_WEBHOOK_URL    — optional Slack webhook for the page.
- *                                        Falls back to SLACK_WEBHOOK_URL.
+ *   EXPORT_TIMING_ChatProvider_WEBHOOK_URL    — optional ChatProvider webhook for the page.
+ *                                        Falls back to ChatProvider_WEBHOOK_URL.
  *   EXPORT_TIMING_ALERT_EMAIL          — comma-separated recipient list.
  *   EXPORT_TIMING_ALERT_CRON           — cron expression, default "*\/5 * * * *".
  *   EXPORT_TIMING_ALERT_DISABLED       — set to "1" to disable the alert
@@ -306,8 +306,8 @@ export interface ExportTimingAlertCheckResult {
   emittedBreaches: ExportTimingBreach[];
   /** Subset of `breaches` that were suppressed because we paged recently. */
   suppressedBreaches: ExportTimingBreach[];
-  /** True iff at least one Slack post was attempted and succeeded. */
-  slackSent: boolean;
+  /** True iff at least one ChatProvider post was attempted and succeeded. */
+  ChatProviderSent: boolean;
   /** True iff at least one email was attempted and succeeded. */
   emailSent: boolean;
   /** Diagnostic reason. */
@@ -328,9 +328,9 @@ export interface ExportTimingAlertDeps {
     description: string;
     metadata: Record<string, unknown>;
   }) => Promise<void>;
-  /** Defaults to fetch-to-Slack-webhook (no-op when not configured). */
-  postSlack?: (text: string) => Promise<boolean>;
-  /** Defaults to `sendResendEmail` (no-op when not configured). */
+  /** Defaults to fetch-to-ChatProvider-webhook (no-op when not configured). */
+  postChatProvider?: (text: string) => Promise<boolean>;
+  /** Defaults to `sendEmailProviderEmail` (no-op when not configured). */
   sendEmail?: (subject: string, html: string, text: string) => Promise<boolean>;
   /** Override min-samples (mostly for tests). */
   minSamples?: number;
@@ -369,12 +369,12 @@ const DEFAULT_EMIT_EVENT: NonNullable<
   });
 };
 
-const DEFAULT_POST_SLACK: NonNullable<
-  ExportTimingAlertDeps["postSlack"]
+const DEFAULT_POST_ChatProvider: NonNullable<
+  ExportTimingAlertDeps["postChatProvider"]
 > = async (text) => {
   const url =
-    process.env.EXPORT_TIMING_SLACK_WEBHOOK_URL ||
-    process.env.SLACK_WEBHOOK_URL ||
+    process.env.EXPORT_TIMING_ChatProvider_WEBHOOK_URL ||
+    process.env.ChatProvider_WEBHOOK_URL ||
     "";
   if (!url) return false;
   try {
@@ -390,7 +390,7 @@ const DEFAULT_POST_SLACK: NonNullable<
           statusText: response.statusText,
           component: "exportTimingMetrics",
         },
-        "Slack webhook returned non-2xx — alert was already written to system_events",
+        "ChatProvider webhook returned non-2xx — alert was already written to system_events",
       );
       return false;
     }
@@ -398,7 +398,7 @@ const DEFAULT_POST_SLACK: NonNullable<
   } catch (err) {
     logger.warn(
       { err: (err as Error).message, component: "exportTimingMetrics" },
-      "Slack webhook POST failed — alert was already written to system_events",
+      "ChatProvider webhook POST failed — alert was already written to system_events",
     );
     return false;
   }
@@ -415,8 +415,8 @@ const DEFAULT_SEND_EMAIL: NonNullable<
     .filter(Boolean);
   if (recipients.length === 0) return false;
   try {
-    const { sendResendEmail } = await import("./resendMail");
-    const r = await sendResendEmail({ to: recipients, subject, html, text });
+    const { sendEmailProviderEmail } = await import("./EmailProviderMail");
+    const r = await sendEmailProviderEmail({ to: recipients, subject, html, text });
     return !!r?.success;
   } catch (err) {
     logger.warn(
@@ -485,7 +485,7 @@ function formatBreachesHtml(breaches: ExportTimingBreach[]): string {
  * the cron — the per-(route, reason) repeat-suppression window prevents
  * flapping during a sustained regression.
  *
- * Never throws — DB / Slack / email failures are caught and surfaced via
+ * Never throws — DB / ChatProvider / email failures are caught and surfaced via
  * the result so the cron's bookkeeping stays intact.
  */
 export async function runExportTimingAlertCheck(
@@ -497,7 +497,7 @@ export async function runExportTimingAlertCheck(
       breaches: [],
       emittedBreaches: [],
       suppressedBreaches: [],
-      slackSent: false,
+      ChatProviderSent: false,
       emailSent: false,
       reason: "disabled",
     };
@@ -508,7 +508,7 @@ export async function runExportTimingAlertCheck(
   const countRecent =
     depsOverride.countRecentEmissions ?? DEFAULT_COUNT_RECENT;
   const emitEvent = depsOverride.emitSystemEvent ?? DEFAULT_EMIT_EVENT;
-  const postSlack = depsOverride.postSlack ?? DEFAULT_POST_SLACK;
+  const postChatProvider = depsOverride.postChatProvider ?? DEFAULT_POST_ChatProvider;
   const sendEmail = depsOverride.sendEmail ?? DEFAULT_SEND_EMAIL;
   const minSamples = depsOverride.minSamples ?? getExportTimingMinSamples();
   const repeatHours = depsOverride.repeatHours ?? getExportTimingRepeatHours();
@@ -520,7 +520,7 @@ export async function runExportTimingAlertCheck(
       breaches: [],
       emittedBreaches: [],
       suppressedBreaches: [],
-      slackSent: false,
+      ChatProviderSent: false,
       emailSent: false,
       reason: "no_samples",
     };
@@ -533,7 +533,7 @@ export async function runExportTimingAlertCheck(
       breaches: [],
       emittedBreaches: [],
       suppressedBreaches: [],
-      slackSent: false,
+      ChatProviderSent: false,
       emailSent: false,
       reason: "below_threshold",
     };
@@ -578,7 +578,7 @@ export async function runExportTimingAlertCheck(
       breaches: evaluation.breaches,
       emittedBreaches: [],
       suppressedBreaches: suppressed,
-      slackSent: false,
+      ChatProviderSent: false,
       emailSent: false,
       reason: "above_threshold",
     };
@@ -615,28 +615,28 @@ export async function runExportTimingAlertCheck(
           reason: breach.reason,
           component: "exportTimingMetrics",
         },
-        "emitSystemEvent threw — Slack/email still attempted",
+        "emitSystemEvent threw — ChatProvider/email still attempted",
       );
     }
   }
 
-  // Best-effort fan-out — single combined Slack/email per tick (a wave of
+  // Best-effort fan-out — single combined ChatProvider/email per tick (a wave of
   // simultaneous breaches almost always means a shared root cause; one page
   // with the whole list is more useful to on-call than N separate pings).
-  const slackText =
+  const ChatProviderText =
     `:hourglass_flowing_sand: *Export endpoint p95 over budget* — ` +
     `${fresh.length} fresh breach(es) (suppressed ${suppressed.length}).\n` +
     `*Breaches:*\n${formatBreachesText(fresh)}\n\n` +
     `Runbook: \`docs/runbook-export-timing-alert.md\`. ` +
     `Budget constants live in \`src/utils/excelExport.ts\` ` +
     `(\`EXPORT_TTFB_BUDGET_MS\`, \`EXPORT_TOTAL_BUDGET_MS\`).`;
-  let slackSent = false;
+  let ChatProviderSent = false;
   try {
-    slackSent = await postSlack(slackText);
+    ChatProviderSent = await postChatProvider(ChatProviderText);
   } catch (err) {
     logger.warn(
       { err: (err as Error).message, component: "exportTimingMetrics" },
-      "postSlack threw",
+      "postChatProvider threw",
     );
   }
 
@@ -672,7 +672,7 @@ Budget constants live in <code>src/utils/excelExport.ts</code>
     breaches: evaluation.breaches,
     emittedBreaches: emitted,
     suppressedBreaches: suppressed,
-    slackSent,
+    ChatProviderSent,
     emailSent,
     reason: "above_threshold",
   };

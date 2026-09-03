@@ -472,23 +472,23 @@ if (!HAS_DB) {
     "GET /api/consultant/feedback/stats — returns per-client-surface breakdown including 'unknown' bucket for legacy rows",
     async () => {
       // Seed three rows: two on the mobile surface (one up, one down)
-      // and one on the slack surface (up). The 'down' on mobile should
-      // make mobile's ratio 50%, while slack should be 100%. A legacy
+      // and one on the ChatProvider surface (up). The 'down' on mobile should
+      // make mobile's ratio 50%, while ChatProvider should be 100%. A legacy
       // row inserted directly with `{}` metadata should land in the
       // 'unknown' bucket.
       const mobileSurface = "mobile";
-      const slackSurface = "slack";
+      const ChatProviderSurface = "ChatProvider";
       const ids = [
         `consultant-surface-mobile-up-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         `consultant-surface-mobile-down-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        `consultant-surface-slack-up-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        `consultant-surface-ChatProvider-up-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         `consultant-surface-legacy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       ];
       seededMessageIds.push(...ids);
 
       await postFeedback({ messageId: ids[0], rating: "up", clientSurface: mobileSurface });
       await postFeedback({ messageId: ids[1], rating: "down", clientSurface: mobileSurface });
-      await postFeedback({ messageId: ids[2], rating: "up", clientSurface: slackSurface });
+      await postFeedback({ messageId: ids[2], rating: "up", clientSurface: ChatProviderSurface });
       // Legacy row: insert directly so metadata stays `{}`. The route
       // would normally fall back to client_surface='web' (see the
       // "older clients keep working" test above), so we bypass it
@@ -523,11 +523,11 @@ if (!HAS_DB) {
           ? surfaces.find((s: any) => s.client_surface === label)
           : undefined;
       const rowMobile = findRow(mobileSurface);
-      const rowSlack = findRow(slackSurface);
+      const rowChatProvider = findRow(ChatProviderSurface);
       const rowUnknown = findRow("unknown");
 
       suite.expect(!!rowMobile, `breakdown contains '${mobileSurface}' surface`);
-      suite.expect(!!rowSlack, `breakdown contains '${slackSurface}' surface`);
+      suite.expect(!!rowChatProvider, `breakdown contains '${ChatProviderSurface}' surface`);
       suite.expect(!!rowUnknown, "breakdown contains the 'unknown' bucket for legacy rows");
 
       if (rowMobile) {
@@ -548,12 +548,12 @@ if (!HAS_DB) {
           "mobile.thumbs_up_ratio is a percentage between 0 and 100",
         );
       }
-      if (rowSlack) {
+      if (rowChatProvider) {
         suite.expect(
-          (rowSlack.thumbs_up ?? 0) >= 1,
-          "slack thumbs_up counts the seeded up-rating",
+          (rowChatProvider.thumbs_up ?? 0) >= 1,
+          "ChatProvider thumbs_up counts the seeded up-rating",
         );
-        suite.expectEqual(rowSlack.thumbs_up_ratio, 100, "slack ratio is 100%");
+        suite.expectEqual(rowChatProvider.thumbs_up_ratio, 100, "ChatProvider ratio is 100%");
       }
       if (rowUnknown) {
         suite.expect(

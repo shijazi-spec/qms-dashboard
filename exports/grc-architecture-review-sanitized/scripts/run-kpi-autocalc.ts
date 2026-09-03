@@ -7,7 +7,7 @@
  *   # PowerShell: $env:DATABASE_URL="postgres://..."; npx tsx scripts/run-kpi-autocalc.ts
  *
  * Add --cycle-times to also run the Sales Proposal/Agreement cycle-time step
- * (needs Zoho API env vars; otherwise leave it off for a DB-only check):
+ * (needs CRMProvider API env vars; otherwise leave it off for a DB-only check):
  *   DATABASE_URL=... npx tsx scripts/run-kpi-autocalc.ts --cycle-times
  */
 import {
@@ -17,7 +17,7 @@ import {
 import { initKPIChecklistTables } from "../src/utils/kpiChecklistDatabase";
 import { runKPIAutoCalc } from "../src/utils/kpiAutoCalc";
 import { pool as radarPool } from "../src/utils/duplicateRadarDatabase";
-import { analyzeRecordHygiene, DEFAULT_GOVERNANCE_RULES } from "../src/utils/zohoCRM";
+import { analyzeRecordHygiene, DEFAULT_GOVERNANCE_RULES } from "../src/utils/CRMProviderCRM";
 
 /** Surface the ACTUAL field values so the matchers can be calibrated to reality. */
 async function printValueDiagnostics() {
@@ -25,7 +25,7 @@ async function printValueDiagnostics() {
     try {
       const r = await radarPool.query(
         `SELECT coalesce(raw_data->>'${field}','(blank)') AS v, COUNT(*)::int AS n
-           FROM duplicate_records WHERE zoho_module = $1
+           FROM duplicate_records WHERE CRMProvider_module = $1
            GROUP BY 1 ORDER BY n DESC LIMIT 15`,
         [module],
       );
@@ -42,7 +42,7 @@ async function printValueDiagnostics() {
   for (const module of ["Leads", "Deals"] as const) {
     try {
       const r = await radarPool.query(
-        `SELECT raw_data FROM duplicate_records WHERE zoho_module = $1 LIMIT 1000`,
+        `SELECT raw_data FROM duplicate_records WHERE CRMProvider_module = $1 LIMIT 1000`,
         [module],
       );
       const tally: Record<string, number> = {};
@@ -93,8 +93,8 @@ async function printDiagnostics() {
     "SELECT COUNT(*)::int n FROM call_records WHERE lead_id IS NOT NULL",
   );
   await safe("deal_doc_compliance rows", "SELECT COUNT(*)::int n FROM deal_doc_compliance");
-  await safe("local Leads", "SELECT COUNT(*)::int n FROM duplicate_records WHERE zoho_module='Leads'");
-  await safe("local Deals", "SELECT COUNT(*)::int n FROM duplicate_records WHERE zoho_module='Deals'");
+  await safe("local Leads", "SELECT COUNT(*)::int n FROM duplicate_records WHERE CRMProvider_module='Leads'");
+  await safe("local Deals", "SELECT COUNT(*)::int n FROM duplicate_records WHERE CRMProvider_module='Deals'");
   console.table(out);
 }
 
@@ -121,7 +121,7 @@ async function main() {
   await initKPIChecklistTables();
 
   console.log(
-    `\nRunning KPI auto-calc${includeCycleTimes ? " (incl. Sales cycle times via Zoho)" : " (DB-only; --cycle-times to include Zoho)"}…\n`,
+    `\nRunning KPI auto-calc${includeCycleTimes ? " (incl. Sales cycle times via CRMProvider)" : " (DB-only; --cycle-times to include CRMProvider)"}…\n`,
   );
   const result = await runKPIAutoCalc(includeCycleTimes);
   console.log(

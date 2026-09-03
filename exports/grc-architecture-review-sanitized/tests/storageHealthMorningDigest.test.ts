@@ -2,7 +2,7 @@
  * Tests for runStorageHealthMorningDigest (Task #604).
  *
  * Verifies:
- *   1. Sends a single Slack + email digest listing every unresolved
+ *   1. Sends a single ChatProvider + email digest listing every unresolved
  *      storage_health alert created during the just-closed quiet-hours
  *      window.
  *   2. The alert query window is computed from the configured quiet-hours
@@ -10,8 +10,8 @@
  *   3. The opt-out env var STORAGE_HEALTH_MORNING_DIGEST_DISABLED skips
  *      everything.
  *   4. When quiet hours aren't configured, the digest is a no-op.
- *   5. When the window has no unresolved alerts, no Slack/email is pushed.
- *   6. Slack/email are skipped silently when their env vars are unset.
+ *   5. When the window has no unresolved alerts, no ChatProvider/email is pushed.
+ *   6. ChatProvider/email are skipped silently when their env vars are unset.
  *   7. Notification failures are swallowed (returns success=false but does
  *      not throw).
  *
@@ -34,7 +34,7 @@ interface QueryRecord {
   toMs: number;
 }
 
-interface SlackRecord {
+interface ChatProviderRecord {
   webhookUrl: string;
   text: string;
 }
@@ -48,25 +48,25 @@ interface EmailRecord {
 interface Harness {
   deps: MorningDigestDeps;
   queries: QueryRecord[];
-  slacks: SlackRecord[];
+  ChatProviders: ChatProviderRecord[];
   emails: EmailRecord[];
   setAlerts: (alerts: AIAlert[]) => void;
   setQueryError: (err: Error | null) => void;
-  setSlackOk: (ok: boolean) => void;
+  setChatProviderOk: (ok: boolean) => void;
   setEmailOk: (ok: boolean) => void;
-  setSlackThrows: (err: Error | null) => void;
+  setChatProviderThrows: (err: Error | null) => void;
   setEmailThrows: (err: Error | null) => void;
 }
 
 function makeHarness(env: NodeJS.ProcessEnv, now: Date): Harness {
   const queries: QueryRecord[] = [];
-  const slacks: SlackRecord[] = [];
+  const ChatProviders: ChatProviderRecord[] = [];
   const emails: EmailRecord[] = [];
   let alerts: AIAlert[] = [];
   let queryError: Error | null = null;
-  let slackOk = true;
+  let ChatProviderOk = true;
   let emailOk = true;
-  let slackThrows: Error | null = null;
+  let ChatProviderThrows: Error | null = null;
   let emailThrows: Error | null = null;
 
   const deps: MorningDigestDeps = {
@@ -75,10 +75,10 @@ function makeHarness(env: NodeJS.ProcessEnv, now: Date): Harness {
       if (queryError) throw queryError;
       return alerts;
     },
-    sendSlack: async (webhookUrl, text) => {
-      slacks.push({ webhookUrl, text });
-      if (slackThrows) throw slackThrows;
-      return slackOk;
+    sendChatProvider: async (webhookUrl, text) => {
+      ChatProviders.push({ webhookUrl, text });
+      if (ChatProviderThrows) throw ChatProviderThrows;
+      return ChatProviderOk;
     },
     sendEmail: async ({ to, subject, html }) => {
       emails.push({ to, subject, html });
@@ -92,7 +92,7 @@ function makeHarness(env: NodeJS.ProcessEnv, now: Date): Harness {
   return {
     deps,
     queries,
-    slacks,
+    ChatProviders,
     emails,
     setAlerts: (a) => {
       alerts = a;
@@ -100,14 +100,14 @@ function makeHarness(env: NodeJS.ProcessEnv, now: Date): Harness {
     setQueryError: (e) => {
       queryError = e;
     },
-    setSlackOk: (ok) => {
-      slackOk = ok;
+    setChatProviderOk: (ok) => {
+      ChatProviderOk = ok;
     },
     setEmailOk: (ok) => {
       emailOk = ok;
     },
-    setSlackThrows: (e) => {
-      slackThrows = e;
+    setChatProviderThrows: (e) => {
+      ChatProviderThrows = e;
     },
     setEmailThrows: (e) => {
       emailThrows = e;
@@ -135,12 +135,12 @@ function alert(
 const suite = new TestSuite('storageHealthMorningDigest');
 
 await suite.test(
-  'sends a single Slack + email digest listing alerts in the just-closed wrap-around window',
+  'sends a single ChatProvider + email digest listing alerts in the just-closed wrap-around window',
   async () => {
     // Quiet hours 22→07 (length 9h). Cron fires at 07:05 UTC.
     const harness = makeHarness(
       {
-        SLACK_WEBHOOK_URL: '<REDACTED_URL>',
+        ChatProvider_WEBHOOK_URL: '<REDACTED_URL>',
         AI_COST_ALERT_EMAIL: 'user@example.invalid,user@example.invalid',
         STORAGE_HEALTH_QUIET_HOURS_START: '22',
         STORAGE_HEALTH_QUIET_HOURS_END: '7',
@@ -159,7 +159,7 @@ await suite.test(
     suite.expect(!result.quietHoursDisabled, 'quiet hours configured');
     suite.expect(!result.noAlertsInWindow, 'has alerts');
     suite.expectEqual(result.alertCount, 2, 'alertCount');
-    suite.expect(result.slackSent, 'slack sent');
+    suite.expect(result.ChatProviderSent, 'ChatProvider sent');
     suite.expect(result.emailSent, 'email sent');
 
     // Window = [now - 9h, now)
@@ -173,22 +173,22 @@ await suite.test(
       'fromMs is now - 9h',
     );
 
-    suite.expectEqual(harness.slacks.length, 1, 'one Slack call');
+    suite.expectEqual(harness.ChatProviders.length, 1, 'one ChatProvider call');
     suite.expect(
-      harness.slacks[0].text.includes('Morning digest'),
-      `slack text — got: ${harness.slacks[0].text}`,
+      harness.ChatProviders[0].text.includes('Morning digest'),
+      `ChatProvider text — got: ${harness.ChatProviders[0].text}`,
     );
     suite.expect(
-      harness.slacks[0].text.includes('AI usage table outgrowing'),
-      'slack text mentions first alert title',
+      harness.ChatProviders[0].text.includes('AI usage table outgrowing'),
+      'ChatProvider text mentions first alert title',
     );
     suite.expect(
-      harness.slacks[0].text.includes('Second breach'),
-      'slack text mentions second alert title',
+      harness.ChatProviders[0].text.includes('Second breach'),
+      'ChatProvider text mentions second alert title',
     );
     suite.expect(
-      harness.slacks[0].text.includes('<REDACTED_HOST>/dashboard'),
-      'slack text contains app link',
+      harness.ChatProviders[0].text.includes('<REDACTED_HOST>/dashboard'),
+      'ChatProvider text contains app link',
     );
 
     suite.expectEqual(harness.emails.length, 1, 'one email call');
@@ -214,7 +214,7 @@ await suite.test(
     // Quiet hours 01→05 (length 4h). Cron fires at 05:00 UTC.
     const harness = makeHarness(
       {
-        SLACK_WEBHOOK_URL: '<REDACTED_URL>',
+        ChatProvider_WEBHOOK_URL: '<REDACTED_URL>',
         STORAGE_HEALTH_QUIET_HOURS_START: '1',
         STORAGE_HEALTH_QUIET_HOURS_END: '5',
       },
@@ -227,7 +227,7 @@ await suite.test(
     suite.expectEqual(harness.queries.length, 1, 'one DB query');
     const q = harness.queries[0];
     suite.expectEqual(q.toMs - q.fromMs, 4 * 3600 * 1000, 'window length 4h');
-    suite.expect(result.slackSent, 'slack sent');
+    suite.expect(result.ChatProviderSent, 'ChatProvider sent');
   },
 );
 
@@ -236,7 +236,7 @@ await suite.test(
   async () => {
     const harness = makeHarness(
       {
-        SLACK_WEBHOOK_URL: '<REDACTED_URL>',
+        ChatProvider_WEBHOOK_URL: '<REDACTED_URL>',
         AI_COST_ALERT_EMAIL: 'user@example.invalid',
         STORAGE_HEALTH_QUIET_HOURS_START: '22',
         STORAGE_HEALTH_QUIET_HOURS_END: '7',
@@ -250,7 +250,7 @@ await suite.test(
 
     suite.expect(result.optedOut, 'optedOut should be true');
     suite.expectEqual(harness.queries.length, 0, 'no DB query');
-    suite.expectEqual(harness.slacks.length, 0, 'no Slack call');
+    suite.expectEqual(harness.ChatProviders.length, 0, 'no ChatProvider call');
     suite.expectEqual(harness.emails.length, 0, 'no email call');
   },
 );
@@ -289,7 +289,7 @@ await suite.test(
   'no-op when quiet hours are not configured',
   async () => {
     const harness = makeHarness(
-      { SLACK_WEBHOOK_URL: '<REDACTED_URL>' },
+      { ChatProvider_WEBHOOK_URL: '<REDACTED_URL>' },
       new Date('2026-04-25T07:05:00.000Z'),
     );
     harness.setAlerts([alert(1, 'high', 't', '2026-04-25T03:00:00.000Z')]);
@@ -298,16 +298,16 @@ await suite.test(
 
     suite.expect(result.quietHoursDisabled, 'quietHoursDisabled true');
     suite.expectEqual(harness.queries.length, 0, 'no DB query');
-    suite.expectEqual(harness.slacks.length, 0, 'no Slack call');
+    suite.expectEqual(harness.ChatProviders.length, 0, 'no ChatProvider call');
   },
 );
 
 await suite.test(
-  'no Slack/email when window has no unresolved alerts',
+  'no ChatProvider/email when window has no unresolved alerts',
   async () => {
     const harness = makeHarness(
       {
-        SLACK_WEBHOOK_URL: '<REDACTED_URL>',
+        ChatProvider_WEBHOOK_URL: '<REDACTED_URL>',
         AI_COST_ALERT_EMAIL: 'user@example.invalid',
         STORAGE_HEALTH_QUIET_HOURS_START: '22',
         STORAGE_HEALTH_QUIET_HOURS_END: '7',
@@ -321,13 +321,13 @@ await suite.test(
     suite.expectEqual(result.alertCount, 0, 'alertCount 0');
     suite.expect(result.noAlertsInWindow, 'noAlertsInWindow true');
     suite.expectEqual(harness.queries.length, 1, 'DB query still ran');
-    suite.expectEqual(harness.slacks.length, 0, 'no Slack push when nothing to digest');
+    suite.expectEqual(harness.ChatProviders.length, 0, 'no ChatProvider push when nothing to digest');
     suite.expectEqual(harness.emails.length, 0, 'no email push when nothing to digest');
   },
 );
 
 await suite.test(
-  'skips Slack/email silently when env vars are unset (still queries)',
+  'skips ChatProvider/email silently when env vars are unset (still queries)',
   async () => {
     const harness = makeHarness(
       {
@@ -341,19 +341,19 @@ await suite.test(
     const result = await runStorageHealthMorningDigest(harness.deps);
 
     suite.expectEqual(result.alertCount, 1, 'alertCount 1');
-    suite.expect(!result.slackSent, 'slack not sent (no webhook)');
+    suite.expect(!result.ChatProviderSent, 'ChatProvider not sent (no webhook)');
     suite.expect(!result.emailSent, 'email not sent (no recipients)');
-    suite.expectEqual(harness.slacks.length, 0, 'no Slack call');
+    suite.expectEqual(harness.ChatProviders.length, 0, 'no ChatProvider call');
     suite.expectEqual(harness.emails.length, 0, 'no email call');
   },
 );
 
 await suite.test(
-  'transient Slack/email failures are swallowed (returns false, does not throw)',
+  'transient ChatProvider/email failures are swallowed (returns false, does not throw)',
   async () => {
     const harness = makeHarness(
       {
-        SLACK_WEBHOOK_URL: '<REDACTED_URL>',
+        ChatProvider_WEBHOOK_URL: '<REDACTED_URL>',
         AI_COST_ALERT_EMAIL: 'user@example.invalid',
         STORAGE_HEALTH_QUIET_HOURS_START: '22',
         STORAGE_HEALTH_QUIET_HOURS_END: '7',
@@ -361,11 +361,11 @@ await suite.test(
       new Date('2026-04-25T07:05:00.000Z'),
     );
     harness.setAlerts([alert(1, 'high', 't', '2026-04-25T03:00:00.000Z')]);
-    harness.setSlackThrows(new Error('slack 500'));
-    harness.setEmailThrows(new Error('resend timeout'));
+    harness.setChatProviderThrows(new Error('ChatProvider 500'));
+    harness.setEmailThrows(new Error('EmailProvider timeout'));
 
     const result = await runStorageHealthMorningDigest(harness.deps);
-    suite.expect(!result.slackSent, 'slack reported false');
+    suite.expect(!result.ChatProviderSent, 'ChatProvider reported false');
     suite.expect(!result.emailSent, 'email reported false');
     suite.expectEqual(result.alertCount, 1, 'still counted alerts');
   },
@@ -376,7 +376,7 @@ await suite.test(
   async () => {
     const harness = makeHarness(
       {
-        SLACK_WEBHOOK_URL: '<REDACTED_URL>',
+        ChatProvider_WEBHOOK_URL: '<REDACTED_URL>',
         STORAGE_HEALTH_QUIET_HOURS_START: '22',
         STORAGE_HEALTH_QUIET_HOURS_END: '7',
       },
@@ -386,7 +386,7 @@ await suite.test(
 
     const result = await runStorageHealthMorningDigest(harness.deps);
     suite.expectEqual(result.alertCount, 0, 'no alerts counted');
-    suite.expectEqual(harness.slacks.length, 0, 'no Slack push');
+    suite.expectEqual(harness.ChatProviders.length, 0, 'no ChatProvider push');
   },
 );
 
@@ -441,9 +441,9 @@ await suite.test(
       '<REDACTED_URL>',
     );
     suite.expect(
-      msg.slackText.includes('1 unresolved alert ') ||
-        msg.slackText.includes('1 unresolved alert*'),
-      `slack singular wording — got: ${msg.slackText}`,
+      msg.ChatProviderText.includes('1 unresolved alert ') ||
+        msg.ChatProviderText.includes('1 unresolved alert*'),
+      `ChatProvider singular wording — got: ${msg.ChatProviderText}`,
     );
     suite.expect(
       msg.emailSubject.includes('1 unresolved alert'),

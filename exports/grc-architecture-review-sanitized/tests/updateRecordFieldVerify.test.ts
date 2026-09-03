@@ -7,13 +7,13 @@ import {
 /*
  * Read-back verification for update-record-field.
  *
- * Root-cause context: Zoho's v2 write API returns HTTP 200 + code:SUCCESS even
+ * Root-cause context: CRMProvider's v2 write API returns HTTP 200 + code:SUCCESS even
  * when a field is NOT actually persisted (field-level profile permission, a
  * validation rule that reverts the value, or a no-op). The tool now re-reads
  * the record and compares with fieldValuesMatch() before claiming success, so
- * an approval can no longer show "Executed" while Zoho is unchanged.
+ * an approval can no longer show "Executed" while CRMProvider is unchanged.
  *
- * These cases lock the comparison's leniency (so Zoho's own normalization does
+ * These cases lock the comparison's leniency (so CRMProvider's own normalization does
  * NOT cause a false "did not change") AND its strictness (a genuinely unchanged
  * value is reported as a mismatch).
  */
@@ -26,11 +26,11 @@ assert.strictEqual(fieldValuesMatch("user@example.invalid", "user@example.invali
 // Trim differences are ignored.
 assert.strictEqual(fieldValuesMatch("  user@example.invalid ", "user@example.invalid"), true);
 
-// Case-insensitive (Zoho may normalize email/URL casing).
+// Case-insensitive (CRMProvider may normalize email/URL casing).
 assert.strictEqual(fieldValuesMatch("user@example.invalid", "user@example.invalid"), true);
 assert.strictEqual(fieldValuesMatch("<REDACTED_URL>", "<REDACTED_URL>"), true);
 
-// Phone: Zoho may reformat — digit-only match counts as success, but ONLY when
+// Phone: CRMProvider may reformat — digit-only match counts as success, but ONLY when
 // the field name is phone-like.
 assert.strictEqual(fieldValuesMatch("<REDACTED_PHONE>", "<REDACTED_PHONE>", "Phone"), true);
 assert.strictEqual(fieldValuesMatch("555-1234", "5551234", "Mobile"), true);
@@ -40,7 +40,7 @@ assert.strictEqual(fieldValuesMatch("555-1234", "5551234", "Mobile"), true);
 assert.strictEqual(fieldValuesMatch("<REDACTED_PHONE>", "<REDACTED_PHONE>"), false);
 assert.strictEqual(fieldValuesMatch("1234", "1-2-3-4", "Account_Number"), false);
 
-// THE BUG CASE: Zoho said SUCCESS but the stale value is still there.
+// THE BUG CASE: CRMProvider said SUCCESS but the stale value is still there.
 assert.strictEqual(fieldValuesMatch("user@example.invalid", "user@example.invalid"), false);
 
 // A field that was never written (null/empty) is a mismatch, not a pass.
@@ -63,7 +63,7 @@ assert.deepStrictEqual(
   [],
 );
 
-// THE BUG CASE end-to-end: Zoho SUCCESS but value unchanged -> mismatch listed
+// THE BUG CASE end-to-end: CRMProvider SUCCESS but value unchanged -> mismatch listed
 // with the actual stored value, which drives success:false on the tool.
 {
   const m = computeReadBackMismatches(

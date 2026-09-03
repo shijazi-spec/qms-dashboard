@@ -184,18 +184,18 @@ const SECRET_LIKE_STRINGS: Array<{ label: string; value: string }> = [
       "<REDACTED_TOKEN>",
   },
   {
-    label: "OpenAI sk- key",
+    label: "LLMProvider sk- key",
     value: "<REDACTED_TOKEN>",
   },
   {
-    label: "GitHub PAT",
+    label: "SourceControlProvider PAT",
     value: "<REDACTED_TOKEN>",
   },
   {
-    label: "Stripe live key",
-    // Prefix split at source so GitHub push-protection's Stripe-key
+    label: "PaymentProvider live key",
+    // Prefix split at source so SourceControlProvider push-protection's PaymentProvider-key
     // pattern matcher doesn't flag this synthetic fixture as a real
-    // secret. The runtime string is still exactly the Stripe-key shape
+    // secret. The runtime string is still exactly the PaymentProvider-key shape
     // the redactor must recognise.
     value: "sk" + "_live_ABCdefGHIjklMNOpqrsTUVwx",
   },
@@ -409,7 +409,7 @@ for (const { label, value } of SECRET_LIKE_STRINGS.slice(0, 2)) {
 console.log("\n=== closeFraudIncident — write-path secret-leak tests ===\n");
 
 {
-  const { label, value } = SECRET_LIKE_STRINGS[2]; // OpenAI key
+  const { label, value } = SECRET_LIKE_STRINGS[2]; // LLMProvider key
   captured.length = 0;
   await closeFraudIncident(42, "test-runner", {
     root_cause: `Closure root-cause references token: ${value}`,
@@ -468,7 +468,7 @@ for (const { label, value } of SECRET_LIKE_STRINGS.slice(0, 2)) {
 console.log("\n=== createCountryRisk — write-path secret-leak tests ===\n");
 
 {
-  const { label, value } = SECRET_LIKE_STRINGS[3]; // GitHub PAT
+  const { label, value } = SECRET_LIKE_STRINGS[3]; // SourceControlProvider PAT
   captured.length = 0;
   await createCountryRisk({
     iso_code: "XX",
@@ -503,7 +503,7 @@ console.log("\n=== createCountryRisk — write-path secret-leak tests ===\n");
 console.log("\n=== updateCountryRisk — write-path secret-leak tests ===\n");
 
 {
-  const { label, value } = SECRET_LIKE_STRINGS[4]; // Stripe live key
+  const { label, value } = SECRET_LIKE_STRINGS[4]; // PaymentProvider live key
   captured.length = 0;
   await updateCountryRisk(
     "XX",

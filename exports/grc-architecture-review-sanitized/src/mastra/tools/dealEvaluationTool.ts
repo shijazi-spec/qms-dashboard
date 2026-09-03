@@ -14,7 +14,7 @@ import {
   createCapaRecord,
   saveQualityMetrics
 } from "../../utils/qmsDatabase";
-import { fetchZohoRecords } from "../../utils/zohoCRM";
+import { fetchCRMProviderRecords } from "../../utils/CRMProviderCRM";
 
 export const evaluateDealsTool = createTool({
   id: "evaluate-deals",
@@ -25,7 +25,7 @@ export const evaluateDealsTool = createTool({
     "and identifies findings that may require CAPA or nonconformance tracking.",
 
   inputSchema: z.object({
-    source: z.enum(["crm", "csv", "manual"]).describe("Source of deal data: 'crm' fetches from Zoho CRM API, 'csv' uses uploaded CSV data, 'manual' uses provided deal data"),
+    source: z.enum(["crm", "csv", "manual"]).describe("Source of deal data: 'crm' fetches from CRMProvider CRM API, 'csv' uses uploaded CSV data, 'manual' uses provided deal data"),
     dealIds: z.array(z.string()).optional().describe("Specific deal IDs to evaluate (optional, evaluates all if not provided)"),
     manualDeals: z.array(z.record(z.any())).optional().describe("Array of deal data objects when source is 'manual'"),
     csvData: z.string().optional().describe("CSV string of deal data when source is 'csv'"),
@@ -93,9 +93,9 @@ export const evaluateDealsTool = createTool({
 
       switch (context.source) {
         case 'crm':
-          logger?.info("🔄 [evaluateDealsTool] Fetching deals from Zoho CRM...");
+          logger?.info("🔄 [evaluateDealsTool] Fetching deals from CRMProvider CRM...");
           try {
-            const crmRecords = await fetchZohoRecords('Deals', { perPage: pageSize });
+            const crmRecords = await fetchCRMProviderRecords('Deals', { perPage: pageSize });
             dealsData = crmRecords.map(r => ({ ...r.data, id: r.id, Owner: r.owner }));
             logger?.info(`📊 [evaluateDealsTool] Fetched ${dealsData.length} deals from CRM`);
           } catch (error) {

@@ -43,13 +43,13 @@ describe("getConfidenceTier", () => {
 describe("recommendedAction", () => {
   test("primary record → keep", () => {
     expect(
-      recommendedAction({ is_primary: true, primary_name: "ACME Co" }),
+      recommendedAction({ is_primary: true, primary_name: "Example Organization Co" }),
     ).toBe("Keep — primary record");
   });
   test("non-primary with primary set → merge into named", () => {
     expect(
-      recommendedAction({ is_primary: false, primary_name: "ACME Co" }),
-    ).toBe('Merge into "ACME Co"');
+      recommendedAction({ is_primary: false, primary_name: "Example Organization Co" }),
+    ).toBe('Merge into "Example Organization Co"');
   });
   test("non-primary with no primary set → manual review", () => {
     expect(
@@ -168,12 +168,12 @@ describe("startCluster + rowPlaybook (integration)", () => {
     const primaryRow = {
       cluster_id: 42,
       is_primary: true,
-      record_name: "ACME Co — Riyadh Branch",
+      record_name: "Example Organization Co — Riyadh Branch",
       owner_name: "Sample User",
       owner_email: "user@example.invalid",
       cluster_confidence_score: 95,
       cluster_total_records: 3,
-      ai_recommendation: "Merge after Zoho confirmation",
+      ai_recommendation: "Merge after CRMProvider confirmation",
     };
     startCluster(state, primaryRow, new Date("2026-05-22T00:00:00Z"));
 
@@ -185,16 +185,16 @@ describe("startCluster + rowPlaybook (integration)", () => {
     const dupRow = {
       cluster_id: 42,
       is_primary: false,
-      record_name: "Acme co. (Riyadh)",
+      record_name: "Example Organization co. (Riyadh)",
       owner_name: "Sample User",
       owner_email: "user@example.invalid",
       cluster_confidence_score: 95,
       cluster_total_records: 3,
-      ai_recommendation: "Merge after Zoho confirmation",
+      ai_recommendation: "Merge after CRMProvider confirmation",
     };
     const dupPb = rowPlaybook(dupRow, state);
     expect(dupPb.recommended_action).toBe(
-      'Merge into "ACME Co — Riyadh Branch"',
+      'Merge into "Example Organization Co — Riyadh Branch"',
     );
     // The duplicate row's own owner is the one to consult — not the primary's.
     expect(dupPb.owner_to_consult).toBe("Sara <user@example.invalid>");

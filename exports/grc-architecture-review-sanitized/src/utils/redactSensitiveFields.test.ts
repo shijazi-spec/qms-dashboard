@@ -138,17 +138,17 @@ assert(redactSensitiveFields(undefined) === undefined, "undefined returned uncha
   const r = redactSensitiveFields({
     access_token: "<REDACTED_SECRET>",
     refresh_token: "<REDACTED_SECRET>",
-    zoho_refresh_token: "zoho_rt_secret",
+    CRMProvider_refresh_token: "CRMProvider_rt_secret",
   });
   assert(r.access_token === REDACTED_SENTINEL, "suffix _token: access_token redacted");
   assert(r.refresh_token === REDACTED_SENTINEL, "suffix _token: refresh_token redacted");
-  assert(r.zoho_refresh_token === REDACTED_SENTINEL, "suffix _token: zoho_refresh_token redacted");
+  assert(r.CRMProvider_refresh_token === REDACTED_SENTINEL, "suffix _token: CRMProvider_refresh_token redacted");
 }
 
 {
-  const r = redactSensitiveFields({ api_key: "<REDACTED_SECRET>", openai_api_key: "sk-openai" });
+  const r = redactSensitiveFields({ api_key: "<REDACTED_SECRET>", LLMProvider_api_key: "sk-LLMProvider" });
   assert(r.api_key === REDACTED_SENTINEL, "suffix _key: api_key redacted");
-  assert(r.openai_api_key === REDACTED_SENTINEL, "suffix _key: openai_api_key redacted");
+  assert(r.LLMProvider_api_key === REDACTED_SENTINEL, "suffix _key: LLMProvider_api_key redacted");
 }
 
 {
@@ -254,7 +254,7 @@ assert(redactSecretLikeStrings("") === "", "regex: empty string returned unchang
 
 {
   const out = redactSecretLikeStrings(
-    "Stripe key <REDACTED_TOKEN> rotated",
+    "PaymentProvider key <REDACTED_TOKEN> rotated",
   ) as string;
   assert(!out.includes("<REDACTED_TOKEN>"), "regex: sk_live_ key scrubbed");
   assert(out.includes(REDACTED_SENTINEL), "regex: sentinel inserted in place of sk_ key");
@@ -262,7 +262,7 @@ assert(redactSecretLikeStrings("") === "", "regex: empty string returned unchang
 
 {
   const out = redactSecretLikeStrings(
-    "GitHub PAT <REDACTED_TOKEN> leaked",
+    "SourceControlProvider PAT <REDACTED_TOKEN> leaked",
   ) as string;
   assert(
     !out.includes("<REDACTED_TOKEN>"),
@@ -416,7 +416,7 @@ await runWritePathTest(
     severity: "INFO",
     module: "integrations",
     newValue: {
-      provider: "zoho",
+      provider: "CRMProvider",
       access_token: SECRETS.access_token,
       refresh_token: SECRETS.refresh_token,
       api_key: SECRETS.api_key,
@@ -443,7 +443,7 @@ await runWritePathTest(
     severity: "INFO",
     module: "integrations",
     newValue: {
-      integration: "slack",
+      integration: "ChatProvider",
       config: {
         bot_token: SECRETS.bot_token,
         api_key: SECRETS.api_key,
@@ -514,9 +514,9 @@ const TEXT_LEAK_SECRETS = {
   await logEvent({
     actionType: "UPDATE",
     entityType: "SYSTEM",
-    entityId: "stripe-config",
-    entityName: `Stripe key ${TEXT_LEAK_SECRETS.sk}`,
-    description: `Rotated Stripe live key to ${TEXT_LEAK_SECRETS.sk} for finance team`,
+    entityId: "PaymentProvider-config",
+    entityName: `PaymentProvider key ${TEXT_LEAK_SECRETS.sk}`,
+    description: `Rotated PaymentProvider live key to ${TEXT_LEAK_SECRETS.sk} for finance team`,
     severity: "WARNING",
     module: "integrations",
   });
@@ -542,7 +542,7 @@ const TEXT_LEAK_SECRETS = {
       "task-84: REDACTED sentinel present in entity_name",
     );
     assert(
-      description.includes("Rotated Stripe live key"),
+      description.includes("Rotated PaymentProvider live key"),
       "task-84: surrounding prose preserved in description",
     );
   }
@@ -553,7 +553,7 @@ const TEXT_LEAK_SECRETS = {
   await logEvent({
     actionType: "CREATE",
     entityType: "SYSTEM",
-    entityName: `GitHub PAT issued: ${TEXT_LEAK_SECRETS.ghp}`,
+    entityName: `SourceControlProvider PAT issued: ${TEXT_LEAK_SECRETS.ghp}`,
     description: `JWT minted: ${TEXT_LEAK_SECRETS.jwt}`,
     severity: "INFO",
     module: "auth",
@@ -590,7 +590,7 @@ const TEXT_LEAK_SECRETS = {
       note: `bcrypt of legacy admin: ${TEXT_LEAK_SECRETS.bcrypt}`,
     },
     newValue: {
-      provider: "github",
+      provider: "SourceControlProvider",
       headers: {
         authorization: `Bearer ${TEXT_LEAK_SECRETS.jwt}`,
       },
@@ -645,7 +645,7 @@ const TEXT_LEAK_SECRETS = {
   await logEvent({
     actionType: "UPDATE",
     entityType: "SYSTEM",
-    entityId: "stripe-webhook",
+    entityId: "PaymentProvider-webhook",
     description: "webhook reconfigured",
     severity: "INFO",
     module: "integrations",
@@ -653,7 +653,7 @@ const TEXT_LEAK_SECRETS = {
       note: `key=${TEXT_LEAK_SECRETS.sk}`,
       curl_example:
         `curl -H 'Authorization: Bearer ${TEXT_LEAK_SECRETS.sk}' <REDACTED_URL>`,
-      provider: "stripe",
+      provider: "PaymentProvider",
     },
   });
   const params = findInsertCallParams();
@@ -669,7 +669,7 @@ const TEXT_LEAK_SECRETS = {
       "task-302: REDACTED sentinel present in newValue JSONB column",
     );
     assert(
-      newJson.includes("stripe"),
+      newJson.includes("PaymentProvider"),
       "task-302: non-secret sibling field 'provider' preserved verbatim",
     );
     assert(
@@ -686,7 +686,7 @@ const TEXT_LEAK_SECRETS = {
   await logEvent({
     actionType: "UPDATE",
     entityType: "SYSTEM",
-    entityId: "stripe-webhook",
+    entityId: "PaymentProvider-webhook",
     description: "webhook reconfigured",
     severity: "INFO",
     module: "integrations",
@@ -694,7 +694,7 @@ const TEXT_LEAK_SECRETS = {
       note: `key=${TEXT_LEAK_SECRETS.sk}`,
       curl_example:
         `curl -H 'Authorization: Bearer ${TEXT_LEAK_SECRETS.sk}' <REDACTED_URL>`,
-      provider: "stripe",
+      provider: "PaymentProvider",
     },
   });
   const params = findInsertCallParams();

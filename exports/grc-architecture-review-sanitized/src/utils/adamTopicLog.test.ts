@@ -102,7 +102,7 @@ for (const [key, rawSecret] of Object.entries(SECRETS)) {
 
 captured.length = 0;
 await recordQuestionSection("Show KPI scorecards", {
-  surface: "slack",
+  surface: "ChatProvider",
   askedBy: "user@example.invalid",
 });
 const ordinaryParams = lastInsertParams();
@@ -110,7 +110,7 @@ assert(ordinaryParams !== null, "ordinary payload: INSERT was issued");
 if (ordinaryParams) {
   assert(
     ordinaryParams[0] === "kpis" &&
-      ordinaryParams[1] === "slack" &&
+      ordinaryParams[1] === "ChatProvider" &&
       ordinaryParams[2] === "user@example.invalid",
     "ordinary payload is preserved verbatim",
   );

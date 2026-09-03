@@ -17,7 +17,7 @@
 import { createHash } from "crypto";
 import { sharedPool as pool } from "./sharedPool";
 import { logger } from "./logger";
-import { getOpenAIApiKey, getOpenAIBaseUrl } from "./openaiCredentials";
+import { getLLMProviderApiKey, getLLMProviderBaseUrl } from "./LLMProviderCredentials";
 import { redactSensitiveDeep } from "./eventLogsDatabase";
 
 export const EMBED_MODEL =
@@ -66,12 +66,12 @@ export async function initClauseEmbeddingsTable(): Promise<void> {
 
 /** Best-effort: embed a single text. Returns null on any failure. */
 export async function embedText(text: string): Promise<number[] | null> {
-  const key = getOpenAIApiKey();
+  const key = getLLMProviderApiKey();
   if (!key) return null;
   const input = (text || "").slice(0, 8000);
   if (!input.trim()) return null;
   try {
-    const base = getOpenAIBaseUrl() || "<REDACTED_URL>";
+    const base = getLLMProviderBaseUrl() || "<REDACTED_URL>";
     const res = await fetch(`${base}/embeddings`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
@@ -184,7 +184,7 @@ export async function embeddingsCoverage(): Promise<{
  * Pre-warm the embedding cache for clauses that don't have one yet. Batched +
  * bounded-concurrency so the request can't time out; the UI loops until
  * remaining === 0. Runs regardless of the feature flag (so you can build the
- * cache first, then flip DOCUMENT_MAPPING_EMBEDDINGS=true). Needs the OpenAI
+ * cache first, then flip DOCUMENT_MAPPING_EMBEDDINGS=true). Needs the LLMProvider
  * key — without it every embed fails and `failed` reports the count.
  * Staleness (clause text changed after caching) is still handled lazily by
  * ensureClauseEmbeddings during a real scan; this only fills the gaps.

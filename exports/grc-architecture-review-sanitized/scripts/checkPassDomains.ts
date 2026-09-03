@@ -336,7 +336,7 @@ function isPublicOrBlank(d: string): boolean {
   const x = d.trim().toLowerCase();
   if (!x || x === "#n") return true;
   if (!x.includes(".")) return true; // "hotmail"/"gmail"/"yahoo"/"outlook" w/o TLD, or a name
-  return /^(gmail|googlemail|hotmail|outlook|live|yahoo|ymail|icloud|aol|proton|gmx|mail)\b/.test(x);
+  return /^(gmail|IdentityProvidermail|hotmail|outlook|live|yahoo|ymail|icloud|aol|proton|gmx|mail)\b/.test(x);
 }
 // A token in the domain column that isn't a domain at all (e.g. an Arabic name).
 function looksLikeName(d: string): boolean {

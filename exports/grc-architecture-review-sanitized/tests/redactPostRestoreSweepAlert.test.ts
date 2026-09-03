@@ -10,7 +10,7 @@
  *   1. Stays silent when every monitored counter (event_logs,
  *      nc_change_history, capa_change_history, ai_pending_actions) is
  *      zero — a clean boot must not page on-call.
- *   2. Dispatches via the platform notification hub AND the Slack
+ *   2. Dispatches via the platform notification hub AND the ChatProvider
  *      webhook when any monitored counter is non-zero.
  *   3. Includes the sweep timestamp and the per-table counts in both
  *      payloads so on-call can immediately tell which surface area was
@@ -21,25 +21,25 @@
  *   5. Trips on `nc_change_history` alone, on `capa_change_history`
  *      alone, on `event_logs` alone, and on `ai_pending_actions` alone
  *      (each surface area wires the alert independently).
- *   6. Skips Slack delivery when SLACK_WEBHOOK_URL is unset (parity with
+ *   6. Skips ChatProvider delivery when ChatProvider_WEBHOOK_URL is unset (parity with
  *      the ai-cost-summary cron pattern), but still fires the platform
  *      notification.
  *   7. Reports a per-channel `channelsAttempted` / `channelsSucceeded`
- *      breakdown so a Slack outage does not suppress the in-app
+ *      breakdown so a ChatProvider outage does not suppress the in-app
  *      notification and vice-versa.
- *   8. Never throws when the notification hub or Slack webhook fails —
+ *   8. Never throws when the notification hub or ChatProvider webhook fails —
  *      the boot path must not crash because the alert pipeline is
  *      degraded.
  *   9. (Task #555) Skips the email channel when
  *      `POST_RESTORE_SWEEP_ALERT_EMAIL` is unset — silent parity with
- *      the Slack-webhook channel.
+ *      the ChatProvider-webhook channel.
  *  10. (Task #555) When the env var lists recipients, sends a
- *      formatted email via the resend helper that includes the sweep
+ *      formatted email via the EmailProvider helper that includes the sweep
  *      timestamp and per-table counts. Trims whitespace and skips
  *      empty entries in the comma-separated recipient list.
  *  11. (Task #555) Email send failure (helper throws or returns
  *      `success:false`) does NOT suppress the platform notification
- *      or the Slack webhook, and is logged as a warning.
+ *      or the ChatProvider webhook, and is logged as a warning.
  *
  * Run:  npx tsx tests/redactPostRestoreSweepAlert.test.ts
  */
@@ -158,28 +158,28 @@ interface DispatcherStub {
 
 /**
  * Stub-length API key (>=20 chars) the dispatcher accepts as
- * "configured" without ever calling Resend (the dependency-injected
+ * "configured" without ever calling EmailProvider (the dependency-injected
  * `sendEmail` short-circuits the real client). Real keys look nothing
  * like this — kept obviously fake so a leaked test fixture is never
  * mistaken for a credential by the redaction sweep itself.
  */
-const STUB_RESEND_KEY = "re_test_aaaaaaaaaaaaaaaaaaaaaa";
+const STUB_EmailProvider_KEY = "re_test_aaaaaaaaaaaaaaaaaaaaaa";
 
 function buildStub(
   options: {
-    slackUrl?: string;
+    ChatProviderUrl?: string;
     emailRecipientsEnv?: string;
     /**
-     * Override the stubbed `RESEND_API_KEY` env var.
+     * Override the stubbed `EmailProvider_API_KEY` env var.
      *   - `undefined` (default): inject a stub-length key so the
      *     dispatcher considers the email helper configured.
-     *   - `null`: omit `RESEND_API_KEY` entirely (helper unconfigured —
+     *   - `null`: omit `EmailProvider_API_KEY` entirely (helper unconfigured —
      *     dispatcher must skip the email channel silently).
      *   - any string: pass through verbatim (e.g. a 5-char value to
      *     simulate a clearly-too-short stub the dispatcher should also
      *     treat as unconfigured).
      */
-    resendApiKey?: string | null;
+    EmailProviderApiKey?: string | null;
     notificationError?: Error;
     emailError?: Error;
     emailFailureReason?: string;
@@ -219,20 +219,20 @@ function buildStub(
         return { success: true, id: "email-stub-id" };
       },
       env: {
-        ...(options.slackUrl
-          ? { SLACK_WEBHOOK_URL: options.slackUrl }
+        ...(options.ChatProviderUrl
+          ? { ChatProvider_WEBHOOK_URL: options.ChatProviderUrl }
           : {}),
         ...(options.emailRecipientsEnv !== undefined
           ? { POST_RESTORE_SWEEP_ALERT_EMAIL: options.emailRecipientsEnv }
           : {}),
-        // null → leave RESEND_API_KEY unset; undefined → use stub key;
+        // null → leave EmailProvider_API_KEY unset; undefined → use stub key;
         // any explicit string → passthrough (lets tests probe the
         // length<20 unconfigured branch).
-        ...(options.resendApiKey === null
+        ...(options.EmailProviderApiKey === null
           ? {}
           : {
-              RESEND_API_KEY:
-                options.resendApiKey ?? STUB_RESEND_KEY,
+              EmailProvider_API_KEY:
+                options.EmailProviderApiKey ?? STUB_EmailProvider_KEY,
             }),
       },
       logger: {
@@ -311,7 +311,7 @@ async function run(): Promise<void> {
 
   console.log("\nClean sweep — all zeros");
   {
-    const stub = buildStub({ slackUrl: "<REDACTED_URL>" });
+    const stub = buildStub({ ChatProviderUrl: "<REDACTED_URL>" });
     const outcome = await dispatchPostRestoreSweepAlert(
       buildSweepResult(),
       stub.deps,
@@ -327,7 +327,7 @@ async function run(): Promise<void> {
     );
     assert(
       stub.fetches.length === 0,
-      "no Slack POST on clean sweep (silent boot)",
+      "no ChatProvider POST on clean sweep (silent boot)",
     );
     assert(
       outcome.channelsAttempted.length === 0,
@@ -337,7 +337,7 @@ async function run(): Promise<void> {
 
   console.log("\nNon-zero sweep — both channels fire");
   {
-    const stub = buildStub({ slackUrl: "<REDACTED_URL>" });
+    const stub = buildStub({ ChatProviderUrl: "<REDACTED_URL>" });
     const outcome = await dispatchPostRestoreSweepAlert(
       buildSweepResult({
         event_logs_updated: 5,
@@ -355,22 +355,22 @@ async function run(): Promise<void> {
     );
     assert(outcome.dispatched === true, "outcome.dispatched=true");
     assert(stub.notifications.length === 1, "platform notification dispatched");
-    assert(stub.fetches.length === 1, "Slack webhook POST dispatched");
+    assert(stub.fetches.length === 1, "ChatProvider webhook POST dispatched");
     assert(
       outcome.channelsAttempted.includes("platform_notification"),
       "platform_notification attempted",
     );
     assert(
-      outcome.channelsAttempted.includes("slack_webhook"),
-      "slack_webhook attempted",
+      outcome.channelsAttempted.includes("ChatProvider_webhook"),
+      "ChatProvider_webhook attempted",
     );
     assert(
       outcome.channelsSucceeded.includes("platform_notification"),
       "platform_notification succeeded",
     );
     assert(
-      outcome.channelsSucceeded.includes("slack_webhook"),
-      "slack_webhook succeeded",
+      outcome.channelsSucceeded.includes("ChatProvider_webhook"),
+      "ChatProvider_webhook succeeded",
     );
 
     const notif = stub.notifications[0].args;
@@ -397,29 +397,29 @@ async function run(): Promise<void> {
       "notification message embeds per-table counts",
     );
 
-    const slackCall = stub.fetches[0];
+    const ChatProviderCall = stub.fetches[0];
     assert(
-      slackCall.url === "<REDACTED_URL>",
-      "Slack POST hits configured SLACK_WEBHOOK_URL",
+      ChatProviderCall.url === "<REDACTED_URL>",
+      "ChatProvider POST hits configured ChatProvider_WEBHOOK_URL",
     );
-    assert(slackCall.init?.method === "POST", "Slack POST uses HTTP POST");
-    const slackHeaders = (slackCall.init?.headers ?? {}) as Record<
+    assert(ChatProviderCall.init?.method === "POST", "ChatProvider POST uses HTTP POST");
+    const ChatProviderHeaders = (ChatProviderCall.init?.headers ?? {}) as Record<
       string,
       string
     >;
     assert(
-      slackHeaders["Content-Type"] === "application/json",
-      "Slack POST sets Content-Type=application/json",
+      ChatProviderHeaders["Content-Type"] === "application/json",
+      "ChatProvider POST sets Content-Type=application/json",
     );
-    const slackBody = JSON.parse(String(slackCall.init?.body ?? "{}"));
+    const ChatProviderBody = JSON.parse(String(ChatProviderCall.init?.body ?? "{}"));
     assert(
-      typeof slackBody.text === "string" && slackBody.text.includes(SWEEP_TS),
-      "Slack body includes sweep timestamp",
+      typeof ChatProviderBody.text === "string" && ChatProviderBody.text.includes(SWEEP_TS),
+      "ChatProvider body includes sweep timestamp",
     );
     assert(
-      slackBody.text.includes("nc_change_history=7") &&
-        slackBody.text.includes("capa_change_history=11"),
-      "Slack body includes nc/capa change-history counts",
+      ChatProviderBody.text.includes("nc_change_history=7") &&
+        ChatProviderBody.text.includes("capa_change_history=11"),
+      "ChatProvider body includes nc/capa change-history counts",
     );
 
     assert(
@@ -438,18 +438,18 @@ async function run(): Promise<void> {
     "nc_change_history_updated",
     "capa_change_history_updated",
   ] as const) {
-    const stub = buildStub({ slackUrl: "<REDACTED_URL>" });
+    const stub = buildStub({ ChatProviderUrl: "<REDACTED_URL>" });
     const outcome = await dispatchPostRestoreSweepAlert(
       buildSweepResult({ [surface]: 1 } as Partial<SweepResult>),
       stub.deps,
     );
     assert(outcome.dispatched === true, `${surface}>0 alone fires the alert`);
     assert(stub.notifications.length === 1, `${surface}>0 sends notification`);
-    assert(stub.fetches.length === 1, `${surface}>0 sends Slack POST`);
+    assert(stub.fetches.length === 1, `${surface}>0 sends ChatProvider POST`);
   }
 
   {
-    const stub = buildStub({ slackUrl: "<REDACTED_URL>" });
+    const stub = buildStub({ ChatProviderUrl: "<REDACTED_URL>" });
     const outcome = await dispatchPostRestoreSweepAlert(
       buildSweepResult({
         ai_pending_actions: {
@@ -470,7 +470,7 @@ async function run(): Promise<void> {
 
   console.log("\nSkipped ai_pending_actions does NOT trigger by itself");
   {
-    const stub = buildStub({ slackUrl: "<REDACTED_URL>" });
+    const stub = buildStub({ ChatProviderUrl: "<REDACTED_URL>" });
     const outcome = await dispatchPostRestoreSweepAlert(
       buildSweepResult({
         ai_pending_actions: { skipped: "table_missing" },
@@ -483,7 +483,7 @@ async function run(): Promise<void> {
     );
   }
 
-  console.log("\nSlack webhook unset — platform notification still fires");
+  console.log("\nChatProvider webhook unset — platform notification still fires");
   {
     const stub = buildStub();
     const outcome = await dispatchPostRestoreSweepAlert(
@@ -493,23 +493,23 @@ async function run(): Promise<void> {
     assert(outcome.dispatched === true, "alert still dispatched");
     assert(
       stub.notifications.length === 1,
-      "platform notification fired without SLACK_WEBHOOK_URL",
+      "platform notification fired without ChatProvider_WEBHOOK_URL",
     );
-    assert(stub.fetches.length === 0, "no Slack POST without webhook URL");
+    assert(stub.fetches.length === 0, "no ChatProvider POST without webhook URL");
     assert(
       outcome.channelsAttempted.includes("platform_notification"),
       "only platform_notification attempted",
     );
     assert(
-      !outcome.channelsAttempted.includes("slack_webhook"),
-      "slack_webhook NOT attempted when URL missing",
+      !outcome.channelsAttempted.includes("ChatProvider_webhook"),
+      "ChatProvider_webhook NOT attempted when URL missing",
     );
   }
 
-  console.log("\nNotification failure — Slack still fires, no throw");
+  console.log("\nNotification failure — ChatProvider still fires, no throw");
   {
     const stub = buildStub({
-      slackUrl: "<REDACTED_URL>",
+      ChatProviderUrl: "<REDACTED_URL>",
       notificationError: new Error("hub down"),
     });
     const outcome = await dispatchPostRestoreSweepAlert(
@@ -518,8 +518,8 @@ async function run(): Promise<void> {
     );
     assert(outcome.dispatched === true, "outcome still reports dispatched");
     assert(
-      outcome.channelsSucceeded.includes("slack_webhook"),
-      "slack_webhook still succeeded",
+      outcome.channelsSucceeded.includes("ChatProvider_webhook"),
+      "ChatProvider_webhook still succeeded",
     );
     assert(
       !outcome.channelsSucceeded.includes("platform_notification"),
@@ -531,13 +531,13 @@ async function run(): Promise<void> {
       ),
       "notification failure logged as warning",
     );
-    assert(stub.fetches.length === 1, "Slack POST still issued");
+    assert(stub.fetches.length === 1, "ChatProvider POST still issued");
   }
 
-  console.log("\nSlack failure — platform notification still recorded");
+  console.log("\nChatProvider failure — platform notification still recorded");
   {
     const stub = buildStub({
-      slackUrl: "<REDACTED_URL>",
+      ChatProviderUrl: "<REDACTED_URL>",
       fetchResponses: [new Error("network down")],
     });
     const outcome = await dispatchPostRestoreSweepAlert(
@@ -550,21 +550,21 @@ async function run(): Promise<void> {
       "platform_notification still succeeded",
     );
     assert(
-      !outcome.channelsSucceeded.includes("slack_webhook"),
-      "slack_webhook missing from succeeded list",
+      !outcome.channelsSucceeded.includes("ChatProvider_webhook"),
+      "ChatProvider_webhook missing from succeeded list",
     );
     assert(
       stub.warnings.some((w) =>
-        String(w[0] ?? "").includes("Slack webhook failed"),
+        String(w[0] ?? "").includes("ChatProvider webhook failed"),
       ),
-      "Slack failure logged as warning",
+      "ChatProvider failure logged as warning",
     );
   }
 
-  console.log("\nSlack 5xx — counted as failure, not silent success");
+  console.log("\nChatProvider 5xx — counted as failure, not silent success");
   {
     const stub = buildStub({
-      slackUrl: "<REDACTED_URL>",
+      ChatProviderUrl: "<REDACTED_URL>",
       fetchResponses: [new Response("oops", { status: 502 })],
     });
     const outcome = await dispatchPostRestoreSweepAlert(
@@ -573,12 +573,12 @@ async function run(): Promise<void> {
     );
     assert(outcome.dispatched === true, "outcome dispatched");
     assert(
-      !outcome.channelsSucceeded.includes("slack_webhook"),
-      "slack_webhook NOT in succeeded list on HTTP 502",
+      !outcome.channelsSucceeded.includes("ChatProvider_webhook"),
+      "ChatProvider_webhook NOT in succeeded list on HTTP 502",
     );
     assert(
       stub.warnings.some((w) =>
-        String(w[0] ?? "").includes("Slack webhook returned"),
+        String(w[0] ?? "").includes("ChatProvider webhook returned"),
       ),
       "HTTP failure logged as warning",
     );
@@ -589,7 +589,7 @@ async function run(): Promise<void> {
   //
   // Mirrors the AI_COST_ALERT_EMAIL pattern in src/mastra/inngest/index.ts
   // (the ai-cost-summary cron). On-call engineers who don't happen to be
-  // in Slack at boot time must still see the page in their inbox because a
+  // in ChatProvider at boot time must still see the page in their inbox because a
   // credential reintroduction via backup restore needs to be acknowledged
   // within minutes, not hours.
   // ──────────────────────────────────────────────────────────────────────
@@ -598,11 +598,11 @@ async function run(): Promise<void> {
     "\n[Task #555] Email recipients unset — silent on the email channel",
   );
   {
-    // Slack URL set so the alert still has another delivery channel and
+    // ChatProvider URL set so the alert still has another delivery channel and
     // we can confirm email is the only one missing — i.e. the unset env
     // var really did cause the email channel to be skipped, not that the
     // dispatch itself short-circuited.
-    const stub = buildStub({ slackUrl: "<REDACTED_URL>" });
+    const stub = buildStub({ ChatProviderUrl: "<REDACTED_URL>" });
     const outcome = await dispatchPostRestoreSweepAlert(
       buildSweepResult({ event_logs_updated: 1 }),
       stub.deps,
@@ -631,7 +631,7 @@ async function run(): Promise<void> {
     // helper would just no-op, but the channel would be falsely reported
     // as attempted).
     const stub = buildStub({
-      slackUrl: "<REDACTED_URL>",
+      ChatProviderUrl: "<REDACTED_URL>",
       emailRecipientsEnv: " , , ",
     });
     const outcome = await dispatchPostRestoreSweepAlert(
@@ -653,7 +653,7 @@ async function run(): Promise<void> {
   );
   {
     const stub = buildStub({
-      slackUrl: "<REDACTED_URL>",
+      ChatProviderUrl: "<REDACTED_URL>",
       emailRecipientsEnv:
         "user@example.invalid, user@example.invalid ,, user@example.invalid",
     });
@@ -726,7 +726,7 @@ async function run(): Promise<void> {
       stub.notifications.length === 1,
       "platform notification still dispatched alongside email",
     );
-    assert(stub.fetches.length === 1, "Slack POST still issued alongside email");
+    assert(stub.fetches.length === 1, "ChatProvider POST still issued alongside email");
   }
 
   console.log(
@@ -734,9 +734,9 @@ async function run(): Promise<void> {
   );
   {
     const stub = buildStub({
-      slackUrl: "<REDACTED_URL>",
+      ChatProviderUrl: "<REDACTED_URL>",
       emailRecipientsEnv: "user@example.invalid",
-      emailError: new Error("resend api down"),
+      emailError: new Error("EmailProvider api down"),
     });
     const outcome = await dispatchPostRestoreSweepAlert(
       buildSweepResult({ nc_change_history_updated: 3 }),
@@ -756,8 +756,8 @@ async function run(): Promise<void> {
       "platform_notification still succeeded despite email throw",
     );
     assert(
-      outcome.channelsSucceeded.includes("slack_webhook"),
-      "slack_webhook still succeeded despite email throw",
+      outcome.channelsSucceeded.includes("ChatProvider_webhook"),
+      "ChatProvider_webhook still succeeded despite email throw",
     );
     assert(
       stub.notifications.length === 1,
@@ -765,7 +765,7 @@ async function run(): Promise<void> {
     );
     assert(
       stub.fetches.length === 1,
-      "Slack POST issued despite email throw",
+      "ChatProvider POST issued despite email throw",
     );
     assert(
       stub.warnings.some((w) =>
@@ -780,16 +780,16 @@ async function run(): Promise<void> {
       "delivery error — counted as failure & warned",
   );
   {
-    // success:false here represents an upstream Resend delivery error
+    // success:false here represents an upstream EmailProvider delivery error
     // (rate-limit, blocked recipient, etc.) — the dispatcher already
-    // confirmed the helper was configured (RESEND_API_KEY present), so
+    // confirmed the helper was configured (EmailProvider_API_KEY present), so
     // the channel was attempted and a real failure deserves a warning.
     // This is the "degraded upstream" branch, distinct from the
     // unconfigured-helper silent-skip branch covered below.
     const stub = buildStub({
-      slackUrl: "<REDACTED_URL>",
+      ChatProviderUrl: "<REDACTED_URL>",
       emailRecipientsEnv: "user@example.invalid",
-      emailFailureReason: "Resend API rate limited",
+      emailFailureReason: "EmailProvider API rate limited",
     });
     const outcome = await dispatchPostRestoreSweepAlert(
       buildSweepResult({ capa_change_history_updated: 1 }),
@@ -810,32 +810,32 @@ async function run(): Promise<void> {
       "platform_notification still succeeded",
     );
     assert(
-      outcome.channelsSucceeded.includes("slack_webhook"),
-      "slack_webhook still succeeded",
+      outcome.channelsSucceeded.includes("ChatProvider_webhook"),
+      "ChatProvider_webhook still succeeded",
     );
     assert(
       stub.warnings.some((w) =>
         String(w[0] ?? "").includes("email helper") &&
-        String(w[0] ?? "").includes("Resend API rate limited"),
+        String(w[0] ?? "").includes("EmailProvider API rate limited"),
       ),
       "email helper failure reason surfaced in warning",
     );
   }
 
   console.log(
-    "\n[Task #555] Email helper unconfigured (no RESEND_API_KEY) — " +
+    "\n[Task #555] Email helper unconfigured (no EmailProvider_API_KEY) — " +
       "silent skip, channel NOT attempted",
   );
   {
-    // Parity with the SLACK_WEBHOOK_URL-unset branch: when the helper
+    // Parity with the ChatProvider_WEBHOOK_URL-unset branch: when the helper
     // itself is unconfigured the channel should be skipped silently —
     // no warning, no `attempted` entry, no `sendEmail` call. This
     // mirrors how the ai-cost-summary cron behaves: an unconfigured
-    // Resend key is a deployment posture, not an alertable failure.
+    // EmailProvider key is a deployment posture, not an alertable failure.
     const stub = buildStub({
-      slackUrl: "<REDACTED_URL>",
+      ChatProviderUrl: "<REDACTED_URL>",
       emailRecipientsEnv: "user@example.invalid",
-      resendApiKey: null, // omit RESEND_API_KEY entirely
+      EmailProviderApiKey: null, // omit EmailProvider_API_KEY entirely
     });
     const outcome = await dispatchPostRestoreSweepAlert(
       buildSweepResult({ event_logs_updated: 2 }),
@@ -844,7 +844,7 @@ async function run(): Promise<void> {
     assert(outcome.dispatched === true, "outcome dispatched");
     assert(
       stub.emails.length === 0,
-      "email helper NOT invoked when RESEND_API_KEY missing",
+      "email helper NOT invoked when EmailProvider_API_KEY missing",
     );
     assert(
       !outcome.channelsAttempted.includes("email_recipients"),
@@ -865,22 +865,22 @@ async function run(): Promise<void> {
       "platform_notification still fires when email channel silenced",
     );
     assert(
-      outcome.channelsSucceeded.includes("slack_webhook"),
-      "slack_webhook still fires when email channel silenced",
+      outcome.channelsSucceeded.includes("ChatProvider_webhook"),
+      "ChatProvider_webhook still fires when email channel silenced",
     );
   }
 
   console.log(
-    "\n[Task #555] RESEND_API_KEY too short (<20 chars) — also silent skip",
+    "\n[Task #555] EmailProvider_API_KEY too short (<20 chars) — also silent skip",
   );
   {
-    // The configured-check matches `sendResendEmail`'s own internal
+    // The configured-check matches `sendEmailProviderEmail`'s own internal
     // length>=20 gate, so a placeholder/stub key ("changeme", "todo")
     // is treated the same as no key at all.
     const stub = buildStub({
-      slackUrl: "<REDACTED_URL>",
+      ChatProviderUrl: "<REDACTED_URL>",
       emailRecipientsEnv: "user@example.invalid",
-      resendApiKey: "short",
+      EmailProviderApiKey: "short",
     });
     const outcome = await dispatchPostRestoreSweepAlert(
       buildSweepResult({ event_logs_updated: 1 }),
@@ -907,7 +907,7 @@ async function run(): Promise<void> {
     // email — is touched, so opt-in operators are not paged on every
     // boot.
     const stub = buildStub({
-      slackUrl: "<REDACTED_URL>",
+      ChatProviderUrl: "<REDACTED_URL>",
       emailRecipientsEnv: "user@example.invalid",
     });
     const outcome = await dispatchPostRestoreSweepAlert(
@@ -936,11 +936,11 @@ async function run(): Promise<void> {
   // ──────────────────────────────────────────────────────────────────────
 
   console.log(
-    "\n[Task #626] Flagged action codes inlined in notification, Slack, and email",
+    "\n[Task #626] Flagged action codes inlined in notification, ChatProvider, and email",
   );
   {
     const stub = buildStub({
-      slackUrl: "<REDACTED_URL>",
+      ChatProviderUrl: "<REDACTED_URL>",
       emailRecipientsEnv: "user@example.invalid",
     });
     const flagged = ["APR-001", "APR-002", "APR-003"];
@@ -971,16 +971,16 @@ async function run(): Promise<void> {
       "notification body has no truncation hint when nothing was truncated",
     );
 
-    const slackBody = JSON.parse(String(stub.fetches[0].init?.body ?? "{}"));
+    const ChatProviderBody = JSON.parse(String(stub.fetches[0].init?.body ?? "{}"));
     assert(
-      typeof slackBody.text === "string" &&
-        slackBody.text.includes("Flagged approval IDs:") &&
-        flagged.every((c) => slackBody.text.includes(c)),
-      "Slack body lists the flagged approval IDs",
+      typeof ChatProviderBody.text === "string" &&
+        ChatProviderBody.text.includes("Flagged approval IDs:") &&
+        flagged.every((c) => ChatProviderBody.text.includes(c)),
+      "ChatProvider body lists the flagged approval IDs",
     );
     assert(
-      !String(slackBody.text).includes("+0 more"),
-      "Slack body has no truncation hint when nothing was truncated",
+      !String(ChatProviderBody.text).includes("+0 more"),
+      "ChatProvider body has no truncation hint when nothing was truncated",
     );
 
     const email = stub.emails[0];
@@ -1007,7 +1007,7 @@ async function run(): Promise<void> {
   );
   {
     const stub = buildStub({
-      slackUrl: "<REDACTED_URL>",
+      ChatProviderUrl: "<REDACTED_URL>",
       emailRecipientsEnv: "user@example.invalid",
     });
     // Synthesise the boundary case: helper hit FLAGGED_ACTION_CODES_LIMIT
@@ -1040,10 +1040,10 @@ async function run(): Promise<void> {
       "notification body includes the +7 more truncation hint",
     );
 
-    const slackBody = JSON.parse(String(stub.fetches[0].init?.body ?? "{}"));
+    const ChatProviderBody = JSON.parse(String(stub.fetches[0].init?.body ?? "{}"));
     assert(
-      String(slackBody.text).includes("(+7 more)"),
-      "Slack body includes the +7 more truncation hint",
+      String(ChatProviderBody.text).includes("(+7 more)"),
+      "ChatProvider body includes the +7 more truncation hint",
     );
 
     const email = stub.emails[0];
@@ -1065,7 +1065,7 @@ async function run(): Promise<void> {
     // not bloat the alert body with an empty "Flagged approval IDs:"
     // section — bodies stay as concise as they were pre-Task-#626.
     const stub = buildStub({
-      slackUrl: "<REDACTED_URL>",
+      ChatProviderUrl: "<REDACTED_URL>",
       emailRecipientsEnv: "user@example.invalid",
     });
     const outcome = await dispatchPostRestoreSweepAlert(
@@ -1091,10 +1091,10 @@ async function run(): Promise<void> {
       "notification body has NO 'Flagged approval IDs' section when list is empty",
     );
 
-    const slackBody = JSON.parse(String(stub.fetches[0].init?.body ?? "{}"));
+    const ChatProviderBody = JSON.parse(String(stub.fetches[0].init?.body ?? "{}"));
     assert(
-      !String(slackBody.text).includes("Flagged approval IDs"),
-      "Slack body has NO 'Flagged approval IDs' section when list is empty",
+      !String(ChatProviderBody.text).includes("Flagged approval IDs"),
+      "ChatProvider body has NO 'Flagged approval IDs' section when list is empty",
     );
 
     const email = stub.emails[0];
@@ -1117,7 +1117,7 @@ async function run(): Promise<void> {
     // The dispatcher must treat this exactly like an empty list — no
     // section, no warning, no crash from missing fields.
     const stub = buildStub({
-      slackUrl: "<REDACTED_URL>",
+      ChatProviderUrl: "<REDACTED_URL>",
       emailRecipientsEnv: "user@example.invalid",
     });
     const outcome = await dispatchPostRestoreSweepAlert(
@@ -1134,10 +1134,10 @@ async function run(): Promise<void> {
       !notifMsg.includes("Flagged approval IDs"),
       "skipped backfill → no flagged section in notification",
     );
-    const slackBody = JSON.parse(String(stub.fetches[0].init?.body ?? "{}"));
+    const ChatProviderBody = JSON.parse(String(stub.fetches[0].init?.body ?? "{}"));
     assert(
-      !String(slackBody.text).includes("Flagged approval IDs"),
-      "skipped backfill → no flagged section in Slack body",
+      !String(ChatProviderBody.text).includes("Flagged approval IDs"),
+      "skipped backfill → no flagged section in ChatProvider body",
     );
     const email = stub.emails[0];
     assert(
@@ -1155,7 +1155,7 @@ async function run(): Promise<void> {
     // list is the source of truth — the env var must be ignored even
     // if it is set.
     const stub = buildStub({
-      slackUrl: "<REDACTED_URL>",
+      ChatProviderUrl: "<REDACTED_URL>",
       emailRecipientsEnv: "user@example.invalid",
     });
     let resolverCalls = 0;
@@ -1216,7 +1216,7 @@ async function run(): Promise<void> {
   );
   {
     const stub = buildStub({
-      slackUrl: "<REDACTED_URL>",
+      ChatProviderUrl: "<REDACTED_URL>",
       emailRecipientsEnv: "user@example.invalid",
     });
     let resolverCalls = 0;
@@ -1267,7 +1267,7 @@ async function run(): Promise<void> {
     // email channel just because the resolver threw — it falls back
     // to parsing the env var directly so on-call still gets paged.
     const stub = buildStub({
-      slackUrl: "<REDACTED_URL>",
+      ChatProviderUrl: "<REDACTED_URL>",
       emailRecipientsEnv: "user@example.invalid",
     });
     stub.deps.resolveRecipients = async () => {
@@ -1302,7 +1302,7 @@ async function run(): Promise<void> {
     "\n[Task #573] Both DB and env empty → email channel skipped silently",
   );
   {
-    const stub = buildStub({ slackUrl: "<REDACTED_URL>" });
+    const stub = buildStub({ ChatProviderUrl: "<REDACTED_URL>" });
     stub.deps.resolveRecipients = async () => ({
       recipients: [],
       source: "none" as const,

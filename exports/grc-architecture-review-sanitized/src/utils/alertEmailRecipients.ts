@@ -80,7 +80,7 @@ export interface AlertRecipientAuditEntry {
  * local-parts with embedded `@` etc). Mirror what every real-world
  * form does: `user@example.invalid`, no whitespace, ≤ 254 chars
  * (the SMTP envelope limit). The dispatcher itself will pass anything
- * we accept here through to Resend, so this is also our last line of
+ * we accept here through to EmailProvider, so this is also our last line of
  * defence against typo'd entries that would silently break the page.
  */
 const EMAIL_RE = /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$/;

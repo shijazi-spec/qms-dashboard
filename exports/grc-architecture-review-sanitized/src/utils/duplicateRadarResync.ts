@@ -1,9 +1,9 @@
 /**
  * Targeted CRM re-sync for the Preflight check. When an operator corrects a
- * mis-tagged "client" in Zoho (e.g. clears a stale Phase / changes a stage),
+ * mis-tagged "client" in CRMProvider (e.g. clears a stale Phase / changes a stage),
  * the local duplicate_records copy is still stale until the slow full scan
  * catches up — so the company keeps BLOCKING contactable leads. This re-fetches
- * ONLY the matching companies' deals straight from Zoho, overwrites the local
+ * ONLY the matching companies' deals straight from CRMProvider, overwrites the local
  * raw_data + stage + layout, and busts the CS-client directory cache so the
  * next preflight reflects the correction in seconds.
  *
@@ -11,11 +11,11 @@
  *   - scripts/resyncCorrectedDeals.ts   (bulk, editable TARGETS list)
  *   - POST /api/duplicates/preflight/recheck   (the per-row "↻ Re-check" button)
  *
- * Read-only against Zoho (GET by id) + a local UPDATE — never writes to Zoho,
+ * Read-only against CRMProvider (GET by id) + a local UPDATE — never writes to CRMProvider,
  * never deletes.
  */
 import { pool } from "./duplicateRadarDatabase";
-import { fetchZohoRecordById } from "./zohoCRM";
+import { fetchCRMProviderRecordById } from "./CRMProviderCRM";
 import { invalidateCsDirectoryCache } from "./duplicateRadarPreflight";
 
 export interface ResyncTarget {
@@ -27,7 +27,7 @@ export interface ResyncTarget {
 export interface ResyncDetail {
   id: string;
   name: string;
-  status: "updated" | "not_in_zoho";
+  status: "updated" | "not_in_CRMProvider";
   phaseBefore?: string | null;
   phaseAfter?: string | null;
   stageBefore?: string | null;
@@ -44,9 +44,9 @@ export interface ResyncResult {
 /**
  * Re-fetch and refresh the local copy of every deal that matches the given
  * companies (by exact domain OR a name LIKE). Bounded so one call can never
- * hammer the Zoho API.
+ * hammer the CRMProvider API.
  */
-export async function resyncCompanyDealsFromZoho(
+export async function resyncCompanyDealsFromCRMProvider(
   targets: ResyncTarget[],
   opts?: { maxDeals?: number },
 ): Promise<ResyncResult> {
@@ -78,7 +78,7 @@ export async function resyncCompanyDealsFromZoho(
     if (!conds.length) continue;
 
     const q = await pool.query(
-      `SELECT zoho_record_id, account_name, company_name,
+      `SELECT CRMProvider_record_id, account_name, company_name,
               raw_data->>'Phase' AS phase,
               COALESCE(NULLIF(stage,''), raw_data->>'Stage') AS stage
          FROM duplicate_records
@@ -89,16 +89,16 @@ export async function resyncCompanyDealsFromZoho(
 
     for (const r of q.rows) {
       if (out.scanned >= maxDeals) break;
-      const id = r.zoho_record_id as string;
+      const id = r.CRMProvider_record_id as string;
       if (!id || seen.has(id)) continue;
       seen.add(id);
       out.scanned++;
 
-      const fresh: any = await fetchZohoRecordById("Deals", id).catch(() => null);
+      const fresh: any = await fetchCRMProviderRecordById("Deals", id).catch(() => null);
       const name = (r.account_name || r.company_name || "").toString();
       if (!fresh) {
         out.missing++;
-        out.details.push({ id, name, status: "not_in_zoho" });
+        out.details.push({ id, name, status: "not_in_CRMProvider" });
         continue;
       }
       const newStage = fresh.Stage ?? null;
@@ -108,7 +108,7 @@ export async function resyncCompanyDealsFromZoho(
             SET raw_data = $1::jsonb,
                 stage = $2,
                 layout_name = COALESCE($3, layout_name)
-          WHERE record_type='deal' AND zoho_record_id = $4`,
+          WHERE record_type='deal' AND CRMProvider_record_id = $4`,
         [JSON.stringify(fresh), newStage, newLayout, id],
       );
       out.updated++;

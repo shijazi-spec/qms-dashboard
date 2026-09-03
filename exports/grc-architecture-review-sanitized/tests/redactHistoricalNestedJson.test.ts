@@ -143,7 +143,7 @@ const MFA_SECRET_UUID = "<REDACTED_PHONE>-4000-8000-<REDACTED_PHONE>";
       entity_name: "IntegrationSync",
       old_value: null,
       new_value: {
-        provider: "stripe",
+        provider: "PaymentProvider",
         // Note: this value is a STRING that happens to be JSON.
         raw_payload: JSON.stringify({ api_key: "<REDACTED_SECRET>" }),
       },
@@ -210,7 +210,7 @@ const MFA_SECRET_UUID = "<REDACTED_PHONE>-4000-8000-<REDACTED_PHONE>";
     "row 2: sentinel present in re-stringified raw_payload",
   );
   assert(
-    row2.new_value.provider === "stripe",
+    row2.new_value.provider === "PaymentProvider",
     "row 2: non-secret sibling JSONB key preserved",
   );
 }

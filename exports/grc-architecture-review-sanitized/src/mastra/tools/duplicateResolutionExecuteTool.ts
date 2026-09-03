@@ -71,7 +71,7 @@ export const duplicateResolutionExecuteTool = createTool({
         errors: report.errors.length,
         performedBy: AGENT_PERFORMED_BY,
       }).catch(() => {});
-      // (Apply notifications are batched into the twice-daily Slack digest.)
+      // (Apply notifications are batched into the twice-daily ChatProvider digest.)
       return {
         success: ok,
         clusterId: plan.clusterId,

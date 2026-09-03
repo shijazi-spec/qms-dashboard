@@ -94,8 +94,8 @@ function makeStub(opts: {
         resolved.push({ id, note });
         return { id, alert_type: "prompt_regression", severity: "medium", title: "", description: "", status: "resolved" };
       },
-      // Stub the recovery notifier so tests never touch Slack/email or
-      // process.env.SLACK_WEBHOOK_URL — mirrors `notifyToolHealthRecovery`
+      // Stub the recovery notifier so tests never touch ChatProvider/email or
+      // process.env.ChatProvider_WEBHOOK_URL — mirrors `notifyToolHealthRecovery`
       // dep injection on the tool-health cron.
       notifyRecovery: async (recoveries: CapturedRecoveryNotification[]) => {
         recoveryCalls.push(recoveries);
@@ -531,7 +531,7 @@ async function run(): Promise<void> {
 
   // ──────────────────────────────────────────────────────────────────────
   // Case 15: Recovery notifier batches multiple recoveries in a single
-  // call so admins get one summary on Slack/email per cron tick instead
+  // call so admins get one summary on ChatProvider/email per cron tick instead
   // of N pages.
   // ──────────────────────────────────────────────────────────────────────
   console.log("\n15. Recovery notifier batches multiple recoveries into one call");
@@ -614,7 +614,7 @@ async function run(): Promise<void> {
     const out = await runPromptRegressionCheck({
       ...stub.deps,
       notifyRecovery: async () => {
-        throw new Error("simulated Slack outage");
+        throw new Error("simulated ChatProvider outage");
       },
     });
     assert(out.alertsAutoResolved === 1, "alert still reported as auto-resolved");
@@ -750,13 +750,13 @@ async function run(): Promise<void> {
   // ──────────────────────────────────────────────────────────────────────
   // Notification fan-out tests (Task #247)
   //
-  // The next four cases exercise the breach-side Slack + email fan-out
+  // The next four cases exercise the breach-side ChatProvider + email fan-out
   // (`sendPromptRegressionNotifications`). The recovery-side fan-out is
   // already covered by Cases 15–16 via the `notifyRecovery` dep. Here we:
   //
-  //   • Stub `fetch` (Slack) and `sendEmail` (Resend) on the helper's
+  //   • Stub `fetch` (ChatProvider) and `sendEmail` (EmailProvider) on the helper's
   //     injected deps so no real network or email goes out from CI.
-  //   • Set `SLACK_WEBHOOK_URL` and `AI_PROMPT_REGRESSION_ALERT_EMAIL`
+  //   • Set `ChatProvider_WEBHOOK_URL` and `AI_PROMPT_REGRESSION_ALERT_EMAIL`
   //     so the helper's per-channel guards open. Every block restores
   //     the previous values in a finally so the test file stays
   //     idempotent regardless of which env was set when CI invoked it.
@@ -767,15 +767,15 @@ async function run(): Promise<void> {
 
   function withRegressionEnv<T>(
     fn: () => Promise<T>,
-    overrides: { slack?: string | null; email?: string | null } = {},
+    overrides: { ChatProvider?: string | null; email?: string | null } = {},
   ): Promise<T> {
-    const prevSlack = process.env.SLACK_WEBHOOK_URL;
+    const prevChatProvider = process.env.ChatProvider_WEBHOOK_URL;
     const prevEmail = process.env.AI_PROMPT_REGRESSION_ALERT_EMAIL;
-    if (overrides.slack === null) {
-      delete process.env.SLACK_WEBHOOK_URL;
+    if (overrides.ChatProvider === null) {
+      delete process.env.ChatProvider_WEBHOOK_URL;
     } else {
-      process.env.SLACK_WEBHOOK_URL =
-        overrides.slack ?? "<REDACTED_URL>";
+      process.env.ChatProvider_WEBHOOK_URL =
+        overrides.ChatProvider ?? "<REDACTED_URL>";
     }
     if (overrides.email === null) {
       delete process.env.AI_PROMPT_REGRESSION_ALERT_EMAIL;
@@ -784,8 +784,8 @@ async function run(): Promise<void> {
         overrides.email ?? "user@example.invalid";
     }
     return fn().finally(() => {
-      if (prevSlack === undefined) delete process.env.SLACK_WEBHOOK_URL;
-      else process.env.SLACK_WEBHOOK_URL = prevSlack;
+      if (prevChatProvider === undefined) delete process.env.ChatProvider_WEBHOOK_URL;
+      else process.env.ChatProvider_WEBHOOK_URL = prevChatProvider;
       if (prevEmail === undefined) {
         delete process.env.AI_PROMPT_REGRESSION_ALERT_EMAIL;
       } else {
@@ -812,12 +812,12 @@ async function run(): Promise<void> {
   }
 
   // ──────────────────────────────────────────────────────────────────────
-  // Case 19 (Task #247): Slack + email each fire exactly once when the
+  // Case 19 (Task #247): ChatProvider + email each fire exactly once when the
   // cron creates a new alert. Stubs both channels at the dep level so
   // the assertions live or die on the actual fan-out path executed by
   // production code, not on a parallel codepath in the test.
   // ──────────────────────────────────────────────────────────────────────
-  console.log("\n19. Slack and email each fire once when an alert is created");
+  console.log("\n19. ChatProvider and email each fire once when an alert is created");
   await withRegressionEnv(async () => {
     const fetchCalls: Array<{ url: string; body: string }> = [];
     const emailCalls: Array<{
@@ -855,22 +855,22 @@ async function run(): Promise<void> {
           fetchFn: fetchStub,
           sendEmail: sendEmailStub,
           // Bypass the per-(agent, version) cooldown introduced by Task
-          // #754 — this case asserts the happy-path Slack/email fan-out
+          // #754 — this case asserts the happy-path ChatProvider/email fan-out
           // and runs against a test DB with no notification ledger row.
           claimDb: async () => true,
         }),
     });
 
     assert(out.alertsCreated === 1, "1 alert created (precondition for fan-out)");
-    assert(fetchCalls.length === 1, `Slack fetch called once (got ${fetchCalls.length})`);
+    assert(fetchCalls.length === 1, `ChatProvider fetch called once (got ${fetchCalls.length})`);
     assert(
-      fetchCalls[0]?.url === process.env.SLACK_WEBHOOK_URL,
-      `Slack POST targets the configured webhook (got "${fetchCalls[0]?.url}")`,
+      fetchCalls[0]?.url === process.env.ChatProvider_WEBHOOK_URL,
+      `ChatProvider POST targets the configured webhook (got "${fetchCalls[0]?.url}")`,
     );
     assert(
       fetchCalls[0]?.body.includes("TestAgent") &&
         fetchCalls[0]?.body.includes("v2"),
-      "Slack body names the agent and the regressed version",
+      "ChatProvider body names the agent and the regressed version",
     );
     assert(emailCalls.length === 1, `Email sent once (got ${emailCalls.length})`);
     const emailTo = emailCalls[0]?.to;
@@ -938,21 +938,21 @@ async function run(): Promise<void> {
       notifyBreachesCalls === 0,
       `breach notifier dep is not invoked at all (got ${notifyBreachesCalls})`,
     );
-    assert(fetchCalls === 0, `Slack fetch never fires (got ${fetchCalls})`);
+    assert(fetchCalls === 0, `ChatProvider fetch never fires (got ${fetchCalls})`);
     assert(emailCalls === 0, `Email never fires (got ${emailCalls})`);
   });
 
   // ──────────────────────────────────────────────────────────────────────
-  // Case 21 (Task #247): a Slack outage must not silence the email
+  // Case 21 (Task #247): a ChatProvider outage must not silence the email
   // channel. The cron explicitly catches each channel independently so
-  // ops still get the email summary even when the Slack webhook is
+  // ops still get the email summary even when the ChatProvider webhook is
   // returning 5xx or refusing connections.
   // ──────────────────────────────────────────────────────────────────────
-  console.log("\n21. Slack failure does not prevent the email from being attempted");
+  console.log("\n21. ChatProvider failure does not prevent the email from being attempted");
   await withRegressionEnv(async () => {
     let emailCalls = 0;
     const fetchStub = (async () => {
-      throw new Error("simulated Slack 503");
+      throw new Error("simulated ChatProvider 503");
     }) as typeof fetch;
     const sendEmailStub = async () => {
       emailCalls++;
@@ -963,7 +963,7 @@ async function run(): Promise<void> {
       fetchFn: fetchStub,
       sendEmail: sendEmailStub,
       // Skip the cooldown gate (Task #754) for this isolation test —
-      // we're asserting Slack-failure does not silence email, not the
+      // we're asserting ChatProvider-failure does not silence email, not the
       // throttle behaviour (separately covered by case 27/28).
       claimDb: async () => true,
     });
@@ -972,12 +972,12 @@ async function run(): Promise<void> {
   });
 
   // ──────────────────────────────────────────────────────────────────────
-  // Case 22 (Task #247): symmetrically — if Resend (email) throws, the
-  // Slack post must already have happened. The Slack block runs first
+  // Case 22 (Task #247): symmetrically — if EmailProvider (email) throws, the
+  // ChatProvider post must already have happened. The ChatProvider block runs first
   // and is wrapped in its own try/catch, so an email failure cannot
-  // retroactively cancel the Slack notification.
+  // retroactively cancel the ChatProvider notification.
   // ──────────────────────────────────────────────────────────────────────
-  console.log("\n22. Email failure does not prevent the Slack post");
+  console.log("\n22. Email failure does not prevent the ChatProvider post");
   await withRegressionEnv(async () => {
     let fetchCalls = 0;
     const fetchStub = (async () => {
@@ -985,19 +985,19 @@ async function run(): Promise<void> {
       return new Response("ok", { status: 200 });
     }) as typeof fetch;
     const sendEmailStub = async () => {
-      throw new Error("simulated Resend 500");
+      throw new Error("simulated EmailProvider 500");
     };
 
     await sendPromptRegressionNotifications([makeBreach()], {
       fetchFn: fetchStub,
       sendEmail: sendEmailStub,
       // Skip the cooldown gate (Task #754) for this isolation test —
-      // we're asserting email-failure does not silence Slack, not the
+      // we're asserting email-failure does not silence ChatProvider, not the
       // throttle behaviour (separately covered by case 27/28).
       claimDb: async () => true,
     });
 
-    assert(fetchCalls === 1, `Slack fetch was still attempted (got ${fetchCalls})`);
+    assert(fetchCalls === 1, `ChatProvider fetch was still attempted (got ${fetchCalls})`);
   });
 
   // ────────────────────────────────────────────────────────────────────────
@@ -1025,14 +1025,14 @@ async function run(): Promise<void> {
   }
 
   // ──────────────────────────────────────────────────────────────────────
-  // Case 23 (Task #640): Slack + email each fire exactly once when an
+  // Case 23 (Task #640): ChatProvider + email each fire exactly once when an
   // open prompt-regression alert auto-resolves. Drives the recovery
   // path end-to-end through `runPromptRegressionCheck` so the
   // assertions live or die on the production wiring (cron → recovery
   // sweep → `notifyRecovery` → `sendPromptRegressionRecoveryNotifications`),
   // not on a parallel codepath in the test.
   // ──────────────────────────────────────────────────────────────────────
-  console.log("\n23. Recovery — Slack and email each fire once when an alert auto-resolves");
+  console.log("\n23. Recovery — ChatProvider and email each fire once when an alert auto-resolves");
   await withRegressionEnv(async () => {
     const fetchCalls: Array<{ url: string; body: string }> = [];
     const emailCalls: Array<{
@@ -1086,17 +1086,17 @@ async function run(): Promise<void> {
     });
 
     assert(out.alertsAutoResolved === 1, "1 alert auto-resolved (precondition for fan-out)");
-    assert(fetchCalls.length === 1, `Slack fetch called once (got ${fetchCalls.length})`);
+    assert(fetchCalls.length === 1, `ChatProvider fetch called once (got ${fetchCalls.length})`);
     assert(
-      fetchCalls[0]?.url === process.env.SLACK_WEBHOOK_URL,
-      `Slack POST targets the configured webhook (got "${fetchCalls[0]?.url}")`,
+      fetchCalls[0]?.url === process.env.ChatProvider_WEBHOOK_URL,
+      `ChatProvider POST targets the configured webhook (got "${fetchCalls[0]?.url}")`,
     );
     assert(
       fetchCalls[0]?.body.includes("Recovered") &&
         fetchCalls[0]?.body.includes("TestAgent") &&
         fetchCalls[0]?.body.includes("v2") &&
         fetchCalls[0]?.body.includes("#42"),
-      "Slack body announces a recovery and names the agent, version and alert id",
+      "ChatProvider body announces a recovery and names the agent, version and alert id",
     );
     assert(emailCalls.length === 1, `Recovery email sent once (got ${emailCalls.length})`);
     const emailTo = emailCalls[0]?.to;
@@ -1119,16 +1119,16 @@ async function run(): Promise<void> {
   });
 
   // ──────────────────────────────────────────────────────────────────────
-  // Case 24 (Task #640): a Slack outage on the recovery path must not
+  // Case 24 (Task #640): a ChatProvider outage on the recovery path must not
   // silence the recovery email. Mirrors case 21 on the breach side —
   // each channel is wrapped in its own try/catch so ops still get the
-  // recovery email even when the Slack webhook is returning 5xx.
+  // recovery email even when the ChatProvider webhook is returning 5xx.
   // ──────────────────────────────────────────────────────────────────────
-  console.log("\n24. Recovery — Slack failure does not prevent the email from being attempted");
+  console.log("\n24. Recovery — ChatProvider failure does not prevent the email from being attempted");
   await withRegressionEnv(async () => {
     let emailCalls = 0;
     const fetchStub = (async () => {
-      throw new Error("simulated Slack 503");
+      throw new Error("simulated ChatProvider 503");
     }) as typeof fetch;
     const sendEmailStub = async () => {
       emailCalls++;
@@ -1144,11 +1144,11 @@ async function run(): Promise<void> {
   });
 
   // ──────────────────────────────────────────────────────────────────────
-  // Case 25 (Task #640): symmetrically — if Resend (email) throws on the
-  // recovery path, the Slack post must already have happened. Mirrors
+  // Case 25 (Task #640): symmetrically — if EmailProvider (email) throws on the
+  // recovery path, the ChatProvider post must already have happened. Mirrors
   // case 22 on the breach side.
   // ──────────────────────────────────────────────────────────────────────
-  console.log("\n25. Recovery — email failure does not prevent the Slack post");
+  console.log("\n25. Recovery — email failure does not prevent the ChatProvider post");
   await withRegressionEnv(async () => {
     let fetchCalls = 0;
     const fetchStub = (async () => {
@@ -1156,7 +1156,7 @@ async function run(): Promise<void> {
       return new Response("ok", { status: 200 });
     }) as typeof fetch;
     const sendEmailStub = async () => {
-      throw new Error("simulated Resend 500");
+      throw new Error("simulated EmailProvider 500");
     };
 
     await sendPromptRegressionRecoveryNotifications([makeRecovery()], {
@@ -1164,7 +1164,7 @@ async function run(): Promise<void> {
       sendEmail: sendEmailStub,
     });
 
-    assert(fetchCalls === 1, `Recovery Slack fetch was still attempted (got ${fetchCalls})`);
+    assert(fetchCalls === 1, `Recovery ChatProvider fetch was still attempted (got ${fetchCalls})`);
   });
 
   // ────────────────────────────────────────────────────────────────────────
@@ -1211,7 +1211,7 @@ async function run(): Promise<void> {
     const baselineOut = await runPromptRegressionCheck({
       ...stubBaseline.deps,
       loadOverrides: async () => ({}),
-      // Skip Slack/email side-effects entirely — only the alert-create
+      // Skip ChatProvider/email side-effects entirely — only the alert-create
       // path is under test here.
       notifyBreaches: async () => {},
     });
@@ -1267,13 +1267,13 @@ async function run(): Promise<void> {
   //
   // The breach notifier now takes a `claimDb` dep that mirrors the tool-
   // health alerter's per-key throttle. When the DB returns `false` for a
-  // given `(agent, version)` key the breach must NOT reach Slack or email
+  // given `(agent, version)` key the breach must NOT reach ChatProvider or email
   // this cycle — even though `runPromptRegressionCheck` already opened an
   // AIAlert row. This case feeds two breaches, lets only one through the
   // throttle, and asserts:
   //   • the throttle key shape is `prompt_regression:<agent>:<version>`,
   //   • the throttle is consulted exactly once per breach,
-  //   • only the sendable breach is surfaced in the Slack body and the
+  //   • only the sendable breach is surfaced in the ChatProvider body and the
   //     single email summary (i.e. throttled breaches are filtered, not
   //     just dimmed),
   //   • the configured `notifyThrottleMin` is forwarded as the cooldown
@@ -1348,22 +1348,22 @@ async function run(): Promise<void> {
       `claimDb is called with TTL ${expectedTtlMs} ms (got ${JSON.stringify(claimCalls.map((c) => c.ttlMs))})`,
     );
 
-    // 3. Slack fires once and the body mentions only the un-throttled
+    // 3. ChatProvider fires once and the body mentions only the un-throttled
     //    breach. The throttled one must not leak into the channel — that
     //    would defeat the cooldown entirely.
     assert(
       fetchCalls.length === 1,
-      `Slack POST happens exactly once for the sendable subset (got ${fetchCalls.length})`,
+      `ChatProvider POST happens exactly once for the sendable subset (got ${fetchCalls.length})`,
     );
     assert(
       fetchCalls[0]!.body.includes("TestAgent") &&
         fetchCalls[0]!.body.includes("v2"),
-      "Slack body names the un-throttled (TestAgent / v2) breach",
+      "ChatProvider body names the un-throttled (TestAgent / v2) breach",
     );
     assert(
       !fetchCalls[0]!.body.includes("OtherAgent") &&
         !fetchCalls[0]!.body.includes("v9"),
-      "Slack body omits the throttled (OtherAgent / v9) breach",
+      "ChatProvider body omits the throttled (OtherAgent / v9) breach",
     );
 
     // 4. Email behaves the same — throttled breach absent from the HTML body.
@@ -1427,7 +1427,7 @@ async function run(): Promise<void> {
       claimCalls === 0,
       `claimDb is bypassed entirely when cooldown is 0 (got ${claimCalls} calls)`,
     );
-    assert(fetchCalls === 1, `Slack still fires (got ${fetchCalls})`);
+    assert(fetchCalls === 1, `ChatProvider still fires (got ${fetchCalls})`);
     assert(emailCalls === 1, `Email still fires (got ${emailCalls})`);
   });
 

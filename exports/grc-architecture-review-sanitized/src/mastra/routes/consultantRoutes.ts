@@ -47,7 +47,7 @@ interface AgentTextResult {
  * Background. The widget has alternated between working and broken at
  * least FIVE times across SDK upgrades because Mastra rejects one of
  * generate/stream OR generateLegacy/streamLegacy depending on whether
- * openai.chat("gpt-4o") at startup produces a V4-shaped or V2/V5-shaped
+ * LLMProvider.chat("gpt-4o") at startup produces a V4-shaped or V2/V5-shaped
  * model class. The two error messages that have appeared at different
  * times:
  *
@@ -58,7 +58,7 @@ interface AgentTextResult {
  *                                  generateLegacy. Please use generate"
  *
  * Every previous "root fix" pinned ONE polarity in code, then the next
- * `@mastra/core` or `@ai-sdk/openai` bump flipped it and broke the
+ * `@mastra/core` or `@ai-sdk/LLMProvider` bump flipped it and broke the
  * widget again. Operators have re-patched this five times.
  *
  * This implementation TRIES one polarity, catches the specific
@@ -108,7 +108,7 @@ async function agentGenerateAdaptive(
     _generateMethodCache = "modern";
     return r;
   } catch (modernErr) {
-    // Any non-polarity error (tool schema, OpenAI auth/quota, RBAC, etc.) is
+    // Any non-polarity error (tool schema, LLMProvider auth/quota, RBAC, etc.) is
     // the REAL cause — surface it directly instead of masking it with a
     // misleading legacy retry.
     if (!_isV4ModelError(modernErr)) throw modernErr;
@@ -120,7 +120,7 @@ async function agentGenerateAdaptive(
       if (_isV2ModelLegacyError(legacyErr)) {
         throw new Error(
           "AI SDK/core version mismatch: generate() reports a v4-spec model while " +
-            "generateLegacy() reports a v2-spec model — @ai-sdk/openai and @mastra/core " +
+            "generateLegacy() reports a v2-spec model — @ai-sdk/LLMProvider and @mastra/core " +
             "are incompatible (pin a compatible pair). modern: " +
             (modernErr instanceof Error ? modernErr.message : String(modernErr)),
         );
@@ -153,7 +153,7 @@ async function agentStreamAdaptive(
       if (_isV2ModelLegacyError(legacyErr)) {
         throw new Error(
           "AI SDK/core version mismatch: stream() reports a v4-spec model while " +
-            "streamLegacy() reports a v2-spec model — @ai-sdk/openai and @mastra/core " +
+            "streamLegacy() reports a v2-spec model — @ai-sdk/LLMProvider and @mastra/core " +
             "are incompatible (pin a compatible pair). modern: " +
             (modernErr instanceof Error ? modernErr.message : String(modernErr)),
         );
@@ -739,7 +739,7 @@ export const consultantRoutes = [
   {
     // Adam's persistent Working Memory for the requesting user — the durable
     // "what Adam knows about me" profile that follows them across every chat
-    // (web + Slack). PDPL/ISO 27001: a user can only ever read THEIR OWN
+    // (web + ChatProvider). PDPL/ISO 27001: a user can only ever read THEIR OWN
     // memory (namespaced by resourceId) and can clear it via the sibling
     // /clear route. Returns the raw markdown so the page can render it.
     path: "/api/consultant/memory",
@@ -772,13 +772,13 @@ export const consultantRoutes = [
   },
 
   {
-    // OpenAI credential health check (Sample User 2026-07-26): confirm the key the
+    // LLMProvider credential health check (Sample User 2026-07-26): confirm the key the
     // app actually uses works — after swapping in the Tier-4 key. Reports which
     // env source is active + a MASKED tail (never the full key), then makes a
     // tiny live chat call and reports ok / the exact provider error (rate limit,
     // auth, etc.). Read-only, no state change.
-    //   GET /api/consultant/openai-health
-    path: "/api/consultant/openai-health",
+    //   GET /api/consultant/LLMProvider-health
+    path: "/api/consultant/LLMProvider-health",
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
@@ -786,17 +786,17 @@ export const consultantRoutes = [
           const user = await requireRole(c, CONSULTANT_ROLES);
           if (!user) return c.json({ error: "Insufficient permissions" }, 403);
 
-          const { getOpenAIApiKey, getOpenAIBaseUrl } = await import(
-            "../../utils/openaiCredentials"
+          const { getLLMProviderApiKey, getLLMProviderBaseUrl } = await import(
+            "../../utils/LLMProviderCredentials"
           );
-          const key = getOpenAIApiKey();
-          const baseUrl = getOpenAIBaseUrl() || "<REDACTED_URL>";
-          const aiInt = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+          const key = getLLMProviderApiKey();
+          const baseUrl = getLLMProviderBaseUrl() || "<REDACTED_URL>";
+          const aiInt = process.env.AI_INTEGRATIONS_LLMProvider_API_KEY;
           const source =
             aiInt && aiInt.length >= 40
-              ? "AI_INTEGRATIONS_OPENAI_API_KEY"
-              : process.env.OPENAI_API_KEY
-                ? "OPENAI_API_KEY"
+              ? "AI_INTEGRATIONS_LLMProvider_API_KEY"
+              : process.env.LLMProvider_API_KEY
+                ? "LLMProvider_API_KEY"
                 : "none";
           const mask = (k?: string) =>
             k ? `${k.slice(0, 3)}…${k.slice(-4)} (len ${k.length})` : "(unset)";
@@ -806,7 +806,7 @@ export const consultantRoutes = [
               ok: false,
               keySource: source,
               keyMasked: mask(key),
-              error: "No OpenAI key resolved — set OPENAI_API_KEY.",
+              error: "No LLMProvider key resolved — set LLMProvider_API_KEY.",
             });
           }
 
@@ -830,7 +830,7 @@ export const consultantRoutes = [
               }),
             });
             status = resp.status;
-            org = resp.headers.get("openai-organization") || undefined;
+            org = resp.headers.get("LLMProvider-organization") || undefined;
             ok = resp.ok;
             if (!resp.ok) {
               const body = await resp.json().catch(() => ({}));
@@ -858,13 +858,13 @@ export const consultantRoutes = [
             hint: ok
               ? "Key works — Adam is live on this key."
               : /rate limit|429|tokens per min|TPM/i.test(errorMsg || "")
-                ? "Still rate-limited — the app is NOT on the new Tier-4 key yet. Check that OPENAI_API_KEY holds the new key AND that AI_INTEGRATIONS_OPENAI_API_KEY is cleared, then republish."
+                ? "Still rate-limited — the app is NOT on the new Tier-4 key yet. Check that LLMProvider_API_KEY holds the new key AND that AI_INTEGRATIONS_LLMProvider_API_KEY is cleared, then republish."
                 : /invalid|incorrect|auth|401/i.test(errorMsg || "")
                   ? "Auth error — the key value looks wrong or wasn't saved to the deployment secrets."
                   : "Call failed — see error.",
           });
         } catch (error) {
-          logger.error("[Consultant] openai-health error:", error);
+          logger.error("[Consultant] LLMProvider-health error:", error);
           return c.json({ error: "Health check failed" }, 500);
         }
       };
@@ -1190,7 +1190,7 @@ export const consultantRoutes = [
           const encoder = new TextEncoder();
           // Heartbeat: while the agent is "thinking" (e.g. waiting on a
           // slow tool before the first chunk arrives), the SSE socket is
-          // idle and intermediate proxies (Replit's edge, corporate
+          // idle and intermediate proxies (HostingPlatform's edge, corporate
           // gateways) can drop the connection after ~30-60s. Send an
           // SSE comment frame every 15s — comments are ignored by the
           // EventSource parser but keep the TCP socket warm.
@@ -1389,7 +1389,7 @@ export const consultantRoutes = [
         } catch (error) {
           logger.error("[Consultant] Stream error:", error);
           // Surface the underlying error class + message in the response so
-          // DevTools shows the real cause (e.g. "OpenAIError: 401 Incorrect
+          // DevTools shows the real cause (e.g. "LLMProviderError: 401 Incorrect
           // API key", "AbortError", "RateLimitError"). The frontend
           // previously got an opaque "Failed to start stream" and could only
           // tell the user "No response received." — invisible by design.
@@ -1621,7 +1621,7 @@ export const consultantRoutes = [
           // send one (older clients that haven't been updated yet).
           // ratingSource / clientSurface mark which UI surface produced
           // the rating; defaults match the inline thumbs on the web
-          // consultant chat (other surfaces — Slack, mobile, embedded
+          // consultant chat (other surfaces — ChatProvider, mobile, embedded
           // widget — supply different values when wired up).
           const feedbackMetadata = buildAiCallFeedbackMetadata({
             promptVersion: safeMetaString(clientPromptVersion, 100) ?? QMS_CONSULTANT_PROMPT_VERSION,

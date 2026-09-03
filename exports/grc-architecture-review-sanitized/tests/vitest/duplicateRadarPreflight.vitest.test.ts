@@ -347,7 +347,7 @@ describe("classifyPreflightRows — phone & company-name match paths", () => {
 
 describe("shouldCreateForVerdict (R5 — webhook decision policy)", () => {
   // BLOCK and REVIEW are stop-the-create verdicts. The webhook should
-  // return should_create=false so a Zoho-side workflow can refuse the
+  // return should_create=false so a CRMProvider-side workflow can refuse the
   // insert and route the record to the existing owner / CS instead.
   test("block → false", () => {
     expect(shouldCreateForVerdict("block")).toBe(false);
@@ -385,7 +385,7 @@ describe("buildClusterFromRecords — Tier-1 company state engine", () => {
   const rec = (o: Partial<PreflightRecordRow>): PreflightRecordRow => ({
     cluster_id: 5, domain: "<REDACTED_HOST>", record_type: "deal", stage: null, status: null,
     lead_status: null, churn_date: null, gov_type: null, owner_name: "Sample User",
-    record_name: "Acme", company_name: "Example Organization", zoho_record_id: "1",
+    record_name: "Example Organization", company_name: "Example Organization", CRMProvider_record_id: "1",
     layout_name: null, account_type: null, lead_type: null, ...o,
   });
 

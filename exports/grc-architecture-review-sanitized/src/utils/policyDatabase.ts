@@ -161,7 +161,7 @@ export async function initPolicyTables(): Promise<void> {
 
   // Controlled-document BYTES, in the database.
   //
-  // They used to be written to <cwd>/data/documents. Replit rebuilds the
+  // They used to be written to <cwd>/data/documents. HostingPlatform rebuilds the
   // deployment directory from the repo on every publish and `data/` is not
   // tracked, so every uploaded document was destroyed at the next deploy while
   // its policies row kept claiming a file — the CS SOP's Open button 404'd on

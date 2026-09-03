@@ -281,7 +281,7 @@ export function sanitizeErrorMessage(error: unknown): string {
     if (msg.includes('ECONNREFUSED') || msg.includes('ETIMEDOUT')) {
       return 'Service temporarily unavailable';
     }
-    if (msg.includes('Resend') || msg.includes('SMTP') || msg.includes('email')) {
+    if (msg.includes('EmailProvider') || msg.includes('SMTP') || msg.includes('email')) {
       return 'Email service temporarily unavailable';
     }
   }

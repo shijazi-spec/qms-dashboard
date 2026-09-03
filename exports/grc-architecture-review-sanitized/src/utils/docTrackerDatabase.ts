@@ -21,7 +21,7 @@
  * upserting whole rows.
  *
  * Every column is declared in the canonical CREATE TABLE (no runtime-only
- * ALTERs) so scripts/check-schema-parity.mjs --strict stays clean and Replit's
+ * ALTERs) so scripts/check-schema-parity.mjs --strict stays clean and HostingPlatform's
  * publish-time schema diff never proposes a DROP.
  */
 

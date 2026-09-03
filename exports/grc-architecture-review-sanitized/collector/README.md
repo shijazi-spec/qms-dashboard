@@ -28,7 +28,7 @@ rotting.
 
 ### 1. Get the ingest key
 
-In Replit → **Secrets**, set `DOC_TRACKER_INGEST_KEY` to a random string of at
+In HostingPlatform → **Secrets**, set `DOC_TRACKER_INGEST_KEY` to a random string of at
 least 16 characters (32+ recommended). Until this is set the platform refuses
 ingest with `503` — it fails closed rather than accepting unauthenticated writes.
 
@@ -46,7 +46,7 @@ From an **elevated** PowerShell prompt:
 ```powershell
 [Environment]::SetEnvironmentVariable('DOC_TRACKER_INGEST_KEY', 'paste-the-key-here', 'Machine')
 [Environment]::SetEnvironmentVariable('DOC_TRACKER_LIBRARY_ROOT', 'D:\GRQ files\Coded & Controlled', 'Machine')
-[Environment]::SetEnvironmentVariable('DOC_TRACKER_API_BASE', 'https://<REDACTED_HOST>', 'Machine')
+[Environment]::SetEnvironmentVariable('DOC_TRACKER_API_BASE', '<REDACTED_URL_SCHEME><REDACTED_HOST>', 'Machine')
 ```
 
 Close and reopen PowerShell afterwards — environment changes are not picked up
@@ -153,8 +153,8 @@ generating no audit noise.
 
 | Symptom | Cause |
 |---|---|
-| `503` — ingest not configured | `DOC_TRACKER_INGEST_KEY` is unset **on the platform**, in Replit Secrets |
-| `401` — key rejected | The machine's key does not match Replit's |
+| `503` — ingest not configured | `DOC_TRACKER_INGEST_KEY` is unset **on the platform**, in HostingPlatform Secrets |
+| `401` — key rejected | The machine's key does not match HostingPlatform's |
 | `Library root not found` | Share unmounted, or the path/folder names differ |
 | Scan finds 0 documents | Folder names must be `Documents`, `Policies`, `SOPs`, `Forms`, `Security Controls` |
 | Everything shows as orphan | Expected on first push — promote them, especially the Arabic set |
@@ -172,7 +172,7 @@ The platform exposes the scan configuration it expects:
 
 ```powershell
 $h = @{ 'X-Tracker-Key' = $env:DOC_TRACKER_INGEST_KEY }
-Invoke-RestMethod -Uri 'https://<REDACTED_HOST>/api/documentation-tracker/collector-config' -Headers $h
+Invoke-RestMethod -Uri '<REDACTED_URL_SCHEME><REDACTED_HOST>/api/documentation-tracker/collector-config' -Headers $h
 ```
 
 `hashSpecVersion` is sent with every snapshot, so a future change to what goes

@@ -903,7 +903,7 @@
         function postRestoreChannelBadgeClass(channel) {
             const c = String(channel || '').toLowerCase();
             if (c === 'email') return 'bg-purple-100 text-purple-800';
-            if (c === 'slack') return 'bg-emerald-100 text-emerald-800';
+            if (c === 'ChatProvider') return 'bg-emerald-100 text-emerald-800';
             if (c === 'in_app') return 'bg-sky-100 text-sky-800';
             return 'bg-gray-100 text-gray-700';
         }
@@ -917,7 +917,7 @@
 
         function copyPostRestoreSweepEventLogLink(eventLogId, sweepTimestamp) {
             // Build a deep-link to the event_logs row that backs this alert.
-            // Operators paste this into incident tickets / Slack threads so
+            // Operators paste this into incident tickets / ChatProvider threads so
             // anyone clicking it lands on the same audit row the alert was
             // derived from. The path mirrors the existing
             // viewPostRestoreSweepEventLog flow (module + entity_id + a

@@ -5,12 +5,12 @@
  * -------
  * The unit tests in `tests/redactPostRestoreSweepAlert.test.ts` cover the
  * dispatcher contract (recipients trimmed, body includes timestamp +
- * counts, channel marked succeeded/failed) but stub `sendResendEmail`.
+ * counts, channel marked succeeded/failed) but stub `sendEmailProviderEmail`.
  * They cannot prove that:
  *
- *   - The real Resend API accepts the payload that
+ *   - The real EmailProvider API accepts the payload that
  *     `dispatchPostRestoreSweepAlert` produces.
- *   - The rendered HTML survives Gmail web, Outlook, and Apple Mail
+ *   - The rendered HTML survives Gmail web, Outlook, and IdentityProvider Mail
  *     without the per-table counts, sweep timestamp, or
  *     `Open the audit log` link being mangled.
  *
@@ -30,23 +30,23 @@
  *     this script via a no-op stub so a verification dry-run does NOT
  *     pollute the staging notifications table or page real on-call.
  *     Pass `--include-notification` to opt in.
- *   - Channel 2 (Slack webhook) — disabled by default via a no-op fetch
- *     stub for the same reason. Pass `--include-slack` to opt in (and
- *     set `SLACK_WEBHOOK_URL` to a sandbox channel).
- *   - Channel 3 (Resend email) — ALWAYS exercised against the real
- *     `sendResendEmail` helper. This is the only channel this script
+ *   - Channel 2 (ChatProvider webhook) — disabled by default via a no-op fetch
+ *     stub for the same reason. Pass `--include-ChatProvider` to opt in (and
+ *     set `ChatProvider_WEBHOOK_URL` to a sandbox channel).
+ *   - Channel 3 (EmailProvider email) — ALWAYS exercised against the real
+ *     `sendEmailProviderEmail` helper. This is the only channel this script
  *     is designed to verify end-to-end.
  *
  * Required env vars
  * -----------------
- *   - `RESEND_API_KEY`                   — real staging Resend key (≥ 20 chars).
+ *   - `EmailProvider_API_KEY`                   — real staging EmailProvider key (≥ 20 chars).
  *   - `POST_RESTORE_SWEEP_ALERT_EMAIL`   — comma-separated test inbox(es),
  *                                          e.g. your @gmail / @outlook /
  *                                          @icloud aliases.
  *
  * Optional env vars
  * -----------------
- *   - `RESEND_FROM_EMAIL`                — override the From header
+ *   - `EmailProvider_FROM_EMAIL`                — override the From header
  *                                          (default `ExampleOrg QMS
  *                                          <user@example.invalid>`).
  *
@@ -57,8 +57,8 @@
  *                             and at least one must be positive (else the
  *                             dispatcher would correctly stay silent).
  *   --include-notification    Also exercise the platform notification hub.
- *   --include-slack           Also exercise the Slack webhook
- *                             (requires SLACK_WEBHOOK_URL).
+ *   --include-ChatProvider           Also exercise the ChatProvider webhook
+ *                             (requires ChatProvider_WEBHOOK_URL).
  *
  * Usage
  * -----
@@ -75,27 +75,27 @@ import {
   extractPostRestoreSweepAlertCounts,
   type SweepResult,
 } from "../src/utils/redactHistoricalLogs";
-import { isResendConfigured } from "../src/utils/resendMail";
+import { isEmailProviderConfigured } from "../src/utils/EmailProviderMail";
 
 interface ParsedArgs {
   counts: [number, number, number, number];
   includeNotification: boolean;
-  includeSlack: boolean;
+  includeChatProvider: boolean;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
   const out: ParsedArgs = {
     counts: [5, 7, 11, 2],
     includeNotification: false,
-    includeSlack: false,
+    includeChatProvider: false,
   };
   for (const arg of argv) {
     if (arg === "--include-notification") {
       out.includeNotification = true;
       continue;
     }
-    if (arg === "--include-slack") {
-      out.includeSlack = true;
+    if (arg === "--include-ChatProvider") {
+      out.includeChatProvider = true;
       continue;
     }
     const m = arg.match(/^--counts=(.+)$/);
@@ -171,9 +171,9 @@ async function main(): Promise<void> {
   // of letting the dispatcher's silent-skip path swallow a misconfigured
   // run (which would look like a successful no-op and defeat the whole
   // point of the verification).
-  if (!isResendConfigured()) {
+  if (!isEmailProviderConfigured()) {
     console.error(
-      "❌ RESEND_API_KEY is missing or shorter than 20 chars — " +
+      "❌ EmailProvider_API_KEY is missing or shorter than 20 chars — " +
         "the email helper would skip the channel silently. Set a real " +
         "staging key and re-run.",
     );
@@ -194,8 +194,8 @@ async function main(): Promise<void> {
     );
     process.exit(1);
   }
-  if (args.includeSlack && !process.env.SLACK_WEBHOOK_URL) {
-    console.error("❌ --include-slack passed but SLACK_WEBHOOK_URL is unset.");
+  if (args.includeChatProvider && !process.env.ChatProvider_WEBHOOK_URL) {
+    console.error("❌ --include-ChatProvider passed but ChatProvider_WEBHOOK_URL is unset.");
     process.exit(1);
   }
 
@@ -215,18 +215,18 @@ async function main(): Promise<void> {
   );
   // Be explicit about which channels run unstubbed vs which the script
   // intercepts with no-op deps. The dispatcher will still record
-  // `platform_notification` (and `slack_webhook` when SLACK_WEBHOOK_URL
+  // `platform_notification` (and `ChatProvider_webhook` when ChatProvider_WEBHOOK_URL
   // is set) as `channelsAttempted` even when this script feeds it
   // stubs, so wording this purely as "channels enabled" misled review.
   // Email is the only channel the verification dry-run actually proves
-  // out against the real Resend API.
+  // out against the real EmailProvider API.
   const realChannels = ["email_recipients"];
   if (args.includeNotification) realChannels.push("platform_notification");
-  if (args.includeSlack) realChannels.push("slack_webhook");
+  if (args.includeChatProvider) realChannels.push("ChatProvider_webhook");
   const stubbedChannels: string[] = [];
   if (!args.includeNotification) stubbedChannels.push("platform_notification");
-  if (!args.includeSlack && process.env.SLACK_WEBHOOK_URL) {
-    stubbedChannels.push("slack_webhook");
+  if (!args.includeChatProvider && process.env.ChatProvider_WEBHOOK_URL) {
+    stubbedChannels.push("ChatProvider_webhook");
   }
   console.log(`Real channels:      ${realChannels.join(", ")}`);
   console.log(
@@ -234,7 +234,7 @@ async function main(): Promise<void> {
   );
   console.log("");
 
-  // Default: stub out platform notification and Slack so a verification
+  // Default: stub out platform notification and ChatProvider so a verification
   // dry-run does not pollute staging notifications or page on-call.
   // Operators can opt in per channel via --include-* flags.
   const stubFetch: typeof fetch = (async () =>
@@ -243,10 +243,10 @@ async function main(): Promise<void> {
 
   const outcome = await dispatchPostRestoreSweepAlert(result, {
     createNotification: args.includeNotification ? undefined : noopNotification,
-    fetch: args.includeSlack ? undefined : stubFetch,
+    fetch: args.includeChatProvider ? undefined : stubFetch,
     // sendEmail intentionally NOT overridden — we want the real
-    // sendResendEmail helper to run end-to-end. The dispatcher will
-    // dynamically import it from `src/utils/resendMail.ts`.
+    // sendEmailProviderEmail helper to run end-to-end. The dispatcher will
+    // dynamically import it from `src/utils/EmailProviderMail.ts`.
   });
 
   console.log("");
@@ -268,23 +268,23 @@ async function main(): Promise<void> {
   if (!emailAttempted) {
     console.error(
       "❌ Dispatcher did not attempt the email channel. Most likely " +
-        "POST_RESTORE_SWEEP_ALERT_EMAIL or RESEND_API_KEY changed between " +
+        "POST_RESTORE_SWEEP_ALERT_EMAIL or EmailProvider_API_KEY changed between " +
         "pre-flight and dispatch. Re-run with consistent env.",
     );
     process.exit(1);
   }
   if (!emailSucceeded) {
     console.error(
-      "❌ Email helper reported failure — see preceding [ResendMail] " +
-        "logs for the underlying Resend error (rate limit, invalid " +
+      "❌ Email helper reported failure — see preceding [EmailProviderMail] " +
+        "logs for the underlying EmailProvider error (rate limit, invalid " +
         "recipient, unverified From domain, etc.).",
     );
     process.exit(1);
   }
 
   console.log(
-    "✅ Email accepted by Resend. Now open each recipient's inbox " +
-      "(Gmail web, Outlook, Apple Mail) and confirm:",
+    "✅ Email accepted by EmailProvider. Now open each recipient's inbox " +
+      "(Gmail web, Outlook, IdentityProvider Mail) and confirm:",
   );
   console.log("   - Subject contains the total row count and the 🚨 prefix.");
   console.log(`   - Body includes the timestamp ${result.sweep_timestamp}.`);

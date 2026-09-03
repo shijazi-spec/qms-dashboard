@@ -7,7 +7,7 @@
  *
  * recordResolutionEvent() persists agent-supplied `plan` / `report` objects
  * (arbitrary `unknown`) into the plan_json / report_json columns. Those
- * snapshots can embed credential-shaped values (e.g. a Zoho field snapshot
+ * snapshots can embed credential-shaped values (e.g. a CRMProvider field snapshot
  * carrying an api_key/access_token). The writer runs redactSensitiveDeep()
  * over every value before the INSERT. This test mocks pool.query, drives the
  * real write function with payloads containing the required deny-list keys
@@ -122,12 +122,12 @@ for (const key of REQUIRED_DENY_KEYS) {
   await recordResolutionEvent({
     clusterId: 1,
     eventType: "applied",
-    proposedMasterZohoId: "zoho-aaa",
-    chosenMasterZohoId: "zoho-bbb",
+    proposedMasterCRMProviderId: "CRMProvider-aaa",
+    chosenMasterCRMProviderId: "CRMProvider-bbb",
     fieldsMigrated: 3,
     plan: {
-      survivor: "zoho-bbb",
-      integration: { provider: "zoho", [key]: rawSecret },
+      survivor: "CRMProvider-bbb",
+      integration: { provider: "CRMProvider", [key]: rawSecret },
     },
     report: {
       summary: "merged 2 records",
@@ -170,14 +170,14 @@ for (const key of REQUIRED_DENY_KEYS) {
   assert(
     typeof planParsed === "object" &&
       planParsed !== null &&
-      (planParsed as Record<string, unknown>).survivor === "zoho-bbb",
+      (planParsed as Record<string, unknown>).survivor === "CRMProvider-bbb",
     `${key}: plan_json preserves non-secret fields (survivor)`,
   );
   void reportParsed;
 }
 
 // ---------------------------------------------------------------------------
-// Section 2 — secret-shaped string routed through performed_by / zoho ids
+// Section 2 — secret-shaped string routed through performed_by / CRMProvider ids
 // ---------------------------------------------------------------------------
 
 console.log("\n=== recordResolutionEvent — id/actor field scrubbing ===\n");
@@ -189,8 +189,8 @@ console.log("\n=== recordResolutionEvent — id/actor field scrubbing ===\n");
   await recordResolutionEvent({
     clusterId: 2,
     eventType: "dry_run",
-    proposedMasterZohoId: `Bearer ${jwt}`,
-    chosenMasterZohoId: "zoho-clean",
+    proposedMasterCRMProviderId: `Bearer ${jwt}`,
+    chosenMasterCRMProviderId: "CRMProvider-clean",
     performedBy: `<REDACTED_TOKEN>`,
   });
   const params = lastInsertParams();
@@ -220,10 +220,10 @@ console.log("\n=== recordResolutionEvent — non-sensitive passthrough ===\n");
   await recordResolutionEvent({
     clusterId: 42,
     eventType: "preview",
-    proposedMasterZohoId: "zoho-12345",
-    chosenMasterZohoId: "zoho-12345",
+    proposedMasterCRMProviderId: "CRMProvider-12345",
+    chosenMasterCRMProviderId: "CRMProvider-12345",
     fieldsMigrated: 7,
-    plan: { survivor: "zoho-12345", notes: "no overrides, clean merge" },
+    plan: { survivor: "CRMProvider-12345", notes: "no overrides, clean merge" },
     report: { summary: "preview only", reparented: 0 },
     performedBy: "user@example.invalid",
   });
@@ -235,8 +235,8 @@ console.log("\n=== recordResolutionEvent — non-sensitive passthrough ===\n");
       "non-sensitive: cluster_id / event_type preserved verbatim",
     );
     assert(
-      params[2] === "zoho-12345" && params[3] === "zoho-12345",
-      "non-sensitive: zoho ids preserved verbatim (not over-redacted)",
+      params[2] === "CRMProvider-12345" && params[3] === "CRMProvider-12345",
+      "non-sensitive: CRMProvider ids preserved verbatim (not over-redacted)",
     );
     assert(
       params[11] === "user@example.invalid",

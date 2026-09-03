@@ -1,15 +1,15 @@
 /**
- * AI spend circuit-breaker — pauses OpenAI/Whisper/Anthropic calls when
+ * AI spend circuit-breaker — pauses LLMProvider/Whisper/Anthropic calls when
  * estimated daily spend hits a configurable cap.
  *
- * Why this exists: the 2026-05-12 incident — OpenAI prepaid balance hit
+ * Why this exists: the 2026-05-12 incident — LLMProvider prepaid balance hit
  * zero, every analysis silently failed for ~3 hours, no alerting. Per
  * DMAIC Improve phase Solution #9 and Control phase: target ≥ 7-day
- * OpenAI balance runway with a daily cap to prevent runaway spend.
+ * LLMProvider balance runway with a daily cap to prevent runaway spend.
  *
  * Behavior (when enabled):
  *   - Tracks estimated USD per day in-memory (resets on process restart,
- *     which is fine because Replit redeploys regularly enough to make
+ *     which is fine because HostingPlatform redeploys regularly enough to make
  *     persistence overkill — this is a guardrail, not an accounting
  *     system).
  *   - Before each costly call, the call-site checks isCostCapped().
@@ -24,7 +24,7 @@
  * the flag off and let recordSpend() accumulate without blocking — that
  * gives you a free dry-run of how much the platform would spend.
  *
- * Estimates (rough; verify against your OpenAI usage dashboard):
+ * Estimates (rough; verify against your LLMProvider usage dashboard):
  *   - WHISPER_TRANSCRIBE: $0.006/min audio → assume 90s avg call → $0.01
  *   - GPT4O_MINI_ANALYZE: ~600 input + 400 output tokens → ~$0.0003
  *   - GPT4O_MINI_SDR_EVAL: ~1500 input + 500 output tokens → ~$0.0006
@@ -41,19 +41,19 @@
  *     return { status: "cost_capped" };
  *   }
  *
- *   const result = await openai.audio.transcriptions.create({...});
+ *   const result = await LLMProvider.audio.transcriptions.create({...});
  *   recordSpend(COST.WHISPER_TRANSCRIBE, "whisper_transcribe");
  */
 
 import { isFlagEnabled } from "./featureFlags";
 import { logger as safeLogger } from "./logger";
 
-/** Default cap when OPENAI_DAILY_CAP_USD is unset. */
+/** Default cap when LLMProvider_DAILY_CAP_USD is unset. */
 const DEFAULT_DAILY_CAP_USD = 50;
 
 /**
  * Estimated USD cost per operation. Hand-tuned starting estimates;
- * adjust as you compare against actual OpenAI billing.
+ * adjust as you compare against actual LLMProvider billing.
  */
 export const COST = {
   WHISPER_TRANSCRIBE: 0.01,
@@ -95,7 +95,7 @@ function rollIfNewDay(): void {
 }
 
 function readCapUsd(): number {
-  const raw = process.env.OPENAI_DAILY_CAP_USD;
+  const raw = process.env.LLMProvider_DAILY_CAP_USD;
   if (!raw) return DEFAULT_DAILY_CAP_USD;
   const n = Number(raw);
   if (!Number.isFinite(n) || n <= 0) return DEFAULT_DAILY_CAP_USD;

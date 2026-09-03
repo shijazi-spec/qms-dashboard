@@ -313,7 +313,7 @@ export interface AiPendingActionsCredentialWarningsBackfillResult {
  * 50 was chosen because:
  *   - At ~16 chars per action_code (e.g. `act_2025_01ABC123`), the
  *     embedded list adds well under 1 KB to last-sweep.json — small
- *     enough to inline into Slack/email evidence without paging.
+ *     enough to inline into ChatProvider/email evidence without paging.
  *   - Auditors investigating a sweep usually spot-check a handful of
  *     flagged rows; 50 covers any realistic spot-check budget while
  *     still surfacing patterns (same prefix repeated → bulk import).
@@ -1425,7 +1425,7 @@ export async function runSweepWithClient(
 /**
  * Per-table counters extracted from a {@link SweepResult} for the alert
  * dispatcher. Kept in this stable shape so the alert payload (notification
- * `message`, Slack body) is independent of internal `SweepResult` field
+ * `message`, ChatProvider body) is independent of internal `SweepResult` field
  * renames.
  *
  * Only the four surfaces called out in Task #462 trigger the alert — the
@@ -1443,7 +1443,7 @@ export interface PostRestoreSweepAlertTriggerCounts {
 /**
  * Outcome of {@link dispatchPostRestoreSweepAlert}. Used by the boot sweep
  * for logging and by unit tests to assert dispatcher behaviour without
- * standing up a real notifications/Slack pipeline.
+ * standing up a real notifications/ChatProvider pipeline.
  */
 export interface PostRestoreSweepAlertOutcome {
   /**
@@ -1458,18 +1458,18 @@ export interface PostRestoreSweepAlertOutcome {
   triggers: PostRestoreSweepAlertTriggerCounts;
   /** Channels the dispatcher attempted to deliver on this run. */
   channelsAttempted: Array<
-    "platform_notification" | "slack_webhook" | "email_recipients"
+    "platform_notification" | "ChatProvider_webhook" | "email_recipients"
   >;
   /** Subset of `channelsAttempted` that completed without throwing. */
   channelsSucceeded: Array<
-    "platform_notification" | "slack_webhook" | "email_recipients"
+    "platform_notification" | "ChatProvider_webhook" | "email_recipients"
   >;
 }
 
 /**
  * Shape of the email-helper override accepted by
  * {@link PostRestoreSweepAlertDeps.sendEmail}. Mirrors the public surface
- * of `sendResendEmail()` in `src/utils/resendMail.ts` so the dispatcher
+ * of `sendEmailProviderEmail()` in `src/utils/EmailProviderMail.ts` so the dispatcher
  * can dynamically import the real helper in production while unit tests
  * inject a recording stub.
  */
@@ -1485,7 +1485,7 @@ export interface PostRestoreSweepAlertEmailFn {
 /**
  * Optional dependency overrides for {@link dispatchPostRestoreSweepAlert}.
  * Production callers leave these undefined — the defaults dynamically
- * import `notificationHub.createNotification` + `resendMail.sendResendEmail`
+ * import `notificationHub.createNotification` + `EmailProviderMail.sendEmailProviderEmail`
  * and use the global `fetch` + `process.env`. Unit tests pass stubs to
  * assert the dispatcher's behaviour without touching real notification,
  * webhook, or email destinations.
@@ -1553,26 +1553,26 @@ export function extractPostRestoreSweepAlertCounts(
  *       1. The platform notification hub (`createNotification`,
  *          dynamically imported so this module stays usable in pure-CLI
  *          contexts that have no DB-backed notifications table).
- *       2. The Slack webhook at `SLACK_WEBHOOK_URL`, mirroring the
+ *       2. The ChatProvider webhook at `ChatProvider_WEBHOOK_URL`, mirroring the
  *          `ai-cost-summary` cron pattern in
  *          `src/mastra/inngest/index.ts`. Skipped silently when the env
  *          var is unset (parity with that cron).
  *       3. An opt-in recipient list at `POST_RESTORE_SWEEP_ALERT_EMAIL`
- *          (comma-separated), delivered via `sendResendEmail()` in
- *          `src/utils/resendMail.ts`. Mirrors the third channel the
+ *          (comma-separated), delivered via `sendEmailProviderEmail()` in
+ *          `src/utils/EmailProviderMail.ts`. Mirrors the third channel the
  *          `ai-cost-summary` cron exposes via `AI_COST_ALERT_EMAIL`, so
- *          on-call engineers who don't happen to be in Slack at boot
+ *          on-call engineers who don't happen to be in ChatProvider at boot
  *          time still see the page in their inbox — important because a
  *          credential reintroduction via backup restore needs to be
  *          acknowledged within minutes, not hours. Skipped silently
  *          (channel not even marked as attempted) when the env var is
  *          unset OR when the email helper itself is unconfigured
- *          (`RESEND_API_KEY` missing or shorter than the helper's
+ *          (`EmailProvider_API_KEY` missing or shorter than the helper's
  *          internal length>=20 gate). Genuine delivery failures
- *          (Resend rate-limit, network throw) are logged as warnings
+ *          (EmailProvider rate-limit, network throw) are logged as warnings
  *          but do not suppress the other two channels.
  *
- * Each channel is attempted independently — a Slack outage must not
+ * Each channel is attempted independently — a ChatProvider outage must not
  * suppress the in-app notification or the email page, and an email
  * delivery failure must not suppress the other two channels. Failures
  * are logged but never re-thrown: the boot path must not crash because
@@ -1642,7 +1642,7 @@ export async function dispatchPostRestoreSweepAlert(
     flaggedCodes.length > 0
       ? ` Flagged approval IDs: ${flaggedCodes.join(", ")}${truncationHint}.`
       : "";
-  const flaggedSlackLine =
+  const flaggedChatProviderLine =
     flaggedCodes.length > 0
       ? `\nFlagged approval IDs: \`${flaggedCodes.join(", ")}\`${truncationHint}`
       : "";
@@ -1690,52 +1690,52 @@ export async function dispatchPostRestoreSweepAlert(
     );
   }
 
-  // Channel 2 — Slack webhook (mirrors the ai-cost-summary cron pattern).
-  const slackUrl = env.SLACK_WEBHOOK_URL;
-  if (slackUrl) {
-    channelsAttempted.push("slack_webhook");
+  // Channel 2 — ChatProvider webhook (mirrors the ai-cost-summary cron pattern).
+  const ChatProviderUrl = env.ChatProvider_WEBHOOK_URL;
+  if (ChatProviderUrl) {
+    channelsAttempted.push("ChatProvider_webhook");
     try {
       const fetchImpl = deps.fetch ?? fetch;
-      const slackBody = {
+      const ChatProviderBody = {
         text:
           `:rotating_light: *${headline}*\n` +
           `Sweep timestamp: \`${result.sweep_timestamp}\`\n` +
-          `Per-table counts: \`${detailLine}\`${flaggedSlackLine}\n` +
+          `Per-table counts: \`${detailLine}\`${flaggedChatProviderLine}\n` +
           `A non-zero \`nc_change_history\` or \`capa_change_history\` ` +
           `count usually means a database restore from a pre-fix backup ` +
           `reintroduced leaked credentials — investigate the source ` +
           `backup immediately.`,
       };
-      const res = await fetchImpl(slackUrl, {
+      const res = await fetchImpl(ChatProviderUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(slackBody),
+        body: JSON.stringify(ChatProviderBody),
       });
       // `fetch` only throws on network errors; a 4xx/5xx response
       // resolves with `ok=false`. Treat HTTP failure as a delivery
-      // failure so the outcome accurately reflects what landed in Slack.
+      // failure so the outcome accurately reflects what landed in ChatProvider.
       if (res && typeof res === "object" && "ok" in res && !res.ok) {
         logger.warn?.(
-          `[Redaction] Post-restore sweep alert: Slack webhook returned ` +
+          `[Redaction] Post-restore sweep alert: ChatProvider webhook returned ` +
             `HTTP ${"status" in res ? (res as { status: number }).status : "?"}`,
         );
       } else {
-        channelsSucceeded.push("slack_webhook");
+        channelsSucceeded.push("ChatProvider_webhook");
       }
-    } catch (slackErr) {
+    } catch (ChatProviderErr) {
       logger.warn?.(
-        "[Redaction] Post-restore sweep alert: Slack webhook failed:",
-        slackErr,
+        "[Redaction] Post-restore sweep alert: ChatProvider webhook failed:",
+        ChatProviderErr,
       );
     }
   }
 
   // Channel 3 — opt-in email recipient list. Same gating rules as the
-  // Slack-webhook channel above: skipped silently — channel not even
+  // ChatProvider-webhook channel above: skipped silently — channel not even
   // marked attempted — when there are no recipients OR when the email
   // helper itself is unconfigured. Once both gates pass, a genuine
   // send failure (helper throws or returns success:false from a real
-  // Resend API error) is logged as a warning so a degraded upstream
+  // EmailProvider API error) is logged as a warning so a degraded upstream
   // is not silently swallowed.
   //
   // Recipient resolution (Task #573): the DB-backed admin list takes
@@ -1773,19 +1773,19 @@ export async function dispatchPostRestoreSweepAlert(
       .filter(Boolean);
     recipientsSource = emailRecipients.length > 0 ? "env" : "none";
   }
-  // Reuse the centralised helper-configured check from `resendMail.ts`
+  // Reuse the centralised helper-configured check from `EmailProviderMail.ts`
   // so this dispatcher cannot drift from the helper's own internal
   // length>=20 sentinel-key gate. Imported dynamically to keep the
   // module usable in CLI contexts that never touch the email path.
-  const { isResendConfigured } = await import("./resendMail");
-  const helperConfigured = isResendConfigured(env as NodeJS.ProcessEnv);
+  const { isEmailProviderConfigured } = await import("./EmailProviderMail");
+  const helperConfigured = isEmailProviderConfigured(env as NodeJS.ProcessEnv);
   if (emailRecipients.length > 0 && helperConfigured) {
     channelsAttempted.push("email_recipients");
     try {
       const sendEmail =
         deps.sendEmail ??
-        ((await import("./resendMail"))
-          .sendResendEmail as PostRestoreSweepAlertEmailFn);
+        ((await import("./EmailProviderMail"))
+          .sendEmailProviderEmail as PostRestoreSweepAlertEmailFn);
       const subject =
         `🚨 ExampleOrg post-restore redaction sweep rewrote ` +
         `${totalTriggered} historical row(s)`;

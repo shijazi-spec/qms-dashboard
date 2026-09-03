@@ -1,6 +1,6 @@
 # Connector Webhook Triggers
 
-Create webhook handlers for third-party connectors (Linear, GitHub, Slack, etc.) that trigger Mastra workflows.
+Create webhook handlers for third-party connectors (Linear, SourceControlProvider, ChatProvider, etc.) that trigger Mastra workflows.
 
 **NOTE:** This document describes how dev/prod runs the full routing.  The agent may need to know how to query the Mastra server to run directly agents, workflows, etc.  You should disregard this documentation in that case and consult the Mastra doc (docs/mastra/**).
 
@@ -82,7 +82,7 @@ import { exampleWorkflow } from "./workflows/exampleWorkflow";
 }),
 ```
 
-Done! Your webhook handler is now registered. See the [Inngest + Mastra Integration Guide](./dev-prod-replit.md) for details on how webhooks flow through the system and how to test them.
+Done! Your webhook handler is now registered. See the [Inngest + Mastra Integration Guide](./dev-prod-HostingPlatform.md) for details on how webhooks flow through the system and how to test them.
 
 ## Key Principles
 
@@ -112,8 +112,8 @@ logger?.info("📥 Webhook received", { payload });
 Find sample payloads in your connector's docs:
 
 - **Linear**: <<REDACTED_URL>>
-- **GitHub**: <<REDACTED_URL>>
-- **Stripe**: <<REDACTED_URL>>
+- **SourceControlProvider**: <<REDACTED_URL>>
+- **PaymentProvider**: <<REDACTED_URL>>
 
 ### Step 2: Create the Trigger File
 
@@ -208,7 +208,7 @@ const value = payload?.field || (() => {
 See these files for complete examples:
 
 - `exampleConnectorTrigger.ts` - Linear webhook handler (comprehensive example)
-- `slackTriggers.ts` - Slack webhook handler
+- `ChatProviderTriggers.ts` - ChatProvider webhook handler
 - `telegramTriggers.ts` - Telegram webhook handler
 
 ## Architecture Notes
@@ -221,18 +221,18 @@ The `registerApiRoute` function creates:
 The connector name is extracted from the **first path segment** of your route:
 
 - `/linear/webhook` → connector name: "linear" → listens for: `event/api.webhooks.linear.action`
-- `/github/webhook` → connector name: "github" → listens for: `event/api.webhooks.github.action`
+- `/SourceControlProvider/webhook` → connector name: "SourceControlProvider" → listens for: `event/api.webhooks.SourceControlProvider.action`
 
-**Special Case - Slack/Telegram:**
-Slack and Telegram use paths like `/webhooks/slack/action` and `/webhooks/telegram/action`, where the first segment is "webhooks". This means:
+**Special Case - ChatProvider/Telegram:**
+ChatProvider and Telegram use paths like `/webhooks/ChatProvider/action` and `/webhooks/telegram/action`, where the first segment is "webhooks". This means:
 
 - Both connectors share the event name: `event/api.webhooks.webhooks.action`
 - Both share the function ID: `api-webhooks`
 - When testing, you must send the "webhooks" event name for both providers
 
-This shared event name doesn't cause conflicts because each handler still validates its own specific payload structure internally. NOTE: This **only** applies to Slack and Telegram.
+This shared event name doesn't cause conflicts because each handler still validates its own specific payload structure internally. NOTE: This **only** applies to ChatProvider and Telegram.
 
-In production, webhooks flow through Replit's infrastructure and Inngest Cloud before reaching your handler. See the [Inngest + Mastra Integration Guide](./dev-prod-replit.md) for complete architectural details and testing instructions.
+In production, webhooks flow through HostingPlatform's infrastructure and Inngest Cloud before reaching your handler. See the [Inngest + Mastra Integration Guide](./dev-prod-HostingPlatform.md) for complete architectural details and testing instructions.
 
 ## Troubleshooting
 

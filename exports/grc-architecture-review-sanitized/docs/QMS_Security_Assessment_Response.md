@@ -5,8 +5,8 @@
 **Response Date:** March 15, 2026
 **Classification:** CONFIDENTIAL
 **Prepared by:** ExampleOrg Platform Engineering & Security Team
-**Application:** ExampleOrg QMS Platform (https://<REDACTED_HOST>)
-**Technology Stack:** Mastra (TypeScript), Hono HTTP Server, PostgreSQL (Neon), Node.js 20+
+**Application:** ExampleOrg QMS Platform (<REDACTED_URL_SCHEME><REDACTED_HOST>)
+**Technology Stack:** Mastra (TypeScript), Hono HTTP Server, PostgreSQL (DatabaseProvider), Node.js 20+
 
 ---
 
@@ -25,55 +25,55 @@
 
 ## 1. Cloud Infrastructure & Hosting
 
-### 1.1 Where are Replit's data centers physically located?
+### 1.1 Where are HostingPlatform's data centers physically located?
 
 **Response:**
-Replit's production infrastructure runs on **Google Cloud Platform (GCP)**, primarily in **US-based data centers**. The PostgreSQL database is hosted on **Neon**, which also operates on GCP infrastructure. Replit's deployment platform (Autoscale) provisions containers on GCP for serving the application.
+HostingPlatform's production infrastructure runs on **IdentityProvider Cloud Platform (GCP)**, primarily in **US-based data centers**. The PostgreSQL database is hosted on **DatabaseProvider**, which also operates on GCP infrastructure. HostingPlatform's deployment platform (Autoscale) provisions containers on GCP for serving the application.
 
-> **Note:** Specific data center locations and availability zones should be confirmed with Replit and Neon vendor documentation. Replit does not currently offer customer-selectable data residency regions. If specific data residency requirements apply (e.g., GCC/Middle East data sovereignty), this should be discussed with Replit's enterprise sales team regarding regional hosting options.
+> **Note:** Specific data center locations and availability zones should be confirmed with HostingPlatform and DatabaseProvider vendor documentation. HostingPlatform does not currently offer customer-selectable data residency regions. If specific data residency requirements apply (e.g., GCC/Middle East data sovereignty), this should be discussed with HostingPlatform's enterprise sales team regarding regional hosting options.
 
 **Evidence:**
-- Platform deployed via Replit Autoscale: `https://<REDACTED_HOST>`
-- Database connection via Neon PostgreSQL (GCP-backed): configured in `DATABASE_URL` environment variable
-- Replit infrastructure documentation: <REDACTED_URL>
+- Platform deployed via HostingPlatform Autoscale: `<REDACTED_URL_SCHEME><REDACTED_HOST>`
+- Database connection via DatabaseProvider PostgreSQL (GCP-backed): configured in `DATABASE_URL` environment variable
+- HostingPlatform infrastructure documentation: <REDACTED_URL>
 
 ---
 
-### 1.2 Does ExampleOrg have a signed Data Processing Agreement (DPA) with Replit?
+### 1.2 Does ExampleOrg have a signed Data Processing Agreement (DPA) with HostingPlatform?
 
 > **⚠️ ACTION REQUIRED — Business/Legal Confirmation Needed**
 
 **Response:**
-Replit offers Data Processing Agreements for Teams and Enterprise plan subscribers. Whether a DPA has been executed as part of ExampleOrg's current subscription agreement must be verified by the procurement/legal team.
+HostingPlatform offers Data Processing Agreements for Teams and Enterprise plan subscribers. Whether a DPA has been executed as part of ExampleOrg's current subscription agreement must be verified by the procurement/legal team.
 
-**Recommendation:** If a DPA is not yet in place, request one from Replit's enterprise team. Replit's standard DPA covers data processing obligations, sub-processor disclosure, breach notification, and data deletion commitments.
+**Recommendation:** If a DPA is not yet in place, request one from HostingPlatform's enterprise team. HostingPlatform's standard DPA covers data processing obligations, sub-processor disclosure, breach notification, and data deletion commitments.
 
 ---
 
-### 1.3 Does Replit use any sub-processors for the QMS platform?
+### 1.3 Does HostingPlatform use any sub-processors for the QMS platform?
 
 **Response:**
 Yes. The following sub-processors are involved in hosting and operating the QMS platform:
 
 | Sub-Processor | Role | Data Handled |
 |---------------|------|-------------|
-| **Google Cloud Platform (GCP)** | Compute, networking, container orchestration | Application code, runtime data |
-| **Neon** | Managed PostgreSQL database hosting | All application data (97+ tables across 19 module groups) |
+| **IdentityProvider Cloud Platform (GCP)** | Compute, networking, container orchestration | Application code, runtime data |
+| **DatabaseProvider** | Managed PostgreSQL database hosting | All application data (97+ tables across 19 module groups) |
 | **Cloudflare** | CDN, edge routing, DDoS mitigation | HTTP traffic (proxied) |
 
 Additionally, the QMS application itself integrates with the following third-party services:
 
 | Service | Purpose | Data Exchanged |
 |---------|---------|---------------|
-| **OpenAI (GPT-4o)** | AI-powered quality analysis, call scoring, audit recommendations | Business data (quality metrics, call transcripts, CRM records) |
-| **Zoho CRM** | CRM data synchronization (Leads, Deals, Contacts) | Lead/deal records, contact information |
-| **Replit OIDC** | User authentication (OpenID Connect) | Email, name, profile picture |
-| **Resend** | Outbound email notifications | Email addresses, report content |
+| **LLMProvider (GPT-4o)** | AI-powered quality analysis, call scoring, audit recommendations | Business data (quality metrics, call transcripts, CRM records) |
+| **CRMProvider CRM** | CRM data synchronization (Leads, Deals, Contacts) | Lead/deal records, contact information |
+| **HostingPlatform OIDC** | User authentication (OpenID Connect) | Email, name, profile picture |
+| **EmailProvider** | Outbound email notifications | Email addresses, report content |
 
-Replit publishes a sub-processor list on their website which should be reviewed periodically. *(Note: The sub-processor details above are based on publicly available information and should be confirmed against Replit's official sub-processor list.)*
+HostingPlatform publishes a sub-processor list on their website which should be reviewed periodically. *(Note: The sub-processor details above are based on publicly available information and should be confirmed against HostingPlatform's official sub-processor list.)*
 
 **Evidence:**
-- Integration configurations: `src/utils/zohoCRM.ts`, `src/utils/resendMail.ts`, `src/utils/googleCalendar.ts`
+- Integration configurations: `src/utils/CRMProviderCRM.ts`, `src/utils/EmailProviderMail.ts`, `src/utils/IdentityProviderCalendar.ts`
 - AI agent definitions: `src/mastra/agents/qualitySpecialistAgent.ts`, `src/mastra/agents/sdrQualityAgent.ts`
 
 ---
@@ -83,9 +83,9 @@ Replit publishes a sub-processor list on their website which should be reviewed 
 **Response:**
 Backups are handled at multiple levels:
 
-1. **Database (Neon PostgreSQL):** Neon provides **continuous automated backups** with point-in-time recovery (PITR). Data is replicated across GCP storage with automated snapshots. Recovery to any point within the retention window is supported.
+1. **Database (DatabaseProvider PostgreSQL):** DatabaseProvider provides **continuous automated backups** with point-in-time recovery (PITR). Data is replicated across GCP storage with automated snapshots. Recovery to any point within the retention window is supported.
 
-2. **Application Code (Replit):** Replit provides automatic **checkpoint versioning** that captures the codebase and chat sessions — enabling rollback to any prior checkpoint via the Replit interface. *(Note: Checkpoint scope for Neon-hosted databases should be confirmed with Replit — database backups are primarily managed by Neon's own PITR system.)*
+2. **Application Code (HostingPlatform):** HostingPlatform provides automatic **checkpoint versioning** that captures the codebase and chat sessions — enabling rollback to any prior checkpoint via the HostingPlatform interface. *(Note: Checkpoint scope for DatabaseProvider-hosted databases should be confirmed with HostingPlatform — database backups are primarily managed by DatabaseProvider's own PITR system.)*
 
 3. **Event Log Durability:** The event logging system uses **monthly table partitioning** (`event_logs_y2026m03`, etc.) for data durability and efficient archival.
 
@@ -103,7 +103,7 @@ Backups are handled at multiple levels:
 ### 2.1 Is the PostgreSQL database encrypted at rest?
 
 **Response:**
-Yes. The PostgreSQL database is hosted on **Neon**, which encrypts all data at rest using **AES-256 encryption** provided by GCP's underlying storage layer. This includes all database files, WAL logs, and automated backups.
+Yes. The PostgreSQL database is hosted on **DatabaseProvider**, which encrypts all data at rest using **AES-256 encryption** provided by GCP's underlying storage layer. This includes all database files, WAL logs, and automated backups.
 
 The PDPL compliance module (`src/utils/pdplDatabase.ts`) maintains a data inventory that tracks which fields are marked as encrypted. Sensitive fields such as Email and Phone are flagged with `is_encrypted: true` in the `data_inventory` table.
 
@@ -123,17 +123,17 @@ All data in transit is encrypted via **TLS/HTTPS**:
 
 | Communication Path | Encryption | Details |
 |-------------------|-----------|---------|
-| Client ↔ Application | HTTPS/TLS 1.2+ | Managed by Replit's deployment infrastructure and Cloudflare edge |
-| Application ↔ Database | SSL/TLS | Neon connection string enforces `sslmode=require` |
-| Application ↔ OpenAI API | HTTPS/TLS | API calls over encrypted channel |
-| Application ↔ Zoho CRM | HTTPS/TLS | OAuth 2.0 token exchange and API calls over encrypted channel |
-| Application ↔ Replit OIDC | HTTPS/TLS | OIDC authorization code flow over encrypted channel |
+| Client ↔ Application | HTTPS/TLS 1.2+ | Managed by HostingPlatform's deployment infrastructure and Cloudflare edge |
+| Application ↔ Database | SSL/TLS | DatabaseProvider connection string enforces `sslmode=require` |
+| Application ↔ LLMProvider API | HTTPS/TLS | API calls over encrypted channel |
+| Application ↔ CRMProvider CRM | HTTPS/TLS | OAuth 2.0 token exchange and API calls over encrypted channel |
+| Application ↔ HostingPlatform OIDC | HTTPS/TLS | OIDC authorization code flow over encrypted channel |
 
 CORS is restricted to the application's own domain only (no wildcard `*`). Cross-origin requests from unauthorized domains are rejected.
 
 **Evidence:**
 - CORS configuration: `src/mastra/index.ts` (lines 128–148)
-- VAPT Finding VULN-05 (Wildcard CORS): Remediated — explicit origin allowlist derived from `REPLIT_DOMAINS`
+- VAPT Finding VULN-05 (Wildcard CORS): Remediated — explicit origin allowlist derived from `HostingPlatform_DOMAINS`
 - Reference: `docs/VAPT_Remediation_Report.md` (VULN-05)
 
 ---
@@ -145,12 +145,12 @@ Encryption keys are managed at multiple layers:
 
 | Key Type | Management | Details |
 |----------|-----------|---------|
-| **TLS certificates** | Managed by Replit/Cloudflare | Automatic certificate provisioning and renewal |
-| **Database encryption keys** | Managed by GCP/Neon | AES-256 keys managed by cloud provider KMS *(confirm specifics with Neon vendor documentation)* |
-| **Session signing key** (`SESSION_SECRET`) | Replit Secrets vault | HMAC-SHA256 signing key, stored encrypted, never in source code |
-| **API keys** (OpenAI, Zoho, Resend, Admin) | Replit Secrets vault | Injected as environment variables at runtime |
+| **TLS certificates** | Managed by HostingPlatform/Cloudflare | Automatic certificate provisioning and renewal |
+| **Database encryption keys** | Managed by GCP/DatabaseProvider | AES-256 keys managed by cloud provider KMS *(confirm specifics with DatabaseProvider vendor documentation)* |
+| **Session signing key** (`SESSION_SECRET`) | HostingPlatform Secrets vault | HMAC-SHA256 signing key, stored encrypted, never in source code |
+| **API keys** (LLMProvider, CRMProvider, EmailProvider, Admin) | HostingPlatform Secrets vault | Injected as environment variables at runtime |
 
-All application-level secrets are stored in **Replit's encrypted Secrets vault** and injected as environment variables (`process.env.*`). They are **never hardcoded** in source code and **never exposed** in error messages (VAPT Finding VULN-06, remediated).
+All application-level secrets are stored in **HostingPlatform's encrypted Secrets vault** and injected as environment variables (`process.env.*`). They are **never hardcoded** in source code and **never exposed** in error messages (VAPT Finding VULN-06, remediated).
 
 **Evidence:**
 - Session signing: `src/mastra/routes/authRoutes.ts` (lines 18–23, `signSession` function using `crypto.createHmac('sha256', secret)`)
@@ -168,12 +168,12 @@ The QMS platform uses a **dual-layer authentication** approach:
 
 | Method | Type | Usage |
 |--------|------|-------|
-| **Replit OIDC** | Primary | Interactive user login via "Log in with Replit" (supports Google, GitHub, Apple, email) |
+| **HostingPlatform OIDC** | Primary | Interactive user login via "Log in with HostingPlatform" (supports IdentityProvider, SourceControlProvider, IdentityProvider, email) |
 | **Admin API Key** | Secondary | Programmatic/administrative API access via `X-Admin-Key` header |
 
 **OIDC Flow Details:**
-1. User clicks "Log in with Replit" on `/login`
-2. Redirected to Replit's OIDC authorization server (discovery URL: `<REDACTED_URL>`)
+1. User clicks "Log in with HostingPlatform" on `/login`
+2. Redirected to HostingPlatform's OIDC authorization server (discovery URL: `<REDACTED_URL>`)
 3. OIDC callback at `/api/callback` handles token exchange
 4. User profile synced via `upsertOidcUser()` into `platform_users` table
 5. HMAC-SHA256 signed session cookie (`ExampleOrg_session`) issued with 7-day expiry
@@ -263,7 +263,7 @@ Administrative accounts are protected through multiple mechanisms:
 
 5. **Default Admin Seeding:**
    - A single admin account (`user@example.invalid`) is seeded on first initialization
-   - New users authenticated via Replit OIDC receive the `department_viewer` role by default (least privilege)
+   - New users authenticated via HostingPlatform OIDC receive the `department_viewer` role by default (least privilege)
 
 **Evidence:**
 - Admin role permission: `src/utils/rbacDatabase.ts` (line 54)
@@ -282,7 +282,7 @@ Sessions are managed using **cryptographically signed, stateless tokens** stored
 |----------|-------|
 | **Token Format** | `base64url(payload).hmac_sha256_signature` |
 | **Signing Algorithm** | HMAC-SHA256 |
-| **Signing Key** | `SESSION_SECRET` (Replit encrypted secret) |
+| **Signing Key** | `SESSION_SECRET` (HostingPlatform encrypted secret) |
 | **Cookie Name** | `ExampleOrg_session` |
 | **Max Age** | 7 days (604,800 seconds) |
 | **HttpOnly** | Yes (prevents JavaScript access) |
@@ -291,7 +291,7 @@ Sessions are managed using **cryptographically signed, stateless tokens** stored
 | **Path** | `/` (application-wide) |
 
 **Session Lifecycle:**
-1. **Creation:** On successful Replit OIDC callback, a signed token is issued containing `userId`, `email`, `name`, `picture`, `role`, and `exp` (expiry timestamp)
+1. **Creation:** On successful HostingPlatform OIDC callback, a signed token is issued containing `userId`, `email`, `name`, `picture`, `role`, and `exp` (expiry timestamp)
 2. **Verification:** On every request, the middleware extracts the cookie, splits the payload and signature, recomputes the HMAC, and compares. If the signature doesn't match or the token is expired, the request is rejected (401 or redirect to `/login`)
 3. **Revocation:** Logout sets the cookie's `Max-Age` to 0, immediately invalidating it
 4. **CSRF Protection:** OAuth flow uses a `state` parameter validated against an `oauth_state` cookie (HttpOnly, SameSite=Lax)
@@ -485,10 +485,10 @@ The system supports data deletion and anonymization through the **DSAR (Data Sub
 
 ## 6. Third-Party Integrations
 
-### 6.1 For the OpenAI GPT-4o integration — is data protected before sending?
+### 6.1 For the LLMProvider GPT-4o integration — is data protected before sending?
 
 **Response:**
-The following data protection measures are applied to data processed by the OpenAI GPT-4o integration:
+The following data protection measures are applied to data processed by the LLMProvider GPT-4o integration:
 
 **Input Protection:**
 1. **Input Sanitization Middleware:** All incoming API data passes through server-side sanitization (`sanitizeRequestBody`) that strips HTML tags, script injection patterns, event handlers, and prototype pollution keys before data reaches any AI agent
@@ -499,12 +499,12 @@ The following data protection measures are applied to data processed by the Open
    - Credit card numbers → `[CARD_REDACTED]`
 
 **API Security:**
-3. **Authentication Required:** All API endpoints that invoke AI agents require valid authentication (Google session or Admin API key)
-4. **API Key Protection:** The OpenAI API key is stored in Replit's encrypted Secrets vault and never exposed in responses or error messages
-5. **Transport Encryption:** All API calls to OpenAI are made over HTTPS/TLS
+3. **Authentication Required:** All API endpoints that invoke AI agents require valid authentication (IdentityProvider session or Admin API key)
+4. **API Key Protection:** The LLMProvider API key is stored in HostingPlatform's encrypted Secrets vault and never exposed in responses or error messages
+5. **Transport Encryption:** All API calls to LLMProvider are made over HTTPS/TLS
 
 **Data Processing Terms:**
-6. OpenAI's API data usage policy states that data sent via the API is **not used for model training** by default. OpenAI offers a Data Processing Addendum (DPA) for enterprise compliance.
+6. LLMProvider's API data usage policy states that data sent via the API is **not used for model training** by default. LLMProvider offers a Data Processing Addendum (DPA) for enterprise compliance.
 
 **Recommendation:** For environments handling highly sensitive PII, consider implementing explicit PII stripping/anonymization before AI agent invocation as an additional layer beyond the existing guardrails.
 
@@ -521,23 +521,23 @@ The following data protection measures are applied to data processed by the Open
 ### 7.1 How are credentials and API keys managed?
 
 **Response:**
-All credentials and API keys are managed through **Replit's encrypted Secrets vault**:
+All credentials and API keys are managed through **HostingPlatform's encrypted Secrets vault**:
 
 | Secret | Purpose | Access Method |
 |--------|---------|--------------|
 | `DATABASE_URL` | PostgreSQL connection string | `process.env.DATABASE_URL` |
 | `SESSION_SECRET` | Session cookie HMAC signing | `process.env.SESSION_SECRET` |
 | `ADMIN_API_KEY` | Administrative API access | `process.env.ADMIN_API_KEY` |
-| `REPL_ID` | Replit OIDC client identifier (auto-provided by Replit) | `process.env.REPL_ID` |
-| `ISSUER_URL` | Replit OIDC issuer URL (defaults to <REDACTED_URL> | `process.env.ISSUER_URL` |
-| `ZOHO_CLIENT_ID` | Zoho CRM OAuth client ID | `process.env.ZOHO_CLIENT_ID` |
-| `ZOHO_CLIENT_SECRET` | Zoho CRM OAuth client secret | `process.env.ZOHO_CLIENT_SECRET` |
-| `ZOHO_REFRESH_TOKEN` | Zoho CRM OAuth refresh token | `process.env.ZOHO_REFRESH_TOKEN` |
-| `RESEND_API_KEY` | Resend email service API key | `process.env.RESEND_API_KEY` |
-| `RESEND_FROM_EMAIL` | Sender email address | `process.env.RESEND_FROM_EMAIL` |
+| `REPL_ID` | HostingPlatform OIDC client identifier (auto-provided by HostingPlatform) | `process.env.REPL_ID` |
+| `ISSUER_URL` | HostingPlatform OIDC issuer URL (defaults to <REDACTED_URL> | `process.env.ISSUER_URL` |
+| `CRMProvider_CLIENT_ID` | CRMProvider CRM OAuth client ID | `process.env.CRMProvider_CLIENT_ID` |
+| `CRMProvider_CLIENT_SECRET` | CRMProvider CRM OAuth client secret | `process.env.CRMProvider_CLIENT_SECRET` |
+| `CRMProvider_REFRESH_TOKEN` | CRMProvider CRM OAuth refresh token | `process.env.CRMProvider_REFRESH_TOKEN` |
+| `EmailProvider_API_KEY` | EmailProvider email service API key | `process.env.EmailProvider_API_KEY` |
+| `EmailProvider_FROM_EMAIL` | Sender email address | `process.env.EmailProvider_FROM_EMAIL` |
 
 **Security Controls:**
-- Secrets are **encrypted at rest** in Replit's vault
+- Secrets are **encrypted at rest** in HostingPlatform's vault
 - Secrets are injected as **environment variables** at runtime — never hardcoded in source code
 - Error messages are **scrubbed** of all environment variable names and secret references (VAPT Finding VULN-06)
 - The `SESSION_SECRET` has a fallback value only for development environments (`'fallback-dev-secret'`)
@@ -554,18 +554,18 @@ All credentials and API keys are managed through **Replit's encrypted Secrets va
 **Response:**
 Yes. All external API keys are secured as follows:
 
-1. **Storage:** All keys stored in Replit's encrypted Secrets vault (not in source code, `.env` files, or configuration files)
+1. **Storage:** All keys stored in HostingPlatform's encrypted Secrets vault (not in source code, `.env` files, or configuration files)
 2. **Error Handling:** Generic error messages returned for integration failures (e.g., "CRM integration not configured. Please contact your administrator." instead of exposing key names)
 3. **Transport:** All API calls to external services use HTTPS/TLS
 4. **Access Scope:**
-   - Replit OIDC: Callback URI restricted to production domain; client ID is the REPL_ID (auto-managed by Replit)
-   - Zoho CRM: OAuth 2.0 with auto-refreshing tokens (refresh token rotated automatically)
-   - OpenAI: API key scope limited to the specific organization
+   - HostingPlatform OIDC: Callback URI restricted to production domain; client ID is the REPL_ID (auto-managed by HostingPlatform)
+   - CRMProvider CRM: OAuth 2.0 with auto-refreshing tokens (refresh token rotated automatically)
+   - LLMProvider: API key scope limited to the specific organization
 
 **Recommendation:** Implement annual key rotation for all secrets, particularly `SESSION_SECRET` and `ADMIN_API_KEY`.
 
 **Evidence:**
-- Zoho OAuth token refresh: `src/utils/zohoCRM.ts`
+- CRMProvider OAuth token refresh: `src/utils/CRMProviderCRM.ts`
 - Error message scrubbing: `docs/VAPT_Remediation_Report.md` (VULN-06, VULN-16)
 
 ---
@@ -637,10 +637,10 @@ Application errors are handled with a **defense-in-depth** approach that prevent
 
 ## 9. Vendor & Third-Party Risk Management
 
-### 9.1 Has Replit been assessed for security compliance?
+### 9.1 Has HostingPlatform been assessed for security compliance?
 
 **Response:**
-Replit maintains **SOC 2 Type II** compliance certification. Additionally:
+HostingPlatform maintains **SOC 2 Type II** compliance certification. Additionally:
 
 **Platform VAPT Assessment (March 2026):**
 - A formal Vulnerability Assessment and Penetration Testing was conducted on March 11–12, 2026
@@ -683,7 +683,7 @@ The QMS platform includes a dedicated **Vendor Risk Management (VRM) module** (`
 4. **Contract Monitoring:** Expiring contract alerts (90-day window) and overdue assessment tracking
 5. **Audit Logging:** All vendor-related changes logged in the event logging system
 
-Whether specific vendor contracts (with Replit, OpenAI, Neon, Zoho, Resend) include formal security and compliance clauses is a **business/legal matter** that should be verified by the procurement team.
+Whether specific vendor contracts (with HostingPlatform, LLMProvider, DatabaseProvider, CRMProvider, EmailProvider) include formal security and compliance clauses is a **business/legal matter** that should be verified by the procurement team.
 
 **Evidence:**
 - Vendor database schema: `src/utils/vendorDatabase.ts` (436 lines)
@@ -735,11 +735,11 @@ The platform includes dedicated modules for ongoing compliance management:
 
 | # | Question | Action Required |
 |---|----------|----------------|
-| 1.1 | Data center locations | Confirm exact data center regions with Replit and Neon vendor documentation |
-| 1.2 | DPA with Replit | Verify if a Data Processing Agreement is signed with Replit |
-| 1.3 | Sub-processors | Confirm sub-processor list against Replit's official published list |
-| 2.3 | Encryption key management | Confirm database encryption key management details with Neon |
-| 9.2 | Vendor contract clauses | Verify that vendor contracts with Replit, OpenAI, Neon, Zoho, Resend include security requirements |
+| 1.1 | Data center locations | Confirm exact data center regions with HostingPlatform and DatabaseProvider vendor documentation |
+| 1.2 | DPA with HostingPlatform | Verify if a Data Processing Agreement is signed with HostingPlatform |
+| 1.3 | Sub-processors | Confirm sub-processor list against HostingPlatform's official published list |
+| 2.3 | Encryption key management | Confirm database encryption key management details with DatabaseProvider |
+| 9.2 | Vendor contract clauses | Verify that vendor contracts with HostingPlatform, LLMProvider, DatabaseProvider, CRMProvider, EmailProvider include security requirements |
 
 ## Summary of Recommended Enhancements
 

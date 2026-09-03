@@ -1,6 +1,6 @@
 # ExampleOrg Platform QC (Quality Control)
 
-This folder contains the **Platform QC suite** used to verify that each screen and functionality in the ExampleOrg app is working. It produces a report you can send to Replit (or any developer) to fix failures by **Screen name** and **Functionality name**.
+This folder contains the **Platform QC suite** used to verify that each screen and functionality in the ExampleOrg app is working. It produces a report you can send to HostingPlatform (or any developer) to fix failures by **Screen name** and **Functionality name**.
 
 ## How it works
 
@@ -13,19 +13,19 @@ This folder contains the **Platform QC suite** used to verify that each screen a
 2. **Runner** (`run-platform-qc.ts`) – Calls each API against the running app and records pass/fail.
 
 3. **Reports** (generated in this folder):
-   - `qc-report.json` – Machine-readable (for Cursor/Replit/CI).
-   - `qc-report.md` – Human-readable with a **"Send to Replit – Fix These"** table and a JSON block for copy-paste.
+   - `qc-report.json` – Machine-readable (for Cursor/HostingPlatform/CI).
+   - `qc-report.md` – Human-readable with a **"Send to HostingPlatform – Fix These"** table and a JSON block for copy-paste.
 
 ## Running the QC suite
 
-**Prerequisites:** The app must be running (e.g. `npm run dev`) or use the live Replit URL.
+**Prerequisites:** The app must be running (e.g. `npm run dev`) or use the live HostingPlatform URL.
 
 ```bash
 # Test against local app (default <REDACTED_URL>
 npm run qc
 
-# Test against Replit deployment
-QC_BASE_URL=https://<REDACTED_HOST> npm run qc
+# Test against HostingPlatform deployment
+QC_BASE_URL=<REDACTED_URL_SCHEME><REDACTED_HOST> npm run qc
 
 # Include admin-protected routes (Admin Panel, QMS)
 ADMIN_API_KEY=your-admin-key npm run qc
@@ -34,9 +34,9 @@ ADMIN_API_KEY=your-admin-key npm run qc
 ## Using the results
 
 - **Cursor / this agent (QC role):**  
-  Run `npm run qc`, then open `tests/qc/qc-report.md`. The **"Send to Replit – Fix These"** section lists each failure with **Screen** and **Functionality**. You can say: *"Send to Replit: fix these"* and attach the table or the JSON block.
+  Run `npm run qc`, then open `tests/qc/qc-report.md`. The **"Send to HostingPlatform – Fix These"** section lists each failure with **Screen** and **Functionality**. You can say: *"Send to HostingPlatform: fix these"* and attach the table or the JSON block.
 
-- **Replit:**  
+- **HostingPlatform:**  
   Use the table or the JSON from `qc-report.md` (or `qc-report.json`) to fix each item. Each row is one fix: **Screen** + **Functionality** + **Detail** (e.g. HTTP 500).
 
 - **CI / automation:**  

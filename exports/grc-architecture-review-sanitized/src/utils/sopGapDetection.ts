@@ -8,7 +8,7 @@
  *
  * A requirement with no satisfying record is flagged as a "derived
  * expected NC" (open gap). The aggregate counts feed:
- *   - the digest's new "SOP Gaps" section (HTML + Slack)
+ *   - the digest's new "SOP Gaps" section (HTML + ChatProvider)
  *   - the enterprise health-score formula (SOP-coverage component)
  *
  * Coverage signal — a requirement is considered "covered" when any of:

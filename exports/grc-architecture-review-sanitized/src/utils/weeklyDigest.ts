@@ -3,7 +3,7 @@
  *
  * Per DMAIC Improve phase Solution #3 / strategic report defect #4
  * ("No weekly/monthly digest"). Sends a per-agent rollup of last
- * week's calls to a Slack channel and (optionally) a stakeholder
+ * week's calls to a ChatProvider channel and (optionally) a stakeholder
  * email distribution list every Sunday morning Asia/Riyadh time.
  *
  * Three layers split for testability:
@@ -12,14 +12,14 @@
  *      call_records ⨯ sdr_call_evaluations grouped by agent_email
  *      for a [start, end) window. No I/O outside the DB pool.
  *
- *   2. renderDigestText() / renderDigestSlackBlocks() /
+ *   2. renderDigestText() / renderDigestChatProviderBlocks() /
  *      renderDigestHtml() — pure renderers that take a rollup and
  *      return the per-channel payload. Unit-testable without
- *      Slack/Resend credentials.
+ *      ChatProvider/EmailProvider credentials.
  *
  *   3. sendWeeklyDigest() — orchestrator that combines fetch +
- *      render + dispatch via existing postSlackMessage and
- *      sendResendEmail helpers. Best-effort: a failure on one
+ *      render + dispatch via existing postChatProviderMessage and
+ *      sendEmailProviderEmail helpers. Best-effort: a failure on one
  *      channel doesn't abort the other.
  *
  * Triggered by:
@@ -184,7 +184,7 @@ export function renderDigestText(d: WeeklyDigest): string {
   return lines.join("\n");
 }
 
-export function renderDigestSlackBlocks(d: WeeklyDigest): any[] {
+export function renderDigestChatProviderBlocks(d: WeeklyDigest): any[] {
   const blocks: any[] = [
     {
       type: "header",
@@ -208,7 +208,7 @@ export function renderDigestSlackBlocks(d: WeeklyDigest): any[] {
     return blocks;
   }
 
-  // Up to 10 agent rows. Slack block limit is 50; one row each keeps us safe.
+  // Up to 10 agent rows. ChatProvider block limit is 50; one row each keeps us safe.
   const top = d.agents.slice(0, 10);
   for (const a of top) {
     const name = a.agent_name || a.agent_email;
@@ -286,8 +286,8 @@ function escapeHtml(s: string): string {
 export interface SendDigestOptions {
   /** Override the window (default: last 7 days from now). */
   window?: DigestWindow;
-  /** Override the Slack channel id; falls back to SLACK_DIGEST_CHANNEL_ID or SLACK_CHANNEL_ID. */
-  slackChannel?: string;
+  /** Override the ChatProvider channel id; falls back to ChatProvider_DIGEST_CHANNEL_ID or ChatProvider_CHANNEL_ID. */
+  ChatProviderChannel?: string;
   /** Override the email recipients; falls back to WEEKLY_DIGEST_RECIPIENTS (comma-separated). */
   emailRecipients?: string[];
   /** Identity for flag check. */
@@ -298,7 +298,7 @@ export interface SendDigestOptions {
 
 export interface SendDigestResult {
   sent: boolean;
-  slack: { attempted: boolean; ok: boolean; reason?: string };
+  ChatProvider: { attempted: boolean; ok: boolean; reason?: string };
   email: { attempted: boolean; ok: boolean; reason?: string };
   <REDACTED_TOKEN>?: string;
   digest_summary?: {
@@ -316,14 +316,14 @@ export async function sendWeeklyDigest(
   const { identity, forceSend = false } = options;
 
   // HARD-DISABLED — permanent no-op. The Weekly Report lives in the
-  // dashboard (/calls, opened Monday morning); Slack + email push channels
+  // dashboard (/calls, opened Monday morning); ChatProvider + email push channels
   // were dropped in the 3rd + 4th scope amendments (2026-05-25).
   //
   // 2026-09-03: the previous `DIGEST_DECOMMISSIONED_OVERRIDE` env escape
   // hatch was REMOVED at the Quality HOD's request ("stop these
   // notifications till we finish the API integration") after "0 calls"
   // digests reappeared in #automatic-audits. Removing it means NO secret,
-  // feature flag, or Replit-Agent action can re-enable the Slack/email
+  // feature flag, or HostingPlatform-Agent action can re-enable the ChatProvider/email
   // digest while call-evaluation API work is in flight — the code is now
   // the single source of truth. This runs BEFORE the flag check and BEFORE
   // forceSend, so every entry point (cron, manual POST, direct import in
@@ -333,13 +333,13 @@ export async function sendWeeklyDigest(
   // NOTE: everything below this return is intentionally unreachable while
   // the digest is decommissioned; it is retained (not deleted) so a future
   // re-enable is a one-line change rather than a rewrite. The pure
-  // renderers (renderDigestText / renderDigestSlackBlocks / renderDigestHtml)
+  // renderers (renderDigestText / renderDigestChatProviderBlocks / renderDigestHtml)
   // remain exported and unit-tested independently of this orchestrator.
   //
   // The flag is a `boolean`, not the literal `true`, ON PURPOSE: an
   // unconditional `return` makes the retained code unreachable, and
   // TypeScript neither narrows types nor reports errors inside unreachable
-  // code. That is how `postSlackMessage(slackChannel)` below came to fail
+  // code. That is how `postChatProviderMessage(ChatProviderChannel)` below came to fail
   // `tsc` with "string | null" — the guard above it stopped narrowing — and
   // it is the same blind spot that would let this retained block rot into
   // something that no longer compiles when someone finally re-enables it.
@@ -351,7 +351,7 @@ export async function sendWeeklyDigest(
   if (DIGEST_DECOMMISSIONED) {
     return {
       sent: false,
-      slack: { attempted: false, ok: false },
+      ChatProvider: { attempted: false, ok: false },
       email: { attempted: false, ok: false },
       <REDACTED_TOKEN>: "decommissioned_per_amendments_3_and_4",
     };
@@ -360,7 +360,7 @@ export async function sendWeeklyDigest(
   if (!forceSend && !isFlagEnabled("weekly_digest", identity)) {
     return {
       sent: false,
-      slack: { attempted: false, ok: false },
+      ChatProvider: { attempted: false, ok: false },
       email: { attempted: false, ok: false },
       <REDACTED_TOKEN>: "flag_disabled",
     };
@@ -369,10 +369,10 @@ export async function sendWeeklyDigest(
   const window = options.window ?? buildLastWeekWindow();
   const digest = await fetchWeeklyAgentRollup(pool, window);
 
-  const slackChannel =
-    options.slackChannel ||
-    process.env.SLACK_DIGEST_CHANNEL_ID ||
-    process.env.SLACK_CHANNEL_ID ||
+  const ChatProviderChannel =
+    options.ChatProviderChannel ||
+    process.env.ChatProvider_DIGEST_CHANNEL_ID ||
+    process.env.ChatProvider_CHANNEL_ID ||
     null;
 
   const emailRecipients =
@@ -384,7 +384,7 @@ export async function sendWeeklyDigest(
 
   const result: SendDigestResult = {
     sent: false,
-    slack: { attempted: false, ok: false },
+    ChatProvider: { attempted: false, ok: false },
     email: { attempted: false, ok: false },
     digest_summary: {
       window_label: window.label,
@@ -394,29 +394,29 @@ export async function sendWeeklyDigest(
     },
   };
 
-  // Slack
-  if (slackChannel) {
-    result.slack.attempted = true;
+  // ChatProvider
+  if (ChatProviderChannel) {
+    result.ChatProvider.attempted = true;
     try {
-      const { postSlackMessage } = await import("./slackNotifications");
-      const blocks = renderDigestSlackBlocks(digest);
+      const { postChatProviderMessage } = await import("./ChatProviderNotifications");
+      const blocks = renderDigestChatProviderBlocks(digest);
       const fallbackText = renderDigestText(digest);
-      const resp = await postSlackMessage(slackChannel, fallbackText, blocks);
-      result.slack.ok = resp.ok;
-      if (!resp.ok) result.slack.reason = "post_failed";
+      const resp = await postChatProviderMessage(ChatProviderChannel, fallbackText, blocks);
+      result.ChatProvider.ok = resp.ok;
+      if (!resp.ok) result.ChatProvider.reason = "post_failed";
     } catch (err: any) {
-      result.slack.reason = err?.message || String(err);
+      result.ChatProvider.reason = err?.message || String(err);
     }
   } else {
-    result.slack.reason = "no_channel_configured";
+    result.ChatProvider.reason = "no_channel_configured";
   }
 
   // Email
   if (emailRecipients.length > 0) {
     result.email.attempted = true;
     try {
-      const { sendResendEmail } = await import("./resendMail");
-      const send = await sendResendEmail({
+      const { sendEmailProviderEmail } = await import("./EmailProviderMail");
+      const send = await sendEmailProviderEmail({
         to: emailRecipients,
         subject: `ExampleOrg QMS — Weekly Call Eval Digest (${window.label})`,
         text: renderDigestText(digest),
@@ -431,7 +431,7 @@ export async function sendWeeklyDigest(
     result.email.reason = "no_recipients_configured";
   }
 
-  result.sent = result.slack.ok || result.email.ok;
+  result.sent = result.ChatProvider.ok || result.email.ok;
   if (!result.sent && !result.<REDACTED_TOKEN>) {
     result.<REDACTED_TOKEN> = "all_channels_failed_or_unconfigured";
   }

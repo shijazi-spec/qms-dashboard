@@ -20,16 +20,16 @@
  * flag is checked then.
  *
  * Add new flags to the FLAGS map below. Keeping the registry centralized
- * prevents typos like `isFlagEnabled('five9_real_ingets')` from silently
+ * prevents typos like `isFlagEnabled('ContactCenterProvider_real_ingets')` from silently
  * returning false forever.
  */
 
 export const FLAGS = {
   // Solutions from the DMAIC Improve phase (2026-05-24). Each maps to an
-  // env-var name set in Replit Secrets when the feature is ready to surface.
-  five9_real_ingest: "FIVE9_REAL_INGEST",
+  // env-var name set in HostingPlatform Secrets when the feature is ready to surface.
+  ContactCenterProvider_real_ingest: "ContactCenterProvider_REAL_INGEST",
   lead_history_view: "LEAD_HISTORY_VIEW",
-  zoho_structured_fields: "ZOHO_STRUCTURED_FIELDS",
+  CRMProvider_structured_fields: "CRMProvider_STRUCTURED_FIELDS",
   weekly_digest: "WEEKLY_DIGEST",
   coaching_effectiveness_index: "COACHING_EFFECTIVENESS_INDEX",
   calls_health_dashboard: "CALLS_HEALTH_DASHBOARD",

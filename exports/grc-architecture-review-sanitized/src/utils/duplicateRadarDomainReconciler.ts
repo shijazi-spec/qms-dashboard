@@ -127,7 +127,7 @@ export async function reconcileSyntheticClusterDomains(opts: {
       `SELECT id, raw_data
          FROM duplicate_records
         WHERE cluster_id = $1
-          AND zoho_module = 'Deals'`,
+          AND CRMProvider_module = 'Deals'`,
       [cluster.id],
     );
 

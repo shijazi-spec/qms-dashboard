@@ -9,7 +9,7 @@
  * about how `dispatchPostRestoreSweepAlert` (in
  * `src/utils/redactHistoricalLogs.ts`) renders its three channels:
  *
- *   - Slack body — the leading `:rotating_light:` shortcode.
+ *   - ChatProvider body — the leading `:rotating_light:` shortcode.
  *   - In-app notification — `module="security/redaction-sweep"`,
  *     `priority="critical"`, `action_url="/audit-logs"`.
  *   - Per-table detail line — `event_logs=…, nc_change_history=…,
@@ -17,7 +17,7 @@
  *
  * Operators read the procedure top-to-bottom while running a staging
  * dry-run and tick boxes against what they actually see in their inbox /
- * Slack channel / dashboard bell. If the dispatcher renames any of those
+ * ChatProvider channel / dashboard bell. If the dispatcher renames any of those
  * tokens without the procedure being updated, the visual checklist will
  * silently start either:
  *
@@ -43,8 +43,8 @@
  * Wiring
  * ------
  * Run as a step in:
- *   - `.github/workflows/secret-redaction.yml` (GitHub Actions, blocks PR)
- *   - `secret-redaction` workflow in `.replit` (local convenience)
+ *   - `.SourceControlProvider/workflows/secret-redaction.yml` (SourceControlProvider Actions, blocks PR)
+ *   - `secret-redaction` workflow in `.HostingPlatform` (local convenience)
  *
  * Manual run:
  *   npx tsx scripts/checkStagingProcedureInSync.ts
@@ -161,11 +161,11 @@ const checks: Check[] = [
       'Procedure C Step 1 ("action_url=\\"/audit-logs\\"") and the "Action URL" visual check',
   },
   {
-    name: "slack.rotating_light_prefix",
+    name: "ChatProvider.rotating_light_prefix",
     extract: extractLiteral(":rotating_light:"),
     docTokens: () => [":rotating_light:"],
     sourceLocation:
-      "slackBody.text template inside dispatchPostRestoreSweepAlert",
+      "ChatProviderBody.text template inside dispatchPostRestoreSweepAlert",
     docSection:
       '"Why this exists" item 3, Pre-requisites step 4, and Procedure B Step 2 ("Headline line")',
   },

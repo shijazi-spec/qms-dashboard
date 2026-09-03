@@ -1,12 +1,12 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { getOpenAIApiKey, getOpenAIBaseUrl } from "../../utils/openaiCredentials";
+import { getLLMProviderApiKey, getLLMProviderBaseUrl } from "../../utils/LLMProviderCredentials";
 
 export const meetingMOMTool = createTool({
   id: "meeting-mom-tool",
   description: "Generates Minutes of Meeting (MoM) from a meeting transcript or recording. Extracts key decisions, action items, follow-ups, and next meeting date.",
   inputSchema: z.object({
-    calendar_event_id: z.string().describe("Google Calendar event ID"),
+    calendar_event_id: z.string().describe("IdentityProvider Calendar event ID"),
     meeting_title: z.string().describe("Title of the meeting"),
     meeting_date: z.string().describe("Date and time of the meeting (ISO format)"),
     attendees: z.array(z.object({
@@ -70,17 +70,17 @@ Please provide the MoM in the following JSON format:
 
 Respond ONLY with the JSON, no additional text.`;
 
-      const { createOpenAI } = await import("@ai-sdk/openai");
+      const { createLLMProvider } = await import("@ai-sdk/LLMProvider");
       const { generateText } = await import("ai");
 
-      const openai = createOpenAI({
-        baseURL: getOpenAIBaseUrl(),
-        apiKey: getOpenAIApiKey()
+      const LLMProvider = createLLMProvider({
+        baseURL: getLLMProviderBaseUrl(),
+        apiKey: getLLMProviderApiKey()
       });
 
       // Raw-fetch /chat/completions — `.chat()` adapter emits v3 spec
-      // under @ai-sdk/openai 3.x, incompatible with ai@5 (needs v2).
-      const { generateChatText } = await import("../../utils/openaiChatHelper");
+      // under @ai-sdk/LLMProvider 3.x, incompatible with ai@5 (needs v2).
+      const { generateChatText } = await import("../../utils/LLMProviderChatHelper");
       const result = await generateChatText({
         model: "gpt-4o",
         prompt: momPrompt,

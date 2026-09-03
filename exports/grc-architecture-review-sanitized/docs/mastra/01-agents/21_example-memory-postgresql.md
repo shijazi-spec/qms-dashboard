@@ -10,10 +10,10 @@ This example demonstrates how to use Mastra's memory system with PostgreSQL as t
 
 ## Prerequisites
 
-This example uses the `openai` model and requires a PostgreSQL database with the `pgvector` extension. Make sure to add the following to your `.env` file:
+This example uses the `LLMProvider` model and requires a PostgreSQL database with the `pgvector` extension. Make sure to add the following to your `.env` file:
 
 ```bash filename=".env" copy
-OPENAI_API_KEY=<your-api-key>
+LLMProvider_API_KEY=<your-api-key>
 DATABASE_URL=<your-connection-string>
 ```
 
@@ -30,13 +30,13 @@ To add PostgreSQL memory to an agent use the `Memory` class and create a new `st
 ```typescript filename="src/mastra/agents/example-pg-agent.ts" showLineNumbers copy
 import { Memory } from "@mastra/memory";
 import { Agent } from "@mastra/core/agent";
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 import { PostgresStore } from "@mastra/pg";
 
 export const pgAgent = new Agent({
   name: "pg-agent",
   instructions: "You are an AI agent with the ability to automatically recall memories from previous interactions.",
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   memory: new Memory({
     storage: new PostgresStore({
       connectionString: process.env.DATABASE_URL!
@@ -65,14 +65,14 @@ Add the following to your agent:
 ```typescript filename="src/mastra/agents/example-pg-agent.ts" showLineNumbers copy
 import { Memory } from "@mastra/memory";
 import { Agent } from "@mastra/core/agent";
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 import { PostgresStore, PgVector } from "@mastra/pg";
 import { fastembed } from "@mastra/fastembed";
 
 export const pgAgent = new Agent({
   name: "pg-agent",
   instructions: "You are an AI agent with the ability to automatically recall memories from previous interactions.",
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   memory: new Memory({
     storage: new PostgresStore({
       connectionString: process.env.DATABASE_URL!

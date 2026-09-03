@@ -59,7 +59,7 @@ export const testAgent = new Agent({
     options: {
       threads: {
         generateTitle: {
-          model: openai("gpt-4.1-nano"),
+          model: LLMProvider("gpt-4.1-nano"),
           instructions: "Generate a concise title based on the user's first message",
         },
       },
@@ -81,7 +81,7 @@ export const testAgent = new Agent({
         generateTitle: {
           model: ({ runtimeContext }) => {
             const userTier = runtimeContext.get("userTier");
-            return userTier === "premium" ? openai("gpt-4.1") : openai("gpt-4.1-nano");
+            return userTier === "premium" ? LLMProvider("gpt-4.1") : LLMProvider("gpt-4.1-nano");
           },
           instructions: ({ runtimeContext }) => {
             const language = runtimeContext.get("userLanguage") || "English";

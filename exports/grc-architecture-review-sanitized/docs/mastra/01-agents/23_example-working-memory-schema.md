@@ -14,10 +14,10 @@ This example shows how to manage a todo list using a working memory schema.
 
 ## Prerequisites
 
-This example uses the `openai` model. Make sure to add `OPENAI_API_KEY` to your `.env` file.
+This example uses the `LLMProvider` model. Make sure to add `LLMProvider_API_KEY` to your `.env` file.
 
 ```bash filename=".env" copy
-OPENAI_API_KEY=<your-api-key>
+LLMProvider_API_KEY=<your-api-key>
 ```
 
 And install the following package:
@@ -41,7 +41,7 @@ Threads group related messages into conversations. When `generateTitle` is enabl
 ```typescript filename="src/mastra/agents/example-working-memory-schema-agent.ts" showLineNumbers copy
 import { Memory } from "@mastra/memory";
 import { Agent } from "@mastra/core/agent";
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 import { LibSQLStore } from "@mastra/libsql";
 import { z } from "zod";
 
@@ -55,7 +55,7 @@ export const workingMemorySchemaAgent = new Agent({
     Support subtasks with bullet points.
     Ask for time estimates to help with timeboxing.
   `,
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   memory: new Memory({
     storage: new LibSQLStore({
       url: "file:working-memory-schema.db"

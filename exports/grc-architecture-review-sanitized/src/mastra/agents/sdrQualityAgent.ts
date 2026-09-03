@@ -1,11 +1,11 @@
 import { Agent } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
 import { sharedPostgresStorage } from "../storage";
-import { createOpenAI } from "@ai-sdk/openai-v5";
+import { createLLMProvider } from "@ai-sdk/LLMProvider-v5";
 import { createHash } from "crypto";
 
-import { fetchCalendarEventsTool, listCalendarsTool } from "../tools/googleCalendarTool";
-import { auditCRMHygieneTool, checkCRMActivityTool } from "../tools/zohoCRMTool";
+import { fetchCalendarEventsTool, listCalendarsTool } from "../tools/IdentityProviderCalendarTool";
+import { auditCRMHygieneTool, checkCRMActivityTool } from "../tools/CRMProviderCRMTool";
 import { sendQualityReportTool, sendAlertTool } from "../tools/emailReportTool";
 import { evaluateSdrGovernanceTool } from "../tools/sdrGovernanceTool";
 import { reconcileCallTool } from "../tools/callReconciliationTool";
@@ -13,17 +13,17 @@ import { matchLeadByPhoneTool } from "../tools/leadPhoneMatchTool";
 import { driveCallImportTool } from "../tools/driveCallImportTool";
 import { checkCommunicationEligibilityTool } from "../tools/checkCommunicationEligibilityTool";
 import { wrapToolWithTelemetry as wt } from "../../utils/aiTelemetry";
-import { getOpenAIApiKey, getOpenAIBaseUrl } from "../../utils/openaiCredentials";
+import { getLLMProviderApiKey, getLLMProviderBaseUrl } from "../../utils/LLMProviderCredentials";
 
 const AGENT_NAME = "ExampleOrg SDR Quality Specialist";
 
-const openai = createOpenAI({
-  baseURL: getOpenAIBaseUrl(),
-  apiKey: getOpenAIApiKey(),
+const LLMProvider = createLLMProvider({
+  baseURL: getLLMProviderBaseUrl(),
+  apiKey: getLLMProviderApiKey(),
 });
 
 const SDR_QUALITY_INSTRUCTIONS = `
-You are the ExampleOrg SDR (Sales Development Representative) Quality Specialist - an AI-powered quality auditor specialized in evaluating the SDR team's performance on LEADS data in Zoho CRM.
+You are the ExampleOrg SDR (Sales Development Representative) Quality Specialist - an AI-powered quality auditor specialized in evaluating the SDR team's performance on LEADS data in CRMProvider CRM.
 
 ## YOUR DEPARTMENT SCOPE
 - **Department**: SDR (Sales Development Representatives)
@@ -58,7 +58,7 @@ You are the ExampleOrg SDR (Sales Development Representative) Quality Specialist
 - Score performance based on SDR scorecard metrics
 
 ### 5. SDR Call Validation (Call ↔ Transcript ↔ Lead)
-You also validate ingested SDR calls (from Google Drive, Five9, or bulk-upload) against the
+You also validate ingested SDR calls (from IdentityProvider Drive, ContactCenterProvider, or bulk-upload) against the
 ExampleOrg SDR Governance 2.1 ruleset and the existing QA evaluation. For a given call_record_id:
 
 1. Call **reconcile-call** with the call_record_id. It returns the heuristics + governance issues,
@@ -69,7 +69,7 @@ ExampleOrg SDR Governance 2.1 ruleset and the existing QA evaluation. For a give
 3. If the transcript exists but the governance block reports load_error or zero rules_evaluated,
    call **evaluate-sdr-governance** directly with the transcript_text to confirm engine availability.
 4. (Operator use) **drive-call-import** lists audio in a Drive folder and creates call_records with
-   source='google_drive'. Use this only when an operator asks to ingest a folder; do not call it
+   source='IdentityProvider_drive'. Use this only when an operator asks to ingest a folder; do not call it
    speculatively.
 
 When reporting the verdict, classify as:
@@ -131,7 +131,7 @@ export const sdrQualityAgent = new Agent({
 
   instructions: SDR_QUALITY_INSTRUCTIONS,
 
-  model: openai.chat("gpt-4o"),
+  model: LLMProvider.chat("gpt-4o"),
 
   // Each tool is wrapped with wt(...) so per-tool latency, error rate, and
   // parent_call_id are recorded in ai_call_metrics for the AI Ops panel.

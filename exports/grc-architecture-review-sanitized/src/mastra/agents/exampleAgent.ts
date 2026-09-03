@@ -2,33 +2,33 @@ import { Agent } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
 import { sharedPostgresStorage } from "../storage";
 import { exampleTool } from "../tools/exampleTool";
-import { createOpenAI } from "@ai-sdk/openai-v5";
-import { getOpenAIApiKey, getOpenAIBaseUrl } from "../../utils/openaiCredentials";
+import { createLLMProvider } from "@ai-sdk/LLMProvider-v5";
+import { getLLMProviderApiKey, getLLMProviderBaseUrl } from "../../utils/LLMProviderCredentials";
 
 /**
  * LLM CLIENT CONFIGURATION
  *
- * IMPORTANT: Both approaches require the SAME syntax for Replit Playground compatibility:
- * - Use AI SDK v4: model, e.g. openai("gpt-4o-mini")
+ * IMPORTANT: Both approaches require the SAME syntax for HostingPlatform Playground compatibility:
+ * - Use AI SDK v4: model, e.g. LLMProvider("gpt-4o-mini")
  * - In workflows: Use agent.generateLegacy()
- * - The Replit Playground UI always calls the legacy Mastra endpoint.
+ * - The HostingPlatform Playground UI always calls the legacy Mastra endpoint.
  * NOTE: You must always keep the API key as an environment variable for safety!
  * ---
- * OPTION 1: Replit AI Integrations, **only** if user has enabled it via connector.
+ * OPTION 1: HostingPlatform AI Integrations, **only** if user has enabled it via connector.
  *
- * No OpenAI API key required - charges billed to Replit credits
+ * No LLMProvider API key required - charges billed to HostingPlatform credits
  * Automatic key rotation and management
  */
-const openai = createOpenAI({
-  baseURL: getOpenAIBaseUrl(),
-  apiKey: getOpenAIApiKey(),
+const LLMProvider = createLLMProvider({
+  baseURL: getLLMProviderBaseUrl(),
+  apiKey: getLLMProviderApiKey(),
 });
 /*
- * OPTION 2: Standard OpenAI Setup (Your Own API Key)
+ * OPTION 2: Standard LLMProvider Setup (Your Own API Key)
  */
-// const openai = createOpenAI({
-//   baseURL: process.env.OPENAI_BASE_URL || undefined,
-//   apiKey: process.env.OPENAI_API_KEY,
+// const LLMProvider = createLLMProvider({
+//   baseURL: process.env.LLMProvider_BASE_URL || undefined,
+//   apiKey: process.env.LLMProvider_API_KEY,
 // });
 
 /**
@@ -70,10 +70,10 @@ export const exampleAgent = new Agent({
   /**
    * Choose your LLM model
    *
-   * MUST use AI SDK v4 syntax for Replit Playground compatibility.
-   * Use openai.responses("gpt-5") for gpt-5 class models, use openai("gpt-4o") for gpt-4 class models.
+   * MUST use AI SDK v4 syntax for HostingPlatform Playground compatibility.
+   * Use LLMProvider.responses("gpt-5") for gpt-5 class models, use LLMProvider("gpt-4o") for gpt-4 class models.
    */
-  model: openai.responses("gpt-5"),
+  model: LLMProvider.responses("gpt-5"),
 
   /**
    * Provide tools that the agent can use

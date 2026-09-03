@@ -3,7 +3,7 @@ import { logger as safeLogger } from "../../utils/logger";
 // Boot-time table creation (2026-06-17). document_framework_scans and
 // obligation_gap_recommendations are otherwise created LAZILY (on first use
 // of the document-mapping / gap-advisor features). That leaves the DEV
-// database missing them, so Replit's publish-time dev→prod schema sync
+// database missing them, so HostingPlatform's publish-time dev→prod schema sync
 // generates `DROP TABLE … CASCADE` to make prod match dev — permanent data
 // loss (e.g. 420 framework-scan rows). Creating them at boot, the same way
 // the Duplicate Radar tables are (duplicateRadarRoutes.ts), keeps every

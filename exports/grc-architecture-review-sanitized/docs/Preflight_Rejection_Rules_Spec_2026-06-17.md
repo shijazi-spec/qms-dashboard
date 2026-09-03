@@ -12,7 +12,7 @@
 
 **Author:** Sample User / Sample User (GRQ), drafted with Adam · 2026-06-17
 **Status:** Superseded by BASIC mode 2026-06-18 (full ladder archived, re-enablable).
-**Applies to:** Duplicate Radar → Preflight Check (pre-import screening of marketing/vendor lead lists before they enter Zoho CRM).
+**Applies to:** Duplicate Radar → Preflight Check (pre-import screening of marketing/vendor lead lists before they enter CRMProvider CRM).
 
 ---
 
@@ -67,7 +67,7 @@ Then classify by the company's strongest CRM state:
 
 If **no company match at all** → fall through to Tier 2.
 
-> **Stage sets (Zoho), to be confirmed:**
+> **Stage sets (CRMProvider), to be confirmed:**
 > - *Customer / Won*: Paid · Agreement Signed · Closed Won · Client Activated · Transferred to CS
 > - *Active pipeline*: anything not Won and not Lost/Closed/Dropped/Cancelled (Proposal, Negotiation, Meeting, Agreement Sent, Awaiting PO, …)
 > - *Lost*: any stage containing "lost" / "closed lost" / "dropped" / "cancel"
@@ -149,7 +149,7 @@ Graded outcomes tell Sales *what to do*, not just accept/reject:
 2. **Tier 2 strength** — email-exact = hard dedupe, phone-only = REVIEW? (recommended) or any single signal = hard reject (as originally proposed)?
 3. **Outcome model** — graded (recommended) or a single REJECT/ACCEPT flag?
 4. **Cool-off windows** — confirm 180d Private / 365d Government.
-5. **Stage sets** — confirm the Zoho stage lists in §2.
+5. **Stage sets** — confirm the CRMProvider stage lists in §2.
 6. **Generic-name blacklist** — confirm the list (`Confidential`, `N/A`, …) and the company-name fuzzy threshold.
 
 ---

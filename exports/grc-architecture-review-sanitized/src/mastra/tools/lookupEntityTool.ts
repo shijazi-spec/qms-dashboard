@@ -1,44 +1,44 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { searchZohoRecordsByWord } from "../../utils/zohoCRM";
+import { searchCRMProviderRecordsByWord } from "../../utils/CRMProviderCRM";
 import { searchClustersByText } from "../../utils/duplicateRadarDatabase";
 
 /**
  * Entity lookup — "show me everything we have on <X>".
  *
  * Given ANY identifier (company name, person name, domain, email, or phone
- * number) this searches all four Zoho modules at once via Zoho's indexed
- * global search (searchZohoRecordsByWord — the same lookup the CRM's top
+ * number) this searches all four CRMProvider modules at once via CRMProvider's indexed
+ * global search (searchCRMProviderRecordsByWord — the same lookup the CRM's top
  * search box uses, so it matches phone/email/name even where structured
  * `criteria` search misses) and also surfaces any matching duplicate clusters.
  *
  * Read-only. Returns a compact per-module summary the agent can narrate; it
  * does NOT dump full records. Contact PII (email/phone) is included because
  * that's the point of the lookup — only senior roles reach this tool (web is
- * RBAC-gated by login; Slack runs Adam at head_of_operations_quality).
+ * RBAC-gated by login; ChatProvider runs Adam at head_of_operations_quality).
  */
 
 const ALL_MODULES = ["Accounts", "Deals", "Contacts", "Leads"] as const;
 type ZModule = (typeof ALL_MODULES)[number];
 
 /**
- * Build the Zoho CRM *UI* deep-link for a record so Adam can hand the user a
- * clickable "open this in the CRM" link. The API host (zohoapis.<tld>) maps to
- * the CRM web host (crm.zoho.<tld>); the org is resolved by Zoho from the
+ * Build the CRMProvider CRM *UI* deep-link for a record so Adam can hand the user a
+ * clickable "open this in the CRM" link. The API host (CRMProviderapis.<tld>) maps to
+ * the CRM web host (crm.CRMProvider.<tld>); the org is resolved by CRMProvider from the
  * logged-in session, so the org-less /crm/tab/<Module>/<id> form redirects to
  * the right org. Returns null if we have no record id.
  */
-function zohoRecordUrl(module: ZModule, id?: string | null): string | null {
+function CRMProviderRecordUrl(module: ZModule, id?: string | null): string | null {
   if (!id) return null;
-  const apiDomain = process.env.ZOHO_API_DOMAIN || "<REDACTED_URL>";
+  const apiDomain = process.env.CRMProvider_API_DOMAIN || "<REDACTED_URL>";
   // ".com", ".eu", ".in", ".com.au", ".com.cn", ".jp" …
-  const m = apiDomain.match(/zohoapis(\.[a-z.]+)/i);
+  const m = apiDomain.match(/CRMProviderapis(\.[a-z.]+)/i);
   const tld = m ? m[1] : ".com";
   return `<REDACTED_URL>`;
 }
 
 /**
- * Race a promise against a timeout so a single hanging Zoho call can never
+ * Race a promise against a timeout so a single hanging CRMProvider call can never
  * stall the whole lookup. Without this, one slow module search leaves the
  * Promise.all pending forever → the agent waits → the user gets a blank reply
  * / endless spinner. On timeout we reject so the caller's try/catch records it
@@ -82,7 +82,7 @@ function summarize(module: ZModule, rec: any): Record<string, any> {
   const base = {
     id: rec.id,
     owner: rec.owner || nameOf(d.Owner) || null,
-    crmLink: zohoRecordUrl(module, rec.id),
+    crmLink: CRMProviderRecordUrl(module, rec.id),
   };
   switch (module) {
     case "Accounts":
@@ -123,7 +123,7 @@ export const lookupEntityTool = createTool({
 
   description:
     "Look up EVERYTHING the CRM has on a company, person, domain, email, or phone number in one go. " +
-    "Searches Zoho Accounts, Deals, Contacts and Leads using Zoho's indexed global search and surfaces any matching " +
+    "Searches CRMProvider Accounts, Deals, Contacts and Leads using CRMProvider's indexed global search and surfaces any matching " +
     "duplicate clusters. Use this whenever the user asks 'show me everything on <X>', 'what do we have for <company>', " +
     "or gives a domain / email / phone / client name to look up across the CRM.",
 
@@ -134,7 +134,7 @@ export const lookupEntityTool = createTool({
     modules: z
       .array(z.enum(ALL_MODULES))
       .optional()
-      .describe("Limit to specific Zoho modules; defaults to all four (Accounts, Deals, Contacts, Leads)"),
+      .describe("Limit to specific CRMProvider modules; defaults to all four (Accounts, Deals, Contacts, Leads)"),
     limitPerModule: z
       .number()
       .optional()
@@ -155,9 +155,9 @@ export const lookupEntityTool = createTool({
   execute: async ({ context, mastra }) => {
     const logger = mastra?.getLogger();
     // Normalize the search term. Users paste domains as "@<REDACTED_HOST>" — the
-    // leading "@" breaks Zoho's indexed word search, so strip it (and any
+    // leading "@" breaks CRMProvider's indexed word search, so strip it (and any
     // surrounding angle brackets/whitespace). A real email like
-    // "user@example.invalid" keeps its mid-string "@" (Zoho matches emails).
+    // "user@example.invalid" keeps its mid-string "@" (CRMProvider matches emails).
     const raw = (context.query || "").trim();
     const query = raw.replace(/^[<@\s]+/, "").replace(/[>\s]+$/, "").trim();
     if (!query) {
@@ -184,7 +184,7 @@ export const lookupEntityTool = createTool({
       wanted.map(async (m) => {
         try {
           const recs = await withTimeout(
-            searchZohoRecordsByWord(m, query),
+            searchCRMProviderRecordsByWord(m, query),
             SEARCH_TIMEOUT_MS,
             `${m} search`,
           );

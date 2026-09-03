@@ -1,7 +1,7 @@
 /**
  * Controlled-document bytes live in the DATABASE, not on the deployment's disk.
  *
- * fileUpload wrote to <cwd>/data/documents. Replit rebuilds that directory from
+ * fileUpload wrote to <cwd>/data/documents. HostingPlatform rebuilds that directory from
  * the repo on every publish and `data/` is untracked, so every uploaded
  * document was destroyed at the next deploy while its policies row kept
  * claiming a file. The CS SOP's Open button served

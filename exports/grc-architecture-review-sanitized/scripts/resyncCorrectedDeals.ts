@@ -1,18 +1,18 @@
 /**
- * Bulk targeted re-sync for deals you've corrected in Zoho (so the CS-client
+ * Bulk targeted re-sync for deals you've corrected in CRMProvider (so the CS-client
  * directory drops them WITHOUT waiting for a full scan). Re-fetches each
- * matching deal from Zoho and overwrites the local raw_data + stage + layout,
+ * matching deal from CRMProvider and overwrites the local raw_data + stage + layout,
  * then busts the directory cache.
  *
  *   npx tsx scripts/resyncCorrectedDeals.ts
  *
- * Edit TARGETS to add any company you've fixed in Zoho. (The per-row
+ * Edit TARGETS to add any company you've fixed in CRMProvider. (The per-row
  * "↻ Re-check from CRM" button on the Preflight page does the same thing for a
  * single company — this script is the bulk fallback when you fix many at once.)
  *
- * Shares the exact logic the button uses: resyncCompanyDealsFromZoho().
+ * Shares the exact logic the button uses: resyncCompanyDealsFromCRMProvider().
  */
-import { resyncCompanyDealsFromZoho, ResyncTarget } from "../src/utils/duplicateRadarResync";
+import { resyncCompanyDealsFromCRMProvider, ResyncTarget } from "../src/utils/duplicateRadarResync";
 
 const TARGETS: ResyncTarget[] = [
   { label: "AlYemni Group", domains: ["<REDACTED_HOST>"], names: ["yemni", "اليمني"] },
@@ -22,11 +22,11 @@ const TARGETS: ResyncTarget[] = [
 
 async function main() {
   for (const t of TARGETS) {
-    const res = await resyncCompanyDealsFromZoho([t]);
+    const res = await resyncCompanyDealsFromCRMProvider([t]);
     console.log(`\n===== ${t.label}: ${res.scanned} local deal(s) =====`);
     for (const d of res.details) {
-      if (d.status === "not_in_zoho") {
-        console.log(`  ${d.id} "${d.name}": NOT in Zoho (deleted/converted) — left as-is`);
+      if (d.status === "not_in_CRMProvider") {
+        console.log(`  ${d.id} "${d.name}": NOT in CRMProvider (deleted/converted) — left as-is`);
       } else {
         console.log(`  ${d.id} "${(d.name || "").slice(0, 34)}": phase ${d.phaseBefore || "-"} -> ${d.phaseAfter || "-"} | stage ${d.stageBefore || "-"} -> ${d.stageAfter || "-"}`);
       }

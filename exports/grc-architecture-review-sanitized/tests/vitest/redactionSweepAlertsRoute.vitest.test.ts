@@ -219,7 +219,7 @@ describe("GET /api/admin/redaction-sweep/alerts — Task #656 enrichment", () =>
             message,
             module: "security/redaction-sweep",
             priority: "critical",
-            channel: "slack",
+            channel: "ChatProvider",
             status: "unread",
             recipient: "#ops-alerts",
             related_entity_type: "SYSTEM",

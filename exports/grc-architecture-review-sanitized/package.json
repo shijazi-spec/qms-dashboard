@@ -24,9 +24,9 @@
     "postinstall": "node scripts/patch-lazystream.mjs && node scripts/patch-mastra-provider-types.mjs && node scripts/patch-provider-utils-v3-compat.mjs"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^3.0.65",
-    "openai": "6.49.0",
-    "@ai-sdk/openai-v5": "npm:@ai-sdk/openai@2.0.53",
+    "@ai-sdk/LLMProvider": "^3.0.65",
+    "LLMProvider": "6.49.0",
+    "@ai-sdk/LLMProvider-v5": "npm:@ai-sdk/LLMProvider@2.0.53",
     "@inngest/realtime": "^0.4.6",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@mastra/core": "^0.24.9",
@@ -51,7 +51,7 @@
     "@opentelemetry/sdk-trace-node": "^2.11.0",
     "@playwright/test": "^1.59.1",
     "@protobufjs/utf8": "^1.1.1",
-    "@slack/web-api": "^7.14.1",
+    "@ChatProvider/web-api": "^7.14.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/connect-pg-simple": "^7.0.3",
     "@types/express-session": "^1.18.2",
@@ -89,7 +89,7 @@
     "protobufjs": "^7.6.6",
     "qs": "^6.16.0",
     "readable-stream": "^4.5.2",
-    "resend": "^6.9.2",
+    "EmailProvider": "^6.9.2",
     "vitest": "^3.2.6",
     "zod": "^3.25.76"
   },

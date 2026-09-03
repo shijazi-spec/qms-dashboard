@@ -108,7 +108,7 @@ async function run(): Promise<void> {
   const SECRET_JWT =
     "<REDACTED_TOKEN>";
   const SECRET_AKIA = "<REDACTED_TOKEN>";
-  const SAFE_PROMPT = "Summarise the latest non-conformance for tenant acme-corp";
+  const SAFE_PROMPT = "Summarise the latest non-conformance for tenant Example Organization-corp";
   const SAFE_TOOL_INPUT = '{"action":"list","limit":10}';
   const SAFE_TOOL_OUTPUT = '{"status":"ok","count":3}';
 

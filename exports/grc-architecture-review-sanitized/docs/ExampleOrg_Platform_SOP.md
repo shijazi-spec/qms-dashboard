@@ -4,7 +4,7 @@
 **Version:** 4.6
 **Last Updated:** April 24, 2026
 **Classification:** Internal Use Only
-**Published URL:** https://<REDACTED_HOST>
+**Published URL:** <REDACTED_URL_SCHEME><REDACTED_HOST>
 **Approval Authority:** Quality Management Representative / Platform Admin
 **Next Review Date:** July 17, 2026
 
@@ -32,20 +32,20 @@
 | 2.1 | Apr 8, 2026 | Engineering | OAuth credential detection, GRC audit readiness, QMS NC modal, team Add Member, policies fix |
 | 3.0 | Apr 8, 2026 | Engineering | Added Quality Policy, Document Control, Management Review, Internal Audit Program, PDPL/Data Protection, Incident Response, Backup & DR, Change Management, User Training, Continual Improvement, Glossary, RACI, SLAs |
 | 3.1 | Apr 8, 2026 | Engineering | Corrected 10 inaccuracies: GRC audit readiness description, policy button name, QMS KPI cards, NC types, PKCE claim, rate limiting claims, audit process steps, link text, first-steps references |
-| 3.2 | Apr 8, 2026 | Engineering | Comprehensive codebase audit: expanded database inventory (97+ tables), added PDPL backend details (data inventory, DSAR, AI guardrails, audit log with SHA-256), ROI engine details (manpower/platform/error costs, AI validation), Call Intelligence backend (transcripts, QA scores, meeting MOM), handoff & control mapping system, escalation system, Zoho write capability (record updates, evaluation notes), Google Calendar integration, Slack/Telegram triggers, sandbox/mock data endpoints, onboarding tour system, admin governance document & scorecard management, MFA schema, access audit log, data scopes, screen permissions, risk assessment history, compliance calendar, evidence packs, policy versions & acknowledgments, vendor assessments & remediations |
+| 3.2 | Apr 8, 2026 | Engineering | Comprehensive codebase audit: expanded database inventory (97+ tables), added PDPL backend details (data inventory, DSAR, AI guardrails, audit log with SHA-256), ROI engine details (manpower/platform/error costs, AI validation), Call Intelligence backend (transcripts, QA scores, meeting MOM), handoff & control mapping system, escalation system, CRMProvider write capability (record updates, evaluation notes), IdentityProvider Calendar integration, ChatProvider/Telegram triggers, sandbox/mock data endpoints, onboarding tour system, admin governance document & scorecard management, MFA schema, access audit log, data scopes, screen permissions, risk assessment history, compliance calendar, evidence packs, policy versions & acknowledgments, vendor assessments & remediations |
 | 3.3 | Apr 8, 2026 | Engineering | Corrected 9 inaccuracies: database count 73→97+ tables, fixed section numbering (22→28 gap), corrected policy form fields, NC severity/source options, audit readiness naming, expanded table inventory (+24 tables, +2 groups) |
 | 3.4 | Apr 9, 2026 | Engineering | Restored auth documentation (authRoutes.ts with OIDC + HMAC-SHA256 session signing exists in codebase), corrected CSP to reflect nonce implementation, documented tiered rate limiting, updated VAPT status to reflect post-retest remediation of final 5 findings, unified role system |
 | 3.5 | Apr 9, 2026 | Engineering | CSP nonce removed (CSP Level 3 conflict with inline handlers), page-level auth now accepts admin_key cookie alongside session cookie, audit trigger uses Inngest-first with direct execution fallback, admin key login redirects to dashboard, inngest.sh DATABASE_URL check fixed, smoke test routes added (/api/health, /api/smoke) |
-| 3.6 | Apr 9, 2026 | Engineering | 22-fix security hardening: SQL injection fixes (parameterized make_interval in getTrendData, getRiskTrends, getUpcomingDeadlines), path traversal fix in screenshot endpoint, kpiDatabase table name corrections, crmComplianceTool fake data removal + Zoho datacenter URL fix, OIDC nonce verification (via oauth_data cookie, redirect on mismatch), directAuditRunner trigger chain, eventLogsDatabase error propagation, UUID treatment action resolution, dashboard HTML fixes (policies.html, executive.html, pdpl.html), uniform requireAdminOrKey auth guards on rbacRoutes/pdplRoutes/callIntelligenceRoutes/duplicateRadarRoutes, Telegram webhook secret validation, Linear webhook HMAC-SHA256 signature verification with timingSafeEqual |
+| 3.6 | Apr 9, 2026 | Engineering | 22-fix security hardening: SQL injection fixes (parameterized make_interval in getTrendData, getRiskTrends, getUpcomingDeadlines), path traversal fix in screenshot endpoint, kpiDatabase table name corrections, crmComplianceTool fake data removal + CRMProvider datacenter URL fix, OIDC nonce verification (via oauth_data cookie, redirect on mismatch), directAuditRunner trigger chain, eventLogsDatabase error propagation, UUID treatment action resolution, dashboard HTML fixes (policies.html, executive.html, pdpl.html), uniform requireAdminOrKey auth guards on rbacRoutes/pdplRoutes/callIntelligenceRoutes/duplicateRadarRoutes, Telegram webhook secret validation, Linear webhook HMAC-SHA256 signature verification with timingSafeEqual |
 | 3.7 | Apr 10, 2026 | Engineering | SOP accuracy corrections: fixed OIDC nonce cookie name (oauth_data, not oidc_nonce) and rejection behavior (redirect to `/login?error=nonce_mismatch`, not 403), clarified Linear webhook HMAC-SHA256 implementation details (createHmac + timingSafeEqual), clarified uniform requireAdminOrKey usage across RBAC/PDPL/CallIntel/DuplicateRadar with note on requireWriteRole in other modules, updated Recent Changes Log |
-| 3.8 | Apr 12, 2026 | Engineering | Added AI Consultant & Assistant module (Section 4.20/6.4/7/8): GPT-4o agent with 8 tools, background scanner (6h Inngest cron, 8 checks), alerts system, full chat UI at `/consultant`, alert bell in nav bar. Removed Sandbox module. Updated Audit History to show Date/Time. Added Slack notification integration details. Updated AI engine to GPT-4o. |
-| 4.0 | Apr 13, 2026 | Engineering | **Major SOP overhaul.** AI Consultant upgraded to 16 tools (added NC/CAPA create/list, checklist runner, knowledge search). Duplicate Radar Tier 1–3 upgrade: multi-signal scoring (email 40pts + domain 25pts + phone 30pts + company 20pts), cross-module matching (Leads/Contacts/Deals/Accounts), merge workflow, owner accountability, real-time duplicate check, async scan with progress polling. AI Scanner expanded to 12 checks (added Sales SLA, SDR SLA, low-progress treatments, high-confidence duplicates). 76 CRM governance rules documented (Sales SOP + SDR SOP + 20 Account rules). 11 SDR KPIs seeded. 6-hourly duplicate auto-sync cron. KPI auto-calculation cron (daily 2 AM, 6 KPIs). Zoho pagination uncapped by default. Notification hub integration. Database expanded to 105+ tables. Complete route/utility/dashboard inventory. Updated all sections. |
-| 4.1 | Apr 13, 2026 | Engineering | **Duplicate Radar 21-item enhancement (4 phases).** Phase 1 Bug Fixes: A1 – incremental upsert with ON CONFLICT replacing destructive clear, DUPLICATE_SCAN_MODE env (incremental/full), stale record cleanup + orphan cluster removal; A2 – getEnhancedSummary low_confidence only for clusters with >1 record, added singletonCount + resolutionRate; A3 – fixed searchDuplicates paramIndex bug for company_name; A6 – RBAC on DELETE /api/duplicates/mock-data; A7 – phone_normalized computed atomically in INSERT. Phase 2 Performance: B2 – upsertRecord with atomic phone_normalized; B3 – parallel 4-module fetch via Promise.all(); B4 – pg_trgm + GIN index for fuzzy company matching with Levenshtein fallback; B5 – JOIN-based getDuplicateRecordsByType and getExportRecords eliminating N+1 queries; B6 – performance indexes on zoho_record_id (unique), email, phone_normalized, domain. Phase 3 Features: C1 – SSE endpoint /api/duplicates/scan-stream for real-time scan progress; C2 – Contact Duplicates tab + /api/duplicates/contacts endpoint; C3 – Owner Accountability with RAG status (green ≤2%, amber 2-5%, red >5% vs 2% KPI target); C4 – server-side pagination (30/page clusters, 50/page records); C5 – auto-resolve engine POST /api/duplicates/auto-resolve (singletons→ignored, ≥95% confidence→resolved); C6 – date range filters on all endpoints; C7 – smart AI recommendations with multi-factor scoring (completeness, deal activity, recency, stage). Phase 4 UI/UX: D1 – animated progress bar with module status chips (pending/fetching/processing/done); D2 – enhanced cluster modal with side-by-side field comparison, AI recommendations (KEEP/MERGE/CLOSE), Zoho record links, resolve/ignore actions; D4 – Executive Summary with resolution rate, KPI gauge vs 2% target, top match signals, top 5 clusters by pipeline inflation, last scan info; D5 – Generate Test Data button removed from production UI. |
+| 3.8 | Apr 12, 2026 | Engineering | Added AI Consultant & Assistant module (Section 4.20/6.4/7/8): GPT-4o agent with 8 tools, background scanner (6h Inngest cron, 8 checks), alerts system, full chat UI at `/consultant`, alert bell in nav bar. Removed Sandbox module. Updated Audit History to show Date/Time. Added ChatProvider notification integration details. Updated AI engine to GPT-4o. |
+| 4.0 | Apr 13, 2026 | Engineering | **Major SOP overhaul.** AI Consultant upgraded to 16 tools (added NC/CAPA create/list, checklist runner, knowledge search). Duplicate Radar Tier 1–3 upgrade: multi-signal scoring (email 40pts + domain 25pts + phone 30pts + company 20pts), cross-module matching (Leads/Contacts/Deals/Accounts), merge workflow, owner accountability, real-time duplicate check, async scan with progress polling. AI Scanner expanded to 12 checks (added Sales SLA, SDR SLA, low-progress treatments, high-confidence duplicates). 76 CRM governance rules documented (Sales SOP + SDR SOP + 20 Account rules). 11 SDR KPIs seeded. 6-hourly duplicate auto-sync cron. KPI auto-calculation cron (daily 2 AM, 6 KPIs). CRMProvider pagination uncapped by default. Notification hub integration. Database expanded to 105+ tables. Complete route/utility/dashboard inventory. Updated all sections. |
+| 4.1 | Apr 13, 2026 | Engineering | **Duplicate Radar 21-item enhancement (4 phases).** Phase 1 Bug Fixes: A1 – incremental upsert with ON CONFLICT replacing destructive clear, DUPLICATE_SCAN_MODE env (incremental/full), stale record cleanup + orphan cluster removal; A2 – getEnhancedSummary low_confidence only for clusters with >1 record, added singletonCount + resolutionRate; A3 – fixed searchDuplicates paramIndex bug for company_name; A6 – RBAC on DELETE /api/duplicates/mock-data; A7 – phone_normalized computed atomically in INSERT. Phase 2 Performance: B2 – upsertRecord with atomic phone_normalized; B3 – parallel 4-module fetch via Promise.all(); B4 – pg_trgm + GIN index for fuzzy company matching with Levenshtein fallback; B5 – JOIN-based getDuplicateRecordsByType and getExportRecords eliminating N+1 queries; B6 – performance indexes on CRMProvider_record_id (unique), email, phone_normalized, domain. Phase 3 Features: C1 – SSE endpoint /api/duplicates/scan-stream for real-time scan progress; C2 – Contact Duplicates tab + /api/duplicates/contacts endpoint; C3 – Owner Accountability with RAG status (green ≤2%, amber 2-5%, red >5% vs 2% KPI target); C4 – server-side pagination (30/page clusters, 50/page records); C5 – auto-resolve engine POST /api/duplicates/auto-resolve (singletons→ignored, ≥95% confidence→resolved); C6 – date range filters on all endpoints; C7 – smart AI recommendations with multi-factor scoring (completeness, deal activity, recency, stage). Phase 4 UI/UX: D1 – animated progress bar with module status chips (pending/fetching/processing/done); D2 – enhanced cluster modal with side-by-side field comparison, AI recommendations (KEEP/MERGE/CLOSE), CRMProvider record links, resolve/ignore actions; D4 – Executive Summary with resolution rate, KPI gauge vs 2% target, top match signals, top 5 clusters by pipeline inflation, last scan info; D5 – Generate Test Data button removed from production UI. |
 | 4.2 | Apr 13, 2026 | Engineering | **AI Consultant 27-item enhancement (4 phases).** Phase 1 Bugs: A1 – XSS-safe renderMarkdown with escapeHtml + placeholder tokens for code/tables + URL protocol sanitization; A2 – sla_breach added to createAlertTool Zod enum; A3 – 9 `if(true)` scanner bugs fixed (use createAlertIfNew return); A4 – Auto-NC status query `'active'` → `IN ('open','acknowledged')`; A5 – KPI join column `kpi_definition_id` → `kpi_id`; A6 – monitorRisksTool column `rta.description` → `rta.action_description`; A7 – Dead `checkAgainst` param removed from reviewDocumentTool; A8 – Scan prompt revised to report-only (no force-create). Phase 2 Performance: B1 – Shared pg.Pool in sharedPool.ts (max:20); B2 – AbortController timeouts on all agent calls (120s chat, 300s scan, configurable via env vars); B3 – 13 scanner checks parallelized via Promise.all; B4 – safeQuery error logging + errors[] in ScanResult. Phase 3 Features: C1 – Alert action buttons (ack/resolve/dismiss) + View All modal with status/severity filters; C2 – Chat history panel with localStorage persistence; C3 – File upload endpoint (PDF/DOCX/TXT, 10MB limit); C4 – Clickable knowledge docs; C5 – Citation CSS + sanitized markdown links; C6 – Scan SSE progress bar endpoint (/api/consultant/scan-stream); C7 – Agent upgraded to 23 tools (added updateCapa, addCapaAction, createTraining, getTrainingList, assignTraining, getTrainingAssignments, completeTraining); C8 – Auth guards (session or X-Admin-Key) on all consultant endpoints; C9 – Contextual welcome dashboard with KPI summary. Phase 4 UI: D1 – Consolidated alert polling (60s interval); D2 – Touch swipe gestures + sticky input; D3 – Severity icons + inline actions + relative time; D4 – Retry button on stream failure; D5 – Export chat as Markdown; D6 – Arabic RTL detection. |
-| 4.3 | Apr 14, 2026 | Engineering | **CRM Data Hub & reliability fixes.** CRM page (`/crm`) rewritten as "CRM Data Hub" with live quality enrichment via `POST /api/crm/enrich`, additive penalty scoring via `assessDataQuality()`, junk detection (gibberish names, garbage names, suspicious emails), duplicate cluster cross-reference via `lookupRecordsByZohoIds()`. Frontend: health summary bar, 4-tier quality badges, cluster badges linking to Duplicate Radar, row-click detail modal, Hide Junk/Highlight Issues toggles, `escapeHtml()` XSS protection. Duplicate Radar: full CRM sync with `syncAllModules`, 6-hourly auto-sync, data quality scoring + junk quarantine, new filter/sync/quality endpoints, Data Quality tab, `zoho_sync_state` and `duplicate_record_tasks` tables. PDPL section corrected to reflect CRM data persistence. SOP accuracy audit: corrected 23 discrepancies. |
-| 4.4 | Apr 17, 2026 | Engineering | **Duplicate Radar — cross-module intelligence, deletion sync, dashboard drill-downs.** (1) Module-aware recommendations: cluster decisions now distinguish MERGE (same module), LINK (cross-module — set `Account_Name`/`Contact_Name` instead of merging, per Zoho rule), CLOSE, and REVIEW. Account-first primary selection across cross-module clusters. Cluster API (`GET /api/duplicates/clusters/:id`) returns `primary_type`, `is_cross_module`, and `record_types`; cluster modal shows cross-module banner + per-record type tags, dynamic Resolve label, and post-merge sync hint. (2) Deletion detection: `fetchDeletedZohoRecords()` calls Zoho's `/deleted?type=all` with `If-Modified-Since`; `runDeletionDetection()` purges merged/deleted records on each scan. Removed unsafe `markStaleRecords()` from incremental sync to avoid false purges. Deletion detection is skipped on the very first scan (no `last_sync_at` baseline). (3) "View All" drill-down modals on the dashboard: new endpoints `GET /api/duplicates/clusters-by-inflation` and `GET /api/duplicates/clusters-by-signal/:signal` with DB helpers `getAllClustersByInflation` / `getClustersBySignal`. Generic `listModal` with "View all signals →" and "View all clusters →" links; inline signal rows are clickable. (4) Layout filter on Clusters tab: shared `buildClusterFilterClause()` helper used by both `getAllClusters` and `getClusterCount` (guarantees list/count parity); new `layouts` param uses an `EXISTS` subquery on `duplicate_records.layout_name` (uses existing `idx_duplicate_records_layout` index); Layout `<select>` populated once from `/api/duplicates/filters/options` with a live count hint. Resolved/ignored decisions are still LOST on full Rebuild Clusters (admin-only). |
+| 4.3 | Apr 14, 2026 | Engineering | **CRM Data Hub & reliability fixes.** CRM page (`/crm`) rewritten as "CRM Data Hub" with live quality enrichment via `POST /api/crm/enrich`, additive penalty scoring via `assessDataQuality()`, junk detection (gibberish names, garbage names, suspicious emails), duplicate cluster cross-reference via `lookupRecordsByCRMProviderIds()`. Frontend: health summary bar, 4-tier quality badges, cluster badges linking to Duplicate Radar, row-click detail modal, Hide Junk/Highlight Issues toggles, `escapeHtml()` XSS protection. Duplicate Radar: full CRM sync with `syncAllModules`, 6-hourly auto-sync, data quality scoring + junk quarantine, new filter/sync/quality endpoints, Data Quality tab, `CRMProvider_sync_state` and `duplicate_record_tasks` tables. PDPL section corrected to reflect CRM data persistence. SOP accuracy audit: corrected 23 discrepancies. |
+| 4.4 | Apr 17, 2026 | Engineering | **Duplicate Radar — cross-module intelligence, deletion sync, dashboard drill-downs.** (1) Module-aware recommendations: cluster decisions now distinguish MERGE (same module), LINK (cross-module — set `Account_Name`/`Contact_Name` instead of merging, per CRMProvider rule), CLOSE, and REVIEW. Account-first primary selection across cross-module clusters. Cluster API (`GET /api/duplicates/clusters/:id`) returns `primary_type`, `is_cross_module`, and `record_types`; cluster modal shows cross-module banner + per-record type tags, dynamic Resolve label, and post-merge sync hint. (2) Deletion detection: `fetchDeletedCRMProviderRecords()` calls CRMProvider's `/deleted?type=all` with `If-Modified-Since`; `runDeletionDetection()` purges merged/deleted records on each scan. Removed unsafe `markStaleRecords()` from incremental sync to avoid false purges. Deletion detection is skipped on the very first scan (no `last_sync_at` baseline). (3) "View All" drill-down modals on the dashboard: new endpoints `GET /api/duplicates/clusters-by-inflation` and `GET /api/duplicates/clusters-by-signal/:signal` with DB helpers `getAllClustersByInflation` / `getClustersBySignal`. Generic `listModal` with "View all signals →" and "View all clusters →" links; inline signal rows are clickable. (4) Layout filter on Clusters tab: shared `buildClusterFilterClause()` helper used by both `getAllClusters` and `getClusterCount` (guarantees list/count parity); new `layouts` param uses an `EXISTS` subquery on `duplicate_records.layout_name` (uses existing `idx_duplicate_records_layout` index); Layout `<select>` populated once from `/api/duplicates/filters/options` with a live count hint. Resolved/ignored decisions are still LOST on full Rebuild Clusters (admin-only). |
 | 4.5 | Apr 18, 2026 | Engineering | **Internal Audits re-architecture + Admin & Tools dropdown + External Audits.** (1) Internal Audits Dashboard (§4.26) — Annual Audit Programme panel with HITL sign-off routed through `/ai-approvals` (new role `head_of_operations_quality` as sole approver, WP-CTL-007); triggers now require a written dismiss reason (≥10 chars) and auto-re-evaluate in 24 h; critical triggers expose "Propose via HITL"; new Inngest cron `trigger-auto-escalate` (daily @ 03:00) re-activates dismissed triggers when the re-eval window elapses and auto-opens a formal `grc_audit_findings` row for Critical @ 7 d / Minor @ 30 d stale pending triggers, with bi-directional link via `escalation_finding_id`. (2) Manual Audit Intake (§4.27) — new `/intake` workspace, Quality Manager as central intake owner, GPT-4o structured finding extraction with paste-fallback for un-parsed binaries, per-finding accept/edit/reject review, `source_quote` traceability, `Finalize` promotes accepted findings into `grc_audit_findings` with `intake_id` lineage; tables `manual_audit_intake`, `manual_audit_findings`. (3) External Audits (§4.28) — separated into `/external-audits` with Calendar/Audits + Certificate Register + Readiness Checklist tabs; hero summary card on `/grc` showing Next Audit / Active Certs / Expiring ≤ 90 d; tables `external_audits`, `external_audit_certificates`, `external_audit_checklist`. (4) Admin & Tools dropdown (§4.29) — new top-nav group consolidating Data Migration Engine (moved from GRC), User & Role Management, Users & Access, AI Approvals Queue, System Logs (moved from Analytics); role-gated. (5) Migration Engine expanded with 5 Quality templates: CAPA Register, Nonconformity Log, Training Records, Audit Findings, Deal Evaluations (AI column-mapper + duplicate pre-check inherited). (6) 7 new controlled documents seeded: WP-SOP-040 (Audit Programme Governance), WP-SOP-041 (Manual Intake Control), WP-SOP-042 (External Audit Preparation), WP-FORM-055/056/057, WP-CTL-007 (Programme Sign-off Control). (7) `audits.source_party` + `audit_run_id`/`programme_id`/`intake_id` columns for full audit lineage. |
-| 4.3 | Apr 14, 2026 | Engineering | **CRM Data Hub & reliability fixes.** CRM page (`/crm`) rewritten as "CRM Data Hub" with live quality enrichment via `POST /api/crm/enrich`, additive penalty scoring via `assessDataQuality()`, junk detection (gibberish names, garbage names, suspicious emails), duplicate cluster cross-reference via `lookupRecordsByZohoIds()`. Frontend: health summary bar, 4-tier quality badges, cluster badges linking to Duplicate Radar, row-click detail modal, Hide Junk/Highlight Issues toggles, `escapeHtml()` XSS protection. Duplicate Radar: full CRM sync with `syncAllModules`, 6-hourly auto-sync, data quality scoring + junk quarantine, new filter/sync/quality endpoints, Data Quality tab, `zoho_sync_state` and `duplicate_record_tasks` tables. PDPL section corrected to reflect CRM data persistence. SOP accuracy audit: corrected 23 discrepancies. |
+| 4.3 | Apr 14, 2026 | Engineering | **CRM Data Hub & reliability fixes.** CRM page (`/crm`) rewritten as "CRM Data Hub" with live quality enrichment via `POST /api/crm/enrich`, additive penalty scoring via `assessDataQuality()`, junk detection (gibberish names, garbage names, suspicious emails), duplicate cluster cross-reference via `lookupRecordsByCRMProviderIds()`. Frontend: health summary bar, 4-tier quality badges, cluster badges linking to Duplicate Radar, row-click detail modal, Hide Junk/Highlight Issues toggles, `escapeHtml()` XSS protection. Duplicate Radar: full CRM sync with `syncAllModules`, 6-hourly auto-sync, data quality scoring + junk quarantine, new filter/sync/quality endpoints, Data Quality tab, `CRMProvider_sync_state` and `duplicate_record_tasks` tables. PDPL section corrected to reflect CRM data persistence. SOP accuracy audit: corrected 23 discrepancies. |
 
 ### Document Control Procedure
 1. This SOP is maintained in the project repository at `docs/ExampleOrg_Platform_SOP.md`
@@ -79,7 +79,7 @@ ExampleOrg is committed to delivering an enterprise-grade Quality Management Sys
 | CAPA Closure Rate | ≥ 80% within 30 days | Open vs closed CAPA records in QMS | Monthly |
 | NC Resolution Time | ≤ 15 business days (major), ≤ 30 days (critical) | NC records aging in QMS | Monthly |
 | First Pass Yield | ≥ 75% | QMS Audit KPI dashboard | Monthly |
-| Platform Uptime | ≥ 99.5% | Replit health checks and monitoring | Monthly |
+| Platform Uptime | ≥ 99.5% | HostingPlatform health checks and monitoring | Monthly |
 | User Satisfaction | ≥ 4.0/5.0 | Feedback module (`/feedback`) | Quarterly |
 | Duplicate Rate | ≤ 2% | Duplicate Radar KPI SDR-KPI-09 | Monthly |
 | SDR Contact Rate | ≥ 30% | KPI SDR-KPI-02 | Monthly |
@@ -94,13 +94,13 @@ ExampleOrg is committed to delivering an enterprise-grade Quality Management Sys
 
 ## 2. Platform Overview
 
-ExampleOrg QMS is an AI-powered enterprise Quality Management System that integrates Governance, Risk, and Compliance (GRC) with quality management capabilities. The platform connects directly to Zoho CRM (production, via OAuth 2.0) to perform automated quality audits, data hygiene checks, SLA monitoring, duplicate detection, and compliance monitoring.
+ExampleOrg QMS is an AI-powered enterprise Quality Management System that integrates Governance, Risk, and Compliance (GRC) with quality management capabilities. The platform connects directly to CRMProvider CRM (production, via OAuth 2.0) to perform automated quality audits, data hygiene checks, SLA monitoring, duplicate detection, and compliance monitoring.
 
-**Platform URL:** https://<REDACTED_HOST>
+**Platform URL:** <REDACTED_URL_SCHEME><REDACTED_HOST>
 **Tech Stack:** Mastra AI Framework, Hono HTTP Server, PostgreSQL, Inngest Workflows
-**Hosting:** Replit Autoscale with automatic health checks
+**Hosting:** HostingPlatform Autoscale with automatic health checks
 **Database:** PostgreSQL with 113+ auto-initialized tables (v4.5: +8 audit/intake/external tables)
-**AI Engine:** GPT-4o via OpenAI / Replit AI Integrations (configurable)
+**AI Engine:** GPT-4o via LLMProvider / HostingPlatform AI Integrations (configurable)
 
 ### 2.1 Platform Architecture Summary
 
@@ -139,9 +139,9 @@ ExampleOrg QMS is an AI-powered enterprise Quality Management System that integr
 | **Custom** | Configurable | Per-screen permissions assigned by admin; used for non-standard access patterns |
 
 ### 3.2 Login Process
-1. Navigate to **https://<REDACTED_HOST>**
-2. Click **"Log in with Replit"**
-3. Authenticate using Google, GitHub, Apple, or email
+1. Navigate to **<REDACTED_URL_SCHEME><REDACTED_HOST>**
+2. Click **"Log in with HostingPlatform"**
+3. Authenticate using IdentityProvider, SourceControlProvider, IdentityProvider, or email
 4. System creates/updates your user profile automatically
 5. Default role assigned: **Department Viewer** (admin can upgrade via Users page)
 
@@ -184,7 +184,7 @@ ExampleOrg QMS is an AI-powered enterprise Quality Management System that integr
 4. Click the purple **"Run AI Audit"** button in the top-right area
 5. The button shows a spinner while the audit runs (~15 seconds)
 6. On completion, the button shows "Audit Started!" and the dashboard refreshes automatically with updated scores
-7. The audit connects to live Zoho CRM data using OAuth credentials
+7. The audit connects to live CRMProvider CRM data using OAuth credentials
 
 ### 4.2 GRC Control Tower (`/grc`)
 **Purpose:** Centralized governance, risk, and compliance management.
@@ -280,7 +280,7 @@ The `/audits` surface was re-architected in v4.5 as the **Internal Audits Dashbo
 **Purpose:** AI-powered call quality analysis and compliance monitoring.
 
 **Key Features:**
-- Call recording ingestion from Five9/Twilio (metadata stored in `call_records`)
+- Call recording ingestion from ContactCenterProvider/TelephonyProvider (metadata stored in `call_records`)
 - Full call transcripts stored for analysis (`call_transcripts`)
 - AI-powered sentiment analysis, topic extraction, and insights (`call_analysis`)
 - Automated quality scoring per call with dimension breakdown (`call_qa_scores`)
@@ -429,13 +429,13 @@ The `/audits` surface was re-architected in v4.5 as the **Internal Audits Dashbo
 **Backend Tables:** `employee_scorecards`
 
 ### 4.15 Duplicate Radar (`/duplicates`)
-**Purpose:** AI-powered CRM data deduplication, hygiene management, and pipeline inflation detection across all Zoho modules.
+**Purpose:** AI-powered CRM data deduplication, hygiene management, and pipeline inflation detection across all CRMProvider modules.
 
 **Key Features:**
 - **Multi-Signal Confidence Scoring:** Email match (40 points), domain match (25 points), phone match (30 points), company name match (20 points). Maximum confidence: 100.
 - **Cross-Module Matching:** Detects duplicates across Leads, Contacts, Deals, and Accounts simultaneously
-- **Module-Aware Recommendations (v4.4):** Cluster decisions are now classified as **MERGE** (records in the same Zoho module — safe to merge), **LINK** (records in different modules — must NOT be merged; instead set `Account_Name`/`Contact_Name` on the child record per Zoho's cross-module rule), **CLOSE** (low-value duplicates), or **REVIEW**. Cluster API returns `primary_type`, `is_cross_module`, and `record_types`. The cluster modal shows a cross-module banner, per-record type tags, a dynamic Resolve button label that reflects the recommended action, and a post-merge sync hint. Account-first selection is used for the primary record in cross-module clusters.
-- **Deletion Detection (v4.4):** `fetchDeletedZohoRecords()` calls Zoho's `/deleted?type=all` endpoint with an `If-Modified-Since` header derived from `zoho_sync_state.last_sync_at`. `runDeletionDetection()` purges merged/deleted Zoho records from the local store on each scan. Skipped automatically on the first scan (no baseline). The unsafe `markStaleRecords()` call has been removed from the incremental sync path to prevent false purges when Zoho returns partial pages.
+- **Module-Aware Recommendations (v4.4):** Cluster decisions are now classified as **MERGE** (records in the same CRMProvider module — safe to merge), **LINK** (records in different modules — must NOT be merged; instead set `Account_Name`/`Contact_Name` on the child record per CRMProvider's cross-module rule), **CLOSE** (low-value duplicates), or **REVIEW**. Cluster API returns `primary_type`, `is_cross_module`, and `record_types`. The cluster modal shows a cross-module banner, per-record type tags, a dynamic Resolve button label that reflects the recommended action, and a post-merge sync hint. Account-first selection is used for the primary record in cross-module clusters.
+- **Deletion Detection (v4.4):** `fetchDeletedCRMProviderRecords()` calls CRMProvider's `/deleted?type=all` endpoint with an `If-Modified-Since` header derived from `CRMProvider_sync_state.last_sync_at`. `runDeletionDetection()` purges merged/deleted CRMProvider records from the local store on each scan. Skipped automatically on the first scan (no baseline). The unsafe `markStaleRecords()` call has been removed from the incremental sync path to prevent false purges when CRMProvider returns partial pages.
 - **5-Signal Cluster Matching:** domain → email → phone → exact company name → fuzzy company name (pg_trgm similarity with Levenshtein fallback)
 - **Confidence Levels:** Strong (≥90 points, red), Moderate (60–89 points, amber), Weak (<60 points, green)
 - **Pipeline Inflation:** Calculates estimated duplicate deal value (non-primary deals only)
@@ -444,13 +444,13 @@ The `/audits` surface was re-architected in v4.5 as the **Internal Audits Dashbo
 - **Real-Time Duplicate Check:** Pre-creation validation endpoint to check if a record already exists
 - **Incremental Scanning:** Upsert-based scan with ON CONFLICT (configurable via `DUPLICATE_SCAN_MODE` env: `incremental` or `full`). Incremental mode marks existing records stale, upserts new data, then cleans up stale records and orphan clusters — avoiding destructive data loss between scans
 - **SSE Scan Stream:** Real-time Server-Sent Events endpoint (`/api/duplicates/scan-stream`) for live progress during scans, with module status chips and percentage updates
-- **Parallel Module Fetch:** All 4 Zoho modules (Leads, Deals, Contacts, Accounts) fetched simultaneously via `Promise.all()` for faster scan completion
+- **Parallel Module Fetch:** All 4 CRMProvider modules (Leads, Deals, Contacts, Accounts) fetched simultaneously via `Promise.all()` for faster scan completion
 - **pg_trgm Fuzzy Matching:** PostgreSQL `pg_trgm` extension with GIN index on `company_name_normalized` for efficient fuzzy company name matching. Falls back to Levenshtein distance if `pg_trgm` is unavailable
 - **Server-Side Pagination:** Clusters paginated at 30/page, records at 50/page, reducing frontend memory usage for large datasets
 - **Auto-Resolve Engine:** Automatically ignores singleton clusters (≤1 record) and resolves clusters with ≥95% confidence and a clear primary record
 - **Smart AI Recommendations:** Multi-factor scoring considering data completeness, deal value, modification recency, record age, and deal stage. Outputs KEEP/MERGE/CLOSE actions with confidence scores and reasons
 - **Date Range Filters:** Server-side date filtering on all endpoints (clusters, leads, deals, contacts, accounts)
-- **Side-by-Side Comparison Modal:** Cluster detail modal shows all records in a field-by-field comparison table with AI recommendations row and Zoho CRM record links
+- **Side-by-Side Comparison Modal:** Cluster detail modal shows all records in a field-by-field comparison table with AI recommendations row and CRMProvider CRM record links
 - **KPI Dashboard:** Executive summary includes resolution rate gauge, KPI gauge vs 2% target, top match signal sources, top 5 clusters by pipeline inflation, and last scan timestamp/details
 - **Export:** CSV export with all duplicate records and recommendations, with owner/date filters
 
@@ -458,10 +458,10 @@ The `/audits` surface was re-architected in v4.5 as the **Internal Audits Dashbo
 - **Executive Summary:** Resolution rate, KPI gauge, true duplicate clusters, confidence distribution, pipeline inflation, top signals, top clusters by inflation, last scan info, charts (source distribution, similarity scores)
 - **Search:** Multi-field search (domain, phone, company, contract, email, name, owner) with cluster grouping
 - **Domain Clusters:** Paginated clusters (30/page) with status, confidence, record counts, and filter by similarity/status
-- **Lead Duplicates:** Paginated groups of duplicate leads (50/page) with Zoho links
+- **Lead Duplicates:** Paginated groups of duplicate leads (50/page) with CRMProvider links
 - **Deal Duplicates:** Paginated groups of duplicate deals with combined value
-- **Account Duplicates:** Duplicate accounts from Zoho Accounts module
-- **Contact Duplicates:** Duplicate contacts from Zoho Contacts module
+- **Account Duplicates:** Duplicate accounts from CRMProvider Accounts module
+- **Contact Duplicates:** Duplicate contacts from CRMProvider Contacts module
 - **Owner Accountability:** RAG status table with total records, duplicate count, duplicate rate, KPI status badge, high-confidence count, estimated waste value, and per-owner CSV export link
 - **Export Center:** CSV export with type/date filters
 - **Logs:** Scan history with records scanned, clusters found, duration, and status
@@ -469,16 +469,16 @@ The `/audits` surface was re-architected in v4.5 as the **Internal Audits Dashbo
 
 **Filter Panel:** Shared filters across tabs — Module (Leads/Deals/Contacts/Accounts), Layout, Owner, Created Date range, Domain, and Pipeline
 
-**Clusters Tab Filters (v4.4):** In addition to Similarity and Status (Active/Resolved/Ignored), the Clusters tab now exposes a **Layout** dropdown that filters clusters to those containing at least one record in the selected Zoho layout (Corporate Accounts, Standard, Marketplace, ...). The dropdown is populated once from `/api/duplicates/filters/options` and shows a live count hint such as `"42 cluster(s) in 'Corporate Accounts'"`. The list and total count always stay in lock-step because both queries share `buildClusterFilterClause()`.
+**Clusters Tab Filters (v4.4):** In addition to Similarity and Status (Active/Resolved/Ignored), the Clusters tab now exposes a **Layout** dropdown that filters clusters to those containing at least one record in the selected CRMProvider layout (Corporate Accounts, Standard, Marketplace, ...). The dropdown is populated once from `/api/duplicates/filters/options` and shows a live count hint such as `"42 cluster(s) in 'Corporate Accounts'"`. The list and total count always stay in lock-step because both queries share `buildClusterFilterClause()`.
 
 **Dashboard Drill-Down Modals (v4.4):** The Executive Summary's "Top Match Signals" and "Top 5 Clusters by Inflation" panels now expose **"View all signals →"** and **"View all clusters →"** links that open a generic `listModal` powered by `GET /api/duplicates/clusters-by-inflation` and `GET /api/duplicates/clusters-by-signal/:signal`. Inline signal rows are also clickable.
 
 **Scan Process:**
-1. Click **"Scan from Zoho"** button on the Duplicate Radar page
+1. Click **"Scan from CRMProvider"** button on the Duplicate Radar page
 2. Animated progress bar appears with module status chips (pending → fetching → processing → done)
 3. In incremental mode, existing records are marked stale; in full mode, previous data is cleared
-4. All 4 modules (Leads, Contacts, Deals, Accounts) are fetched from Zoho (no per-module cap by default; the `DUPLICATE_SCAN_LIMIT` env var can optionally set a limit, default 50,000)
-5. Records are upserted using ON CONFLICT on `zoho_record_id` — existing records are updated, new records are inserted
+4. All 4 modules (Leads, Contacts, Deals, Accounts) are fetched from CRMProvider (no per-module cap by default; the `DUPLICATE_SCAN_LIMIT` env var can optionally set a limit, default 50,000)
+5. Records are upserted using ON CONFLICT on `CRMProvider_record_id` — existing records are updated, new records are inserted
 6. Stale records (not refreshed during scan) and orphan clusters (no remaining records) are cleaned up
 7. Cluster statistics are recalculated (confidence scores, pipeline inflation, owner lists)
 8. On completion, dashboard refreshes with results
@@ -510,7 +510,7 @@ The `/audits` surface was re-architected in v4.5 as the **Internal Audits Dashbo
 | `/api/duplicates/by-source` | GET | Duplicate records by lead source |
 | `/api/duplicates/kpis` | GET | Dedup KPI metrics |
 | `/api/duplicates/search` | GET/POST | Search duplicates by domain/phone/company/email/name/owner |
-| `/api/duplicates/scan-zoho` | POST | Start async Zoho scan (RBAC) |
+| `/api/duplicates/scan-CRMProvider` | POST | Start async CRMProvider scan (RBAC) |
 | `/api/duplicates/scan-status` | GET | Poll scan progress with module statuses and percentage |
 | `/api/duplicates/scan-stream` | GET | SSE real-time scan progress stream |
 | `/api/duplicates/export` | GET | Export CSV with owner/date filters |
@@ -527,24 +527,24 @@ The `/audits` surface was re-architected in v4.5 as the **Internal Audits Dashbo
 | `/api/duplicates/sync-state` | GET | Per-module sync status, last sync time, and record counts |
 | `/api/duplicates/filtered-clusters` | GET | Clusters filtered by module, layout, owner, date range, domain, pipeline |
 | `/api/duplicates/filtered-summary` | GET | Summary statistics with applied filters |
-| `/api/duplicates/clusters/:id/tasks` | GET | Zoho Tasks linked to a cluster's records |
+| `/api/duplicates/clusters/:id/tasks` | GET | CRMProvider Tasks linked to a cluster's records |
 | `/api/duplicates/data-quality` | GET | Data quality stats: junk count, quality distribution, top issues, quality by module |
 
 **Cross-Module Merge Rule (v4.4 — IMPORTANT):**
-Zoho does not allow merging records that live in different modules. The Resolve action therefore branches on `is_cross_module`:
-- **Same module (Leads↔Leads, Deals↔Deals, ...):** safe to merge in Zoho; the cluster recommendation is `MERGE` and the Resolve button reads "Merge in Zoho".
-- **Cross-module (e.g. Account ↔ Contact ↔ Deal):** the cluster recommendation is `LINK`; the Resolve button reads "Link in Zoho" and the post-merge sync hint instructs the operator to set `Account_Name` / `Contact_Name` on the child record so the relationship is preserved without data loss.
+CRMProvider does not allow merging records that live in different modules. The Resolve action therefore branches on `is_cross_module`:
+- **Same module (Leads↔Leads, Deals↔Deals, ...):** safe to merge in CRMProvider; the cluster recommendation is `MERGE` and the Resolve button reads "Merge in CRMProvider".
+- **Cross-module (e.g. Account ↔ Contact ↔ Deal):** the cluster recommendation is `LINK`; the Resolve button reads "Link in CRMProvider" and the post-merge sync hint instructs the operator to set `Account_Name` / `Contact_Name` on the child record so the relationship is preserved without data loss.
 
 **Performance Optimizations (v4.1):**
 - `ON CONFLICT` upsert eliminates destructive data clearing
 - `pg_trgm` GIN index for sub-second fuzzy company name matching
 - JOIN-based queries for lead/deal/contact/account endpoints (no N+1)
-- Unique index on `zoho_record_id`, indexes on `email`, `phone_normalized`, `domain`
+- Unique index on `CRMProvider_record_id`, indexes on `email`, `phone_normalized`, `domain`
 - `phone_normalized` computed atomically in INSERT (no separate UPDATE)
 - Parallel module fetch reduces scan time by ~60%
 - Server-side pagination limits memory usage
 
-**Backend Tables:** `duplicate_clusters` (with `company_name_normalized`, `match_signals`, `resolved_by`, `resolved_at`), `duplicate_records` (with `phone_normalized`, `mobile_normalized`, `match_signals`, `data_quality_score`, `data_quality_flags`, `layout_name`, `layout_id`, `zoho_module`, `pipeline`, `products`, `contact_name`, `account_name`, `cr_number`, `vat_number`, `website`, `country`, `region`, `industry`, `no_of_employees`, `title`, `lead_type`, `gov_type`, `account_type`, unique index on `zoho_record_id`), `duplicate_merge_actions`, `duplicate_detection_logs`, `duplicate_export_logs`, `zoho_sync_state` (per-module sync tracking), `duplicate_record_tasks` (linked Zoho Tasks)
+**Backend Tables:** `duplicate_clusters` (with `company_name_normalized`, `match_signals`, `resolved_by`, `resolved_at`), `duplicate_records` (with `phone_normalized`, `mobile_normalized`, `match_signals`, `data_quality_score`, `data_quality_flags`, `layout_name`, `layout_id`, `CRMProvider_module`, `pipeline`, `products`, `contact_name`, `account_name`, `cr_number`, `vat_number`, `website`, `country`, `region`, `industry`, `no_of_employees`, `title`, `lead_type`, `gov_type`, `account_type`, unique index on `CRMProvider_record_id`), `duplicate_merge_actions`, `duplicate_detection_logs`, `duplicate_export_logs`, `CRMProvider_sync_state` (per-module sync tracking), `duplicate_record_tasks` (linked CRMProvider Tasks)
 
 ### 4.16 PDPL Privacy Compliance (`/pdpl`)
 **Purpose:** Personal Data Protection Law compliance tracking (Saudi Arabia).
@@ -577,7 +577,7 @@ Zoho does not allow merging records that live in different modules. The Resolve 
 - Live CRM data browsing across 5 modules (Leads, Deals, Contacts, Tasks, Accounts)
 - **Live Quality Enrichment:** Each page of records is sent to `POST /api/crm/enrich` which runs `assessDataQuality()` (from `duplicateRadarDatabase.ts`) and returns a 0-100 quality score per record using additive penalty scoring (starts at 100, subtracts fixed penalties per issue: -50 gibberish name, -40 garbage name, -30 gibberish company, -20 missing name, -15 missing company/suspicious email, -10 missing email/phone, -5 missing owner/no business domain)
 - **Junk/Spam Detection:** Identifies gibberish names (20+ all-letter strings, high consonant-to-vowel ratio >8:1, zero vowels in 10+ letter strings, consecutive 8+ capitals), garbage names (test, asdf, qwerty, demo, sample, etc.), and suspicious emails (6+ consecutive digits in local part, excessive dots in long local parts)
-- **Duplicate Cluster Cross-Reference:** Batch lookup via `lookupRecordsByZohoIds()` matches CRM records against synced duplicate radar clusters, showing cluster badges that link directly to the Duplicate Radar page
+- **Duplicate Cluster Cross-Reference:** Batch lookup via `lookupRecordsByCRMProviderIds()` matches CRM records against synced duplicate radar clusters, showing cluster badges that link directly to the Duplicate Radar page
 - **Health Summary Bar:** Displays Total Records, Clean, With Issues, Junk/Spam, and In Dup. Clusters counts for the current page
 - **Quality Score Badges:** Color-coded badges on each table row: green (≥85 good), amber (50–84 fair), orange (21–49 poor), red (≤20 junk)
 - **Row-Click Detail Modal:** Full quality assessment with severity-tagged issues, cluster info with confidence level, and all record fields with XSS-safe rendering
@@ -587,7 +587,7 @@ Zoho does not allow merging records that live in different modules. The Resolve 
 - **Security:** XSS-safe rendering (`escapeHtml()`) on all dynamic content including modal innerHTML
 
 **Backend Endpoint:** `POST /api/crm/enrich` (requires admin key or session auth)
-**Backend Tables:** Uses `duplicate_records` and `duplicate_clusters` tables via `lookupRecordsByZohoIds()`
+**Backend Tables:** Uses `duplicate_records` and `duplicate_clusters` tables via `lookupRecordsByCRMProviderIds()`
 
 ### 4.19 System Event Logs (`/logs`)
 **Purpose:** Audit trail for all system activities.
@@ -792,8 +792,8 @@ Zoho does not allow merging records that live in different modules. The Resolve 
 
 **Key Features:**
 - In-app notifications with severity levels
-- Slack channel notifications (via `SLACK_BOT_TOKEN` and `SLACK_CHANNEL_ID`)
-- Email notifications via Resend (with Replit mail fallback)
+- ChatProvider channel notifications (via `ChatProvider_BOT_TOKEN` and `ChatProvider_CHANNEL_ID`)
+- Email notifications via EmailProvider (with HostingPlatform mail fallback)
 - Triggered by 6-hourly duplicate auto-syncs, AI scanner findings, and audit completion
 
 ---
@@ -912,11 +912,11 @@ All imports run through the **same** AI column-mapper + duplicate pre-check + au
 
 ---
 
-## 5. Zoho CRM Integration
+## 5. CRMProvider CRM Integration
 
 ### 5.1 Connection Details
 - **Access Type:** OAuth 2.0 with auto-refresh
-- **Environment:** Zoho CRM Production
+- **Environment:** CRMProvider CRM Production
 - **Authentication:** OAuth client credentials with refresh token
 - **Token Refresh:** Automatic — tokens renew with a 5-minute buffer before expiry
 - **Token Caching:** Access tokens cached in memory; auto-cleared and re-fetched on 401 errors
@@ -925,7 +925,7 @@ All imports run through the **same** AI column-mapper + duplicate pre-check + au
 
 ### 5.2 Modules Accessed
 
-| Zoho Module | Data Read | Purpose |
+| CRMProvider Module | Data Read | Purpose |
 |-------------|-----------|---------|
 | **Leads** | Email, Phone, Lead Source, Status, Company, Region, Owner, City, No_of_Employees, Industry, Designation, Outgoing_Call_Result, Description, Tag | Quality audits, hygiene scoring, SDR SLA monitoring, duplicate detection |
 | **Deals** | Deal_Name, Stage, Amount, Closing_Date, Stage_History, Account_Name, Contact_Name, Pipeline, Lead_Source, Owner, First_Call_Date, Meeting_Date, Proposal_Sent_Date, Agreement_Sent_Date, Agreement_Signed_Date, On_Hold_Reason, Probability, Bundle_Type, Discount, Onboarding_Method, Contract_No_of_Employees, Trial_Period, National_Address | Pipeline governance, Sales SLA monitoring, duplicate detection |
@@ -937,14 +937,14 @@ All imports run through the **same** AI column-mapper + duplicate pre-check + au
 
 | Function | Purpose |
 |----------|---------|
-| `fetchZohoRecords` | Fetches a single page of records from any module |
-| `fetchAllZohoRecords` | Paginated retrieval of all records per module (no hard cap; 200/page with rate-limit backoff) |
-| `searchZohoRecords` | Searches records using Zoho COQL-like criteria |
+| `fetchCRMProviderRecords` | Fetches a single page of records from any module |
+| `fetchAllCRMProviderRecords` | Paginated retrieval of all records per module (no hard cap; 200/page with rate-limit backoff) |
+| `searchCRMProviderRecords` | Searches records using CRMProvider COQL-like criteria |
 | `analyzeRecordHygiene` | Validates records against 76 governance rules |
 | `calculateQualityScores` | Weight-based scoring producing People, Process, Governance, and Overall scores |
-| `lookupRecordsByZohoIds` | Batch lookup of Zoho record IDs against duplicate radar database for cluster cross-reference (used by CRM Data Hub enrichment) |
-| `updateZohoRecord` | Updates record fields in CRM (used for evaluation logging) |
-| `updateZohoRecordNotes` | Adds evaluation notes to CRM records |
+| `lookupRecordsByCRMProviderIds` | Batch lookup of CRMProvider record IDs against duplicate radar database for cluster cross-reference (used by CRM Data Hub enrichment) |
+| `updateCRMProviderRecord` | Updates record fields in CRM (used for evaluation logging) |
+| `updateCRMProviderRecordNotes` | Adds evaluation notes to CRM records |
 
 ### 5.4 What is NOT Accessed
 - No employee/HR data
@@ -971,14 +971,14 @@ The platform enforces 76 governance rules across three SOPs:
 | Proposal | 90 days | Proposal Document Attached, Proposal Sent Date | Proposal within 2 business days of meeting |
 | On Hold | 180 days | On Hold Reason (Critical, mandatory) | — |
 | Agreement Sent | 90 days | Agreement Document, Sent Date | Review & signature within 10 business days |
-| Agreement Signed | — | Signed Agreement, Invoice/Quotation in Zoho Books | — |
+| Agreement Signed | — | Signed Agreement, Invoice/Quotation in CRMProvider Books | — |
 | Closed Lost | — | Closed Lost Reason (Budget, SDR Issue, Client Not Responding, etc.) | — |
 
 **Sales SLAs:**
 - Contact after SDR Handoff: ≤ 1 business day
 - Proposal Preparation: ≤ 2 business days from meeting
 - Agreement Review & Signature: ≤ 10 business days
-- Zoho CRM Activity Logging: Same day
+- CRMProvider CRM Activity Logging: Same day
 
 **Sales Qualification Criteria:**
 - Market: KSA only
@@ -1035,11 +1035,11 @@ The platform enforces 76 governance rules across three SOPs:
 
 ### 5.6 AI Audit Process
 When "Run AI Audit" is triggered (via button or weekly schedule):
-1. System authenticates to Zoho CRM via OAuth (auto-refreshes tokens if expired)
+1. System authenticates to CRMProvider CRM via OAuth (auto-refreshes tokens if expired)
 2. Fetches up to 100 records per module (Leads, Deals, Contacts, Tasks)
 3. Loads active scorecards and governance documents from the database
 4. AI agents perform parallel audits: SDR Quality Agent audits Leads, Sales Quality Agent audits Deals
-5. Falls back to direct (non-AI) rule-based audit if OpenAI keys are not configured
+5. Falls back to direct (non-AI) rule-based audit if LLMProvider keys are not configured
 6. Applies 76 governance rules to each record:
    - Missing required fields (email, phone, company, etc.)
    - Format validation (email format, phone format, KSA +966)
@@ -1057,17 +1057,17 @@ When "Run AI Audit" is triggered (via button or weekly schedule):
     - `AUDIT_COMPLETED` — always
     - `NONCONFORMANCE_DETECTED` — if issues > 0
     - `CAPA_REQUIRED` — if critical/high issues found
-11. Sends email report to configured recipients via Resend (with fallback to Replit mail)
+11. Sends email report to configured recipients via EmailProvider (with fallback to HostingPlatform mail)
 12. Dashboard refreshes with updated scores
 
 ### 5.7 Regional Configuration
-If your Zoho account is in the Saudi Arabia (.sa) region:
-- Set `ZOHO_ACCOUNTS_URL` to `<REDACTED_URL>`
-- Set `ZOHO_API_DOMAIN` to `<REDACTED_URL>`
+If your CRMProvider account is in the Saudi Arabia (.sa) region:
+- Set `CRMProvider_ACCOUNTS_URL` to `<REDACTED_URL>`
+- Set `CRMProvider_API_DOMAIN` to `<REDACTED_URL>`
 
 Default (global) endpoints work for most other regions:
-- `ZOHO_ACCOUNTS_URL` = `<REDACTED_URL>`
-- `ZOHO_API_DOMAIN` = `<REDACTED_URL>`
+- `CRMProvider_ACCOUNTS_URL` = `<REDACTED_URL>`
+- `CRMProvider_API_DOMAIN` = `<REDACTED_URL>`
 
 ---
 
@@ -1087,7 +1087,7 @@ Default (global) endpoints work for most other regions:
 - Supports both standard and streaming (SSE) chat responses with AbortController timeouts
 - Responds in English or Arabic based on user's language (automatic RTL detection)
 - Does not expose internal tool mechanics or database queries to users
-- Uses `@ai-sdk/openai` v3.x (`^3.0.29`) via Replit AI proxy (`AI_INTEGRATIONS_OPENAI_BASE_URL`)
+- Uses `@ai-sdk/LLMProvider` v3.x (`^3.0.29`) via HostingPlatform AI proxy (`AI_INTEGRATIONS_LLMProvider_BASE_URL`)
 - Can directly create/update NCs, CAPAs (with action items), manage training assignments, run checklists, and search knowledge base documents
 - All database operations use shared pg.Pool (max 20 connections) via `sharedPool.ts`
 - Auth guards on all endpoints (session cookie or X-Admin-Key header)
@@ -1142,14 +1142,14 @@ Default (global) endpoints work for most other regions:
 
 | Tool | Function |
 |------|----------|
-| **CRM Hygiene Audit** | Audits Zoho CRM records for data quality issues across modules |
+| **CRM Hygiene Audit** | Audits CRMProvider CRM records for data quality issues across modules |
 | **CRM Activity Check** | Verifies activity compliance, follow-up timing, and task completion |
 | **Call Analysis** | AI-powered call recording analysis with quality scoring |
 | **Call Ingest** | Processes and stores call recordings for analysis |
 | **CRM Compliance** | Validates post-call CRM updates (was CRM updated after call?) |
 | **Deal Evaluation** | Assesses deal quality, risk factors, and progression compliance |
 | **Meeting MOM** | Minutes of Meeting generation from call/meeting data |
-| **Email Reports** | Automated email report delivery via Resend (with Replit mail fallback) |
+| **Email Reports** | Automated email report delivery via EmailProvider (with HostingPlatform mail fallback) |
 
 ---
 
@@ -1158,10 +1158,10 @@ Default (global) endpoints work for most other regions:
 ### 8.1 Quality Audit Workflow
 - **Trigger:** Manual (via Run AI Audit button or API call) or Cron schedule
 - **Schedule:** Every Monday at 8:00 AM (configurable via `SCHEDULE_CRON_EXPRESSION`)
-- **Engine:** Inngest-first with direct execution fallback. The audit trigger endpoint (`/api/audit/trigger`) first attempts to send an Inngest event (`replit/cron.trigger`). If Inngest dispatch fails (e.g., no Inngest Cloud configured), it falls back to `runDirectAudit()` (`src/utils/directAuditRunner.ts`) which executes in-process (fire-and-forget, non-blocking HTTP response).
+- **Engine:** Inngest-first with direct execution fallback. The audit trigger endpoint (`/api/audit/trigger`) first attempts to send an Inngest event (`HostingPlatform/cron.trigger`). If Inngest dispatch fails (e.g., no Inngest Cloud configured), it falls back to `runDirectAudit()` (`src/utils/directAuditRunner.ts`) which executes in-process (fire-and-forget, non-blocking HTTP response).
 - **Steps:**
-  1. `validate-environment` — Checks Zoho credentials and OpenAI API keys
-  2. `fetch-calendar-events` — Retrieves Google Calendar events for the last 7 days
+  1. `validate-environment` — Checks CRMProvider credentials and LLMProvider API keys
+  2. `fetch-calendar-events` — Retrieves IdentityProvider Calendar events for the last 7 days
   3. `audit-crm-with-agent` — Parallel AI audit of Leads (SDR agent) and Deals (Sales agent), with direct-logic fallback
   4. `generate-insights` — AI-generated executive summary and recommendations
   5. `send-report` — Email delivery, database persistence, and trigger firing
@@ -1207,7 +1207,7 @@ Default (global) endpoints work for most other regions:
 - **Function ID:** `duplicate-radar-auto-sync`
 - **Purpose:** Automated CRM data synchronization and duplicate detection across all modules (Leads, Deals, Contacts, Accounts)
 - **Process:** Two-step pipeline:
-  1. `sync-crm-data` — Calls `syncAllModules('incremental')` which fetches records modified since last sync from Zoho, upserts them into the local database, assesses data quality per record, quarantines junk records, fetches and stores linked Zoho Tasks, and updates sync state per module
+  1. `sync-crm-data` — Calls `syncAllModules('incremental')` which fetches records modified since last sync from CRMProvider, upserts them into the local database, assesses data quality per record, quarantines junk records, fetches and stores linked CRMProvider Tasks, and updates sync state per module
   2. `detect-duplicates` — Calls `runDuplicateDetection()` which re-clusters all locally synced records and updates cluster statistics
 - **Notification:** If high-confidence duplicates are found, sends notification via the Notification Hub with:
   - Total records synced
@@ -1225,7 +1225,7 @@ Default (global) endpoints work for most other regions:
 
 ### 8.6 External Notification Triggers
 - **Cron Triggers:** Configurable scheduled triggers for weekly/monthly audits (`src/triggers/cronTriggers.ts`)
-- **Slack Integration:** Automated notifications to Slack channels (`src/triggers/slackTrigger.ts`). Uses `SLACK_BOT_TOKEN` and `SLACK_CHANNEL_ID` environment variables.
+- **ChatProvider Integration:** Automated notifications to ChatProvider channels (`src/triggers/ChatProviderTrigger.ts`). Uses `ChatProvider_BOT_TOKEN` and `ChatProvider_CHANNEL_ID` environment variables.
 - **Telegram Integration:** Automated notifications to Telegram chats (`src/triggers/telegramTrigger.ts`). Webhook endpoint protected by `TELEGRAM_WEBHOOK_SECRET` query parameter validation when the secret is configured.
 - **Linear Webhook Integration:** Issue-created webhook handler (`src/triggers/exampleConnectorTrigger.ts`) with full HMAC-SHA256 signature verification when `LINEAR_WEBHOOK_SECRET` is configured. The handler computes `createHmac('sha256', secret).update(rawBody).digest('hex')` and compares against the `Linear-Signature` header using `timingSafeEqual` for constant-time comparison. Requests with invalid signatures are rejected with 403.
 
@@ -1234,8 +1234,8 @@ Default (global) endpoints work for most other regions:
 ## 9. Security Architecture
 
 ### 9.1 Authentication
-- **Replit OIDC:** Primary login via Replit's OpenID Connect provider (`authRoutes.ts`). Discovery URL: `<REDACTED_URL>`
-- **Supported providers:** Google, GitHub, Apple, and email (via Replit OIDC)
+- **HostingPlatform OIDC:** Primary login via HostingPlatform's OpenID Connect provider (`authRoutes.ts`). Discovery URL: `<REDACTED_URL>`
+- **Supported providers:** IdentityProvider, SourceControlProvider, IdentityProvider, and email (via HostingPlatform OIDC)
 - **OIDC callback:** `/api/callback` handles token exchange, nonce verification (v3.6), user profile sync, and session creation
 - **OIDC nonce verification (v3.6):** The authorization flow generates a cryptographic nonce stored inside the `oauth_data` HttpOnly cookie (as part of a base64url-encoded JSON payload alongside state and PKCE verifier). On callback, the `id_token` nonce claim is parsed from the JWT payload and verified against the stored nonce to prevent replay attacks. Mismatches redirect to `/login?error=nonce_mismatch`.
 - **Session signing:** HMAC-SHA256 signed stateless tokens (`signSession()` / `verifySession()` in `authRoutes.ts`)
@@ -1276,7 +1276,7 @@ Default (global) endpoints work for most other regions:
 - **Resource ID obfuscation:** UUID public_id columns on 9+ tables (enterprise_risks, risk_treatment_actions, vendors, policies, audits, regulations, obligations, compliance_assessments, team_feedback). API responses use `obfuscateResourceIds()` and `resolveGenericId()` to map between internal IDs and public UUIDs
 - **Password policy:** 12+ characters, uppercase, lowercase, number, special character (`validatePassword()` in `inputSanitizer.ts`)
 - **Error handling:** Generic error messages only — internal errors (e.g., unique constraint violations) mapped to user-friendly messages; no raw error exposure (`scrubErrorMessage()` in `inputSanitizer.ts`)
-- **CORS:** Dynamically validates origins against `REPLIT_DOMAINS`, enforces `Access-Control-Allow-Credentials: true` (no wildcard)
+- **CORS:** Dynamically validates origins against `HostingPlatform_DOMAINS`, enforces `Access-Control-Allow-Credentials: true` (no wildcard)
 - **Security headers:**
   - `X-Frame-Options: DENY` (anti-clickjacking)
   - `X-Content-Type-Options: nosniff`
@@ -1305,26 +1305,26 @@ Default (global) endpoints work for most other regions:
 
 | Secret | Purpose | Notes |
 |--------|---------|-------|
-| `DATABASE_URL` | PostgreSQL connection string | Auto-provided if using Replit's DB |
+| `DATABASE_URL` | PostgreSQL connection string | Auto-provided if using HostingPlatform's DB |
 | `SESSION_SECRET` | Session cookie HMAC signing | Any random long string |
 | `ADMIN_API_KEY` | Admin panel and API access | Strong key, e.g. 64-char hex |
-| `ZOHO_CLIENT_ID` | Zoho CRM OAuth | From Zoho API Console |
-| `ZOHO_CLIENT_SECRET` | Zoho CRM OAuth | From Zoho API Console |
-| `ZOHO_REFRESH_TOKEN` | Zoho CRM OAuth | Generated during CRM authorization |
+| `CRMProvider_CLIENT_ID` | CRMProvider CRM OAuth | From CRMProvider API Console |
+| `CRMProvider_CLIENT_SECRET` | CRMProvider CRM OAuth | From CRMProvider API Console |
+| `CRMProvider_REFRESH_TOKEN` | CRMProvider CRM OAuth | Generated during CRM authorization |
 
 ### 10.2 Optional but Recommended Secrets
 
 | Secret | Default | Purpose |
 |--------|---------|---------|
-| `ZOHO_ACCOUNTS_URL` | <REDACTED_URL> | Zoho OAuth endpoint (use .sa for Saudi region) |
-| `ZOHO_API_DOMAIN` | <REDACTED_URL> | Zoho API domain (use .sa for Saudi region) |
-| `AI_INTEGRATIONS_OPENAI_API_KEY` | — | OpenAI API key (Replit-managed, preferred) for AI audits and AI Consultant |
-| `AI_INTEGRATIONS_OPENAI_BASE_URL` | <REDACTED_URL> | Replit AI proxy endpoint |
-| `OPENAI_API_KEY` | — | Direct OpenAI API key (fallback if Replit-managed key unavailable) |
-| `SLACK_BOT_TOKEN` | — | Slack Bot token for QMS notifications |
-| `SLACK_CHANNEL_ID` | — | Slack channel ID for QMS alert notifications |
-| `RESEND_API_KEY` | — | Email delivery via Resend |
-| `RESEND_FROM_EMAIL` | — | Sender address for quality report emails |
+| `CRMProvider_ACCOUNTS_URL` | <REDACTED_URL> | CRMProvider OAuth endpoint (use .sa for Saudi region) |
+| `CRMProvider_API_DOMAIN` | <REDACTED_URL> | CRMProvider API domain (use .sa for Saudi region) |
+| `AI_INTEGRATIONS_LLMProvider_API_KEY` | — | LLMProvider API key (HostingPlatform-managed, preferred) for AI audits and AI Consultant |
+| `AI_INTEGRATIONS_LLMProvider_BASE_URL` | <REDACTED_URL> | HostingPlatform AI proxy endpoint |
+| `LLMProvider_API_KEY` | — | Direct LLMProvider API key (fallback if HostingPlatform-managed key unavailable) |
+| `ChatProvider_BOT_TOKEN` | — | ChatProvider Bot token for QMS notifications |
+| `ChatProvider_CHANNEL_ID` | — | ChatProvider channel ID for QMS alert notifications |
+| `EmailProvider_API_KEY` | — | Email delivery via EmailProvider |
+| `EmailProvider_FROM_EMAIL` | — | Sender address for quality report emails |
 | `TELEGRAM_WEBHOOK_SECRET` | — | Telegram webhook secret for validating incoming webhook requests |
 | `LINEAR_WEBHOOK_SECRET` | — | Linear webhook HMAC signing secret for signature verification |
 
@@ -1368,7 +1368,7 @@ A `.env.example` file is included in the project root with all variables documen
 | Handoff & Controls | 3 | handoff_rules, handoff_events, control_mappings | Cross-module automation |
 | Team & Projects | 11 | team_members, team_performance_metrics, team_project_assignments, pmp_projects, project_risks, project_milestones, project_stakeholders, project_team_assignments, project_procurement, project_change_requests, training_courses | Team, project, and training management |
 | Scorecard | 2 | employee_scorecards, course_assignments | Performance scorecards and course tracking |
-| Duplicate Radar | 7 | duplicate_clusters, duplicate_records, duplicate_merge_actions, duplicate_detection_logs, duplicate_export_logs, zoho_sync_state, duplicate_record_tasks | CRM deduplication, merge workflow, sync tracking, linked tasks, and audit |
+| Duplicate Radar | 7 | duplicate_clusters, duplicate_records, duplicate_merge_actions, duplicate_detection_logs, duplicate_export_logs, CRMProvider_sync_state, duplicate_record_tasks | CRM deduplication, merge workflow, sync tracking, linked tasks, and audit |
 | Onboarding | 2 | user_onboarding_status, onboarding_tour_steps | User onboarding |
 | Event Logs | 1 | event_logs | System audit trail |
 | KPI & Reporting | 3 | kpi_definitions, kpi_entries, executive_reports | KPI tracking and executive reporting |
@@ -1378,12 +1378,12 @@ A `.env.example` file is included in the project root with all variables documen
 
 ### 11.1 Owner Roster (CRM Owner Data Quality enrichment)
 
-The CRM Owner Data Quality widget on `/` (and any other surface that calls `GET /api/agents/performance`) enriches each Zoho CRM record owner with **Department (Team)**, **Activity (Active/Inactive status)**, and **CRM Modules in scope**. Until v4.5 this enrichment returned an empty roster — every owner fell back to a hard-coded default (`SDR / SDR Representative` for lead-only owners, `Sales / Account Executive` for deal-only owners) and the activity badge always read `Unknown`.
+The CRM Owner Data Quality widget on `/` (and any other surface that calls `GET /api/agents/performance`) enriches each CRMProvider CRM record owner with **Department (Team)**, **Activity (Active/Inactive status)**, and **CRM Modules in scope**. Until v4.5 this enrichment returned an empty roster — every owner fell back to a hard-coded default (`SDR / SDR Representative` for lead-only owners, `Sales / Account Executive` for deal-only owners) and the activity badge always read `Unknown`.
 
 **v4.5 introduces a two-tier roster:**
 
 1. **Seed roster (source of truth):** `src/data/seedUsers.ts` — 117 owners loaded from the official `CRM_Users_Complete_117_Updated.xlsx` snapshot dated **2026-04-18**. Each entry carries `name`, `team`, `status` (Active/Inactive), `totalRecords`, and `modules` (the CRM modules the owner currently has records in).
-2. **Live Zoho Users API fill (id bridge):** `fetchZohoUsers()` in `src/utils/zohoCRM.ts` calls `GET /crm/v2/users?type=AllUsers` to map each Zoho User ID → display name. The seed wins on team/status/modules; Zoho fills any owner not yet on the seed (so brand-new hires don't disappear from the dashboard while the spreadsheet is being refreshed).
+2. **Live CRMProvider Users API fill (id bridge):** `fetchCRMProviderUsers()` in `src/utils/CRMProviderCRM.ts` calls `GET /crm/v2/users?type=AllUsers` to map each CRMProvider User ID → display name. The seed wins on team/status/modules; CRMProvider fills any owner not yet on the seed (so brand-new hires don't disappear from the dashboard while the spreadsheet is being refreshed).
 
 **Roster composition (2026-04-18 snapshot):**
 
@@ -1395,7 +1395,7 @@ The CRM Owner Data Quality widget on `/` (and any other surface that calls `GET 
 | CS | 5 | 2 | 7 | Customer Success |
 | SDR | 4 | 3 | 7 | SDR (lead generation) |
 | MGMT | 4 | 0 | 4 | Management |
-| CRM Admin | 2 | 0 | 2 | Zoho admin / data stewards |
+| CRM Admin | 2 | 0 | 2 | CRMProvider admin / data stewards |
 | BD | 1 | 0 | 1 | Business Development |
 | Eitmad | 1 | 0 | 1 | Eitmad-specific desk |
 | WPE | 1 | 0 | 1 | WPE desk |
@@ -1403,11 +1403,11 @@ The CRM Owner Data Quality widget on `/` (and any other surface that calls `GET 
 | **Total** | **64** | **53** | **117** | |
 
 **Data steward responsibilities:** the CRM Admin team owns the seed roster. When an owner joins, leaves, or changes department, they:
-1. Re-export `CRM_Users_Complete_*.xlsx` from Zoho.
+1. Re-export `CRM_Users_Complete_*.xlsx` from CRMProvider.
 2. Re-run the import (drops in `src/data/seedUsers.ts`).
 3. Bump the snapshot date in this section and in §25 Recent Changes Log.
 
-Owners with Team = `Unassigned` should be triaged within 5 working days (assign a department in Zoho, or mark as system/test account).
+Owners with Team = `Unassigned` should be triaged within 5 working days (assign a department in CRMProvider, or mark as system/test account).
 
 
 
@@ -1421,8 +1421,8 @@ Owners with Team = `Unassigned` should be triaged within 5 working days (assign 
 |----------|--------|---------|
 | `/api/dashboard` | GET | Aggregated dashboard data |
 | `/api/audit/trigger` | POST | Manual trigger for Quality Audit workflow |
-| `/api/integrations/status` | GET | Status of Zoho CRM, Google Calendar, and Email integrations |
-| `/api/crm/data` | GET | Fetches live records from Zoho CRM |
+| `/api/integrations/status` | GET | Status of CRMProvider CRM, IdentityProvider Calendar, and Email integrations |
+| `/api/crm/data` | GET | Fetches live records from CRMProvider CRM |
 | `/api/inngest` | POST | Inngest webhook for workflow execution |
 | `/api/health` | GET | Platform health check |
 | `/api/smoke` | GET | Smoke test endpoint |
@@ -1582,10 +1582,10 @@ Follow these rules:
 
 | Utility | Purpose |
 |---------|---------|
-| `zohoCRM.ts` | Zoho CRM OAuth, fetch, search, hygiene analysis, 76 governance rules |
+| `CRMProviderCRM.ts` | CRMProvider CRM OAuth, fetch, search, hygiene analysis, 76 governance rules |
 | `governanceRules.ts` | Sales SOP (28 rules) + SDR SOP (28 rules) |
 | `database.ts` | Core PostgreSQL database operations |
-| `duplicateRadarDatabase.ts` | Multi-signal duplicate detection, merge workflow, owner accountability, `lookupRecordsByZohoIds()` batch lookup for CRM Data Hub enrichment |
+| `duplicateRadarDatabase.ts` | Multi-signal duplicate detection, merge workflow, owner accountability, `lookupRecordsByCRMProviderIds()` batch lookup for CRM Data Hub enrichment |
 | `aiBackgroundScanner.ts` | 14-check background scanner (parallelized via Promise.all) |
 | `aiAlertsDatabase.ts` | AI alerts CRUD, dedup, unread count |
 | `kpiDatabase.ts` | KPI definitions, entries, 11 SDR KPIs seed |
@@ -1611,7 +1611,7 @@ Follow these rules:
 | `changeHistoryDatabase.ts` | NC/CAPA change audit trail |
 | `onboardingDatabase.ts` | Onboarding status |
 | `migrationDatabase.ts` | Migration data |
-| `notificationHub.ts` | Unified notification routing (email, Slack, in-app) |
+| `notificationHub.ts` | Unified notification routing (email, ChatProvider, in-app) |
 | `directAuditRunner.ts` | Direct audit execution fallback |
 | `evaluationSchema.ts` | Evaluation framework schemas |
 | `reportGenerator.ts` | Report generation |
@@ -1619,8 +1619,8 @@ Follow these rules:
 | `inputSanitizer.ts` | XSS/injection prevention, field whitelisting |
 | `rateLimiter.ts` | Tiered rate limiting |
 | `rbacMiddleware.ts` | Auth middleware (requireAdminOrKey, requireWriteRole) |
-| `slackNotifications.ts` | Slack message delivery |
-| `googleCalendar.ts` | Google Calendar integration |
+| `ChatProviderNotifications.ts` | ChatProvider message delivery |
+| `IdentityProviderCalendar.ts` | IdentityProvider Calendar integration |
 
 ---
 
@@ -1662,9 +1662,9 @@ Follow these rules:
 
 ## 14. Deployment
 
-- **Hosting:** Replit Autoscale
-- **Domain:** https://<REDACTED_HOST>
-- **Process:** Publish via Replit dashboard (automatic build, TLS, health checks)
+- **Hosting:** HostingPlatform Autoscale
+- **Domain:** <REDACTED_URL_SCHEME><REDACTED_HOST>
+- **Process:** Publish via HostingPlatform dashboard (automatic build, TLS, health checks)
 - **Server:** Mastra dev server on port 5000 serving both API and HTML dashboards
 - **Inngest:** Dev server on port 3000 available for workflow orchestration (preferred path for audit triggers when Inngest Cloud is configured; direct execution fallback when unavailable)
 - **Auto-restart:** Health checks ensure uptime
@@ -1673,15 +1673,15 @@ Follow these rules:
 
 ## 15. First Steps After Deployment
 
-1. **Set all secrets** in the Replit Secrets tab (see Section 10)
-2. **Open the platform** at https://<REDACTED_HOST>
-3. **Log in** using any supported provider (Google, GitHub, Apple, or email)
+1. **Set all secrets** in the HostingPlatform Secrets tab (see Section 10)
+2. **Open the platform** at <REDACTED_URL_SCHEME><REDACTED_HOST>
+3. **Log in** using any supported provider (IdentityProvider, SourceControlProvider, IdentityProvider, or email)
 4. **Go to `/admin`** and enter your ADMIN_API_KEY to access admin features
 5. **Upload governance documents** via Admin Panel — these define the rules AI agents use during audits
 6. **Configure scorecards** via Admin Panel — these define evaluation criteria for SDR and Sales agents
-7. **Run your first AI Audit:** Go to `/` (Quality Dashboard) and click "Run AI Audit" — this pulls live data from Zoho CRM
+7. **Run your first AI Audit:** Go to `/` (Quality Dashboard) and click "Run AI Audit" — this pulls live data from CRMProvider CRM
 8. **Seed SDR KPIs:** Call `POST /api/kpis/seed-sdr` to initialize 11 SDR KPIs
-9. **Run Duplicate Radar:** Go to `/duplicates` and click "Scan from Zoho" to detect duplicates across CRM
+9. **Run Duplicate Radar:** Go to `/duplicates` and click "Scan from CRMProvider" to detect duplicates across CRM
 10. **Check `/grc`** — verify the Audit Readiness table loads with audit records
 11. **Check `/policies`** — click "New Policy" and create a test policy to verify the workflow
 12. **Check `/team`** — use the "Add Member" button to register team members
@@ -1704,7 +1704,7 @@ The PDPL module (`/pdpl`) maintains a register of all data processing activities
 - **Processing purpose** for each data category
 - **Legal basis** for processing (consent, legitimate interest, contractual necessity, legal obligation)
 - **Data categories** processed (CRM records: names, emails, phone numbers, company details, deal amounts)
-- **Data subjects** (leads, contacts, account holders in Zoho CRM)
+- **Data subjects** (leads, contacts, account holders in CRMProvider CRM)
 - **Recipients** (internal platform users only — no data shared with third parties)
 - **Retention periods** (see Section 16.5)
 
@@ -1723,11 +1723,11 @@ In the event of a personal data breach (tracked in `data_incidents` table):
 | 8 | Create CAPA record in QMS for root cause analysis | Within 5 business days | Quality Manager |
 
 ### 16.4 Cross-Border Data Transfer Controls
-- ExampleOrg is hosted on Replit infrastructure (US-based servers)
-- CRM data is read from Zoho CRM via OAuth 2.0 for two purposes:
+- ExampleOrg is hosted on HostingPlatform infrastructure (US-based servers)
+- CRM data is read from CRMProvider CRM via OAuth 2.0 for two purposes:
   - **AI Audits:** Records are processed in-memory and only aggregated quality metrics (scores, issue summaries) are stored
   - **Duplicate Radar sync:** Full CRM records (names, emails, phones, company names, owners, stages, etc.) are persisted in the `duplicate_records` table for ongoing duplicate detection, data quality scoring, and cross-module matching. This data is incrementally updated every 6 hours via the auto-sync cron
-- **CRM Data Hub enrichment:** Records from live Zoho API calls are scored in-memory via `assessDataQuality()` and cross-referenced against the persisted `duplicate_records` table; no additional CRM data is persisted by this endpoint
+- **CRM Data Hub enrichment:** Records from live CRMProvider API calls are scored in-memory via `assessDataQuality()` and cross-referenced against the persisted `duplicate_records` table; no additional CRM data is persisted by this endpoint
 - Cross-border transfer is justified under PDPL Article 29 (legitimate business interest with adequate protection). The persisted CRM data in `duplicate_records` is subject to the data retention schedule below
 
 ### 16.5 Data Retention Schedule
@@ -1782,7 +1782,7 @@ Retention policies are configurable via the `retention_policies` table in the PD
 | 5 | Risk register changes (new, escalated, closed) | Risk Register (`/risks`) |
 | 6 | Compliance posture and gap analysis | Compliance Tracking (`/compliance`) |
 | 7 | Customer/user feedback summary | Feedback module (`/feedback`) |
-| 8 | Platform performance (uptime, incidents) | Event Logs (`/logs`), Replit dashboard |
+| 8 | Platform performance (uptime, incidents) | Event Logs (`/logs`), HostingPlatform dashboard |
 | 9 | PDPL/privacy status and any DSARs | PDPL module (`/pdpl`) |
 | 10 | Quality objective performance vs targets | Section 1.2 targets |
 | 11 | KPI performance and trends | KPI Tracking (`/kpis`) |
@@ -1812,7 +1812,7 @@ The internal audit program verifies that the ExampleOrg QMS platform itself oper
 | RBAC and access control effectiveness | Quarterly | Admin or designated auditor | All users have correct roles; no unauthorized access |
 | Data protection and PDPL compliance | Semi-annually | DPO or designated auditor | PDPL articles, data retention schedule |
 | Security controls (CSP, input sanitization) | Semi-annually | Admin or security reviewer | VAPT report baseline, security headers |
-| CRM integration and data accuracy | Quarterly | Quality Manager | Zoho data matches audit results |
+| CRM integration and data accuracy | Quarterly | Quality Manager | CRMProvider data matches audit results |
 | CAPA and NC process effectiveness | Quarterly | Quality Manager | Closure rates, SLA compliance |
 | Backup and disaster recovery | Annually | Admin | RTO/RPO targets met (see Section 20) |
 | User training compliance | Semi-annually | Team Lead | Required training completed per role |
@@ -1843,10 +1843,10 @@ The internal audit program verifies that the ExampleOrg QMS platform itself oper
 | Category | Examples | Severity |
 |----------|----------|----------|
 | **Security Breach** | Unauthorized access, credential compromise, data exfiltration | Critical |
-| **System Outage** | Platform down, database unavailable, Replit hosting failure | High |
+| **System Outage** | Platform down, database unavailable, HostingPlatform hosting failure | High |
 | **Data Integrity** | Incorrect audit results, corrupted records, sync failures | High |
 | **Performance Degradation** | Slow response times, timeout errors, scan timeouts | Medium |
-| **Zoho Integration Failure** | OAuth token expired, API errors, empty data returns | Medium |
+| **CRMProvider Integration Failure** | OAuth token expired, API errors, empty data returns | Medium |
 | **User-Reported Bug** | UI errors, broken functionality, missing data | Low–Medium |
 
 ### 19.2 Escalation Matrix
@@ -1859,7 +1859,7 @@ The internal audit program verifies that the ExampleOrg QMS platform itself oper
 | Low | Any team member | Admin | Within 24 hours |
 
 ### 19.3 Incident Response Steps
-1. **Detect:** Monitor event logs (`/logs`), user reports, Replit health checks, AI alerts
+1. **Detect:** Monitor event logs (`/logs`), user reports, HostingPlatform health checks, AI alerts
 2. **Classify:** Determine category and severity per the table above
 3. **Contain:** Isolate affected components (disable integrations, restrict access if needed)
 4. **Investigate:** Review logs, identify root cause, document findings
@@ -1874,10 +1874,10 @@ The internal audit program verifies that the ExampleOrg QMS platform itself oper
 ## 20. Backup & Disaster Recovery
 
 ### 20.1 Database Backup
-- **Provider:** Replit manages PostgreSQL database infrastructure
-- **Backup frequency:** Automatic (managed by Replit hosting platform)
+- **Provider:** HostingPlatform manages PostgreSQL database infrastructure
+- **Backup frequency:** Automatic (managed by HostingPlatform hosting platform)
 - **Backup type:** Full database snapshots
-- **Retention:** Per Replit's data retention policy
+- **Retention:** Per HostingPlatform's data retention policy
 - **Additional protection:** Project checkpoints (code + database state) created automatically
 
 ### 20.2 Recovery Targets
@@ -1885,18 +1885,18 @@ The internal audit program verifies that the ExampleOrg QMS platform itself oper
 | Metric | Target | Notes |
 |--------|--------|-------|
 | **RTO** (Recovery Time Objective) | 1 hour | Platform redeploy from checkpoint |
-| **RPO** (Recovery Point Objective) | 1 hour | Based on Replit checkpoint frequency |
+| **RPO** (Recovery Point Objective) | 1 hour | Based on HostingPlatform checkpoint frequency |
 
 ### 20.3 Recovery Procedures
-1. **Platform failure:** Replit Autoscale automatically restarts the application on health check failure
-2. **Database corruption:** Restore from Replit checkpoint (admin can initiate rollback via Replit dashboard)
-3. **Code regression:** Roll back to a previous checkpoint via Replit dashboard
-4. **Zoho integration failure:** System automatically retries OAuth token refresh; manual re-authorization via Zoho API Console if refresh token is revoked
+1. **Platform failure:** HostingPlatform Autoscale automatically restarts the application on health check failure
+2. **Database corruption:** Restore from HostingPlatform checkpoint (admin can initiate rollback via HostingPlatform dashboard)
+3. **Code regression:** Roll back to a previous checkpoint via HostingPlatform dashboard
+4. **CRMProvider integration failure:** System automatically retries OAuth token refresh; manual re-authorization via CRMProvider API Console if refresh token is revoked
 5. **Complete disaster:** Redeploy from git repository + restore database from latest checkpoint
 
 ### 20.4 Recovery Testing
 - Recovery procedures should be tested annually as part of the internal audit program (see Section 18)
-- Test should include: checkpoint rollback, service restart verification, and Zoho re-authentication
+- Test should include: checkpoint rollback, service restart verification, and CRMProvider re-authentication
 
 ---
 
@@ -1908,23 +1908,23 @@ The internal audit program verifies that the ExampleOrg QMS platform itself oper
 |----------|----------|-------------------|
 | **Emergency** | Security patch, critical bug fix, data breach response | Admin (post-implementation review) |
 | **Standard** | New feature, UI enhancement, report addition | Admin + Quality Manager |
-| **Configuration** | Secret update, Zoho region change, role modification, cron schedule change | Admin |
+| **Configuration** | Secret update, CRMProvider region change, role modification, cron schedule change | Admin |
 | **Infrastructure** | Database schema change, hosting change, new integration | Admin + Quality Manager + GRC Manager |
 
 ### 21.2 Change Process
 1. **Request:** Document the change (what, why, impact, rollback plan)
 2. **Review:** Appropriate approver reviews the change per category above
-3. **Test:** Verify changes in the development environment (Replit workspace)
+3. **Test:** Verify changes in the development environment (HostingPlatform workspace)
 4. **Approve:** Obtain required approval(s)
-5. **Implement:** Apply changes and publish via Replit dashboard
+5. **Implement:** Apply changes and publish via HostingPlatform dashboard
 6. **Verify:** Confirm functionality after deployment (run relevant module checks)
 7. **Document:** Update this SOP if the change affects procedures, roles, or modules
-8. **Rollback:** If issues arise, roll back to previous checkpoint via Replit dashboard
+8. **Rollback:** If issues arise, roll back to previous checkpoint via HostingPlatform dashboard
 
 ### 21.3 Change Log
 All changes are tracked in:
 - Git version control (commit history)
-- Replit checkpoints (code + database snapshots)
+- HostingPlatform checkpoints (code + database snapshots)
 - Event Logs (`/logs`) for runtime configuration changes
 - Section 25 (Recent Changes Log) of this SOP for procedural changes
 
@@ -2005,23 +2005,23 @@ The following sources feed into the continual improvement process:
 
 | Issue | Solution |
 |-------|----------|
-| Can't log in | Clear browser cookies, try a different auth provider (Google, GitHub, Apple, email) |
+| Can't log in | Clear browser cookies, try a different auth provider (IdentityProvider, SourceControlProvider, IdentityProvider, email) |
 | Dashboard shows 0 records | Click "Run AI Audit" to fetch fresh CRM data |
-| "Run AI Audit" not working | Verify Zoho OAuth secrets are configured (CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN) |
+| "Run AI Audit" not working | Verify CRMProvider OAuth secrets are configured (CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN) |
 | Permission denied on a page | Contact admin to upgrade your role via `/users` |
-| Audit shows sample/mock data | Verify Zoho CRM credentials are properly configured in secrets |
+| Audit shows sample/mock data | Verify CRMProvider CRM credentials are properly configured in secrets |
 | Policies page not loading | Hard refresh the page (Ctrl+Shift+R) |
-| CRM data returning empty | Check Zoho region — Saudi accounts need `.sa` endpoints (see Section 5.7) |
+| CRM data returning empty | Check CRMProvider region — Saudi accounts need `.sa` endpoints (see Section 5.7) |
 | Page not loading at all | Check internet connection, try hard refresh (Ctrl+Shift+R), check if app is published |
-| Email reports not sending | Verify RESEND_API_KEY and RESEND_FROM_EMAIL are configured |
-| AI audit uses sample data instead of live CRM | Verify Zoho OAuth secrets; check `/api/integrations/status` for connection status |
-| AI Consultant not responding | Verify `AI_INTEGRATIONS_OPENAI_API_KEY` or `OPENAI_API_KEY` is configured and has available quota. Check `CONSULTANT_CHAT_TIMEOUT` (default 120s). Ensure `@ai-sdk/openai` is at v3.x (`^3.0.29`). |
+| Email reports not sending | Verify EmailProvider_API_KEY and EmailProvider_FROM_EMAIL are configured |
+| AI audit uses sample data instead of live CRM | Verify CRMProvider OAuth secrets; check `/api/integrations/status` for connection status |
+| AI Consultant not responding | Verify `AI_INTEGRATIONS_LLMProvider_API_KEY` or `LLMProvider_API_KEY` is configured and has available quota. Check `CONSULTANT_CHAT_TIMEOUT` (default 120s). Ensure `@ai-sdk/LLMProvider` is at v3.x (`^3.0.29`). |
 | AI Consultant returns 401 | All consultant API endpoints require valid session or X-Admin-Key header. Log in first or pass admin key. |
 | AI Consultant scan times out | Increase `CONSULTANT_SCAN_TIMEOUT` env var (default 300000ms). Scan-stream SSE endpoint provides real-time progress. |
 | Alert bell not showing count | Check `/api/consultant/alerts/count` — ensure the `ai_alerts` table was initialized |
 | Chat history not loading | Chat history is stored in browser localStorage. Clear browser data to reset. |
 | Duplicate scan shows "Gateway Timeout" | Scan runs in background now — check progress via the UI polling or `/api/duplicates/scan-status` |
-| Duplicate scan shows 0 results | Run "Scan from Zoho" first, or wait for the 6-hourly auto-sync to populate data. Incremental mode retains records across syncs |
+| Duplicate scan shows 0 results | Run "Scan from CRMProvider" first, or wait for the 6-hourly auto-sync to populate data. Incremental mode retains records across syncs |
 | KPIs not auto-calculating | Verify `KPI_AUTO_CALC_CRON` is not overridden; check Inngest cron logs |
 
 ### Feedback
@@ -2106,7 +2106,7 @@ When the language is `ar`, the module sets `html[dir="rtl"]` and adds the class 
 - Mirror the AI consultant widget from the right side to the left
 - Swap message bubble border-radius so chat bubbles point in the correct direction
 
-The Noto Sans Arabic font is loaded on demand (Google Fonts CDN) only when Arabic is active, injecting a `<link>` tag into `<head>` with `id="wp-arabic-font"` to prevent duplicates.
+The Noto Sans Arabic font is loaded on demand (IdentityProvider Fonts CDN) only when Arabic is active, injecting a `<link>` tag into `<head>` with `id="wp-arabic-font"` to prevent duplicates.
 
 ### 26.6 Hijri Date on Executive Dashboard
 
@@ -2161,8 +2161,8 @@ Tests cover:
 | Term | Definition |
 |------|-----------|
 | **CAPA** | Corrective and Preventive Action — a structured process for identifying root causes of nonconformances and implementing corrective/preventive measures |
-| **COQL** | CRM Object Query Language — Zoho's query language for searching CRM records |
-| **CRM** | Customer Relationship Management — a system for managing business interactions with customers and prospects (Zoho CRM in this context) |
+| **COQL** | CRM Object Query Language — CRMProvider's query language for searching CRM records |
+| **CRM** | Customer Relationship Management — a system for managing business interactions with customers and prospects (CRMProvider CRM in this context) |
 | **CSP** | Content Security Policy — an HTTP header that restricts which resources a browser can load, preventing XSS attacks |
 | **DPO** | Data Protection Officer — the individual responsible for overseeing data protection compliance |
 | **DSAR** | Data Subject Access Request — a request by an individual to access, correct, or delete their personal data |
@@ -2243,7 +2243,7 @@ Tests cover:
 |---------|--------|--------|-------------|
 | AI Audit Completion | Time from trigger to results | ≤ 60 seconds | Platform timer |
 | Dashboard Data Refresh | Staleness after audit | ≤ 5 minutes | Automatic refresh |
-| Platform Availability | Monthly uptime | ≥ 99.5% | Replit health checks |
+| Platform Availability | Monthly uptime | ≥ 99.5% | HostingPlatform health checks |
 | Login Response | Authentication time | ≤ 5 seconds | OIDC callback timing |
 | Duplicate Scan | Full 4-module scan | ≤ 10 minutes | Scan duration timer |
 
@@ -2473,14 +2473,14 @@ The suite (9 assertions) verifies:
 | Date | Change | Impact |
 |------|--------|--------|
 | **Apr 24, 2026** | **SOP v4.6 — Arabic/RTL Support (i18n Phase 1).** New `dashboard/js/i18n.js` module with `init()`, `t(key)`, `setLang()`, `applyToDOM()`, `formatDateBilingual()`, `isRTL()`. Translation files at `dashboard/i18n/en.json` and `dashboard/i18n/ar.json` covering all Phase 1 pages (nav, login, executive, GRC, AI consultant, notifications). New API endpoints: `GET/POST /api/user/language-preference` persisting `ui_language` column on `platform_users` (auto-migrated with `ADD COLUMN IF NOT EXISTS`). Language priority: server pref → localStorage → `<html lang>` → browser → `en`. RTL CSS injected into navigation style block with `html[dir="rtl"]` overrides (rail flips right, padding swaps, mobile slide direction, AI widget mirrors). Language toggle added to user menu (user-dropdown). Hijri date display on Executive page via `Intl.DateTimeFormat` with `ca-islamic` calendar. All Phase 1 HTML pages updated with `data-i18n` attributes and `<script src="/js/i18n.js">`. E2E Playwright tests added in `tests/i18n.spec.ts` (14 test cases). New §26 i18n conventions added to SOP. | Arabic users can now switch to RTL Arabic interface persisted across sessions; platform ready for Middle East enterprise rollout; zero build-step i18n for static dashboard pages |
-| **Apr 18, 2026** | **SOP v4.5.1 — CRM Owner Roster wired (closes "Unknown activity" gap).** Replaced the empty `getUsers()` stub in `src/data/index.ts` with a two-tier resolver: (a) hard-coded **117-owner seed** in new `src/data/seedUsers.ts` loaded from `CRM_Users_Complete_117_Updated.xlsx` (dated 2026-04-18) carrying name, team, status, totalRecords, modules; (b) live `fetchZohoUsers()` in `src/utils/zohoCRM.ts` (`GET /crm/v2/users?type=AllUsers`) that bridges Zoho User IDs → display names. Seed wins on team/status/modules; Zoho fills gaps for owners not yet on the seed. `GET /api/agents/performance` now propagates `status` so the dashboard activity badge resolves to **Active/Inactive** instead of **Unknown**. New SOP §11.1 "Owner Roster" documents the data steward refresh procedure. Roster breakdown: 11 departments, 64 Active, 53 Inactive, 7 Unassigned (logged as gap). | Closes the long-standing "every owner shows Unknown / falls back to SDR or Sales" defect; CRM Owner Data Quality widget is now data-true; data steward refresh path documented. |
+| **Apr 18, 2026** | **SOP v4.5.1 — CRM Owner Roster wired (closes "Unknown activity" gap).** Replaced the empty `getUsers()` stub in `src/data/index.ts` with a two-tier resolver: (a) hard-coded **117-owner seed** in new `src/data/seedUsers.ts` loaded from `CRM_Users_Complete_117_Updated.xlsx` (dated 2026-04-18) carrying name, team, status, totalRecords, modules; (b) live `fetchCRMProviderUsers()` in `src/utils/CRMProviderCRM.ts` (`GET /crm/v2/users?type=AllUsers`) that bridges CRMProvider User IDs → display names. Seed wins on team/status/modules; CRMProvider fills gaps for owners not yet on the seed. `GET /api/agents/performance` now propagates `status` so the dashboard activity badge resolves to **Active/Inactive** instead of **Unknown**. New SOP §11.1 "Owner Roster" documents the data steward refresh procedure. Roster breakdown: 11 departments, 64 Active, 53 Inactive, 7 Unassigned (logged as gap). | Closes the long-standing "every owner shows Unknown / falls back to SDR or Sales" defect; CRM Owner Data Quality widget is now data-true; data steward refresh path documented. |
 | **Apr 18, 2026** | **SOP v4.5 — Internal Audits re-architecture + Admin & Tools + External Audits.** New §4.26 Internal Audits Dashboard with Annual Audit Programme HITL sign-off (sole approver: new role `head_of_operations_quality`, WP-CTL-007); trigger HITL gate (≥10-char dismiss reason, 24h auto-re-evaluate, "Propose via HITL" for Critical, `trigger-auto-escalate` Inngest cron @ 03:00 UTC, stale Critical@7d / Minor@30d auto-opens `grc_audit_findings` with bi-directional `escalation_finding_id`). New §4.27 Manual Audit Intake (`/intake`) — central Quality Manager workspace, GPT-4o structured extraction with paste-fallback, per-finding accept/edit/reject, `source_quote` traceability, Finalize promotes to `grc_audit_findings` with `intake_id`. New §4.28 External Audits (`/external-audits`) split out — Calendar/Audits + Certificate Register + Readiness Checklist tabs; hero card on `/grc` (Next Audit / Active Certs / Expiring ≤90d) backed by `GET /api/external-audits/summary`. New §4.29 Admin & Tools dropdown — consolidates Migration Engine (relocated from GRC), User & Role Management, Users & Access, AI Approvals Queue, System Logs (relocated from Analytics); role-gated. Migration Engine expanded with 5 Quality templates (CAPA Register, Nonconformity Log, Training Records, Audit Findings, Deal Evaluations). Database expanded 105→**113 tables** (+8: `audit_programmes`, `audit_programme_audits`, `manual_audit_intake`, `manual_audit_findings`, `external_audits`, `external_audit_certificates`, `external_audit_checklist`, `audit_triggers_decisions`); +3 columns on `qms_triggers` (`dismiss_reason`, `re_evaluate_at`, `escalation_finding_id`); +3 FKs on `grc_audit_findings`; +1 RBAC role; 2 new HITL action codes (`audit_programme_signoff`, `trigger_decision`). 7 new controlled documents seeded: WP-SOP-040/041/042, WP-FORM-055/056/057, WP-CTL-007. Approximate code delta: ~2,500 BE LOC + ~1,400 FE LOC. | Closes ISO 19011:2018 §5.2 sign-off gap; ends "shadow audit register" risk; gives execs a single-pane External Audits view; consolidates operator tooling away from business modules |
-| Apr 14, 2026 | **SOP v4.3 — CRM Data Hub & reliability fixes.** CRM page (`/crm`) rewritten as "CRM Data Hub" with live quality enrichment via `POST /api/crm/enrich` (additive penalty scoring via `assessDataQuality()`, junk detection, duplicate cluster cross-reference via `lookupRecordsByZohoIds()`). Frontend: health summary bar, 4-tier quality badges, cluster badges, row-click detail modal, Hide Junk/Highlight Issues toggles, `escapeHtml()` XSS protection. Duplicate Radar: full CRM sync model with `syncAllModules`, 6-hourly auto-sync, data quality scoring + junk quarantine, new filter/sync/quality endpoints, Data Quality tab, 2 new tables (`zoho_sync_state`, `duplicate_record_tasks`). PDPL section corrected to reflect CRM data persistence in `duplicate_records`. SOP accuracy audit: corrected 23 discrepancies (counts, formulas, function names, retention claims). | CRM data visibility with integrated quality intelligence; PDPL compliance accuracy; duplicate radar full CRM sync |
+| Apr 14, 2026 | **SOP v4.3 — CRM Data Hub & reliability fixes.** CRM page (`/crm`) rewritten as "CRM Data Hub" with live quality enrichment via `POST /api/crm/enrich` (additive penalty scoring via `assessDataQuality()`, junk detection, duplicate cluster cross-reference via `lookupRecordsByCRMProviderIds()`). Frontend: health summary bar, 4-tier quality badges, cluster badges, row-click detail modal, Hide Junk/Highlight Issues toggles, `escapeHtml()` XSS protection. Duplicate Radar: full CRM sync model with `syncAllModules`, 6-hourly auto-sync, data quality scoring + junk quarantine, new filter/sync/quality endpoints, Data Quality tab, 2 new tables (`CRMProvider_sync_state`, `duplicate_record_tasks`). PDPL section corrected to reflect CRM data persistence in `duplicate_records`. SOP accuracy audit: corrected 23 discrepancies (counts, formulas, function names, retention claims). | CRM data visibility with integrated quality intelligence; PDPL compliance accuracy; duplicate radar full CRM sync |
 | Apr 13, 2026 | **SOP v4.2 — AI Consultant 27-item enhancement (4 phases).** Phase 1 Bugs: XSS-safe renderMarkdown (placeholder tokens + URL sanitization), sla_breach enum, `if(true)` scanner bugs, auto-NC status fix, KPI join column, monitorRisksTool column, dead param removal, scan prompt report-only. Phase 2 Performance: sharedPool.ts (shared pg.Pool max:20), AbortController timeouts (120s/300s configurable), parallelized 14 scanner checks, safeQuery error logging. Phase 3 Features: alert action buttons + modal, chat history, file upload, clickable knowledge docs, citation CSS, scan SSE progress bar, 23 tools on agent (+updateCapa +addCapaAction +5 training tools), auth guards on all endpoints, welcome dashboard. Phase 4 UI: consolidated polling, touch swipe, severity icons + relative time, retry button, export chat, Arabic RTL. | AI Consultant security hardening, performance optimization, feature completion, and UX polish |
-| Apr 13, 2026 | **SOP v4.0 major overhaul:** Comprehensive update reflecting all platform features as of this date. AI Consultant tools expanded from 8→16 (added NC/CAPA create/list, CAPA details, checklist run/manage, knowledge search). Duplicate Radar upgraded to Tier 1–3: multi-signal scoring (email 40pts + domain 25pts + phone 30pts + company 20pts), cross-module matching (Leads/Contacts/Deals/Accounts), merge workflow (resolve/ignore/mark primary/bulk resolve), owner accountability, real-time pre-creation check, async scan with progress polling. AI Scanner expanded from 8→12 checks (added Sales SLA violations, SDR SLA violations, low-progress treatments, high-confidence duplicates). 76 CRM governance rules fully documented (Sales SOP 28 + SDR SOP 28 + Account Rules 20). 11 SDR KPIs seeded. 6 platform KPIs auto-calculated daily. 6-hourly duplicate auto-sync cron. Zoho pagination uncapped by default. Database tables expanded 98→105+. Added complete dashboard page inventory (29), route file inventory (29), utility module inventory (39). All SLA tables updated with Sales/SDR SLA monitoring. RACI matrix updated. Added Knowledge Base, Notification Hub modules. | Full platform documentation reflecting all implemented capabilities |
-| Apr 13, 2026 | **SOP v4.1 — Duplicate Radar 21-item enhancement (4 phases).** Phase 1: Incremental upsert (ON CONFLICT), enhanced summary (singletonCount, resolutionRate), paramIndex fix, RBAC on mock-data DELETE, atomic phone_normalized. Phase 2: Parallel Promise.all() fetch, pg_trgm GIN index, JOIN-based queries, performance indexes. Phase 3: SSE scan-stream, Contact Duplicates tab, Owner RAG status, server-side pagination, auto-resolve engine, date range filters, smart multi-factor AI recommendations. Phase 4: Animated progress bar with module chips, side-by-side comparison modal with Zoho links, KPI gauge + resolution rate dashboard, Generate Test Data button removed. | Comprehensive Duplicate Radar upgrade: reliability, performance, features, and UX |
+| Apr 13, 2026 | **SOP v4.0 major overhaul:** Comprehensive update reflecting all platform features as of this date. AI Consultant tools expanded from 8→16 (added NC/CAPA create/list, CAPA details, checklist run/manage, knowledge search). Duplicate Radar upgraded to Tier 1–3: multi-signal scoring (email 40pts + domain 25pts + phone 30pts + company 20pts), cross-module matching (Leads/Contacts/Deals/Accounts), merge workflow (resolve/ignore/mark primary/bulk resolve), owner accountability, real-time pre-creation check, async scan with progress polling. AI Scanner expanded from 8→12 checks (added Sales SLA violations, SDR SLA violations, low-progress treatments, high-confidence duplicates). 76 CRM governance rules fully documented (Sales SOP 28 + SDR SOP 28 + Account Rules 20). 11 SDR KPIs seeded. 6 platform KPIs auto-calculated daily. 6-hourly duplicate auto-sync cron. CRMProvider pagination uncapped by default. Database tables expanded 98→105+. Added complete dashboard page inventory (29), route file inventory (29), utility module inventory (39). All SLA tables updated with Sales/SDR SLA monitoring. RACI matrix updated. Added Knowledge Base, Notification Hub modules. | Full platform documentation reflecting all implemented capabilities |
+| Apr 13, 2026 | **SOP v4.1 — Duplicate Radar 21-item enhancement (4 phases).** Phase 1: Incremental upsert (ON CONFLICT), enhanced summary (singletonCount, resolutionRate), paramIndex fix, RBAC on mock-data DELETE, atomic phone_normalized. Phase 2: Parallel Promise.all() fetch, pg_trgm GIN index, JOIN-based queries, performance indexes. Phase 3: SSE scan-stream, Contact Duplicates tab, Owner RAG status, server-side pagination, auto-resolve engine, date range filters, smart multi-factor AI recommendations. Phase 4: Animated progress bar with module chips, side-by-side comparison modal with CRMProvider links, KPI gauge + resolution rate dashboard, Generate Test Data button removed. | Comprehensive Duplicate Radar upgrade: reliability, performance, features, and UX |
 | Apr 12, 2026 | Duplicate Radar async scan: Scan runs in background with progress polling; no more gateway timeouts | Improved scan reliability for large CRM datasets |
-| Apr 12, 2026 | AI Consultant & Assistant module added: GPT-4o agent with 16 tools, background scanner (6h Inngest cron, 12 checks), alerts system, full chat UI at `/consultant`, alert bell in nav bar. Removed Sandbox module. Updated Audit History to show Date/Time. Added Slack notification integration details. | New AI-powered quality management guidance module; proactive issue detection via background scanning |
+| Apr 12, 2026 | AI Consultant & Assistant module added: GPT-4o agent with 16 tools, background scanner (6h Inngest cron, 12 checks), alerts system, full chat UI at `/consultant`, alert bell in nav bar. Removed Sandbox module. Updated Audit History to show Date/Time. Added ChatProvider notification integration details. | New AI-powered quality management guidance module; proactive issue detection via background scanning |
 | Apr 9, 2026 | SOP v3.6: 22-fix security hardening — SQL injection (parameterized intervals), path traversal, fake data removal, OIDC nonce (oauth_data cookie, redirect on mismatch), uniform requireAdminOrKey auth guards on RBAC/PDPL/CallIntel/DuplicateRadar, webhook validation (Telegram secret + Linear HMAC-SHA256 with timingSafeEqual), audit trigger chain in fallback, error propagation, UUID resolution, dashboard HTML fixes | Protected API endpoints require authentication; webhook endpoints validated; SQL injection vectors eliminated |
 | Apr 9, 2026 | SOP v3.5: Removed CSP nonce (CSP Level 3 conflict with inline handlers), page-level auth accepts admin_key cookie, audit trigger uses Inngest-first with direct fallback, admin key login redirects to dashboard, inngest.sh fixed, smoke test routes added | CSP, auth, and audit trigger accuracy verified |
 | Apr 9, 2026 | SOP v3.4: Restored auth documentation, corrected CSP, documented tiered rate limiting, updated VAPT status to 37/37, unified role system | SOP accuracy verified against deployed codebase |
@@ -2488,5 +2488,5 @@ The suite (9 assertions) verifies:
 | Apr 8, 2026 | Fixed CRM credential detection, policies.html, Added Member button, Audit Readiness to GRC, NC creation modal | Core platform functionality fixes |
 | Apr 2, 2026 | Pentest v4 retest — 31/37 initially confirmed fixed | Retest baseline |
 | Apr 8–9, 2026 | Post-retest remediation — remaining 5 findings (QMS-024, 026, 031, 032, 036) closed | 37/37 findings now resolved |
-| Mar 2026 | Migrated to Replit Auth (OIDC), Centralized RBAC middleware | Google, GitHub, Apple, email login + granular access control |
+| Mar 2026 | Migrated to HostingPlatform Auth (OIDC), Centralized RBAC middleware | IdentityProvider, SourceControlProvider, IdentityProvider, email login + granular access control |
 | Feb 2026 | Platform launched | Full ExampleOrg QMS codebase deployed |

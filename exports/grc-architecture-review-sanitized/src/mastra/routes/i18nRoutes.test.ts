@@ -16,8 +16,8 @@
  *      so that ANY future write attempt is captured rather than touching
  *      a real database.
  *   2. Drives the POST handler with secret-shaped `lang` payloads (deny-list
- *      keys + credential-shaped strings: bcrypt hash, JWT, GitHub PAT,
- *      OpenAI key, etc.).
+ *      keys + credential-shaped strings: bcrypt hash, JWT, SourceControlProvider PAT,
+ *      LLMProvider key, etc.).
  *   3. Asserts the handler rejects with HTTP 400 ("Unsupported language")
  *      and that NO INSERT/UPDATE was issued — proving the input whitelist
  *      is the first line of defence and no raw secret could ever reach
@@ -106,9 +106,9 @@ const SECRET_LIKE_LANG_VALUES: Array<{ label: string; value: string }> = [
     value:
       "<REDACTED_TOKEN>",
   },
-  { label: "GitHub PAT", value: "<REDACTED_TOKEN>" },
+  { label: "SourceControlProvider PAT", value: "<REDACTED_TOKEN>" },
   {
-    label: "OpenAI sk- key",
+    label: "LLMProvider sk- key",
     value: "<REDACTED_TOKEN>",
   },
 ];

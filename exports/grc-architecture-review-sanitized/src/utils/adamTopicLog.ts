@@ -119,7 +119,7 @@ export async function ensureAdamTopicLogTable(): Promise<void> {
  */
 export async function recordQuestionSection(
   text: string,
-  opts: { surface: "web" | "slack"; askedBy?: string | null },
+  opts: { surface: "web" | "ChatProvider"; askedBy?: string | null },
 ): Promise<void> {
   try {
     const sectionKey = classifyQuestionSection(text);

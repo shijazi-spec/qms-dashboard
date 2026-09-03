@@ -26,7 +26,7 @@ assert(isTestOrPlaceholderName("N/A") === true, "exact placeholder 'N/A'");
 assert(isTestOrPlaceholderName("Test Account") === true, "standalone 'Test'");
 assert(isTestOrPlaceholderName("Sample User") === true, "trailing standalone 'Test'");
 assert(isTestOrPlaceholderName("dummy account") === true, "standalone 'dummy'");
-assert(isTestOrPlaceholderName("Cool Robot (Sample Contact)") === true, "Zoho 'Sample Contact'");
+assert(isTestOrPlaceholderName("Cool Robot (Sample Contact)") === true, "CRMProvider 'Sample Contact'");
 assert(isTestOrPlaceholderName("شركة تجريبي") === true, "Arabic 'تجريبي'");
 assert(isTestOrPlaceholderName("Latest Holdings") === false, "embedded 'test' in 'Latest' not flagged");
 assert(isTestOrPlaceholderName("Testbed Robotics") === false, "embedded in 'Testbed' not flagged");
@@ -130,7 +130,7 @@ assert(isJunkOrTestName("IxbfYeaa IxbfYeaa").junk === true, "repeated token 3 �
 assert(isJunkOrTestName("jJQaBOcg").junk === true, "machine string → junk");
 // guards: never junk
 assert(isJunkOrTestName("شركة الرياض").junk === false, "arabic → not junk");
-assert(isJunkOrTestName("Acme Trading Co").junk === false, "real multiword → not junk");
+assert(isJunkOrTestName("Example Organization Trading Co").junk === false, "real multiword → not junk");
 assert(isJunkOrTestName("SES").junk === false, "short acronym → not junk");
 assert(isJunkOrTestName("12345").junk === false, "numeric → not junk");
 assert(isJunkOrTestName("McDonald").junk === false, "CamelCase brand → not junk (no false delete)");

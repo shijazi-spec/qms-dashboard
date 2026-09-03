@@ -280,7 +280,7 @@ export function makePMPProject(overrides: Partial<PMPProject> = {}): PMPProject 
 export function makeCallRecord(overrides: Partial<CallRecord> = {}): CallRecord {
   return {
     call_id: "call-test-01",
-    source: "five9",
+    source: "ContactCenterProvider",
     agent_email: "user@example.invalid",
     direction: "outbound",
     status: "uploaded",

@@ -1,7 +1,7 @@
 /**
- * Pruning our mirror copy of records Zoho no longer has.
+ * Pruning our mirror copy of records CRMProvider no longer has.
  *
- * Two bugs here produced "Already deleted in Zoho — removed. (Mirror prune did
+ * Two bugs here produced "Already deleted in CRMProvider — removed. (Mirror prune did
  * not confirm; it may reappear until the next sweep.)" on records that really
  * had been deleted, observed live 2026-08-19:
  *

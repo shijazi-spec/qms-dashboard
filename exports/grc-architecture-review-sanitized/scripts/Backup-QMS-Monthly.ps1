@@ -1,19 +1,19 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-    Monthly Replit → D: drive backup of the QMS Postgres database.
+    Monthly HostingPlatform → D: drive backup of the QMS Postgres database.
     Designed to run under Windows Task Scheduler on the 1st of every
     month at 09:00 Riyadh time.
 
 .DESCRIPTION
-    Replit is the sole environment for the QMS platform. This script is
+    HostingPlatform is the sole environment for the QMS platform. This script is
     the on-premises backup: it pulls a fresh pg_dump directly from
-    Replit's managed Postgres (Neon under the hood) and lands the file
-    on the user's D: drive. Nothing lives in the cloud that isn't Replit,
+    HostingPlatform's managed Postgres (DatabaseProvider under the hood) and lands the file
+    on the user's D: drive. Nothing lives in the cloud that isn't HostingPlatform,
     and nothing lives on the PC that isn't a file.
 
     The script:
-        1. Reads REPLIT_DATABASE_URL from a Windows user environment variable.
+        1. Reads HostingPlatform_DATABASE_URL from a Windows user environment variable.
         2. Runs pg_dump in custom format (compressed, restore-friendly).
         3. Writes to D:\2_QMS Platform\_local_backup_sql\qms-YYYY-MM.dump.
            (YYYY-MM naming lets Windows sort backups chronologically.)
@@ -38,14 +38,14 @@
     .\Backup-QMS-Monthly.ps1 -RetentionMonths 24
 
 .NOTES
-    Required environment variable: REPLIT_DATABASE_URL
-        Source: Replit → your QMS Repl → Tools → Secrets → copy the value of
-                DATABASE_URL (or PROD_DATABASE_URL — the Neon connection string).
-        Format: postgres://<user>:<pass>@<host>.neon.tech/<db>?sslmode=require
+    Required environment variable: HostingPlatform_DATABASE_URL
+        Source: HostingPlatform → your QMS Repl → Tools → Secrets → copy the value of
+                DATABASE_URL (or PROD_DATABASE_URL — the DatabaseProvider connection string).
+        Format: postgres://<user>:<pass>@<host>.DatabaseProvider.tech/<db>?sslmode=require
 
     Set it once, persistently, for your Windows user with:
         [Environment]::SetEnvironmentVariable(
-            "REPLIT_DATABASE_URL",
+            "HostingPlatform_DATABASE_URL",
             "postgres://user:user@example.invalid/db?sslmode=require",
             "User"
         )
@@ -96,9 +96,9 @@ function Find-PgDump {
 }
 
 # ─── Locate connection string ────────────────────────────────────────────────
-$connStr = $env:REPLIT_DATABASE_URL
+$connStr = $env:HostingPlatform_DATABASE_URL
 if (-not $connStr) {
-    throw "REPLIT_DATABASE_URL environment variable is not set. See script .NOTES for setup."
+    throw "HostingPlatform_DATABASE_URL environment variable is not set. See script .NOTES for setup."
 }
 
 # ─── Prepare backup directory + log ──────────────────────────────────────────
@@ -115,7 +115,7 @@ function Write-Log {
 }
 
 Write-Log "═══════════════════════════════════════════════════"
-Write-Log "Monthly Replit → D: drive backup — started"
+Write-Log "Monthly HostingPlatform → D: drive backup — started"
 Write-Log "BackupRoot      = $BackupRoot"
 Write-Log "RetentionMonths = $RetentionMonths"
 

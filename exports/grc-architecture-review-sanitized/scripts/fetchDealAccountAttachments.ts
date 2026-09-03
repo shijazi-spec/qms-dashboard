@@ -1,6 +1,6 @@
 /**
  * One-time script: fetch attachment metadata for all (or a subset of) Deals
- * and Accounts from Zoho CRM, and write a CSV + JSON report to ./reports.
+ * and Accounts from CRMProvider CRM, and write a CSV + JSON report to ./reports.
  *
  * Usage:
  *   npx tsx scripts/fetchDealAccountAttachments.ts
@@ -16,7 +16,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { fetchAllZohoRecords, getValidAccessToken } from '../src/utils/zohoCRM';
+import { fetchAllCRMProviderRecords, getValidAccessToken } from '../src/utils/CRMProviderCRM';
 
 type ModuleName = 'Deals' | 'Accounts';
 
@@ -69,7 +69,7 @@ function csvEscape(v: unknown): string {
 }
 
 async function getValidTokenAndDomain(): Promise<{ token: string; apiDomain: string }> {
-  const apiDomain = process.env.ZOHO_API_DOMAIN || '<REDACTED_URL>';
+  const apiDomain = process.env.CRMProvider_API_DOMAIN || '<REDACTED_URL>';
   const token = await getValidAccessToken();
   return { token, apiDomain };
 }
@@ -96,7 +96,7 @@ async function fetchAttachmentsFor(
       const res = await fetch(url, {
         method: 'GET',
         headers: {
-          Authorization: `Zoho-oauthtoken ${token}`,
+          Authorization: `CRMProvider-oauthtoken ${token}`,
           'Content-Type': 'application/json',
         },
       });
@@ -152,7 +152,7 @@ async function processModule(
   const nameField = module === 'Deals' ? 'Deal_Name' : 'Account_Name';
   console.log(`\n📥 Fetching all ${module} record ids…`);
   const t0 = Date.now();
-  const records = await fetchAllZohoRecords(module, {
+  const records = await fetchAllCRMProviderRecords(module, {
     fields: ['id', nameField],
     maxRecords: limit === Infinity ? undefined : limit,
   });
@@ -203,7 +203,7 @@ async function main() {
 
   console.log(`🚀 Attachment fetch  module=${moduleArg}  limit=${limit}  concurrency=${concurrency}`);
   const { token, apiDomain } = await getValidTokenAndDomain();
-  console.log(`🔑 Zoho token acquired  apiDomain=${apiDomain}`);
+  console.log(`🔑 CRMProvider token acquired  apiDomain=${apiDomain}`);
 
   const allAttachments: AttachmentMeta[] = [];
   const allPerRecord: { module: ModuleName; recordId: string; recordName: string; attachmentCount: number; totalSizeBytes: number }[] = [];

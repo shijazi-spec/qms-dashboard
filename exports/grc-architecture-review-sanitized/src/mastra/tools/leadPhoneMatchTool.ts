@@ -5,7 +5,7 @@ import { findLeadsByPhoneMatch } from "../../utils/callLeadPhoneMatch";
 export const matchLeadByPhoneTool = createTool({
   id: "match-lead-by-phone",
   description:
-    "Look up Zoho CRM Leads by phone number (Leads module only — Contacts/Deals/Activities are out of scope). Normalizes the phone (digits-only, KSA country-code aware) and matches against Phone/Mobile fields on fetched Leads. Returns matches plus a count of leads scanned. Empty matches with scanned=0 typically means Zoho credentials are not set.",
+    "Look up CRMProvider CRM Leads by phone number (Leads module only — Contacts/Deals/Activities are out of scope). Normalizes the phone (digits-only, KSA country-code aware) and matches against Phone/Mobile fields on fetched Leads. Returns matches plus a count of leads scanned. Empty matches with scanned=0 typically means CRMProvider credentials are not set.",
   inputSchema: z.object({
     phone: z
       .string()

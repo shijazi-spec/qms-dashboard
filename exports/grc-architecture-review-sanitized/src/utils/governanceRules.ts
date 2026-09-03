@@ -59,7 +59,7 @@ export const ExampleOrgSalesGovernanceRules = {
       nextStages: ["Proposal", "Agreement Sent", "Closed Lost"]
     },
     "Agreement Sent": {
-      description: "Service Agreement sent via Zoho Sign, pending signatures",
+      description: "Service Agreement sent via CRMProvider Sign, pending signatures",
       maxDuration: 90,
       maxDurationUnit: "days",
       requiredFields: ["Agreement Document", "Agreement Sent Date"],
@@ -68,7 +68,7 @@ export const ExampleOrgSalesGovernanceRules = {
     "Agreement Signed": {
       description: "All parties signed, ready for CS handover",
       maxDuration: null,
-      requiredFields: ["Signed Agreement", "Invoice/Quotation in Zoho Books"],
+      requiredFields: ["Signed Agreement", "Invoice/Quotation in CRMProvider Books"],
       nextStages: []
     },
     "Closed Lost": {
@@ -96,7 +96,7 @@ export const ExampleOrgSalesGovernanceRules = {
     "Proposal Validity Update": { value: 30, unit: "days", description: "From proposal expiry to re-issuance" },
     "Agreement Review & Signature": { value: 10, unit: "business_days", description: "From client acceptance to full signature" },
     "Agreement Escalation Window": { value: 5, unit: "business_days", description: "From GRC delay to escalation" },
-    "Zoho CRM Activity Logging": { value: 0, unit: "same_day", description: "Log activities same business day" },
+    "CRMProvider CRM Activity Logging": { value: 0, unit: "same_day", description: "Log activities same business day" },
     "Follow-Up Compliance": { value: 0, unit: "same_day", description: "Complete follow-ups same business day" },
     "CS Handover Acknowledgment": { value: 1, unit: "business_day", description: "CS acknowledgment after Agreement Signed" },
     "Issue Escalation Window": { value: 4, unit: "hours", description: "Submit escalation notice within 4 hours" }
@@ -143,7 +143,7 @@ export const ExampleOrgSalesGovernanceRules = {
   ],
   
   spotCheckCriteria: [
-    "Completeness of Zoho CRM fields",
+    "Completeness of CRMProvider CRM fields",
     "Correct stage movement",
     "Document/attachment accuracy",
     "Follow-up frequency"
@@ -293,7 +293,7 @@ export const qualityScorecardConfig = {
           weight: 0.30,
           description: "All mandatory fields completed correctly with valid data",
           passingCriteria: "100% completion, no placeholder text",
-          zohoFields: ["Company_Name", "Contact_Person", "No_of_Employees", "Region", "Industry"],
+          CRMProviderFields: ["Company_Name", "Contact_Person", "No_of_Employees", "Region", "Industry"],
           severityIfFailed: "high"
         },
         {
@@ -302,7 +302,7 @@ export const qualityScorecardConfig = {
           weight: 0.20,
           description: "Meeting notes, client objections, and RCA documented clearly",
           passingCriteria: "Notes exist for every stage transition; include date, action, outcome",
-          zohoFields: ["Notes"],
+          CRMProviderFields: ["Notes"],
           severityIfFailed: "medium"
         },
         {
@@ -311,16 +311,16 @@ export const qualityScorecardConfig = {
           weight: 0.25,
           description: "Follow-up calls/tasks executed within SLA",
           passingCriteria: "≥95% on-time follow-ups",
-          zohoFields: ["Tasks", "Calls"],
+          CRMProviderFields: ["Tasks", "Calls"],
           severityIfFailed: "high"
         },
         {
           id: "P4",
           name: "Calendar Synchronization",
           weight: 0.15,
-          description: "Google Calendar updated daily, reflects schedule changes",
-          passingCriteria: "Calendar matches Zoho meeting activities",
-          zohoFields: ["Meeting_Activities"],
+          description: "IdentityProvider Calendar updated daily, reflects schedule changes",
+          passingCriteria: "Calendar matches CRMProvider meeting activities",
+          CRMProviderFields: ["Meeting_Activities"],
           severityIfFailed: "medium"
         },
         {
@@ -329,7 +329,7 @@ export const qualityScorecardConfig = {
           weight: 0.10,
           description: "Issues escalated within ≤4 hours of detection",
           passingCriteria: "100% adherence to escalation SLA",
-          zohoFields: ["Escalation_Notes"],
+          CRMProviderFields: ["Escalation_Notes"],
           severityIfFailed: "critical"
         }
       ]
@@ -346,7 +346,7 @@ export const qualityScorecardConfig = {
           weight: 0.20,
           description: "Deal moves through correct stages per governance doc",
           passingCriteria: "Stages follow: New Deal → Contacted → Meeting → Proposal → Agreement Sent → Signed",
-          zohoFields: ["Stage", "Stage_History"],
+          CRMProviderFields: ["Stage", "Stage_History"],
           severityIfFailed: "high"
         },
         {
@@ -355,7 +355,7 @@ export const qualityScorecardConfig = {
           weight: 0.15,
           description: "Client contacted within 1 business day of SDR handoff",
           passingCriteria: "100% compliance with ≤1 day SLA",
-          zohoFields: ["First_Call_Date", "Created_Time"],
+          CRMProviderFields: ["First_Call_Date", "Created_Time"],
           severityIfFailed: "high"
         },
         {
@@ -364,7 +364,7 @@ export const qualityScorecardConfig = {
           weight: 0.20,
           description: "Proposal sent within 2 business days of meeting",
           passingCriteria: "Average ≤2 days",
-          zohoFields: ["Proposal_Sent_Date", "Meeting_Date"],
+          CRMProviderFields: ["Proposal_Sent_Date", "Meeting_Date"],
           severityIfFailed: "high"
         },
         {
@@ -373,7 +373,7 @@ export const qualityScorecardConfig = {
           weight: 0.15,
           description: "Pre-meeting confirmation call made (30-60 min for short, 24h for long)",
           passingCriteria: "Evidence of confirmation call logged",
-          zohoFields: ["Calls_Before_Meeting"],
+          CRMProviderFields: ["Calls_Before_Meeting"],
           severityIfFailed: "medium"
         },
         {
@@ -382,7 +382,7 @@ export const qualityScorecardConfig = {
           weight: 0.10,
           description: "Deals properly moved with correct reason logged",
           passingCriteria: "Reason field populated from approved list",
-          zohoFields: ["Not_Attend_Reason"],
+          CRMProviderFields: ["Not_Attend_Reason"],
           validValues: ["Sales Agent not attend", "Client has an emergency", "Client on a vacation", "Client no answer", "Client postponed", "Wrong contact person", "Wrong invitation/time scheduled"],
           severityIfFailed: "medium"
         },
@@ -392,7 +392,7 @@ export const qualityScorecardConfig = {
           weight: 0.10,
           description: "Lost deals have valid reason from approved categories",
           passingCriteria: "Reason selected from governance-defined list",
-          zohoFields: ["Closed_Lost_Reason"],
+          CRMProviderFields: ["Closed_Lost_Reason"],
           validValues: ["Sales Issue", "Sales Issue - Not Interested", "Budget Issue", "Client Not Responding", "Client Rejected Service After Signing", "SDR Issue - Client Not Attend Meeting", "SDR Issue - Not Interested", "SDR Issue - Not Qualified Deal", "SDR Issue - Already a Client", "SDR Issue - Active Deal with Sales"],
           severityIfFailed: "medium"
         },
@@ -402,7 +402,7 @@ export const qualityScorecardConfig = {
           weight: 0.10,
           description: "Deals don't exceed max time per stage",
           passingCriteria: "Meeting ≤10 days, Proposal ≤3 months, Agreement Sent ≤3 months",
-          zohoFields: ["Stage_Entry_Date", "Stage"],
+          CRMProviderFields: ["Stage_Entry_Date", "Stage"],
           severityIfFailed: "high"
         }
       ]
@@ -419,7 +419,7 @@ export const qualityScorecardConfig = {
           weight: 0.20,
           description: "All client interactions logged same business day",
           passingCriteria: "100% compliance",
-          zohoFields: ["Activity_Timestamp", "Interaction_Date"],
+          CRMProviderFields: ["Activity_Timestamp", "Interaction_Date"],
           severityIfFailed: "critical"
         },
         {
@@ -428,7 +428,7 @@ export const qualityScorecardConfig = {
           weight: 0.20,
           description: "Required documents attached before CS handover",
           passingCriteria: "≥95% deals have: Proposal, Agreement, CR, VAT Certificate",
-          zohoFields: ["Attachments"],
+          CRMProviderFields: ["Attachments"],
           requiredDocs: ["Proposal", "Agreement", "CR", "VAT Certificate"],
           severityIfFailed: "high"
         },
@@ -438,7 +438,7 @@ export const qualityScorecardConfig = {
           weight: 0.15,
           description: "Deals meet qualification rules (KSA, 15+ employees, decision-maker)",
           passingCriteria: "100% of deals are qualified per Section 7.1.2",
-          zohoFields: ["No_of_Employees", "Region", "Contact_Title"],
+          CRMProviderFields: ["No_of_Employees", "Region", "Contact_Title"],
           validations: { region: "KSA", minEmployees: 15, validTitles: ["Manager", "Director", "Head", "HR"] },
           severityIfFailed: "critical"
         },
@@ -448,7 +448,7 @@ export const qualityScorecardConfig = {
           weight: 0.15,
           description: "Client acceptance to full signature ≤10 business days",
           passingCriteria: "90% compliance",
-          zohoFields: ["Agreement_Sent_Date", "Agreement_Signed_Date"],
+          CRMProviderFields: ["Agreement_Sent_Date", "Agreement_Signed_Date"],
           maxDays: 10,
           severityIfFailed: "high"
         },
@@ -458,7 +458,7 @@ export const qualityScorecardConfig = {
           weight: 0.15,
           description: "CS handover acknowledged within 1 business day",
           passingCriteria: "100% compliance",
-          zohoFields: ["Handover_Activity"],
+          CRMProviderFields: ["Handover_Activity"],
           severityIfFailed: "high"
         },
         {
@@ -467,7 +467,7 @@ export const qualityScorecardConfig = {
           weight: 0.15,
           description: "All stage changes, reassignments, and escalations documented",
           passingCriteria: "Complete audit trail in Notes",
-          zohoFields: ["Notes", "History"],
+          CRMProviderFields: ["Notes", "History"],
           severityIfFailed: "medium"
         }
       ]
@@ -507,7 +507,7 @@ export interface AttachmentStageRule {
 export const ExampleOrgAttachmentAuditRules = {
   module: 'Deals' as const,
   stageField: 'Stage',
-  // Keys MUST match Zoho Stage values exactly (case-insensitive comparison handled by code).
+  // Keys MUST match CRMProvider Stage values exactly (case-insensitive comparison handled by code).
   stages: {
     'Proposal': {
       keywords: ['proposal', 'offer', 'quotation', 'عرض'],

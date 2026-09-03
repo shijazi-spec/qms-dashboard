@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="/css/utilities.css">
     <script src="/js/csp-styles.js?v=1"></script>
   <style>
-    body { background: #f8fafc; font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; }
+    body { background: #f8fafc; font-family: -IdentityProvider-system, 'Segoe UI', Roboto, sans-serif; }
     .section-card { transition: all .2s; cursor: pointer; }
     .section-card:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(0,0,0,0.08); }
     .section-card.selected { ring: 4px; box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.4); }
@@ -89,9 +89,9 @@
           Print
         </button>
         <div class="w-full"></div>
-        <button id="btn-slack" disabled class="bg-[#4A154B] hover:bg-[#611f63] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-4 py-2.5 rounded-lg flex items-center gap-2 transition">
+        <button id="btn-ChatProvider" disabled class="bg-[#4A154B] hover:bg-[#611f63] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-4 py-2.5 rounded-lg flex items-center gap-2 transition">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.<REDACTED_PHONE>.523A2.<REDACTED_PHONE>.165a2.<REDACTED_PHONE>.52h2.52v2.52zM6.313 15.165a2.<REDACTED_PHONE>.<REDACTED_PHONE>.521 2.52v6.313A2.<REDACTED_PHONE> 24a2.<REDACTED_PHONE>.522v-6.313zM8.834 5.042a2.<REDACTED_PHONE>.52A2.<REDACTED_PHONE> 0a2.<REDACTED_PHONE>.522v2.52H8.834zM8.834 6.313a2.<REDACTED_PHONE>.<REDACTED_PHONE>.521 2.521H2.522A2.<REDACTED_PHONE>.834a2.<REDACTED_PHONE>.521h6.312zM18.956 8.834a2.<REDACTED_PHONE>.521A2.<REDACTED_PHONE>.834a2.<REDACTED_PHONE>.521h-2.522V8.834zM17.688 8.834a2.<REDACTED_PHONE>.<REDACTED_PHONE>.52-2.521V2.522A2.<REDACTED_PHONE> 0a2.<REDACTED_PHONE>.522v6.312zM15.165 18.956a2.<REDACTED_PHONE>.522A2.<REDACTED_PHONE> 24a2.<REDACTED_PHONE>.522v-2.522h2.52zM15.165 17.688a2.<REDACTED_PHONE>.<REDACTED_PHONE>.52-2.52h6.313A2.<REDACTED_PHONE>.165a2.<REDACTED_PHONE>.523h-6.313z"/></svg>
-          Send to Slack
+          Send to ChatProvider
         </button>
         <button id="btn-email" disabled class="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-4 py-2.5 rounded-lg flex items-center gap-2 transition">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
@@ -100,24 +100,24 @@
       </div>
     </section>
 
-    <!-- Slack modal -->
-    <div id="slack-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4">
+    <!-- ChatProvider modal -->
+    <div id="ChatProvider-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4">
       <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-bold text-slate-900" data-i18n="infographic.h3_slack">Send to Slack</h3>
+          <h3 class="text-lg font-bold text-slate-900" data-i18n="infographic.h3_ChatProvider">Send to ChatProvider</h3>
           <button data-close class="text-slate-400 hover:text-slate-600">&times;</button>
         </div>
-        <p class="text-sm text-slate-600 mb-4">Posts the infographic as a PNG attachment in the configured Slack channel.</p>
+        <p class="text-sm text-slate-600 mb-4">Posts the infographic as a PNG attachment in the configured ChatProvider channel.</p>
         <label class="block text-sm font-semibold text-slate-700 mb-1">Channel <span class="font-normal text-slate-400">(leave blank for default)</span></label>
-        <input id="slack-channel" type="text" placeholder="C0123ABCDEF or #general" class="w-full border border-slate-300 rounded-lg px-3 py-2 mb-3 text-sm" />
+        <input id="ChatProvider-channel" type="text" placeholder="C0123ABCDEF or #general" class="w-full border border-slate-300 rounded-lg px-3 py-2 mb-3 text-sm" />
         <label class="block text-sm font-semibold text-slate-700 mb-1">Comment <span class="font-normal text-slate-400">(optional)</span></label>
-        <textarea id="slack-comment" rows="3" placeholder="A short note for the channel…" class="w-full border border-slate-300 rounded-lg px-3 py-2 mb-4 text-sm"></textarea>
-        <div id="slack-status" class="text-sm mb-3 hidden"></div>
+        <textarea id="ChatProvider-comment" rows="3" placeholder="A short note for the channel…" class="w-full border border-slate-300 rounded-lg px-3 py-2 mb-4 text-sm"></textarea>
+        <div id="ChatProvider-status" class="text-sm mb-3 hidden"></div>
         <div class="flex justify-end gap-2">
           <button data-close class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-semibold">Cancel</button>
-          <button id="slack-send" class="bg-[#4A154B] hover:bg-[#611f63] text-white px-5 py-2 rounded-lg text-sm font-semibold flex items-center gap-2">
-            <span id="slack-send-label">Send</span>
-            <span id="slack-send-spinner" class="hidden spinner spinner-sm"></span>
+          <button id="ChatProvider-send" class="bg-[#4A154B] hover:bg-[#611f63] text-white px-5 py-2 rounded-lg text-sm font-semibold flex items-center gap-2">
+            <span id="ChatProvider-send-label">Send</span>
+            <span id="ChatProvider-send-spinner" class="hidden spinner spinner-sm"></span>
           </button>
         </div>
       </div>
@@ -177,7 +177,7 @@
     const btnSvg = document.getElementById('btn-svg');
     const btnPng = document.getElementById('btn-png');
     const btnPrint = document.getElementById('btn-print');
-    const btnSlack = document.getElementById('btn-slack');
+    const btnChatProvider = document.getElementById('btn-ChatProvider');
     const btnEmail = document.getElementById('btn-email');
 
     function colorTints(hex) {
@@ -226,7 +226,7 @@
             // Reset preview
             previewContainer.innerHTML = '<div class="text-slate-400 text-sm">Click <strong class="text-white">Generate</strong> to preview the infographic here.</div>';
             btnSvg.disabled = btnPng.disabled = btnPrint.disabled = true;
-            btnSlack.disabled = btnEmail.disabled = false;
+            btnChatProvider.disabled = btnEmail.disabled = false;
           });
         });
       } catch (e) {
@@ -309,11 +309,11 @@
       document.getElementById(spinner).classList.toggle('hidden', !busy);
     }
 
-    btnSlack.addEventListener('click', () => {
+    btnChatProvider.addEventListener('click', () => {
       if (!selected) return;
-      document.getElementById('slack-channel').value = '';
-      document.getElementById('slack-comment').value = '';
-      openModal('slack-modal');
+      document.getElementById('ChatProvider-channel').value = '';
+      document.getElementById('ChatProvider-comment').value = '';
+      openModal('ChatProvider-modal');
     });
     btnEmail.addEventListener('click', () => {
       if (!selected) return;
@@ -323,14 +323,14 @@
       openModal('email-modal');
     });
 
-    document.getElementById('slack-send').addEventListener('click', async () => {
+    document.getElementById('ChatProvider-send').addEventListener('click', async () => {
       if (!selected) return;
-      const channel = document.getElementById('slack-channel').value.trim();
-      const comment = document.getElementById('slack-comment').value.trim();
-      setBusy('slack-send', 'slack-send-label', 'slack-send-spinner', true);
-      setStatus('slack-status', 'info', 'Rendering and uploading to Slack…');
+      const channel = document.getElementById('ChatProvider-channel').value.trim();
+      const comment = document.getElementById('ChatProvider-comment').value.trim();
+      setBusy('ChatProvider-send', 'ChatProvider-send-label', 'ChatProvider-send-spinner', true);
+      setStatus('ChatProvider-status', 'info', 'Rendering and uploading to ChatProvider…');
       try {
-        const r = await fetch('/api/infographic/' + selected.id + '/share/slack', {
+        const r = await fetch('/api/infographic/' + selected.id + '/share/ChatProvider', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ channel: channel || undefined, comment: comment || undefined }),
@@ -338,19 +338,19 @@
         const data = await r.json();
         if (!r.ok || !data.success) throw new Error(data.detail || data.error || ('HTTP ' + r.status));
         if (data.mode === 'message') {
-          setStatus('slack-status', 'warn',
+          setStatus('ChatProvider-status', 'warn',
             'Posted to ' + data.channel + ' as a text message (no image attached). ' +
             'To enable PNG attachments, add the <b>files:write</b> scope at <a href="<REDACTED_URL>" target="_blank" class="underline font-semibold"><REDACTED_HOST>/apps</a> → OAuth & Permissions, then reinstall the app.'
           );
-          setTimeout(() => closeModal('slack-modal'), 6000);
+          setTimeout(() => closeModal('ChatProvider-modal'), 6000);
         } else {
-          setStatus('slack-status', 'ok', 'Posted to Slack channel ' + data.channel + ' as ' + (data.filename || 'PNG attachment'));
-          setTimeout(() => closeModal('slack-modal'), 1800);
+          setStatus('ChatProvider-status', 'ok', 'Posted to ChatProvider channel ' + data.channel + ' as ' + (data.filename || 'PNG attachment'));
+          setTimeout(() => closeModal('ChatProvider-modal'), 1800);
         }
       } catch (e) {
-        setStatus('slack-status', 'err', 'Failed: ' + e.message);
+        setStatus('ChatProvider-status', 'err', 'Failed: ' + e.message);
       } finally {
-        setBusy('slack-send', 'slack-send-label', 'slack-send-spinner', false);
+        setBusy('ChatProvider-send', 'ChatProvider-send-label', 'ChatProvider-send-spinner', false);
       }
     });
 

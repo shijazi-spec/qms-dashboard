@@ -117,7 +117,7 @@ function buildDimensionsPayload(canonical: CopcCanonical) {
         data_source: cp.data_source,
         data_dependency: cp.data_dependency,
         passingCriteria: cp.metric,
-        severityIfFailed: cp.data_dependency.includes("five9_real_ingest")
+        severityIfFailed: cp.data_dependency.includes("ContactCenterProvider_real_ingest")
           ? "minor"
           : section.id === "activity_and_process"
             ? "major"
@@ -521,7 +521,7 @@ export async function backfillToCopc(
 
   // Real backfill — re-score against COPC, preserve v1 score in legacy_*
   const { getActiveSDRScorecard, buildSDREvaluationPrompt } = await import("./callIntelligenceDb");
-  const { generateChatText } = await import("./openaiChatHelper");
+  const { generateChatText } = await import("./LLMProviderChatHelper");
   const { isCostCapped, recordSpend, COST } = await import("./aiCostGuard");
   const scorecard = await getActiveSDRScorecard();
   if (!scorecard) {

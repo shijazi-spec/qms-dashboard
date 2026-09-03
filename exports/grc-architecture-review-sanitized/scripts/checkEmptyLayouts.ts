@@ -1,12 +1,12 @@
 import { getLeads, getDeals } from '../src/data';
 
 async function main() {
-  console.log('Fetching ALL Leads from Zoho (this may take a minute)...');
+  console.log('Fetching ALL Leads from CRMProvider (this may take a minute)...');
   const t1 = Date.now();
   const leads = await getLeads();
   console.log(`  Leads fetched: ${leads.length} in ${((Date.now() - t1) / 1000).toFixed(1)}s`);
 
-  console.log('Fetching ALL Deals from Zoho...');
+  console.log('Fetching ALL Deals from CRMProvider...');
   const t2 = Date.now();
   const deals = await getDeals();
   console.log(`  Deals fetched: ${deals.length} in ${((Date.now() - t2) / 1000).toFixed(1)}s`);

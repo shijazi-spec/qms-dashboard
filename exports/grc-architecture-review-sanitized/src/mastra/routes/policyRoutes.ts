@@ -1377,7 +1377,7 @@ export const policyRoutes = [
 
           const buffer = Buffer.from(await file.arrayBuffer());
 
-          // Bytes go to the DATABASE, not the deployment's disk. Replit rebuilds
+          // Bytes go to the DATABASE, not the deployment's disk. HostingPlatform rebuilds
           // that directory from the repo on every publish, so a disk-stored
           // controlled document is deleted at the next deploy while its row
           // keeps claiming a file — which is exactly how the CS SOP ended up

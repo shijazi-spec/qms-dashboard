@@ -242,7 +242,7 @@ review them all. Need a bulk-action / accept-all-confidence-100% flow.
 
 ### P2 — Documentation drift
 
-`replit.md` is accurate but very high-level and missing:
+`HostingPlatform.md` is accurate but very high-level and missing:
 the 8 seeded regulations, the 4 production agents, the bulk-upload feature,
 the obligation-document mapping table, and the recent RBAC cookie fix.
 
@@ -294,8 +294,8 @@ addresses every P0 and P1 above.
 All numeric claims in this audit can be reproduced with the queries below.
 Run from the project root against the same database the application uses.
 
-**Environment**: Replit dev container, snapshot 2026-05-02 ~17:15 UTC.
-**Database**: Replit-managed Postgres (`DATABASE_URL`).
+**Environment**: HostingPlatform dev container, snapshot 2026-05-02 ~17:15 UTC.
+**Database**: HostingPlatform-managed Postgres (`DATABASE_URL`).
 **Git commit at audit time**: `a3b1313` (admin-key cookie fix).
 
 ```sql
@@ -318,7 +318,7 @@ SELECT
   COUNT(*)                                                           AS total
 FROM policies;
 
--- §2.4 Open AI alerts breakdown
+-- §2.4 LLMProvider alerts breakdown
 SELECT alert_type, severity, COUNT(*)::int AS open_n
 FROM ai_alerts WHERE status='open'
 GROUP BY 1,2 ORDER BY 1,2;
@@ -359,5 +359,5 @@ git log --oneline | wc -l                         # 1029
 
 | Version | Date | Author | Change summary |
 |---|---|---|---|
-| 1.0 | 2026-05-02 | Replit Agent | Initial audit |
-| 1.1 | 2026-05-02 | Replit Agent | Corrected test counts (150, was 171), velocity (610/14d, was 441), separated example agent from production agents, added §6 Evidence Appendix with reproducible SQL + shell commands |
+| 1.0 | 2026-05-02 | HostingPlatform Agent | Initial audit |
+| 1.1 | 2026-05-02 | HostingPlatform Agent | Corrected test counts (150, was 171), velocity (610/14d, was 441), separated example agent from production agents, added §6 Evidence Appendix with reproducible SQL + shell commands |

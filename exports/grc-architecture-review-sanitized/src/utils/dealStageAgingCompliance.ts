@@ -11,7 +11,7 @@
  * Modified_Time — the same proxy CS Lifecycle uses for phase entry.
  * Edge case: a non-stage field edit also bumps Modified_Time, which
  * under-reports aging on those deals. Acceptable for v1; the upgrade
- * path is to integrate Zoho's Stage_History audit log (zohoAging.ts
+ * path is to integrate CRMProvider's Stage_History audit log (CRMProviderAging.ts
  * already pulls it) and persist entered_stage_at per deal.
  */
 
@@ -58,7 +58,7 @@ export interface DealStageAgingInput {
   stage: string | null | undefined;
   modified_date?: string | Date | null;
   created_time?: string | Date | null;
-  /** Optional override — supply when zohoAging-style Stage_History is available. */
+  /** Optional override — supply when CRMProviderAging-style Stage_History is available. */
   entered_stage_at?: string | Date | null;
 }
 

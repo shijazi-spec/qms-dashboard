@@ -1,6 +1,6 @@
 /**
  * Pure-function tests for the AI gap-remediation advisor's prompt builders
- * and JSON parser. No DB / no OpenAI.
+ * and JSON parser. No DB / no LLMProvider.
  *
  * Run:  npx tsx tests/gapRecommendationAdvisor.test.ts
  */

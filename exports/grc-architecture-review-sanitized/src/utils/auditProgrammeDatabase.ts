@@ -103,7 +103,7 @@ export interface ManualIntake {
   file_sha256: string | null;
   uploaded_by_email: string;
   status: ManualIntakeStatus;
-  extraction_model: string | null; // e.g. 'openai/gpt-4o-2024-11-20'
+  extraction_model: string | null; // e.g. 'LLMProvider/gpt-4o-2024-11-20'
   extraction_started_at: Date | null;
   extraction_completed_at: Date | null;
   extraction_error: string | null;

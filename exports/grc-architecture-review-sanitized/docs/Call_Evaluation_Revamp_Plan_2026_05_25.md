@@ -21,13 +21,13 @@ Each row of the seven sub-tabs is graded on three dimensions: **strengths**, **d
 
 **What it does well**
 - KPI cards (Total / Analyzed / Avg Sentiment / Avg QA / Compliance Rate) give an at-a-glance pulse.
-- Integration status banner at the top of the page (lines 1653–1697) is honest about Zoho disconnection rather than silently returning zeros — fixed this week.
+- Integration status banner at the top of the page (lines 1653–1697) is honest about CRMProvider disconnection rather than silently returning zeros — fixed this week.
 - CRM Compliance Breakdown shows *coverage* (not just rates), so a `0 Notes Updated` cell is contextualised by the diagnostic banner.
 - One-click bulk **Backfill Dates** and **Backfill CRM Compliance** buttons exist where they're useful — next to the gap they fix.
 
 **What's broken / awkward / duplicated**
 - KPI cards are not drill-throughs. "Avg QA Score 68" doesn't link to "which 12 calls dragged this down?"
-- "Calls by Source" pie chart is decorative; nobody acts on `five9: 92, manual: 102` because the source tells you nothing about quality.
+- "Calls by Source" pie chart is decorative; nobody acts on `ContactCenterProvider: 92, manual: 102` because the source tells you nothing about quality.
 - "Calls by Agent" is a bar chart of *volume*, not a *leaderboard with score*. Volume without quality misranks SDRs who dial more but qualify less.
 - No date filter. The numbers are always lifetime-to-date.
 - No "Send to SDR Manager" button at the top — yet this is the page a manager would land on.
@@ -38,7 +38,7 @@ Each row of the seven sub-tabs is graded on three dimensions: **strengths**, **d
 
 **Data sources**
 - `GET /api/calls/analytics` (line 578) — aggregates compliance + sentiment + QA.
-- `GET /api/integrations/status` — Zoho/Google banner.
+- `GET /api/integrations/status` — CRMProvider/IdentityProvider banner.
 - `POST /api/calls/backfill-call-dates`, `POST /api/calls/backfill-compliance` — destructive ops.
 
 **TL;DR:** A landing page. Pretty, not actionable. Needs date scoping, drill-through, and a leaderboard view — and a "Send Weekly Report" CTA.
@@ -79,29 +79,29 @@ Each row of the seven sub-tabs is graded on three dimensions: **strengths**, **d
 
 **What it does well**
 - Strict filename parser with five preview chips (phone / last-9 suffix / agent / date / time) — closes a real bug class (the 199 records all stamped with bulk-upload date).
-- Five9 integration UI exists and is honest about disconnection.
-- Zoho Calls Activity Import (lines 472–535) is a powerful coverage gap tool — surfaces calls logged in Zoho but never recorded.
+- ContactCenterProvider integration UI exists and is honest about disconnection.
+- CRMProvider Calls Activity Import (lines 472–535) is a powerful coverage gap tool — surfaces calls logged in CRMProvider but never recorded.
 - Bulk audio drop-zone supports up to 50 files × 25MB.
 
 **What's broken / awkward / duplicated**
 - "Manual Call Upload" card (lines 542–629) is still in the DOM, just `class="hidden"`. It duplicates Bulk Upload and is dead code.
-- Google Drive integration is *mentioned* (per the user's brief) but I cannot find a working Drive sync card in the current HTML — it may be lurking or may have been retired.
+- IdentityProvider Drive integration is *mentioned* (per the user's brief) but I cannot find a working Drive sync card in the current HTML — it may be lurking or may have been retired.
 - "Recent uploads list" (line 707) shows the last few but doesn't link to the Call Records tab.
-- Five9 connection panel collects domain + username + password but the actual sync endpoint requires a configured contact-center license — no preflight to tell the user "you're missing X."
+- ContactCenterProvider connection panel collects domain + username + password but the actual sync endpoint requires a configured contact-center license — no preflight to tell the user "you're missing X."
 - Two upload paths exist with different bugs: `/api/calls/upload-audio` (autoAnalyse=true → Whisper duration captured) and `/api/calls/bulk-upload` (duration NEVER captured). Documented in DMAIC Call Details Unification §A.
 
 **User-journey friction**
 - New user uploading 50 calls has no progress estimate beyond a fraction counter — no ETA.
 - After upload, user has to click into Call Records to verify. No "uploaded → analysed → scored" pipeline view.
-- Filename format is enforced strictly — but if a manager exports Five9 recordings whose filenames *don't* match this format, they're stuck. There is no upload-time "rename helper."
+- Filename format is enforced strictly — but if a manager exports ContactCenterProvider recordings whose filenames *don't* match this format, they're stuck. There is no upload-time "rename helper."
 
 **Data sources**
 - `POST /api/calls/upload-audio` (single-file)
 - `POST /api/calls/bulk-upload` (multipart)
-- `POST /api/calls/five9/{test,configure,sync}`
-- `POST /api/calls/import-from-zoho`
+- `POST /api/calls/ContactCenterProvider/{test,configure,sync}`
+- `POST /api/calls/import-from-CRMProvider`
 
-**TL;DR:** Functional but engineering-flavoured. Long-term, the goal should be **zero-touch ingest** via direct Five9 webhook; the filename parser becomes the historical-import escape hatch only.
+**TL;DR:** Functional but engineering-flavoured. Long-term, the goal should be **zero-touch ingest** via direct ContactCenterProvider webhook; the filename parser becomes the historical-import escape hatch only.
 
 ---
 
@@ -112,7 +112,7 @@ Each row of the seven sub-tabs is graded on three dimensions: **strengths**, **d
 - Per-call evaluation form supports the canonical 4 sections × 19 checkpoints from `scorecardV2CopcCanonical.ts`.
 - Manager-review workflow (Approve / Adjust / Disagree) with per-attribute editing and audit log to `sdr_evaluation_reviews` is enterprise-grade.
 - AI Training Feedback panel (lines 817–847) shows reviewed count / approval rate / top-corrected attributes — a real RL feedback loop.
-- Batch Evaluation panel (lines 725–769) — OpenAI Batch API at 50% off, 24h SLA — saves money on bulk re-scoring.
+- Batch Evaluation panel (lines 725–769) — LLMProvider Batch API at 50% off, 24h SLA — saves money on bulk re-scoring.
 
 **What's broken / awkward / duplicated**
 - This is the tab with the **deepest debt.** Three overlapping concepts live here:
@@ -176,15 +176,15 @@ Each row of the seven sub-tabs is graded on three dimensions: **strengths**, **d
 **What it does well**
 - Real evidence-based compliance (per `src/utils/crmComplianceCheck.ts`) — replaces the original `Math.random()` mock that made the dashboard misleading. This is industry-grade.
 - 4 checkmarks (Notes / Call Logged / Task / Stage) align with COPC governance clauses.
-- The relocated MCP operator tools (Match phone to Zoho Lead / Re-run compliance for call id) — pulled in from the retired "QMS Bridge" tab — sit next to the compliance records, which is the right place.
+- The relocated MCP operator tools (Match phone to CRMProvider Lead / Re-run compliance for call id) — pulled in from the retired "QMS Bridge" tab — sit next to the compliance records, which is the right place.
 - Per-call "Run compliance now" inside Call Details makes single-call retry painless.
 
 **What's broken / awkward / duplicated**
 - Compliance table is a flat list with no group-by-agent. Manager wants "all of Sample User's compliance fails" → has to sort + scroll.
 - No way to "approve" a compliance failure (e.g. "this call legitimately didn't need a task because the lead bounced"). All fails are equally bad.
-- "Export CSV" exports the records but not the underlying Zoho activity counts that drove the boolean.
-- Stale-sync risk: if an SDR creates a task in Zoho *after* compliance ran, the dashboard keeps showing failure until a manual re-check. No auto-refresh.
-- Duplicate Radar violations stick around after Zoho edits (the user reported this today) — same stale-sync class of bug.
+- "Export CSV" exports the records but not the underlying CRMProvider activity counts that drove the boolean.
+- Stale-sync risk: if an SDR creates a task in CRMProvider *after* compliance ran, the dashboard keeps showing failure until a manual re-check. No auto-refresh.
+- Duplicate Radar violations stick around after CRMProvider edits (the user reported this today) — same stale-sync class of bug.
 
 **User-journey friction**
 - Manager sees "Compliance Rate 47%" on Overview → comes to this tab → sees 87 rows of fails → has no triage path.
@@ -241,7 +241,7 @@ I benchmarked ExampleOrg against the dominant conversation-intelligence platform
 
 ### 2.1 Feature parity matrix
 
-| Capability | Gong | <REDACTED_HOST> | ExecVision | SF Einstein CI | Five9 IVA | NICE / Verint | COPC standard | **ExampleOrg today** |
+| Capability | Gong | <REDACTED_HOST> | ExecVision | SF Einstein CI | ContactCenterProvider IVA | NICE / Verint | COPC standard | **ExampleOrg today** |
 |---|---|---|---|---|---|---|---|---|
 | Dialler-native ingest | ✓ via dialler | ✓ via dialler | ✗ (file/email) | ✓ SFDC dialler | ✓ native | ✓ native | n/a | ✗ (filename-based; webhook stub exists) |
 | Transcription (multi-lang) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | n/a | ✓ (Whisper, Arabic + English) |
@@ -254,12 +254,12 @@ I benchmarked ExampleOrg against the dominant conversation-intelligence platform
 | Peer benchmark (anonymised) | ✓ | ✓ | ✓ | ✗ | ✗ | ✓ | required | ✓ (shipped today) |
 | Topic / theme clustering | ✓ "Trackers" | ✓ "Themes" | partial | ✓ "Call Mentions" | ✗ | partial | n/a | ✓ (Topic Clusters) |
 | Sentiment | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | n/a | ✓ |
-| CRM compliance audit | partial | partial | ✗ | ✓ native | ✗ | ✓ | required | ✓ best-in-class (real Zoho check, not mock) |
+| CRM compliance audit | partial | partial | ✗ | ✓ native | ✗ | ✓ | required | ✓ best-in-class (real CRMProvider check, not mock) |
 | Deal-level rollup | ✓ flagship feature | ✓ | ✗ | ✓ | ✗ | partial | n/a | ✗ NO |
 | Account-level rollup | ✓ | ✓ | ✗ | ✓ | ✗ | partial | n/a | ✗ (Company Domain doc proposes it) |
 | Forecast / risk scoring | ✓ Gong Forecast | ✓ Momentum | ✗ | ✓ Einstein | ✗ | ✗ | n/a | ✗ |
 | Manager dashboard (per-team) | ✓ "War Room" | ✓ | ✓ | ✓ | ✓ | ✓ | required | ✗ (missing — biggest gap) |
-| Weekly/monthly digest (auto) | ✓ email | ✓ email | ✓ email | ✓ email | partial | ✓ | required | partial (Slack + email helper exists, no PDF) |
+| Weekly/monthly digest (auto) | ✓ email | ✓ email | ✓ email | ✓ email | partial | ✓ | required | partial (ChatProvider + email helper exists, no PDF) |
 | PDF/email shareable report | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | required | ✗ NO |
 | In-app notifications | ✓ | ✓ | ✓ | ✓ | partial | ✓ | n/a | ✗ NO |
 | Mobile app | ✓ iOS+Android | ✓ iOS+Android | partial | ✓ | partial | ✓ | n/a | ✗ NO |
@@ -270,9 +270,9 @@ I benchmarked ExampleOrg against the dominant conversation-intelligence platform
 ### 2.2 Where ExampleOrg is genuinely ahead
 
 1. **COPC v2 alignment.** Most vendors use proprietary frameworks (Gong's "Smart Trackers," Chorus's "Themes"). ExampleOrg's scorecard maps directly to COPC clauses with version-pinning. For Saudi audits and any regulated buyer, this is decisive.
-2. **Real evidence-based CRM compliance.** Gong and Chorus do *some* CRM hygiene (Salesforce activity sync), but their compliance is not COPC-shaped. ExampleOrg's 4-action compliance (Notes / Call Logged / Task / Stage) is a closer match to what an SDR Manager actually needs.
+2. **Real evidence-based CRM compliance.** Gong and Chorus do *some* CRM hygiene (CRMProvider activity sync), but their compliance is not COPC-shaped. ExampleOrg's 4-action compliance (Notes / Call Logged / Task / Stage) is a closer match to what an SDR Manager actually needs.
 3. **Coaching verification automation.** Most coaching tools require the manager to manually close out a plan. ExampleOrg auto-verifies on the next call. This is rare even at the enterprise end.
-4. **Activity-fallback CRM linkage.** When phone-match fails, the platform tries same-agent + same-day Zoho activity. Gong falls back to "no match" and stops. ExampleOrg recovers 10–20% of unlinked calls.
+4. **Activity-fallback CRM linkage.** When phone-match fails, the platform tries same-agent + same-day CRMProvider activity. Gong falls back to "no match" and stops. ExampleOrg recovers 10–20% of unlinked calls.
 5. **Arabic-first RTL UI + PDPL.** No commercial CI platform has Arabic-first design. For KSA-based SDR teams this is a moat.
 6. **Filename parser as historical-import escape hatch.** Most vendors *only* accept dialler webhooks. ExampleOrg's strict parser lets you bulk-import legacy recordings reliably.
 
@@ -282,14 +282,14 @@ I benchmarked ExampleOrg against the dominant conversation-intelligence platform
 |---|---|---|
 | **No manager dashboard.** No "war room" view per-team. Manager must mentally aggregate. | HIGH | Phase 2 of this plan |
 | **No PDF / email report.** Cannot share results outside the app. | HIGH | Phase 3 of this plan |
-| **No notifications.** Coaching plan auto-creates but no Slack/email ping. Weekly digest exists in code but not in UI. | HIGH | Phase 2 |
+| **No notifications.** Coaching plan auto-creates but no ChatProvider/email ping. Weekly digest exists in code but not in UI. | HIGH | Phase 2 |
 | **No deal/account rollup.** Each call is evaluated in isolation. Gong groups by deal. | MEDIUM | Out of scope for v1 (Company Domain doc covers it) |
 | **No mobile.** Manager can't review on phone. | MEDIUM | Phase 5+ |
 | **No real-time alerts.** A "critical" eval just sits in the table. | MEDIUM | Phase 2 (alert rules) |
 | **No live transcription.** Recording is post-call. | LOW | Architectural — defer |
 | **No call recommendation feed.** "You should review this call" is not surfaced. | LOW | Phase 4 (Insights) |
 | **No forecast integration.** Can't predict pipeline from call quality. | LOW | Out of scope — Gong's moat |
-| **Five9 webhook ingest broken.** Endpoint exists, dialler isn't pushing. | HIGH (operational) | Outside dev — vendor config |
+| **ContactCenterProvider webhook ingest broken.** Endpoint exists, dialler isn't pushing. | HIGH (operational) | Outside dev — vendor config |
 | **No "send to SDR Manager" workflow.** | CRITICAL | Phase 3 |
 
 ### 2.4 What ExampleOrg should NOT try to copy
@@ -297,7 +297,7 @@ I benchmarked ExampleOrg against the dominant conversation-intelligence platform
 - **Gong Forecast** — needs ML on years of CRM data; over-scope for a 7-person GRQ team.
 - **Live call coaching** — requires real-time dialler integration; defer.
 - **Mobile-first design** — managers do this work at a desk; mobile is nice-to-have.
-- **Salesforce-style permission marketplace** — ExampleOrg just simplified to 2 roles (admin/viewer). Don't undo.
+- **CRMProvider-style permission marketplace** — ExampleOrg just simplified to 2 roles (admin/viewer). Don't undo.
 - **Public APIs** — internal tool, no external integrations needed.
 
 **TL;DR:** ExampleOrg has the *engine* of a Gong-class tool. The gaps are in the *manager loop* (dashboard, report, notify) and the *deal/account view*. The first three Phase deliverables — Reports, manager dashboard, notifications — close the GAP that matters most.
@@ -320,30 +320,30 @@ Each mode wants a different artifact:
 
 | Mode | Artifact | Frequency | Length |
 |---|---|---|---|
-| Monday-morning | In-app dashboard + Slack digest | Weekly | 1 screen |
+| Monday-morning | In-app dashboard + ChatProvider digest | Weekly | 1 screen |
 | 1:1 prep | Per-agent PDF (auto-emailed Sunday 6pm KSA) | Weekly | 2-3 pages |
 | Period-end | Per-team PDF, includes trend lines + coaching ROI | Monthly / quarterly | 10-15 pages |
 
 ### 3.2 Existing infrastructure we can reuse
 
-- `src/utils/weeklyDigest.ts` — already computes per-agent rollups, renders Slack blocks, renders HTML email. Just not exposed as a UI button or PDF.
+- `src/utils/weeklyDigest.ts` — already computes per-agent rollups, renders ChatProvider blocks, renders HTML email. Just not exposed as a UI button or PDF.
 - `pdfkit` is already a dependency (line 62 of package.json).
 - `exceljs` is already there for CSV/XLSX export.
-- `@slack/web-api` is wired for Slack notifications.
-- `resend` is wired for transactional email.
+- `@ChatProvider/web-api` is wired for ChatProvider notifications.
+- `EmailProvider` is wired for transactional email.
 - `src/mastra/workflows/weeklyDigestCron.ts` already runs Sunday 06:00 Asia/Riyadh.
 
 We are missing the **PDF renderer**, the **in-app Reports surface**, and the **delivery preferences** for who gets what when.
 
 ### 3.3 Report types — proposed
 
-**Type A: Manager Pulse (daily Slack post)**
+**Type A: Manager Pulse (daily ChatProvider post)**
 - 1 message, posted to `#sdr-quality` channel at 09:00 KSA Mon-Fri.
 - Format: "Yesterday: 12 calls, 8 analyzed, 2 critical, 1 new coaching plan for {SDR}. [Open dashboard]."
 - One-click drill into the day's records.
-- Reuses Slack blocks helper.
+- Reuses ChatProvider blocks helper.
 
-**Type B: Weekly Team Digest (PDF + email + Slack thread)**
+**Type B: Weekly Team Digest (PDF + email + ChatProvider thread)**
 - Sunday 18:00 KSA.
 - One PDF (~4 pages) per SDR Manager covering all their SDRs.
 - Sections:
@@ -352,7 +352,7 @@ We are missing the **PDF renderer**, the **in-app Reports surface**, and the **d
   3. Top 5 calls to review — flagged by the system (critical risk, score outliers, manager-disagreed).
   4. Coaching loop status — open plans, delivered this week, verified passing, verified failing again.
   5. Trend lines — team QA, compliance, sentiment over last 8 weeks.
-- Slack thread: the same exec summary + a link to the PDF.
+- ChatProvider thread: the same exec summary + a link to the PDF.
 
 **Type C: Per-SDR Coaching Brief (on-demand)**
 - Generated when manager clicks "Generate brief" on an agent's profile.
@@ -368,12 +368,12 @@ We are missing the **PDF renderer**, the **in-app Reports surface**, and the **d
 
 **Type E: Critical-Call Alert (real-time)**
 - Triggered immediately when a call's overall score < 40 OR critical_risk == true OR a manager flags a call.
-- Slack DM + email to the relevant manager + in-app notification badge.
+- ChatProvider DM + email to the relevant manager + in-app notification badge.
 - Includes a deep-link to the Call Details modal.
 
 ### 3.4 Delivery channels — recommended matrix
 
-| Report | In-app | Slack | PDF | XLSX | Email | Frequency |
+| Report | In-app | ChatProvider | PDF | XLSX | Email | Frequency |
 |---|---|---|---|---|---|---|
 | Type A — Pulse | – | ✓ | – | – | – | Daily 09:00 |
 | Type B — Weekly Digest | ✓ (Reports tab) | ✓ (link) | ✓ | – | ✓ | Sun 18:00 |
@@ -384,7 +384,7 @@ We are missing the **PDF renderer**, the **in-app Reports surface**, and the **d
 ### 3.5 The drill-down path
 
 ```
-Slack Weekly Digest message
+ChatProvider Weekly Digest message
         │
         │   "12 critical calls last week — click to triage"
         ▼
@@ -418,7 +418,7 @@ System auto-verifies on Sample User's next eval and reports back in next Weekly 
 
 Every step is one click. Today this same journey is 9+ clicks across 5 tabs with manual context-switching.
 
-**TL;DR:** Reports are the missing capstone. Build five report types reusing existing infrastructure (weeklyDigest.ts, pdfkit, exceljs, Slack/Resend). The biggest win is the Weekly Digest PDF — closes the manager loop in week one of Phase 3.
+**TL;DR:** Reports are the missing capstone. Build five report types reusing existing infrastructure (weeklyDigest.ts, pdfkit, exceljs, ChatProvider/EmailProvider). The biggest win is the Weekly Digest PDF — closes the manager loop in week one of Phase 3.
 
 ---
 
@@ -479,7 +479,7 @@ Every step is one click. Today this same journey is 9+ clicks across 5 tabs with
 │  CONFIG VIEW (admin only)                                    │
 │  ───────────                                                 │
 │  • Scorecard management (current SDR Evaluation embed)       │
-│  • Data Sources (Five9 / Drive / Zoho Calls Import)          │
+│  • Data Sources (ContactCenterProvider / Drive / CRMProvider Calls Import)          │
 │  • CRM Compliance settings + Match-phone / Reconciliation    │
 │  • Integration status                                        │
 │  • Bulk operations (backfill, re-analyse, batch eval)        │
@@ -515,7 +515,7 @@ Every step is one click. Today this same journey is 9+ clicks across 5 tabs with
 4. Download + email to COO.
 
 **Journey C — Mid-week alert response (target: 2 minutes)**
-1. Slack DM: "Critical call from Saud just got scored 32/100."
+1. ChatProvider DM: "Critical call from Saud just got scored 32/100."
 2. Click link → Call Details modal opens in a new tab.
 3. Listen to 30s clip → read transcript → understand it's a model false negative.
 4. Click [Adjust Review] → fix per-attribute scores → save with rationale.
@@ -598,7 +598,7 @@ Five phases. Each ships independently. Total effort estimate: **5.5–7 person-w
   - `CoachingBrief.pdf.ts`
   - `Quarterly.pdf.ts`
   - `CriticalCallAlert.html.ts` (email-only, no PDF)
-  - `DailyPulse.slack.ts` (Slack-only)
+  - `DailyPulse.ChatProvider.ts` (ChatProvider-only)
 - Recipients configuration UI in Reports tab — pick which managers get which report at which cadence.
 - Reuse `weeklyDigest.ts` for the data layer; the renderer is purely additive.
 - Wire the Inngest cron at `weeklyDigestCron.ts` to also persist to the `reports` table so a Sunday-night failure is recoverable on Monday.
@@ -609,7 +609,7 @@ Five phases. Each ships independently. Total effort estimate: **5.5–7 person-w
 **Dependencies:** Phase 2 (date-scoped analytics).
 **Deleted:** Nothing.
 **Added:** New table, 5 endpoints, 5 templates, ~1,200 lines.
-**Reused:** weeklyDigest.ts (data layer), Slack helper, Resend helper.
+**Reused:** weeklyDigest.ts (data layer), ChatProvider helper, EmailProvider helper.
 
 ### Phase 4 — Agents view & coaching loop polish (1 week)
 **Goal:** the per-SDR detail page, the "Coaching Brief" surface.
@@ -636,7 +636,7 @@ Five phases. Each ships independently. Total effort estimate: **5.5–7 person-w
 
 **Deliverables**
 - Topic Clusters → click a topic → filter the Call list, with an "Add to Quarterly Report" button.
-- Critical-Call Alert pipeline: on eval save, if `overall_score < 40 OR critical_risks.length > 0`, fire Slack DM + email + in-app toast to the agent's manager.
+- Critical-Call Alert pipeline: on eval save, if `overall_score < 40 OR critical_risks.length > 0`, fire ChatProvider DM + email + in-app toast to the agent's manager.
 - Alert rule config UI (in Config) — threshold + recipients per rule.
 - Coaching Effectiveness Index (CEfx — already shipped) surfaced as a card on Reports.
 
@@ -645,7 +645,7 @@ Five phases. Each ships independently. Total effort estimate: **5.5–7 person-w
 **Dependencies:** Phase 3 (notification infrastructure), Phase 4 (Agents view to deep-link from alert).
 **Deleted:** Nothing.
 **Added:** ~400 lines.
-**Reused:** topic-clusters endpoint, CEfx endpoint, Slack/Resend helpers.
+**Reused:** topic-clusters endpoint, CEfx endpoint, ChatProvider/EmailProvider helpers.
 
 ### 5.6 Phase summary table
 
@@ -743,8 +743,8 @@ These are decisions I can't make without your input. They block at least one pha
    - Today the scorecard is hard-pinned to COPC v2 + the "Create Scorecard" modal lets ops accidentally diverge. Should we (a) lock scorecard creation as admin-only with a confirmation guard, (b) version every scorecard and keep COPC v2 as the only active one, or (c) allow per-team scorecards (SDR vs Sales)?
    **Recommendation:** (b) — keep COPC v2 canonical, version all scorecards. Per-team comes only if Sales adopts the platform.
 
-3. **Five9 webhook vs filename parser permanence**
-   - The filename parser was always the short-term escape hatch. Should Phase 3 budget include Five9 webhook commissioning (vendor config + endpoint hardening)?
+3. **ContactCenterProvider webhook vs filename parser permanence**
+   - The filename parser was always the short-term escape hatch. Should Phase 3 budget include ContactCenterProvider webhook commissioning (vendor config + endpoint hardening)?
    **Recommendation:** Out of scope for this revamp. Track separately as a vendor-config task.
 
 ### 7.2 Reports & cadence
@@ -763,7 +763,7 @@ These are decisions I can't make without your input. They block at least one pha
 
 ### 7.3 Notifications & alerts
 
-7. **Slack channel topology**
+7. **ChatProvider channel topology**
    - One channel for all alerts? One per manager? DMs?
    **Default proposal:** Daily Pulse to a shared `#sdr-quality` channel; Critical-Call Alerts as DMs to the specific manager.
 
@@ -829,7 +829,7 @@ How will we know the revamp worked? Six quantitative metrics + one qualitative.
 | Metric | Today | Target |
 |---|---|---|
 | Clicks from Overview → "Sample User's 2 worst calls last week" | 11 clicks | 3 clicks (Team → Sample User → critical-calls list) |
-| Clicks from "I just got a Slack alert" → "I've adjusted the AI eval" | 8+ clicks | 4 clicks (Slack → Call Details → Adjust → Save) |
+| Clicks from "I just got a ChatProvider alert" → "I've adjusted the AI eval" | 8+ clicks | 4 clicks (ChatProvider → Call Details → Adjust → Save) |
 | Clicks to send a weekly report | n/a (impossible) | 1 click on the [Send Now] button |
 
 ### 8.3 Coverage / quality
@@ -837,7 +837,7 @@ How will we know the revamp worked? Six quantitative metrics + one qualitative.
 | Metric | Today | Target |
 |---|---|---|
 | % of analysed calls with `duration_seconds NOT NULL` | ~85% (post-DMAIC backfill, lazy self-heal climbing) | > 95% |
-| % of analysed calls with a CRM link (Lead or Deal, any signal) | ~73% | > 85% (via activity fallback + Zoho data cleanup, not code) |
+| % of analysed calls with a CRM link (Lead or Deal, any signal) | ~73% | > 85% (via activity fallback + CRMProvider data cleanup, not code) |
 | % of failed coaching plans where verification ran | 100% if next call lands (deterministic) | 100% (unchanged) |
 | % of weeks where Weekly Digest sent on time | n/a | > 98% (cron reliability) |
 | Manager Reports Generated per week (post-launch) | 0 | ≥ 1 per active manager |
@@ -848,7 +848,7 @@ How will we know the revamp worked? Six quantitative metrics + one qualitative.
 |---|---|---|
 | Distinct managers logging into `/calls` weekly | unknown | All active SDR managers + Quality lead |
 | Weekly Digest open rate (email) | n/a | > 60% |
-| Slack Critical-Call Alert reaction rate (any emoji within 1h) | n/a | > 40% |
+| ChatProvider Critical-Call Alert reaction rate (any emoji within 1h) | n/a | > 40% |
 | Coaching plans delivered within 48h of auto-creation | unknown | > 70% |
 | Manager-Adjusted reviews per week | currently ~5/wk | ≥ 10/wk (signals managers are engaging with AI evals) |
 
@@ -915,7 +915,7 @@ How will we know the revamp worked? Six quantitative metrics + one qualitative.
 | Coaching loop (trigger + verify + lifecycle) | `src/utils/coachingPlans.ts` | 541 lines — DO NOT REFACTOR IN THIS REVAMP |
 | Auto-evaluator | `src/utils/sdrAutoEvaluator.ts` | 297 lines — DO NOT REFACTOR |
 | COPC v2 canonical | `src/data/scorecardV2CopcCanonical.ts` | 272 lines — DO NOT EDIT WITHOUT REGENERATING JSON |
-| CRM compliance engine (real Zoho) | `src/utils/crmComplianceCheck.ts` | 238 lines |
+| CRM compliance engine (real CRMProvider) | `src/utils/crmComplianceCheck.ts` | 238 lines |
 | Weekly digest helper | `src/utils/weeklyDigest.ts` | Already there — Phase 3 wraps it in PDF + UI |
 | Weekly digest cron | `src/mastra/workflows/weeklyDigestCron.ts` | Sunday 03:00 UTC |
 | Coaching Effectiveness Index | `src/utils/coachingEffectivenessIndex.ts` | Solution #5 — surfaces in Phase 5 |
@@ -930,7 +930,7 @@ call_records           — base table; one row per call
 call_transcripts       — Whisper output, speaker segments
 call_analysis          — sentiment, topics, action items, key moments
 call_qa_scores         — legacy QA scorecard scores (scorecard_type=sdr|sales)
-call_compliance        — 4-action Zoho hygiene booleans + evidence
+call_compliance        — 4-action CRMProvider hygiene booleans + evidence
 call_governance_results — rule-based governance audit (separate concern)
 meeting_mom            — Meeting Minutes from calendar events (Meet)
 ai_training_feedback   — RL signal from manager corrections
@@ -938,7 +938,7 @@ sdr_call_evaluations   — canonical SDR scorecard result (COPC v2)
 sdr_evaluation_reviews — manager Approve/Adjust/Disagree audit log
 coaching_plans         — auto-triggered + manually-resolved per-attribute plans
 coaching_sessions      — coaching delivery + outcome (separate from plans)
-integration_config     — Five9/Zoho credentials + connection state
+integration_config     — ContactCenterProvider/CRMProvider credentials + connection state
 ```
 
 Notable: there are TWO coaching tables: `coaching_plans` (new, lifecycle-aware) and `coaching_sessions` (legacy, delivery + outcome). In Phase 1 we keep both alive; in Phase 4 we consider merging `coaching_sessions` into `coaching_plans` (a `coaching_session_id` FK on the plan record).
@@ -953,17 +953,17 @@ Notable: there are TWO coaching tables: `coaching_plans` (new, lifecycle-aware) 
 | `docs/Company_Domain_Strategy_2026_05_25.md` | Optional Phase 6 — account-level rollup |
 | `docs/SDR_PDPL_Consent_Script_2026_05_25.md` | Required for PDPL consent compliance metric |
 | `docs/SDR_Verification_Step_2026_05_25.md` | 3-point verification, surfaces in scorecard governance |
-| `docs/Zoho_OAuth_Setup_2026_05_25.md` | Operations runbook for Zoho disconnection |
+| `docs/CRMProvider_OAuth_Setup_2026_05_25.md` | Operations runbook for CRMProvider disconnection |
 
 ### E. ASCII summary — the journey we're trying to design for
 
 ```
 SUNDAY 18:00 KSA
-  └─ Weekly Digest PDF generated + emailed + Slack thread posted
+  └─ Weekly Digest PDF generated + emailed + ChatProvider thread posted
        (auto, no human action)
 
 MONDAY 09:00 KSA
-  └─ Daily Pulse Slack message posted: "Yesterday: 12 calls, 8 analyzed,
+  └─ Daily Pulse ChatProvider message posted: "Yesterday: 12 calls, 8 analyzed,
        2 critical, 1 new coaching plan for Sample User."
 
 MONDAY 09:10
@@ -1003,7 +1003,7 @@ FRIDAY
 
 NEXT SUNDAY
   └─ Weekly Digest reports the closed coaching plan in the "Coaching this week" section
-       └─ Manager replies to Slack thread: 👏
+       └─ Manager replies to ChatProvider thread: 👏
 ```
 
 Every step is enabled by infrastructure that either exists or is in this plan. None of it exists end-to-end today.

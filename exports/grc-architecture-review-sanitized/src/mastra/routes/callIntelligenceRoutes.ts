@@ -8,7 +8,7 @@ import {
 
 import { logger as safeLogger } from "../../utils/logger";
 import { redactSensitiveDeep } from "../../utils/sensitiveRedaction";
-import { getOpenAIApiKey, getOpenAIBaseUrl } from "../../utils/openaiCredentials";
+import { getLLMProviderApiKey, getLLMProviderBaseUrl } from "../../utils/LLMProviderCredentials";
 import {
   runComplianceAfterLink,
   autoLinkCallAndCompliance,
@@ -76,7 +76,7 @@ export const callIntelligenceRoutes = [
 
           const callRecord = await createCallRecord({
             call_id: data.call_id || `call-${Date.now()}`,
-            source: data.source || "five9",
+            source: data.source || "ContactCenterProvider",
             lead_id: data.lead_id,
             deal_id: data.deal_id,
             contact_name: data.contact_name,
@@ -189,7 +189,7 @@ export const callIntelligenceRoutes = [
     // 5 most-recently-inserted rows. Use to confirm whether uploads are
     // actually persisting to Postgres when the UI shows zero records.
     // Auth-gated (same as the other call routes) so it never leaks data.
-    //   curl https://<REDACTED_HOST>/api/calls/_debug/count \
+    //   curl <REDACTED_URL_SCHEME><REDACTED_HOST>/api/calls/_debug/count \
     //        -H "Cookie: <your session cookie>"
     path: "/api/calls/_debug/count",
     method: "GET" as const,
@@ -394,7 +394,7 @@ export const callIntelligenceRoutes = [
   },
   {
     // DECOMMISSIONED per scope amendments 3 + <REDACTED_PHONE>:
-    //   - 3rd amendment: skip weekly digest push channels (Slack + email)
+    //   - 3rd amendment: skip weekly digest push channels (ChatProvider + email)
     //   - 4th amendment: Weekly Report is in-dashboard, opened Monday AM
     // Returns 410 Gone so any caller (curl/Postman/automation) gets a
     // clear "this endpoint is gone" signal instead of silent no-op.
@@ -409,7 +409,7 @@ export const callIntelligenceRoutes = [
           {
             error: "endpoint_decommissioned",
             message:
-              "Weekly digest push channels (Slack + email) were retired in the 3rd and 4th scope amendments on 2026-05-25. The Weekly Report now lives inside the dashboard — open /calls directly. See docs/Decision_Record_Amend_Skip_Digest_Merge_Agent_View_2026_05_25.md and docs/Decision_Record_Amend_AI_Only_No_QA_Review_2026_05_25.md.",
+              "Weekly digest push channels (ChatProvider + email) were retired in the 3rd and 4th scope amendments on 2026-05-25. The Weekly Report now lives inside the dashboard — open /calls directly. See docs/Decision_Record_Amend_Skip_Digest_Merge_Agent_View_2026_05_25.md and docs/Decision_Record_Amend_AI_Only_No_QA_Review_2026_05_25.md.",
           },
           410,
         );
@@ -517,8 +517,8 @@ export const callIntelligenceRoutes = [
     // returns 404 when the flag is off so the existence of the endpoint
     // doesn't leak before the UI is ready.
     //
-    //   GET /api/calls/lead-history?lead_id=ZOHO_LEAD_ID
-    //   GET /api/calls/lead-history?deal_id=ZOHO_DEAL_ID
+    //   GET /api/calls/lead-history?lead_id=CRMProvider_LEAD_ID
+    //   GET /api/calls/lead-history?deal_id=CRMProvider_DEAL_ID
     //   GET /api/calls/lead-history?phone=<REDACTED_PHONE>//
     // All three return the same shape — newest-first calls + summary
     // aggregates. See src/utils/leadHistoryQuery.ts.
@@ -764,17 +764,17 @@ export const callIntelligenceRoutes = [
   {
     // DMAIC Improve: bulk CRM-compliance backfill. The breakdown card in
     // the Overview tab was stuck at all-zeros because the 199 historical
-    // calls were never auto-linked to a Zoho Lead/Deal (either Zoho was
+    // calls were never auto-linked to a CRMProvider Lead/Deal (either CRMProvider was
     // unreachable at upload time, the phone wasn't in CRM yet, or the
     // activity fallback didn't match). No link → no compliance check →
     // no call_compliance row → SUM() returns 0.
     //
     // This endpoint walks every analyzed call missing a real compliance
     // row, attempts the auto-link (phone match + activity fallback), and
-    // — for newly-linked OR already-linked rows — fires the Zoho-backed
+    // — for newly-linked OR already-linked rows — fires the CRMProvider-backed
     // compliance check via runComplianceAfterLink. Serial with a 200ms
-    // gap so Zoho's 10 RPS quota holds even when each call costs 4-5
-    // Zoho API hits.
+    // gap so CRMProvider's 10 RPS quota holds even when each call costs 4-5
+    // CRMProvider API hits.
     //
     // Returns a summary the UI uses to render a progress bar:
     //   { scanned, linked, checked, skipped: [{id, reason}], failures, duration_ms }
@@ -916,7 +916,7 @@ export const callIntelligenceRoutes = [
                 error: err?.message || String(err),
               });
             }
-            // Throttle: ~200ms between calls. Each call costs 4-5 Zoho
+            // Throttle: ~200ms between calls. Each call costs 4-5 CRMProvider
             // hits when fully run; 5 RPS budget holds at this pace.
             await new Promise((resolve) => setTimeout(resolve, 200));
           }
@@ -961,7 +961,7 @@ export const callIntelligenceRoutes = [
   //
   // This sweep re-validates each existing phone-derived link against the
   // same 9-digit overlap rule the matcher now enforces. When the linked
-  // Lead/Deal's Zoho phone does NOT share the call's subscriber number,
+  // Lead/Deal's CRMProvider phone does NOT share the call's subscriber number,
   // the link is a confirmed mismatch: we clear it (lead_id/deal_id +
   // compliance row) and re-run the auto-linker so a correct Lead can be
   // found or the call is left honestly unlinked.
@@ -1010,13 +1010,13 @@ export const callIntelligenceRoutes = [
             await import("../../utils/callIntelligenceDb");
           await initCallIntelligenceTables();
 
-          const { fetchZohoRecords, getZohoConnectionStatus } = await import(
-            "../../utils/zohoCRM"
+          const { fetchCRMProviderRecords, getCRMProviderConnectionStatus } = await import(
+            "../../utils/CRMProviderCRM"
           );
-          const conn = getZohoConnectionStatus();
+          const conn = getCRMProviderConnectionStatus();
           if (!conn.connected) {
             return c.json(
-              { success: false, error: "zoho_not_connected" },
+              { success: false, error: "CRMProvider_not_connected" },
               503,
             );
           }
@@ -1055,13 +1055,13 @@ export const callIntelligenceRoutes = [
           );
           const candidates = candidatesRes.rows;
 
-          // Read the parent record's phone AND Lead_Status from Zoho in
+          // Read the parent record's phone AND Lead_Status from CRMProvider in
           // a single fetch — both verifications need the same record,
-          // so combining saves one Zoho RPS budget hit per candidate.
+          // so combining saves one CRMProvider RPS budget hit per candidate.
           // Leads carry Phone/Mobile + Lead_Status directly; Deals get
           // an empty status (we don't junk-check Deals — see comment in
           // findCrmRecordsByAgentActivity).
-          const readZohoRecord = async (
+          const readCRMProviderRecord = async (
             module: "Leads" | "Deals",
             recordId: string,
           ): Promise<{
@@ -1070,7 +1070,7 @@ export const callIntelligenceRoutes = [
             found: boolean;
           }> => {
             try {
-              const rows = await fetchZohoRecords(module, {
+              const rows = await fetchCRMProviderRecords(module, {
                 criteria: `id:equals:${recordId}`,
                 perPage: 1,
               });
@@ -1092,7 +1092,7 @@ export const callIntelligenceRoutes = [
                 found: true,
               };
             } catch (err: any) {
-              logger?.warn("[audit-crm-links] zoho read failed", {
+              logger?.warn("[audit-crm-links] CRMProvider read failed", {
                 module,
                 recordId,
                 error: err?.message,
@@ -1113,7 +1113,7 @@ export const callIntelligenceRoutes = [
             id: number;
             module: string;
             record_id: string;
-            zoho_phone: string | null;
+            CRMProvider_phone: string | null;
             call_phones: string[];
           }> = [];
           let mismatched = 0;
@@ -1132,10 +1132,10 @@ export const callIntelligenceRoutes = [
               const callPhones = extractCallPhoneCandidates(rec) || [];
 
               const {
-                phone: zohoPhone,
-                status: zohoStatus,
+                phone: CRMProviderPhone,
+                status: CRMProviderStatus,
                 found,
-              } = await readZohoRecord(module, recordId);
+              } = await readCRMProviderRecord(module, recordId);
 
               // Junk-status check — runs FIRST and covers both phone-
               // linked and activity-linked rows. If the Lead is junked
@@ -1143,8 +1143,8 @@ export const callIntelligenceRoutes = [
               if (
                 found &&
                 module === "Leads" &&
-                zohoStatus &&
-                JUNK_LEAD_STATUSES_LOWER.has(zohoStatus.toLowerCase())
+                CRMProviderStatus &&
+                JUNK_LEAD_STATUSES_LOWER.has(CRMProviderStatus.toLowerCase())
               ) {
                 junkCleared++;
                 if (samples.length < 10) {
@@ -1152,7 +1152,7 @@ export const callIntelligenceRoutes = [
                     id: rec.id,
                     module,
                     record_id: recordId,
-                    zoho_phone: zohoPhone,
+                    CRMProvider_phone: CRMProviderPhone,
                     call_phones: callPhones,
                   });
                 }
@@ -1190,15 +1190,15 @@ export const callIntelligenceRoutes = [
                 kept++;
                 continue;
               }
-              // Couldn't read / no phone on the Zoho record → can't prove
+              // Couldn't read / no phone on the CRMProvider record → can't prove
               // a mismatch; keep conservatively.
-              if (!found || !zohoPhone) {
+              if (!found || !CRMProviderPhone) {
                 kept++;
                 continue;
               }
 
               const overlaps = callPhones.some((p: string) =>
-                phonesShareSubscriberNumber(zohoPhone, p),
+                phonesShareSubscriberNumber(CRMProviderPhone, p),
               );
               if (overlaps) {
                 kept++;
@@ -1212,7 +1212,7 @@ export const callIntelligenceRoutes = [
                   id: rec.id,
                   module,
                   record_id: recordId,
-                  zoho_phone: zohoPhone,
+                  CRMProvider_phone: CRMProviderPhone,
                   call_phones: callPhones,
                 });
               }
@@ -1237,7 +1237,7 @@ export const callIntelligenceRoutes = [
             } catch (err: any) {
               errors.push({ id: rec.id, error: err?.message || String(err) });
             }
-            // Throttle for Zoho's RPS budget (read + optional re-link).
+            // Throttle for CRMProvider's RPS budget (read + optional re-link).
             await new Promise((resolve) => setTimeout(resolve, 200));
           }
 
@@ -1332,13 +1332,13 @@ export const callIntelligenceRoutes = [
             await import("../../utils/callIntelligenceDb");
           await initCallIntelligenceTables();
 
-          const { getZohoConnectionStatus } = await import(
-            "../../utils/zohoCRM"
+          const { getCRMProviderConnectionStatus } = await import(
+            "../../utils/CRMProviderCRM"
           );
-          const conn = getZohoConnectionStatus();
+          const conn = getCRMProviderConnectionStatus();
           if (!conn.connected) {
             return c.json(
-              { success: false, error: "zoho_not_connected" },
+              { success: false, error: "CRMProvider_not_connected" },
               503,
             );
           }
@@ -1418,7 +1418,7 @@ export const callIntelligenceRoutes = [
             } catch (err: any) {
               errors.push({ id: row.id, error: err?.message || String(err) });
             }
-            // Throttle: Zoho RPS budget. The walk may issue up to
+            // Throttle: CRMProvider RPS budget. The walk may issue up to
             // (1 search + 1 criteria + 1 related-list) per Contact +
             // (1 leads search + 1 deals search) per phone. 200 ms
             // pacing keeps a 50-row batch under the per-second cap.
@@ -1509,13 +1509,13 @@ export const callIntelligenceRoutes = [
           } = await import("../../utils/callIntelligenceDb");
           await initCallIntelligenceTables();
 
-          const { fetchZohoRecords, getZohoConnectionStatus } = await import(
-            "../../utils/zohoCRM"
+          const { fetchCRMProviderRecords, getCRMProviderConnectionStatus } = await import(
+            "../../utils/CRMProviderCRM"
           );
-          const conn = getZohoConnectionStatus();
+          const conn = getCRMProviderConnectionStatus();
           if (!conn.connected) {
             return c.json(
-              { success: false, error: "zoho_not_connected" },
+              { success: false, error: "CRMProvider_not_connected" },
               503,
             );
           }
@@ -1555,10 +1555,10 @@ export const callIntelligenceRoutes = [
           for (const row of candidates) {
             try {
               // Pull the Deal's primary Contact_Name lookup. Returns
-              // { id, name } in standard Zoho payloads. If the Deal is
+              // { id, name } in standard CRMProvider payloads. If the Deal is
               // missing or has no Contact_Name set, skip — there's
               // nothing to enrich with.
-              const dealRows = await fetchZohoRecords("Deals", {
+              const dealRows = await fetchCRMProviderRecords("Deals", {
                 criteria: `id:equals:${row.deal_id}`,
                 perPage: 1,
               });
@@ -1606,7 +1606,7 @@ export const callIntelligenceRoutes = [
             } catch (err: any) {
               errors.push({ id: row.id, error: err?.message || String(err) });
             }
-            // Throttle for Zoho's RPS budget.
+            // Throttle for CRMProvider's RPS budget.
             await new Promise((resolve) => setTimeout(resolve, 150));
           }
 
@@ -1830,8 +1830,8 @@ export const callIntelligenceRoutes = [
   // being null. autoLinkCallAndCompliance IS called from the upload
   // path, so the link is failing somewhere downstream. Three plausible
   // failure modes:
-  //   1. Zoho disconnected — getZohoConnectionStatus().connected = false
-  //   2. Zoho rate-limited — every fetchZohoRecords call returns 429
+  //   1. CRMProvider disconnected — getCRMProviderConnectionStatus().connected = false
+  //   2. CRMProvider rate-limited — every fetchCRMProviderRecords call returns 429
   //   3. Phone-format mismatch — phones in CRM don't match the
   //      normalised form our matcher emits
   //
@@ -1842,14 +1842,14 @@ export const callIntelligenceRoutes = [
   // and read off the actual failure mode.
   // ===================================================================
   // ===================================================================
-  // Phase 4e — Active Zoho connection probe.
+  // Phase 4e — Active CRMProvider connection probe.
   //
-  // The auto-link diagnostic above reads getZohoConnectionStatus()
+  // The auto-link diagnostic above reads getCRMProviderConnectionStatus()
   // which is a PASSIVE check — it only inspects the in-memory token
   // cache and reports `connected: false` whenever cachedAccessToken
   // is null. Right after a fresh deploy / process restart the cache is
   // ALWAYS empty until something triggers the first refresh, so the
-  // diagnostic can say "Zoho NOT connected" even with perfectly valid
+  // diagnostic can say "CRMProvider NOT connected" even with perfectly valid
   // credentials. The operator updates their secrets, redeploys, hits
   // the diagnostic, sees "NOT connected", and concludes the secrets
   // are wrong when they're actually fine.
@@ -1857,18 +1857,18 @@ export const callIntelligenceRoutes = [
   // This endpoint actively probes:
   //   1. Reports which of the 3 env vars are present (length hints so
   //      formatting issues — extra space, truncated paste — are visible)
-  //   2. Reports the configured Zoho region (accounts URL + API domain)
+  //   2. Reports the configured CRMProvider region (accounts URL + API domain)
   //   3. Reports the current rate-limit cooldown state
   //   4. ACTIVELY calls getValidAccessToken() and reports:
   //      - success: token length + expires_in, plus connected: true
-  //      - failure: the exact error message and HTTP status from Zoho
+  //      - failure: the exact error message and HTTP status from CRMProvider
   //
-  // Admin-only because it surfaces Zoho secrets metadata and forces
+  // Admin-only because it surfaces CRMProvider secrets metadata and forces
   // a token-refresh attempt (which counts against the per-account
   // OAuth quota).
   // ===================================================================
   {
-    path: "/api/calls/diagnostic/zoho",
+    path: "/api/calls/diagnostic/CRMProvider",
     method: "GET" as const,
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
@@ -1883,40 +1883,40 @@ export const callIntelligenceRoutes = [
           // token that should be ~60 chars means someone wrapped it
           // in quotes inside the secret).
           const envReport = {
-            ZOHO_CLIENT_ID: {
-              present: !!process.env.ZOHO_CLIENT_ID,
-              length: (process.env.ZOHO_CLIENT_ID || "").length,
+            CRMProvider_CLIENT_ID: {
+              present: !!process.env.CRMProvider_CLIENT_ID,
+              length: (process.env.CRMProvider_CLIENT_ID || "").length,
             },
-            ZOHO_CLIENT_ID_NEW: {
-              present: !!process.env.ZOHO_CLIENT_ID_NEW,
-              length: (process.env.ZOHO_CLIENT_ID_NEW || "").length,
+            CRMProvider_CLIENT_ID_NEW: {
+              present: !!process.env.CRMProvider_CLIENT_ID_NEW,
+              length: (process.env.CRMProvider_CLIENT_ID_NEW || "").length,
             },
-            ZOHO_CLIENT_SECRET: {
-              present: !!process.env.ZOHO_CLIENT_SECRET,
-              length: (process.env.ZOHO_CLIENT_SECRET || "").length,
+            CRMProvider_CLIENT_SECRET: {
+              present: !!process.env.CRMProvider_CLIENT_SECRET,
+              length: (process.env.CRMProvider_CLIENT_SECRET || "").length,
             },
-            ZOHO_REFRESH_TOKEN: {
-              present: !!process.env.ZOHO_REFRESH_TOKEN,
-              length: (process.env.ZOHO_REFRESH_TOKEN || "").length,
+            CRMProvider_REFRESH_TOKEN: {
+              present: !!process.env.CRMProvider_REFRESH_TOKEN,
+              length: (process.env.CRMProvider_REFRESH_TOKEN || "").length,
             },
-            ZOHO_ACCOUNTS_URL:
-              process.env.ZOHO_ACCOUNTS_URL || "(default: <REDACTED_URL>",
-            ZOHO_API_DOMAIN:
-              process.env.ZOHO_API_DOMAIN || "(default: <REDACTED_URL>",
-            ZOHO_ACCESS_TOKEN_static: {
-              present: !!process.env.ZOHO_ACCESS_TOKEN,
-              length: (process.env.ZOHO_ACCESS_TOKEN || "").length,
+            CRMProvider_ACCOUNTS_URL:
+              process.env.CRMProvider_ACCOUNTS_URL || "(default: <REDACTED_URL>",
+            CRMProvider_API_DOMAIN:
+              process.env.CRMProvider_API_DOMAIN || "(default: <REDACTED_URL>",
+            CRMProvider_ACCESS_TOKEN_static: {
+              present: !!process.env.CRMProvider_ACCESS_TOKEN,
+              length: (process.env.CRMProvider_ACCESS_TOKEN || "").length,
             },
           };
 
           const {
-            getZohoConnectionStatus,
-            getZohoRateLimitState,
+            getCRMProviderConnectionStatus,
+            getCRMProviderRateLimitState,
             getValidAccessToken,
-          } = await import("../../utils/zohoCRM");
+          } = await import("../../utils/CRMProviderCRM");
 
-          const passiveStatus = getZohoConnectionStatus();
-          const rateLimit = getZohoRateLimitState();
+          const passiveStatus = getCRMProviderConnectionStatus();
+          const rateLimit = getCRMProviderRateLimitState();
 
           // Active probe — actually call getValidAccessToken so we
           // exercise the OAuth refresh path and surface the real error
@@ -1930,7 +1930,7 @@ export const callIntelligenceRoutes = [
             errorClass: null,
             errorMessage: null,
             errorHttpStatus: null,
-            isZohoRateLimited: false,
+            isCRMProviderRateLimited: false,
             tokenLength: 0,
           };
           try {
@@ -1943,40 +1943,40 @@ export const callIntelligenceRoutes = [
             activeProbe.errorClass = err?.constructor?.name || "Error";
             activeProbe.errorMessage = err?.message || String(err);
             activeProbe.errorHttpStatus = err?.httpStatus || null;
-            activeProbe.isZohoRateLimited = !!err?.isZohoRateLimited;
+            activeProbe.isCRMProviderRateLimited = !!err?.isCRMProviderRateLimited;
           }
 
           // Re-read passive status AFTER the active probe so the user
           // can see whether the refresh attempt populated the cache.
-          const passiveStatusAfter = getZohoConnectionStatus();
+          const passiveStatusAfter = getCRMProviderConnectionStatus();
 
           // Diagnosis sentence — pick the most actionable explanation.
           let diagnosis = "Unclear — review the per-field detail below.";
           if (
-            !envReport.ZOHO_CLIENT_ID.present &&
-            !envReport.ZOHO_CLIENT_ID_NEW.present
+            !envReport.CRMProvider_CLIENT_ID.present &&
+            !envReport.CRMProvider_CLIENT_ID_NEW.present
           ) {
-            diagnosis = "ZOHO_CLIENT_ID is NOT set in Replit Secrets. Add it and redeploy.";
-          } else if (!envReport.ZOHO_CLIENT_SECRET.present) {
-            diagnosis = "ZOHO_CLIENT_SECRET is NOT set in Replit Secrets. Add it and redeploy.";
-          } else if (!envReport.ZOHO_REFRESH_TOKEN.present) {
-            diagnosis = "ZOHO_REFRESH_TOKEN is NOT set in Replit Secrets. Generate one in the Zoho API Console and add it.";
-          } else if (activeProbe.isZohoRateLimited) {
-            diagnosis = `Zoho's OAuth endpoint is in cooldown — wait ~${Math.ceil((rateLimit.cooldownMsRemaining || 0) / 1000)}s and try again. (Caused by previous repeated refresh failures.)`;
+            diagnosis = "CRMProvider_CLIENT_ID is NOT set in HostingPlatform Secrets. Add it and redeploy.";
+          } else if (!envReport.CRMProvider_CLIENT_SECRET.present) {
+            diagnosis = "CRMProvider_CLIENT_SECRET is NOT set in HostingPlatform Secrets. Add it and redeploy.";
+          } else if (!envReport.CRMProvider_REFRESH_TOKEN.present) {
+            diagnosis = "CRMProvider_REFRESH_TOKEN is NOT set in HostingPlatform Secrets. Generate one in the CRMProvider API Console and add it.";
+          } else if (activeProbe.isCRMProviderRateLimited) {
+            diagnosis = `CRMProvider's OAuth endpoint is in cooldown — wait ~${Math.ceil((rateLimit.cooldownMsRemaining || 0) / 1000)}s and try again. (Caused by previous repeated refresh failures.)`;
           } else if (activeProbe.ok) {
-            diagnosis = "Zoho is connected and the active token refresh just succeeded. If the dashboard still shows 'NOT connected' somewhere, it's caching the pre-probe state — hard-refresh the page.";
+            diagnosis = "CRMProvider is connected and the active token refresh just succeeded. If the dashboard still shows 'NOT connected' somewhere, it's caching the pre-probe state — hard-refresh the page.";
           } else if (activeProbe.errorMessage) {
             const msg = activeProbe.errorMessage.toLowerCase();
             if (msg.includes("invalid client") || msg.includes("invalid_client")) {
-              diagnosis = "Zoho rejected the credentials with 'invalid client' — CLIENT_ID and/or CLIENT_SECRET don't match an active OAuth app on the configured datacenter. Verify both in the Zoho API Console.";
+              diagnosis = "CRMProvider rejected the credentials with 'invalid client' — CLIENT_ID and/or CLIENT_SECRET don't match an active OAuth app on the configured datacenter. Verify both in the CRMProvider API Console.";
             } else if (msg.includes("invalid grant") || msg.includes("invalid_grant") || msg.includes("invalid code")) {
-              diagnosis = "Zoho rejected the REFRESH_TOKEN with 'invalid grant' — the token has been revoked, expired, or was generated for a different OAuth app / scope. Generate a fresh refresh token in the Zoho API Console and update the secret.";
+              diagnosis = "CRMProvider rejected the REFRESH_TOKEN with 'invalid grant' — the token has been revoked, expired, or was generated for a different OAuth app / scope. Generate a fresh refresh token in the CRMProvider API Console and update the secret.";
             } else if (msg.includes("enotfound") || msg.includes("getaddrinfo") || activeProbe.errorClass === "TypeError") {
-              diagnosis = "Network reach failed — the Zoho accounts URL is unreachable from this server. Confirm ZOHO_ACCOUNTS_URL points at the right datacenter (.com / .eu / .in / .com.au / .sa).";
+              diagnosis = "Network reach failed — the CRMProvider accounts URL is unreachable from this server. Confirm CRMProvider_ACCOUNTS_URL points at the right datacenter (.com / .eu / .in / .com.au / .sa).";
             } else if (activeProbe.errorHttpStatus === 404 || msg.includes("404")) {
-              diagnosis = `Zoho returned HTTP 404 — the accounts URL '${envReport.ZOHO_ACCOUNTS_URL}' is wrong for your Zoho region. Try <REDACTED_URL> (US), .eu (Europe), .in (India), .com.au (AU), or .sa (Saudi).`;
+              diagnosis = `CRMProvider returned HTTP 404 — the accounts URL '${envReport.CRMProvider_ACCOUNTS_URL}' is wrong for your CRMProvider region. Try <REDACTED_URL> (US), .eu (Europe), .in (India), .com.au (AU), or .sa (Saudi).`;
             } else {
-              diagnosis = `Zoho refresh threw: ${activeProbe.errorMessage}`;
+              diagnosis = `CRMProvider refresh threw: ${activeProbe.errorMessage}`;
             }
           }
 
@@ -1990,7 +1990,7 @@ export const callIntelligenceRoutes = [
             active_probe: activeProbe,
           });
         } catch (error: any) {
-          safeLogger.error("[API] zoho diagnostic failed", {
+          safeLogger.error("[API] CRMProvider diagnostic failed", {
             error: error?.message,
           });
           return c.json(
@@ -2046,10 +2046,10 @@ export const callIntelligenceRoutes = [
             [n],
           );
 
-          const { getZohoConnectionStatus } = await import(
-            "../../utils/zohoCRM"
+          const { getCRMProviderConnectionStatus } = await import(
+            "../../utils/CRMProviderCRM"
           );
-          const zohoStatus = getZohoConnectionStatus();
+          const CRMProviderStatus = getCRMProviderConnectionStatus();
 
           const { extractCallPhoneCandidates, MIN_PHONE_OVERLAP_DIGITS } =
             await import("../../utils/callLeadPhoneMatch");
@@ -2060,23 +2060,23 @@ export const callIntelligenceRoutes = [
             "../../utils/callMcpReconciliation"
           );
 
-          // Sample Zoho phone field values — taken from the first 10
+          // Sample CRMProvider phone field values — taken from the first 10
           // records in Leads + first 10 in Deals — so the operator can
-          // SEE what raw format Zoho stores phones in, and compare
+          // SEE what raw format CRMProvider stores phones in, and compare
           // against our normalized form. This is what tells us whether
           // we're looking at:
           //   - Format mismatch on a known field (rare; the matcher
           //     already normalizes both sides via normalizePhoneDigits)
           //   - Phone stored in a custom field our readers don't pick up
           //     (e.g. WhatsApp_Number, Client_Phone, Mobile_Number_2)
-          //   - The phones genuinely not in Zoho (e.g. leads were created
+          //   - The phones genuinely not in CRMProvider (e.g. leads were created
           //     without phone, or the CRM has been pruned).
-          let zohoSamplePhones: any = null;
+          let CRMProviderSamplePhones: any = null;
           try {
-            const { fetchAllZohoRecords } = await import("../../utils/zohoCRM");
+            const { fetchAllCRMProviderRecords } = await import("../../utils/CRMProviderCRM");
             const [leadsSample, dealsSample] = await Promise.allSettled([
-              fetchAllZohoRecords("Leads", { maxRecords: 10 }),
-              fetchAllZohoRecords("Deals", { maxRecords: 10 }),
+              fetchAllCRMProviderRecords("Leads", { maxRecords: 10 }),
+              fetchAllCRMProviderRecords("Deals", { maxRecords: 10 }),
             ]);
             const dumpFields = (rec: any) => {
               const d = rec?.data || {};
@@ -2107,7 +2107,7 @@ export const callIntelligenceRoutes = [
                 phone_fields: phoneFields,
               };
             };
-            zohoSamplePhones = {
+            CRMProviderSamplePhones = {
               leads_first10:
                 leadsSample.status === "fulfilled"
                   ? leadsSample.value.map(dumpFields)
@@ -2118,7 +2118,7 @@ export const callIntelligenceRoutes = [
                   : { error: dealsSample.reason?.message || "fetch failed" },
             };
           } catch (sampleErr: any) {
-            zohoSamplePhones = { error: sampleErr?.message || String(sampleErr) };
+            CRMProviderSamplePhones = { error: sampleErr?.message || String(sampleErr) };
           }
 
           const results = [];
@@ -2186,9 +2186,9 @@ export const callIntelligenceRoutes = [
 
           // Roll up a single-sentence diagnosis based on the data.
           let diagnosis = "Unclear — review per-call detail below.";
-          if (!zohoStatus.connected) {
+          if (!CRMProviderStatus.connected) {
             diagnosis =
-              "Zoho is NOT connected — that's why no auto-links can land. Reconnect Zoho on the Integrations tab.";
+              "CRMProvider is NOT connected — that's why no auto-links can land. Reconnect CRMProvider on the Integrations tab.";
           } else if (results.length === 0) {
             diagnosis =
               "Every call_records row already has a lead/deal — no unlinked rows to diagnose. The 'Not linked' badge may be a UI bug — check the By Phone group_by code.";
@@ -2218,14 +2218,14 @@ export const callIntelligenceRoutes = [
             );
             if (anyErrors) {
               diagnosis =
-                "Zoho fetch errored on at least one phone — likely rate-limited (429) or token expired. See `phone_attempts[].error` per row.";
+                "CRMProvider fetch errored on at least one phone — likely rate-limited (429) or token expired. See `phone_attempts[].error` per row.";
             } else if (totalScanned === 0) {
               diagnosis =
-                "Zoho returned zero records for every phone attempted — auth issue OR rate-limit bail. Verify the integration on /integrations and try again.";
+                "CRMProvider returned zero records for every phone attempted — auth issue OR rate-limit bail. Verify the integration on /integrations and try again.";
             } else if (totalMatches === 0) {
               diagnosis =
-                `Zoho returned ${totalScanned} records but ZERO phone matches — phone format mismatch likely. ` +
-                `Compare the 'normalized' field below against the Phone column on a Zoho Lead.`;
+                `CRMProvider returned ${totalScanned} records but ZERO phone matches — phone format mismatch likely. ` +
+                `Compare the 'normalized' field below against the Phone column on a CRMProvider Lead.`;
             } else {
               diagnosis =
                 `Phone match worked (${totalMatches} hits across ${results.length} calls) — but the persist step on these specific rows failed. Check ai_insights / metadata for errors.`;
@@ -2234,19 +2234,19 @@ export const callIntelligenceRoutes = [
 
           logger?.info("[API] auto-link diagnostic complete", {
             sample_size: results.length,
-            zoho_connected: zohoStatus.connected,
+            CRMProvider_connected: CRMProviderStatus.connected,
           });
 
           return c.json({
             success: true,
             diagnosis,
-            zoho_connection: {
-              connected: zohoStatus.connected,
-              status: zohoStatus,
+            CRMProvider_connection: {
+              connected: CRMProviderStatus.connected,
+              status: CRMProviderStatus,
             },
             sample_size: results.length,
             results,
-            zoho_sample_phones: zohoSamplePhones,
+            CRMProvider_sample_phones: CRMProviderSamplePhones,
           });
         } catch (error: any) {
           safeLogger.error("[API] auto-link diagnostic failed", {
@@ -2680,7 +2680,7 @@ export const callIntelligenceRoutes = [
 
           const { saveTranscript, saveCallAnalysis, saveQAScore } =
             await import("../../utils/callIntelligenceDb");
-          const { createOpenAI } = await import("@ai-sdk/openai");
+          const { createLLMProvider } = await import("@ai-sdk/LLMProvider");
           const { generateText } = await import("ai");
 
           const transcript =
@@ -2694,9 +2694,9 @@ export const callIntelligenceRoutes = [
             confidence_score: 95,
           });
 
-          const openai = createOpenAI({
-            baseURL: getOpenAIBaseUrl(),
-            apiKey: getOpenAIApiKey(),
+          const LLMProvider = createLLMProvider({
+            baseURL: getLLMProviderBaseUrl(),
+            apiKey: getLLMProviderApiKey(),
           });
 
           const analysisPrompt = `Analyze this sales call transcript and provide JSON:
@@ -2715,10 +2715,10 @@ Respond with JSON only:
   "ai_insights": "<recommendations>"
 }`;
 
-          // Raw-fetch /chat/completions — bypasses the @ai-sdk/openai v3
+          // Raw-fetch /chat/completions — bypasses the @ai-sdk/LLMProvider v3
           // spec regression that even `.chat()` now triggers.
           const { generateChatText } = await import(
-            "../../utils/openaiChatHelper"
+            "../../utils/LLMProviderChatHelper"
           );
           const aiResult = await generateChatText({
             model: "gpt-4o",
@@ -2868,7 +2868,7 @@ Respond with JSON only:
             "stage_updated",
           ];
 
-          // Real Zoho-backed compliance check. Replaces the previous
+          // Real CRMProvider-backed compliance check. Replaces the previous
           // Math.random()-based mock that produced misleading dashboard
           // KPIs. See src/utils/crmComplianceCheck.ts for the evidence
           // model (one API call each to Notes / Calls / Tasks / Events +
@@ -2887,7 +2887,7 @@ Respond with JSON only:
           });
 
           if (!checked.success || !checked.result) {
-            // Don't fabricate booleans when Zoho is unreachable or the
+            // Don't fabricate booleans when CRMProvider is unreachable or the
             // call has no CRM linkage. Persist a sentinel row so the UI
             // can show "Not checked — reason" instead of a fake pass.
             await saveCompliance({
@@ -3195,7 +3195,7 @@ Respond with JSON only:
           }
 
           // DB-first fallback: when the FS audio file is missing (typical
-          // after a Replit redeploy wipes uploads/) OR was never written
+          // after a HostingPlatform redeploy wipes uploads/) OR was never written
           // (the bulk-upload path until this PR), stream the bytes
           // straight from the audio_blob column. Range support preserved.
           //
@@ -3455,12 +3455,12 @@ Respond with JSON only:
 
           const { saveMeetingMOM } =
             await import("../../utils/callIntelligenceDb");
-          const { createOpenAI } = await import("@ai-sdk/openai");
+          const { createLLMProvider } = await import("@ai-sdk/LLMProvider");
           const { generateText } = await import("ai");
 
-          const openai = createOpenAI({
-            baseURL: getOpenAIBaseUrl(),
-            apiKey: getOpenAIApiKey(),
+          const LLMProvider = createLLMProvider({
+            baseURL: getLLMProviderBaseUrl(),
+            apiKey: getLLMProviderApiKey(),
           });
 
           const momPrompt = `Analyze this meeting and generate Minutes of Meeting (MoM):
@@ -3482,10 +3482,10 @@ Respond with JSON only:
   "notes": "<additional notes>"
 }`;
 
-          // Raw-fetch /chat/completions (bypasses the @ai-sdk/openai v3
+          // Raw-fetch /chat/completions (bypasses the @ai-sdk/LLMProvider v3
           // spec regression — same reason as the analyze path above).
           const { generateChatText: _gctMom } = await import(
-            "../../utils/openaiChatHelper"
+            "../../utils/LLMProviderChatHelper"
           );
           const aiResult = await _gctMom({
             model: "gpt-4o",
@@ -3817,7 +3817,7 @@ Respond with JSON only:
 
           // Same lead_id-vs-phone reroute as the bulk audio path: never
           // store a phone-shaped string in call_records.lead_id, because
-          // the CRM Link cell would then build an Invalid Zoho URL.
+          // the CRM Link cell would then build an Invalid CRMProvider URL.
           const looksLikePhoneSingle = (v: string) =>
             /^\+?\d[\d\s\-()]{4,}$/.test(v.trim());
           let leadIdSafe = leadId;
@@ -3856,7 +3856,7 @@ Respond with JSON only:
               await import("../../utils/callIntelligenceDb");
             await updateCallRecordAudioPath(callRecord.id, audioFilePath);
             // ALSO persist the bytes to Postgres so the recording survives
-            // a Replit redeploy that wipes the local uploads/ directory.
+            // a HostingPlatform redeploy that wipes the local uploads/ directory.
             // Best-effort — if the blob write fails we still have the FS
             // copy for this deploy and the row stays usable.
             try {
@@ -3897,10 +3897,10 @@ Respond with JSON only:
               await updateCallRecord(callRecord.id, { status: "transcribing" });
               analysisStatus = "processing";
 
-              const OpenAI = (await import("openai")).default;
-              const openai = new OpenAI({
-                apiKey: getOpenAIApiKey(),
-                baseURL: getOpenAIBaseUrl(),
+              const LLMProvider = (await import("LLMProvider")).default;
+              const LLMProvider = new LLMProvider({
+                apiKey: getLLMProviderApiKey(),
+                baseURL: getLLMProviderBaseUrl(),
               });
 
               const fsForRead = await import("fs");
@@ -3912,14 +3912,14 @@ Respond with JSON only:
               );
 
               // Cost guard (DMAIC Solution #9): short-circuit before
-              // any paid OpenAI call when today's estimated spend has
+              // any paid LLMProvider call when today's estimated spend has
               // hit the cap. The existing analysis-failed catch below
               // will surface "AI daily cost cap reached" in ai_insights
               // .last_analysis_error so it's visible in /calls-health.
               if (isCostCapped()) {
                 throw new Error("AI daily cost cap reached — analysis paused");
               }
-              const transcription: any = await openai.audio.transcriptions.create({
+              const transcription: any = await LLMProvider.audio.transcriptions.create({
                 model: "whisper-1",
                 file: audioFileObj,
                 response_format: "verbose_json",
@@ -3991,7 +3991,7 @@ ${transcriptText}
 }`;
 
               const { generateChatText } = await import(
-                "../../utils/openaiChatHelper"
+                "../../utils/LLMProviderChatHelper"
               );
               if (isCostCapped()) {
                 throw new Error("AI daily cost cap reached — analysis paused");
@@ -4188,14 +4188,14 @@ ${transcriptText}
 
           // The bulk-upload client extracts a phone number from the
           // filename and sends it as lead_id because at upload time we
-          // don't know the real Zoho Lead record-id yet. Persisting a
+          // don't know the real CRMProvider Lead record-id yet. Persisting a
           // phone-shaped string into call_records.lead_id is harmful:
           // the frontend would build /crm/.../tab/Leads/+966... which
-          // Zoho rejects as Invalid URL, and the auto-link matcher then
+          // CRMProvider rejects as Invalid URL, and the auto-link matcher then
           // refuses to overwrite an already-set lead_id. Detect that
           // case here and reroute the phone into metadata.contact_phone
           // (where the CRM Link cell already knows how to find it), so
-          // lead_id is only ever set by the real Zoho matcher.
+          // lead_id is only ever set by the real CRMProvider matcher.
           const looksLikePhone = (v: string) => /^\+?\d[\d\s\-()]{4,}$/.test(v.trim());
           let leadId = "";
           let contactPhone = "";
@@ -4270,7 +4270,7 @@ ${transcriptText}
           // Reject duplicate uploads of the same source filename so
           // bulk re-imports of an agent's historical calls do not skew
           // analytics / SDR scores / compliance trends by ingesting the
-          // same call twice. Done BEFORE the OpenAI transcription call
+          // same call twice. Done BEFORE the LLMProvider transcription call
           // so a duplicate never costs tokens.
           try {
             const { findCallRecordByOriginalFilename } = await import(
@@ -4330,7 +4330,7 @@ ${transcriptText}
           // Verify the row actually landed by reading it back. If the
           // INSERT silently failed or the connection pool routed to a
           // different DB, this round-trip will catch it before we burn
-          // OpenAI tokens transcribing audio that has no parent record.
+          // LLMProvider tokens transcribing audio that has no parent record.
           try {
             const { getCallRecordById } = await import(
               "../../utils/callIntelligenceDb"
@@ -4344,7 +4344,7 @@ ${transcriptText}
               return c.json(
                 {
                   success: false,
-                  error: "Row creation could not be verified — aborting before OpenAI charge",
+                  error: "Row creation could not be verified — aborting before LLMProvider charge",
                   diagnostic: { attempted_id: callId, call_id: uniqueCallId },
                 },
                 500,
@@ -4366,7 +4366,7 @@ ${transcriptText}
           }
 
           // Persist audio bytes to Postgres so the recording survives a
-          // Replit redeploy (the bulk upload path historically never wrote
+          // HostingPlatform redeploy (the bulk upload path historically never wrote
           // to the FS — only transcribed and discarded the bytes, so the
           // audio was already gone after the upload finished). Best-effort:
           // a blob persist failure doesn't block analysis.
@@ -4399,10 +4399,10 @@ ${transcriptText}
               await updateCallRecord(callId, { status: "transcribing" });
               analysisStatus = "processing";
 
-              const OpenAI = (await import("openai")).default;
-              const openai = new OpenAI({
-                apiKey: getOpenAIApiKey(),
-                baseURL: getOpenAIBaseUrl(),
+              const LLMProvider = (await import("LLMProvider")).default;
+              const LLMProvider = new LLMProvider({
+                apiKey: getLLMProviderApiKey(),
+                baseURL: getLLMProviderBaseUrl(),
               });
 
               logger?.info(
@@ -4423,7 +4423,7 @@ ${transcriptText}
               if (isCostCapped()) {
                 throw new Error("AI daily cost cap reached — analysis paused");
               }
-              const transcription: any = await openai.audio.transcriptions.create({
+              const transcription: any = await LLMProvider.audio.transcriptions.create({
                 model: "whisper-1",
                 file: audioFile,
                 response_format: "verbose_json",
@@ -4460,11 +4460,11 @@ ${transcriptText}
               });
 
               const { generateText } = await import("ai");
-              const { createOpenAI } = await import("@ai-sdk/openai");
+              const { createLLMProvider } = await import("@ai-sdk/LLMProvider");
 
-              const aiSdk = createOpenAI({
-                baseURL: getOpenAIBaseUrl(),
-                apiKey: getOpenAIApiKey(),
+              const aiSdk = createLLMProvider({
+                baseURL: getLLMProviderBaseUrl(),
+                apiKey: getLLMProviderApiKey(),
               });
 
               logger?.info("🔬 [API] Starting comprehensive call analysis");
@@ -4506,10 +4506,10 @@ ${transcriptText}
               // gpt-4o-mini: ~75% cheaper than gpt-4o with comparable quality
               // on structured-output tasks like this JSON-extracting prompt.
               // Per-call analysis cost drops from ~$0.005 to ~$0.001.
-              // Raw-fetch helper bypasses the @ai-sdk/openai v3 spec
+              // Raw-fetch helper bypasses the @ai-sdk/LLMProvider v3 spec
               // regression that broke `aiSdk.chat(...)` in production.
               const { generateChatText: _gctInline } = await import(
-                "../../utils/openaiChatHelper"
+                "../../utils/LLMProviderChatHelper"
               );
               if (isCostCapped()) {
                 throw new Error("AI daily cost cap reached — analysis paused");
@@ -4767,7 +4767,7 @@ ${transcriptText}
     },
   },
   {
-    path: "/api/calls/five9/test",
+    path: "/api/calls/ContactCenterProvider/test",
     method: "POST" as const,
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
@@ -4778,7 +4778,7 @@ ${transcriptText}
           const logger = mastra?.getLogger();
           const body = await c.req.json();
 
-          logger?.info("🔌 [API] Testing Five9 connection", {
+          logger?.info("🔌 [API] Testing ContactCenterProvider connection", {
             domain: body.domain,
           });
 
@@ -4794,11 +4794,11 @@ ${transcriptText}
 
           return c.json({
             success: true,
-            message: "Five9 connection test successful. API is reachable.",
+            message: "ContactCenterProvider connection test successful. API is reachable.",
             domain: body.domain,
           });
         } catch (error) {
-          safeLogger.error("Error testing Five9 connection:", error);
+          safeLogger.error("Error testing ContactCenterProvider connection:", error);
           return c.json(
             { success: false, error: "Connection test failed" },
             500,
@@ -4808,7 +4808,7 @@ ${transcriptText}
     },
   },
   {
-    path: "/api/calls/five9/configure",
+    path: "/api/calls/ContactCenterProvider/configure",
     method: "POST" as const,
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
@@ -4820,7 +4820,7 @@ ${transcriptText}
           const logger = mastra?.getLogger();
           const body = await c.req.json();
 
-          logger?.info("⚙️ [API] Configuring Five9 integration", {
+          logger?.info("⚙️ [API] Configuring ContactCenterProvider integration", {
             domain: body.domain,
           });
 
@@ -4835,11 +4835,11 @@ ${transcriptText}
           }
 
           // Scrub deny-list keys / credential-shaped strings out of the
-          // free-text Five9 config blob BEFORE persisting it as JSONB.
+          // free-text ContactCenterProvider config blob BEFORE persisting it as JSONB.
           // The endpoint deliberately drops the raw password (it is not
           // included in the persisted object), but `domain`/`username`
           // are still operator-controlled and could otherwise smuggle a
-          // JWT, GitHub PAT (`ghp_…`), bcrypt hash, etc. into Postgres.
+          // JWT, SourceControlProvider PAT (`ghp_…`), bcrypt hash, etc. into Postgres.
           const safeConfig = redactSensitiveDeep({
             domain: body.domain,
             username: body.username,
@@ -4847,26 +4847,26 @@ ${transcriptText}
           }) as Record<string, unknown>;
           // Delegated to callIntelligenceDb (Task #746) so the
           // integration_config writes live in a *Database/*Db module.
-          const { upsertFive9IntegrationConfig } = await import(
+          const { upsertContactCenterProviderIntegrationConfig } = await import(
             "../../utils/callIntelligenceDb"
           );
-          await upsertFive9IntegrationConfig(safeConfig);
+          await upsertContactCenterProviderIntegrationConfig(safeConfig);
 
-          logger?.info("✅ [API] Five9 configuration saved");
+          logger?.info("✅ [API] ContactCenterProvider configuration saved");
 
           return c.json({
             success: true,
-            message: "Five9 configuration saved successfully",
+            message: "ContactCenterProvider configuration saved successfully",
           });
         } catch (error) {
-          safeLogger.error("Error configuring Five9:", error);
+          safeLogger.error("Error configuring ContactCenterProvider:", error);
           return c.json({ success: false, error: "Configuration failed" }, 500);
         }
       };
     },
   },
   {
-    path: "/api/calls/five9/sync",
+    path: "/api/calls/ContactCenterProvider/sync",
     method: "POST" as const,
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
@@ -4876,37 +4876,37 @@ ${transcriptText}
           }
 
           const logger = mastra?.getLogger();
-          logger?.info("🔄 [API] Syncing calls from Five9");
+          logger?.info("🔄 [API] Syncing calls from ContactCenterProvider");
 
           // Delegated to callIntelligenceDb (Task #746).
           const {
-            getActiveFive9IntegrationConfig,
-            markFive9IntegrationSynced,
+            getActiveContactCenterProviderIntegrationConfig,
+            markContactCenterProviderIntegrationSynced,
           } = await import("../../utils/callIntelligenceDb");
-          const cfg = await getActiveFive9IntegrationConfig();
+          const cfg = await getActiveContactCenterProviderIntegrationConfig();
           if (!cfg) {
             return c.json(
               {
                 success: false,
-                error: "Five9 not configured. Please configure first.",
+                error: "ContactCenterProvider not configured. Please configure first.",
               },
               400,
             );
           }
-          await markFive9IntegrationSynced();
+          await markContactCenterProviderIntegrationSynced();
 
           logger?.info(
-            "✅ [API] Five9 sync completed (placeholder - actual Five9 API integration pending)",
+            "✅ [API] ContactCenterProvider sync completed (placeholder - actual ContactCenterProvider API integration pending)",
           );
 
           return c.json({
             success: true,
             synced_count: 0,
             message:
-              "Five9 sync completed. Configure Five9 API credentials in secrets for full integration.",
+              "ContactCenterProvider sync completed. Configure ContactCenterProvider API credentials in secrets for full integration.",
           });
         } catch (error) {
-          safeLogger.error("Error syncing Five9 calls:", error);
+          safeLogger.error("Error syncing ContactCenterProvider calls:", error);
           return c.json({ success: false, error: "Sync failed" }, 500);
         }
       };
@@ -5023,11 +5023,11 @@ ${transcriptText}
             try {
               const fs = await import("fs");
               const path = await import("path");
-              const { createOpenAI } = await import("@ai-sdk/openai");
+              const { createLLMProvider } = await import("@ai-sdk/LLMProvider");
 
               // Audio source resolution: prefer the FS file (cheaper, no DB
               // round-trip), fall back to the audio_blob column when the
-              // FS file is missing because of a Replit redeploy that wiped
+              // FS file is missing because of a HostingPlatform redeploy that wiped
               // uploads/. Without this fallback, re-evaluating after a
               // redeploy would always 404.
               let audioBuffer: Buffer | null = null;
@@ -5070,11 +5070,11 @@ ${transcriptText}
               formData.append("response_format", "text");
 
               const transcribeRes = await fetch(
-                `${process.env.AI_INTEGRATIONS_OPENAI_BASE_URL}/audio/transcriptions`,
+                `${process.env.AI_INTEGRATIONS_LLMProvider_BASE_URL}/audio/transcriptions`,
                 {
                   method: "POST",
                   headers: {
-                    Authorization: `Bearer ${getOpenAIApiKey() ?? ""}`,
+                    Authorization: `Bearer ${getLLMProviderApiKey() ?? ""}`,
                   },
                   body: formData,
                 },
@@ -5159,22 +5159,22 @@ ${transcriptText}
           );
 
           const { generateText } = await import("ai");
-          const { createOpenAI } = await import("@ai-sdk/openai");
+          const { createLLMProvider } = await import("@ai-sdk/LLMProvider");
 
-          const aiSdk = createOpenAI({
-            baseURL: getOpenAIBaseUrl(),
-            apiKey: getOpenAIApiKey(),
+          const aiSdk = createLLMProvider({
+            baseURL: getLLMProviderBaseUrl(),
+            apiKey: getLLMProviderApiKey(),
           });
 
           logger?.info("🔬 [API] Sending evaluation to AI");
 
           // gpt-4o-mini for SDR scorecard evaluation — same cost-reduction
           // logic as the analysis step above. Raw-fetch helper bypasses the
-          // @ai-sdk/openai v3 spec regression that took down the bulk
+          // @ai-sdk/LLMProvider v3 spec regression that took down the bulk
           // analyze path in production (.chat() adapter started emitting
           // v3 spec, incompatible with ai@5 which requires v2).
           const { generateChatText: _gctEval } = await import(
-            "../../utils/openaiChatHelper"
+            "../../utils/LLMProviderChatHelper"
           );
           const aiResult = await _gctEval({
             model: "gpt-4o-mini",
@@ -5262,7 +5262,7 @@ ${transcriptText}
             code: errCode,
             stack: errAny?.stack,
           });
-          // Surface the real reason — most common causes are OpenAI quota
+          // Surface the real reason — most common causes are LLMProvider quota
           // exhaustion, transcript missing on the call record, or no active
           // SDR scorecard in quality_scorecards. Opaque "Failed to evaluate
           // call" hides all three.
@@ -6000,7 +6000,7 @@ ${transcriptText}
     },
   },
   // ===================================================================
-  // Medium #9 — OpenAI Batch API for bulk SDR evaluation.
+  // Medium #9 — LLMProvider Batch API for bulk SDR evaluation.
   //   POST   /api/calls/batch/submit-pending  → bundle all eligible calls
   //   GET    /api/calls/batch/jobs            → list recent batches
   //   GET    /api/calls/batch/jobs/:id        → one batch + linked calls
@@ -6121,7 +6121,7 @@ ${transcriptText}
           // Triggers a poll across ALL open batches — manual fallback when
           // the Inngest 15min poller is too slow. The endpoint is :id-scoped
           // for URL clarity but the poll itself is global (cheaper than
-          // single-target lookups against OpenAI).
+          // single-target lookups against LLMProvider).
           const { pollAndProcessOpenBatches, getBatchJob } = await import(
             "../../utils/sdrBatchEvaluator"
           );
@@ -6576,7 +6576,7 @@ ${transcriptText}
     },
   },
   {
-    path: "/api/calls/:callId/sync-zoho",
+    path: "/api/calls/:callId/sync-CRMProvider",
     method: "POST" as const,
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
@@ -6587,13 +6587,13 @@ ${transcriptText}
           const logger = mastra?.getLogger();
           const callId = parseInt(c.req.param("callId"));
 
-          logger?.info("🔄 [API] Syncing call evaluation to Zoho CRM", {
+          logger?.info("🔄 [API] Syncing call evaluation to CRMProvider CRM", {
             callId,
           });
 
           const { getSDREvaluation, getCallRecordById } =
             await import("../../utils/callIntelligenceDb");
-          const { updateZohoRecordNotes } = await import("../../utils/zohoCRM");
+          const { updateCRMProviderRecordNotes } = await import("../../utils/CRMProviderCRM");
 
           const callRecord = await getCallRecordById(callId);
           if (!callRecord) {
@@ -6611,13 +6611,13 @@ ${transcriptText}
             );
           }
 
-          const noteContent = formatEvaluationForZoho(evaluation, callRecord);
+          const noteContent = formatEvaluationForCRMProvider(evaluation, callRecord);
 
           let synced = false;
           let syncTarget = "";
 
           if (callRecord.lead_id) {
-            await updateZohoRecordNotes(
+            await updateCRMProviderRecordNotes(
               "Leads",
               callRecord.lead_id,
               noteContent,
@@ -6625,7 +6625,7 @@ ${transcriptText}
             synced = true;
             syncTarget = `Lead ${callRecord.lead_id}`;
           } else if (callRecord.deal_id) {
-            await updateZohoRecordNotes(
+            await updateCRMProviderRecordNotes(
               "Deals",
               callRecord.deal_id,
               noteContent,
@@ -6645,19 +6645,19 @@ ${transcriptText}
           }
 
           // DMAIC Solution #4: also promote the evaluation into
-          // structured Zoho fields (QA_Score / Compliance_Pass /
+          // structured CRMProvider fields (QA_Score / Compliance_Pass /
           // Last_Evaluation_Date) so the result is filterable in
-          // Zoho's native reports. Feature-flagged on
-          // ZOHO_STRUCTURED_FIELDS — ships dark until the Zoho admin
+          // CRMProvider's native reports. Feature-flagged on
+          // CRMProvider_STRUCTURED_FIELDS — ships dark until the CRMProvider admin
           // creates the custom fields. Best-effort: the Note write
           // above already succeeded; we never fail the sync because
           // of a structured-fields hiccup.
           let structuredResult: any = null;
           try {
-            const { syncEvaluationToZohoStructuredFields } = await import(
-              "../../utils/zohoStructuredFieldsSync"
+            const { syncEvaluationToCRMProviderStructuredFields } = await import(
+              "../../utils/CRMProviderStructuredFieldsSync"
             );
-            structuredResult = await syncEvaluationToZohoStructuredFields(
+            structuredResult = await syncEvaluationToCRMProviderStructuredFields(
               {
                 overall_score: (evaluation as any).overall_score,
                 compliance_pass: (evaluation as any).compliance_pass,
@@ -6679,7 +6679,7 @@ ${transcriptText}
             });
           }
 
-          logger?.info("✅ [API] Call evaluation synced to Zoho", {
+          logger?.info("✅ [API] Call evaluation synced to CRMProvider", {
             callId,
             syncTarget,
             structured_fields_synced: structuredResult?.synced || false,
@@ -6692,9 +6692,9 @@ ${transcriptText}
             structured_fields: structuredResult,
           });
         } catch (error) {
-          safeLogger.error("Error syncing to Zoho:", error);
+          safeLogger.error("Error syncing to CRMProvider:", error);
           return c.json(
-            { success: false, error: "Failed to sync to Zoho" },
+            { success: false, error: "Failed to sync to CRMProvider" },
             500,
           );
         }
@@ -6702,7 +6702,7 @@ ${transcriptText}
     },
   },
   {
-    // SDR Activity Timeline for a linked call. Returns recent Zoho
+    // SDR Activity Timeline for a linked call. Returns recent CRMProvider
     // activities (Notes / Calls / Tasks / Events) on the call's linked
     // Lead or Deal since the call_date. Powers the "what did the SDR do
     // with this prospect after the call" view in the Calls dashboard.
@@ -6730,7 +6730,7 @@ ${transcriptText}
               success: false,
               reason: "no_crm_linkage",
               message:
-                "Call is not linked to a Zoho Lead or Deal — run auto-link first.",
+                "Call is not linked to a CRMProvider Lead or Deal — run auto-link first.",
             });
           }
           const module = record.lead_id ? "Leads" : "Deals";
@@ -6758,7 +6758,7 @@ ${transcriptText}
   {
     // Manual auto-link trigger — re-runs the Lead+Deal phone match on a
     // call after the fact (e.g. for calls ingested before the auto-link
-    // feature shipped, or when Zoho was unreachable at ingest time).
+    // feature shipped, or when CRMProvider was unreachable at ingest time).
     path: "/api/calls/:callId/auto-link",
     method: "POST" as const,
     createHandler: async () => {
@@ -6797,7 +6797,7 @@ ${transcriptText}
           // up a unique lead/deal, look for CRM activities the same
           // agent created on the same day and link to the parent. This
           // recovers calls where the SDR called from a number not on
-          // file but still logged a follow-up note/task in Zoho.
+          // file but still logged a follow-up note/task in CRMProvider.
           const result = await autoLinkCallToCrm(
             callId,
             extractCallPhoneCandidates(record),
@@ -6853,14 +6853,14 @@ ${transcriptText}
     },
   },
   {
-    // Import calls from the Zoho Calls module. Pulls recent records,
-    // normalises Zoho's Call_Type / Call_Duration / Who_Id / What_Id
+    // Import calls from the CRMProvider Calls module. Pulls recent records,
+    // normalises CRMProvider's Call_Type / Call_Duration / Who_Id / What_Id
     // into our call_records schema, and upserts via createCallRecord
     // (idempotent on call_id, so re-runs are safe). The default scope is
     // calls created in the last 30 days, capped at 500 records per run.
     //
     // Body: { since?: ISO, max?: N, owner_email?: string, direction?: in|out }
-    path: "/api/calls/import-from-zoho",
+    path: "/api/calls/import-from-CRMProvider",
     method: "POST" as const,
     createHandler: async () => {
       return async (c: any) => {
@@ -6873,10 +6873,10 @@ ${transcriptText}
           } catch {
             body = {};
           }
-          const { runZohoCallsImport } = await import(
-            "../../utils/zohoCallsImport"
+          const { runCRMProviderCallsImport } = await import(
+            "../../utils/CRMProviderCallsImport"
           );
-          const result = await runZohoCallsImport({
+          const result = await runCRMProviderCallsImport({
             maxRecords:
               typeof body.max === "number" ? body.max : undefined,
             sinceIso:
@@ -6892,11 +6892,11 @@ ${transcriptText}
           });
           return c.json({ success: true, ...result });
         } catch (error: any) {
-          safeLogger.error("[API] zoho-calls import failed", {
+          safeLogger.error("[API] CRMProvider-calls import failed", {
             error: error?.message || String(error),
           });
           return c.json(
-            { success: false, error: "Failed to import from Zoho" },
+            { success: false, error: "Failed to import from CRMProvider" },
             500,
           );
         }
@@ -7114,7 +7114,7 @@ ${transcriptText}
             : extractCallPhoneCandidates(record);
           // Pass the deal-id and linked-via persisters so the matcher
           // can walk through Contacts → Deals when the original Lead has
-          // already been converted in Zoho. Without these options the
+          // already been converted in CRMProvider. Without these options the
           // matcher reverts to the legacy Leads-only behaviour, so older
           // tests + callers keep their original semantics.
           const { updateCallRecordDealId, updateCallRecordLinkedVia } =
@@ -7577,7 +7577,7 @@ ${transcriptText}
   },
 ];
 
-function formatEvaluationForZoho(evaluation: any, callRecord: any): string {
+function formatEvaluationForCRMProvider(evaluation: any, callRecord: any): string {
   const date = new Date().toISOString().split("T")[0];
   const dimScores = evaluation.dimension_scores || {};
 

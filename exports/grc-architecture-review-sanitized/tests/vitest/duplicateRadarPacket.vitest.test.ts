@@ -145,9 +145,9 @@ describe("buildPacketSheets — English (default)", () => {
       {
         cluster_id: 1,
         is_primary: true,
-        record_name: "ACME Co",
+        record_name: "Example Organization Co",
         record_type: "account",
-        zoho_record_id: "Z1",
+        CRMProvider_record_id: "Z1",
         domain: "<REDACTED_HOST>",
         email: "user@example.invalid",
         cluster_confidence_score: 95,
@@ -159,9 +159,9 @@ describe("buildPacketSheets — English (default)", () => {
       {
         cluster_id: 1,
         is_primary: false,
-        record_name: "Acme Company",
+        record_name: "Example Organization",
         record_type: "account",
-        zoho_record_id: "Z2",
+        CRMProvider_record_id: "Z2",
         domain: "<REDACTED_HOST>",
         email: "user@example.invalid",
         cluster_confidence_score: 95,
@@ -185,7 +185,7 @@ describe("buildPacketSheets — English (default)", () => {
     expect(action[0].is_primary_label).toBe("Yes");
     expect(action[0].recommended_action).toBe("Keep — primary record");
     expect(action[1].is_primary_label).toBe("No");
-    expect(action[1].recommended_action).toBe('Merge into "ACME Co"');
+    expect(action[1].recommended_action).toBe('Merge into "Example Organization Co"');
   });
 
   test("empty-owner contract: no records, no cluster confidences — packet still builds and Action Items / Raw Records are empty arrays", () => {
@@ -304,9 +304,9 @@ describe("buildPacketSheets — Arabic", () => {
       {
         cluster_id: 1,
         is_primary: true,
-        record_name: "ACME Co",
+        record_name: "Example Organization Co",
         record_type: "account",
-        zoho_record_id: "Z1",
+        CRMProvider_record_id: "Z1",
         cluster_confidence_score: 95,
         cluster_total_records: 1,
       },

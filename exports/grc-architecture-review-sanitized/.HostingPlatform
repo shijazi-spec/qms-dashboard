@@ -1,0 +1,137 @@
+modules = ["nodejs-20", "web", "python-3.11", "postgresql-16"]
+run = "npm run dev"
+hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
+
+[nix]
+channel = "stable-24_05"
+
+[[ports]]
+localPort = 1104
+externalPort = 3000
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+
+# NOTE: PORT is deliberately NOT pinned here.
+#
+# `[env] PORT = "5000"` used to force the port in EVERY environment, including
+# Autoscale deployments. HostingPlatform assigns each deployment its own dynamic port and
+# health-checks that port, so pinning 5000 made the container listen on 5000
+# while the prober hit e.g. <REDACTED_IP>:1104 — "connection refused" — and the
+# deploy failed its healthcheck even though the build and the app were fine.
+#
+# With this unset, `src/mastra/index.ts` uses `Number(process.env.PORT) || 5000`:
+#   - deployment: binds whatever port HostingPlatform assigns  ✅
+#   - local dev / workspace: PORT is unset, so it falls back to 5000, matching
+#     the `localPort = 5000 -> externalPort = 80` mapping above, unchanged.
+[env]
+
+[deployment]
+deploymentTarget = "autoscale"
+run = ["node", "--import=./.mastra/output/instrumentation.mjs", ".mastra/output/index.mjs"]
+build = ["npm", "run", "build"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "secret-redaction"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "i18n"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "post-restore-sweep-panel"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "consultant-approval-prior-viewers"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev"
+waitForPort = 5000
+
+[[workflows.workflow]]
+name = "secret-redaction"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx tsx src/utils/redactSensitiveFields.test.ts && npx tsx tests/aiApprovalRedaction.test.ts && npx tsx tests/aiApprovalRoutesRedaction.test.ts && npx tsx tests/aiApprovalRejectionRedaction.test.ts && npx tsx tests/aiApprovalSweepBackfill.test.ts && npx tsx tests/aiApprovalCredentialWarningsBackfill.test.ts && npx tsx tests/aiTelemetryErrorRedaction.test.ts && npx tsx tests/aiTelemetryMetadataRedaction.test.ts && npx tsx tests/aiToolPolicyBuildPreview.test.ts && npx tsx tests/aiToolPolicyCoverage.test.ts && npx tsx tests/inngestApiRouteIds.test.ts && npx tsx tests/hardenMastraOutputEngines.test.ts && npx tsx tests/hardenMastraOutputLegacyProviderUtils.test.ts && npx tsx tests/hardenMastraOutputLLMProviderPin.test.ts && npx tsx scripts/checkStagingProcedureInSync.ts"
+
+[[workflows.workflow]]
+name = "i18n"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx playwright test tests/i18n.spec.ts --reporter=line"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "post-restore-sweep-panel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx playwright test tests/postRestoreSweepPanel.spec.ts --reporter=line"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "consultant-approval-prior-viewers"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx playwright test tests/consultantApprovalPriorViewers.spec.ts --reporter=line"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[userenv]
+
+[userenv.shared]
+CRMProvider_ACCOUNTS_URL = "<REDACTED_URL>"
+CRMProvider_API_DOMAIN = "<REDACTED_URL>"
+DATA_MODE = "REAL"
+MANUAL_INTAKE_DIR = "./data/manual-intake"
+ADMIN_BOOTSTRAP_EMAILS = "user@example.invalid,user@example.invalid,user@example.invalid"
+
+[userenv.development]
+
+[userenv.production]
+DIRECT_AUDIT_ChatProvider_NOTIFY = "false"
+DIGEST_DASHBOARD_URL = "<REDACTED_URL_SCHEME><REDACTED_HOST>/executive"
+
+[agent]
+integrations = ["javascript_log_in_with_HostingPlatform:2.0.0", "javascript_LLMProvider_ai_integrations:2.0.0"]
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 360000

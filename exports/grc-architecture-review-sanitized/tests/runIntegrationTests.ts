@@ -31,7 +31,7 @@
  * `RUN_STREAMING_DOWNLOAD_E2E=1` is set we additionally run the streaming
  * download spec across Chromium/Firefox/WebKit. This needs the dev server
  * running and the requested browsers installed (`npx playwright install`).
- * The dedicated CI workflow `.github/workflows/streaming-download-smoke.yml`
+ * The dedicated CI workflow `.SourceControlProvider/workflows/streaming-download-smoke.yml`
  * sets that env after standing up the prerequisites, so a regression in
  * any browser engine fails CI for that workflow.
  *
@@ -42,7 +42,7 @@
  * `stageStreamingExportFromHono` and asserts the `X-Stream-TTFB-Ms`
  * header is present and within `EXPORT_TTFB_BUDGET_MS` — catching
  * server-side buffering regressions the browser smoke test cannot see.
- * The dedicated CI workflow `.github/workflows/streaming-download-smoke.yml`
+ * The dedicated CI workflow `.SourceControlProvider/workflows/streaming-download-smoke.yml`
  * sets the env after standing up the dev server, so a regression in any
  * single export endpoint fails CI for that workflow.
  *
@@ -53,7 +53,7 @@
  * `idx_event_logs_view_audit` partial index rather than seq-scanning a
  * partition. The test validates `DATABASE_URL` itself and exits with a
  * clear error if it's missing. The dedicated CI workflow
- * `.github/workflows/review-filter-index.yml` boots a Postgres service
+ * `.SourceControlProvider/workflows/review-filter-index.yml` boots a Postgres service
  * container plus the dev server (which initialises the event_logs and
  * ai_pending_actions schema and creates `idx_event_logs_view_audit`) and
  * sets the env, so a future schema change that accidentally drops or
@@ -65,7 +65,7 @@
  * against a real Postgres so SQL shape, parameter encoding, and BIGSERIAL
  * keyset pagination in `redactAiCallMetrics()` are exercised end-to-end.
  * Test validates DATABASE_URL itself; CI wires it via
- * `.github/workflows/ai-metrics-sweep.yml`.
+ * `.SourceControlProvider/workflows/ai-metrics-sweep.yml`.
  *
  * Prompt-regression alert cron DB integration test (Task #365): if the env
  * var `RUN_PROMPT_REGRESSION_E2E=1` is set we additionally run
@@ -75,7 +75,7 @@
  * `runPromptRegressionCheck()` with default deps so the production
  * SQL → cron → alert path is exercised end-to-end, and asserts an
  * `ai_alerts` row with `alert_type='prompt_regression'` is created.
- * Notification side-effect deps (Slack/email + open-alerts sweep +
+ * Notification side-effect deps (ChatProvider/email + open-alerts sweep +
  * overrides loader) are stubbed so the test cannot page on-call or
  * disturb pre-existing alerts on a shared DB. Cleanup runs in `finally`.
  *
@@ -84,7 +84,7 @@
  * `tests/rbacReportRoutes.integration.ts` against a running dev server.
  * Both files validate `DATABASE_URL` and `SESSION_SECRET` themselves and
  * exit with a clear error if either is missing. The dedicated CI workflow
- * `.github/workflows/rbac-integration-tests.yml` boots the dev server with
+ * `.SourceControlProvider/workflows/rbac-integration-tests.yml` boots the dev server with
  * those env vars set, so a regression in the route-lockdown middleware
  * fails CI in the same run as the unit tests.
  *
@@ -94,10 +94,10 @@
  * (via `scripts/run-rate-limiter-integration-tests.sh`) against a running
  * dev server. Both files validate `ADMIN_API_KEY`, `SESSION_SECRET`, and
  * `DATABASE_URL` themselves and exit non-zero if any is missing. The
- * dedicated CI workflow `.github/workflows/rate-limiter-integration.yml`
+ * dedicated CI workflow `.SourceControlProvider/workflows/rate-limiter-integration.yml`
  * boots the dev server *without* `RATE_LIMIT_DISABLED=true` (so the
  * limiter actually engages) and sets the env, and the main
- * `.github/workflows/test.yml` also sets the flag so a regression in the
+ * `.SourceControlProvider/workflows/test.yml` also sets the flag so a regression in the
  * IP-keyed or user-keyed buckets — including the per-user reset scenario
  * Task #664 added — fails CI in the same run as the unit tests instead of
  * only being catchable by manually running `npx tsx tests/testRateLimiter*Http.ts`
@@ -107,17 +107,17 @@
  * `RUN_TOOL_HEALTH_INTEGRATION_E2E=1` is set we additionally run
  * `tests/toolHealthAlertNotifier.integration.ts` (via
  * `scripts/run-tool-health-notifier-integration.sh`). The test posts to a
- * real Slack channel and/or a real Resend inbox using the production
+ * real ChatProvider channel and/or a real EmailProvider inbox using the production
  * Block Kit and plaintext renderers — NOT stubs — so broken Block Kit
  * shapes, bad subject lines, plaintext truncation, and character-escaping
  * bugs are caught before they page on-call at 3 AM. The file self-skips
- * cleanly (exits 0) when none of the optional Slack/Resend credential
- * pairs (SLACK_BOT_TOKEN+SLACK_TEST_CHANNEL or
- * RESEND_API_KEY+RESEND_TEST_EMAIL) are configured, so wiring this flag
+ * cleanly (exits 0) when none of the optional ChatProvider/EmailProvider credential
+ * pairs (ChatProvider_BOT_TOKEN+ChatProvider_TEST_CHANNEL or
+ * EmailProvider_API_KEY+EmailProvider_TEST_EMAIL) are configured, so wiring this flag
  * on unconditionally in the standard test job is safe even on
  * environments that don't have the secrets configured. The dedicated CI
- * workflow `.github/workflows/tool-health-notifier-integration.yml`
- * forwards the same secrets, and the main `.github/workflows/test.yml`
+ * workflow `.SourceControlProvider/workflows/tool-health-notifier-integration.yml`
+ * forwards the same secrets, and the main `.SourceControlProvider/workflows/test.yml`
  * also sets the flag so a renderer regression fails CI in the same run
  * as the unit tests when credentials are present.
  *
@@ -136,8 +136,8 @@
  * server at startup whenever NODE_ENV !== 'production'
  * (src/utils/integrationTestFixtureTools.ts), so no extra runtime setup
  * is needed beyond `npm run dev`. The dedicated CI workflow
- * `.github/workflows/ai-approval-redaction-integration.yml` boots the
- * dev server with those env vars set, and the main `.github/workflows/test.yml`
+ * `.SourceControlProvider/workflows/ai-approval-redaction-integration.yml` boots the
+ * dev server with those env vars set, and the main `.SourceControlProvider/workflows/test.yml`
  * also sets the flag so a redaction regression fails CI in the same run
  * as the unit tests.
  *
@@ -787,12 +787,12 @@ async function main(): Promise<void> {
 
   if (process.env.RUN_TOOL_HEALTH_INTEGRATION_E2E === "1") {
     console.log(
-      `\n──── Tool-health on-call notifier integration test (Slack/Resend Block Kit + plaintext renderers) ────`,
+      `\n──── Tool-health on-call notifier integration test (ChatProvider/EmailProvider Block Kit + plaintext renderers) ────`,
     );
     results.push(await runToolHealthNotifierIntegration());
   } else {
     console.log(
-      `\n[skip] Tool-health on-call notifier integration test — set RUN_TOOL_HEALTH_INTEGRATION_E2E=1 to include it (the underlying test self-skips cleanly when no Slack/Resend credentials are configured).`,
+      `\n[skip] Tool-health on-call notifier integration test — set RUN_TOOL_HEALTH_INTEGRATION_E2E=1 to include it (the underlying test self-skips cleanly when no ChatProvider/EmailProvider credentials are configured).`,
     );
   }
 

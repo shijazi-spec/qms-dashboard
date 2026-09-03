@@ -292,7 +292,7 @@ export const onboardingRoutes = [
 
           const link = await createDemoLink(body);
           const baseUrl =
-            process.env.REPLIT_DOMAINS?.split(",")[0] || "localhost:5000";
+            process.env.HostingPlatform_DOMAINS?.split(",")[0] || "localhost:5000";
           const fullUrl = `<REDACTED_URL>`;
 
           logger?.info("✅ [Onboarding API] Demo link created", {

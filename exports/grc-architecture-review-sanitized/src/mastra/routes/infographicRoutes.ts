@@ -123,7 +123,7 @@ export const infographicRoutes = [
     },
   },
   {
-    path: "/api/infographic/:section/share/slack",
+    path: "/api/infographic/:section/share/ChatProvider",
     method: "POST" as const,
     createHandler: async ({ mastra }: any) => {
       return async (c: any) => {
@@ -151,21 +151,21 @@ export const infographicRoutes = [
         try {
           const channel =
             channelOverride ||
-            process.env.SLACK_CHANNEL_ID ||
-            process.env.SLACK_QMS_CHANNEL;
+            process.env.ChatProvider_CHANNEL_ID ||
+            process.env.ChatProvider_QMS_CHANNEL;
           if (!channel)
             return c.json(
               {
                 error:
-                  "No Slack channel configured. Provide a channel ID or set SLACK_CHANNEL_ID.",
+                  "No ChatProvider channel configured. Provide a channel ID or set ChatProvider_CHANNEL_ID.",
               },
               400,
             );
           const token =
-            process.env.SLACK_BOT_TOKEN || process.env.SLACK_API_TOKEN;
+            process.env.ChatProvider_BOT_TOKEN || process.env.ChatProvider_API_TOKEN;
           if (!token)
             return c.json(
-              { error: "Slack is not configured (missing SLACK_BOT_TOKEN)." },
+              { error: "ChatProvider is not configured (missing ChatProvider_BOT_TOKEN)." },
               400,
             );
 
@@ -174,12 +174,12 @@ export const infographicRoutes = [
           const filename = `ExampleOrg-${section}-${stamp}.png`;
 
           logger?.info(
-            `📤 [Infographic] Sharing ${section} to Slack channel ${channel}`,
+            `📤 [Infographic] Sharing ${section} to ChatProvider channel ${channel}`,
           );
           const svg = await buildSectionInfographic(section);
           const png = await svgToPng(svg);
 
-          const { WebClient } = await import("@slack/web-api");
+          const { WebClient } = await import("@ChatProvider/web-api");
           const client = new WebClient(token);
           const headerText = `📊 *${meta.title}* — ${meta.subtitle}`;
           const userComment = comment || "Generated from live ExampleOrg data.";
@@ -200,16 +200,16 @@ export const infographicRoutes = [
               file_id: result?.files?.[0]?.id || result?.file?.id || null,
             });
           } catch (uploadErr: any) {
-            const slackError =
+            const ChatProviderError =
               uploadErr?.data?.error || uploadErr?.message || "";
             // Graceful fallback: if the bot lacks files:write, post a rich text
             // message instead so the channel is still notified.
             if (
-              slackError === "missing_scope" ||
-              slackError === "not_allowed_token_type"
+              ChatProviderError === "missing_scope" ||
+              ChatProviderError === "not_allowed_token_type"
             ) {
               safeLogger.warn(
-                `[Infographic] files.uploadV2 lacks scope (${slackError}); falling back to chat.postMessage`,
+                `[Infographic] files.uploadV2 lacks scope (${ChatProviderError}); falling back to chat.postMessage`,
               );
               const blocks = [
                 {
@@ -228,7 +228,7 @@ export const infographicRoutes = [
                   elements: [
                     {
                       type: "mrkdwn",
-                      text: `📎 _A PNG attachment couldn't be uploaded — Slack bot is missing the *files:write* scope. Open the ExampleOrg dashboard to view or download._`,
+                      text: `📎 _A PNG attachment couldn't be uploaded — ChatProvider bot is missing the *files:write* scope. Open the ExampleOrg dashboard to view or download._`,
                     },
                   ],
                 },
@@ -252,19 +252,19 @@ export const infographicRoutes = [
                 success: true,
                 mode: "message",
                 channel,
-                note: "Posted as a chat message because the Slack bot lacks files:write scope. Add files:write in OAuth & Permissions and reinstall the app to enable PNG attachments.",
+                note: "Posted as a chat message because the ChatProvider bot lacks files:write scope. Add files:write in OAuth & Permissions and reinstall the app to enable PNG attachments.",
               });
             }
             throw uploadErr;
           }
         } catch (error: any) {
           safeLogger.error(
-            "[Infographic] Slack share failed:",
+            "[Infographic] ChatProvider share failed:",
             error?.data || error,
           );
           return c.json(
             {
-              error: "Failed to share to Slack",
+              error: "Failed to share to ChatProvider",
               detail: error?.data?.error || error?.message || "unknown",
             },
             500,
@@ -319,9 +319,9 @@ export const infographicRoutes = [
         const message: string | undefined = body?.message?.trim() || undefined;
 
         try {
-          if (!process.env.RESEND_API_KEY) {
+          if (!process.env.EmailProvider_API_KEY) {
             return c.json(
-              { error: "Email is not configured (missing RESEND_API_KEY)." },
+              { error: "Email is not configured (missing EmailProvider_API_KEY)." },
               400,
             );
           }
@@ -335,12 +335,12 @@ export const infographicRoutes = [
           const svg = await buildSectionInfographic(section);
           const png = await svgToPng(svg);
 
-          const { sendResendEmail } = await import("../../utils/resendMail");
+          const { sendEmailProviderEmail } = await import("../../utils/EmailProviderMail");
           const subjectFinal =
             subject || `${meta.title} — ExampleOrg snapshot (${stamp})`;
           const intro = message ? `<p>${escapeHtml(message)}</p>` : "";
           const html = `
-            <div style="font-family:-apple-system,'Segoe UI',Roboto,sans-serif;max-width:640px;margin:0 auto;padding:24px;color:#1e293b">
+            <div style="font-family:-IdentityProvider-system,'Segoe UI',Roboto,sans-serif;max-width:640px;margin:0 auto;padding:24px;color:#1e293b">
               <h2 style="margin:0 0 8px;color:#0f172a">${escapeHtml(meta.title)}</h2>
               <p style="margin:0 0 16px;color:#64748b">${escapeHtml(meta.subtitle)}</p>
               ${intro}
@@ -350,14 +350,14 @@ export const infographicRoutes = [
               <p style="margin:0;color:#94a3b8;font-size:11px">ExampleOrg Enterprise GRC &amp; Quality Platform</p>
             </div>`;
 
-          // Resend supports attachments — sendResendEmail wraps emails.send,
+          // EmailProvider supports attachments — sendEmailProviderEmail wraps emails.send,
           // but we need the lower-level call for attachments.
-          const { Resend } = await import("resend");
-          const resend = new Resend(process.env.RESEND_API_KEY);
+          const { EmailProvider } = await import("EmailProvider");
+          const EmailProvider = new EmailProvider(process.env.EmailProvider_API_KEY);
           const fromEmail =
-            process.env.RESEND_FROM_EMAIL ||
+            process.env.EmailProvider_FROM_EMAIL ||
             "ExampleOrg QMS <user@example.invalid>";
-          const { data, error } = await resend.emails.send({
+          const { data, error } = await EmailProvider.emails.send({
             from: fromEmail,
             to: recipients,
             subject: subjectFinal,

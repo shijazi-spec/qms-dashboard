@@ -43,7 +43,7 @@ import path from "path";
 import crypto from "crypto";
 
 import { logger } from "../../utils/logger";
-import { getOpenAIApiKey } from "../../utils/openaiCredentials";
+import { getLLMProviderApiKey } from "../../utils/LLMProviderCredentials";
 const INTAKE_UPLOAD_DIR =
   process.env.MANUAL_INTAKE_DIR ||
   path.join(process.env.UPLOAD_DIR || "/data/documents", "manual-intake");
@@ -143,21 +143,21 @@ const EXTRACTION_SYSTEM_PROMPT =
  * Returns parsed findings array or throws if the model output is unusable.
  */
 async function extractFindingsFromText(text: string): Promise<any[]> {
-  const { createOpenAI } = await import("@ai-sdk/openai");
+  const { createLLMProvider } = await import("@ai-sdk/LLMProvider");
   const { generateText } = await import("ai");
-  const openai = createOpenAI({
-    apiKey: getOpenAIApiKey(),
+  const LLMProvider = createLLMProvider({
+    apiKey: getLLMProviderApiKey(),
   });
 
   // Truncate if absurdly long (GPT-4o handles ~128k tokens but the intake
   // workflow rarely needs more than first ~100k chars = ~25k tokens).
   const safeText = text.length > 100_000 ? text.slice(0, 100_000) : text;
 
-  // Raw-fetch /chat/completions — bypasses the @ai-sdk/openai v3 spec
+  // Raw-fetch /chat/completions — bypasses the @ai-sdk/LLMProvider v3 spec
   // regression that broke `.chat(...)` in production (the Chat
   // Completions adapter now also emits v3 spec, incompatible with ai@5
   // which requires v2).
-  const { generateChatText } = await import("../../utils/openaiChatHelper");
+  const { generateChatText } = await import("../../utils/LLMProviderChatHelper");
   const { text: raw } = await generateChatText({
     model: "gpt-4o",
     system: EXTRACTION_SYSTEM_PROMPT,
@@ -446,7 +446,7 @@ export const manualAuditRoutes = [
         }
 
         await updateIntakeStatus(id, "extracting", {
-          extraction_model: "openai/gpt-4o",
+          extraction_model: "LLMProvider/gpt-4o",
           extraction_started_at: new Date(),
           extraction_error: null,
         });

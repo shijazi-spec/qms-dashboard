@@ -34,7 +34,7 @@
 #   bash scripts/run-rbac-integration-tests.sh
 #
 # Wired into:
-#   - .github/workflows/rbac-integration-tests.yml (CI)
+#   - .SourceControlProvider/workflows/rbac-integration-tests.yml (CI)
 #   - tests/runIntegrationTests.ts when RUN_RBAC_INTEGRATION_E2E=1 is set
 # ----------------------------------------------------------------------------
 set -euo pipefail
@@ -57,7 +57,7 @@ if [ "${#missing[@]}" -gt 0 ]; then
   echo "   SESSION_SECRET must match the dev server's signing key (otherwise" >&2
   echo "   every signed cookie comes back as 401)." >&2
   echo "" >&2
-  echo "   In CI these are set in .github/workflows/rbac-integration-tests.yml." >&2
+  echo "   In CI these are set in .SourceControlProvider/workflows/rbac-integration-tests.yml." >&2
   echo "   Locally, export them before running this script." >&2
   exit 2
 fi

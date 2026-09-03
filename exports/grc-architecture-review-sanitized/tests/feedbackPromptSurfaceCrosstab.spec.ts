@@ -21,7 +21,7 @@ const PROMPT_VERSION_B = `qms-consultant@xtabbprompt${RUN_ID.replace(/[^a-z]/g, 
 
 const ROW_A_MOBILE_DOWN = `e2e-xtab-A-mobile-down-${RUN_ID}`;
 const ROW_A_WEB_UP = `e2e-xtab-A-web-up-${RUN_ID}`;
-const ROW_B_SLACK_UP = `e2e-xtab-B-slack-up-${RUN_ID}`;
+const ROW_B_ChatProvider_UP = `e2e-xtab-B-ChatProvider-up-${RUN_ID}`;
 const ROW_LEGACY_DOWN = `e2e-xtab-legacy-down-${RUN_ID}`;
 const ROW_B_WEB_DOWN = `e2e-xtab-B-web-down-${RUN_ID}`;
 const ROW_A_MOBILE_DOWN_2 = `e2e-xtab-A-mobile-down-2-${RUN_ID}`;
@@ -30,7 +30,7 @@ let pool: pg.Pool | null = null;
 const seededMessageIds: string[] = [
   ROW_A_MOBILE_DOWN,
   ROW_A_WEB_UP,
-  ROW_B_SLACK_UP,
+  ROW_B_ChatProvider_UP,
   ROW_LEGACY_DOWN,
   ROW_B_WEB_DOWN,
   ROW_A_MOBILE_DOWN_2,
@@ -55,9 +55,9 @@ async function seedFeedbackRows(): Promise<void> {
       metadata: { prompt_version: PROMPT_VERSION_A, client_surface: 'web' },
     },
     {
-      messageId: ROW_B_SLACK_UP,
+      messageId: ROW_B_ChatProvider_UP,
       rating: 'up',
-      metadata: { prompt_version: PROMPT_VERSION_B, client_surface: 'slack' },
+      metadata: { prompt_version: PROMPT_VERSION_B, client_surface: 'ChatProvider' },
     },
     // Extra down rows give the negative list a badge distribution of
     // mobile×2, web×1, none×1 (legacy `{}` metadata).
@@ -119,7 +119,7 @@ async function findSeededIds(): Promise<Record<string, string | null>> {
     mobileDown: byMessageId[ROW_A_MOBILE_DOWN] ?? null,
     mobileDown2: byMessageId[ROW_A_MOBILE_DOWN_2] ?? null,
     webDown: byMessageId[ROW_B_WEB_DOWN] ?? null,
-    slackUp: byMessageId[ROW_B_SLACK_UP] ?? null,
+    ChatProviderUp: byMessageId[ROW_B_ChatProvider_UP] ?? null,
     legacyDown: byMessageId[ROW_LEGACY_DOWN] ?? null,
   };
 }
@@ -197,7 +197,7 @@ test.describe('AI Ops — Consultant Feedback prompt × surface cross-tab (Task 
     }
     expect(counts.mobile ?? 0, 'two mobile-down seeds should yield two `mobile` badges').toBe(2);
     expect(counts.web ?? 0, 'one web-down seed should yield one `web` badge').toBe(1);
-    expect(counts.slack ?? 0, 'the slack seed was thumbs-up so it must not appear in the negative list').toBe(0);
+    expect(counts.ChatProvider ?? 0, 'the ChatProvider seed was thumbs-up so it must not appear in the negative list').toBe(0);
     expect(seededBadgeTexts.filter((t) => t === null).length, 'legacy `{}`-metadata row must contribute exactly one badge-less down row').toBe(1);
 
     // (b) Cross-tab cells (rows = prompt versions, cols = client surfaces).
@@ -206,7 +206,7 @@ test.describe('AI Ops — Consultant Feedback prompt × surface cross-tab (Task 
 
     const cellAMobile = page.locator(`[data-testid="cell-feedback-prompt-surface-${PROMPT_VERSION_A}-mobile"]`);
     const cellAWeb = page.locator(`[data-testid="cell-feedback-prompt-surface-${PROMPT_VERSION_A}-web"]`);
-    const cellBSlack = page.locator(`[data-testid="cell-feedback-prompt-surface-${PROMPT_VERSION_B}-slack"]`);
+    const cellBChatProvider = page.locator(`[data-testid="cell-feedback-prompt-surface-${PROMPT_VERSION_B}-ChatProvider"]`);
     const cellUnknown = page.locator('[data-testid="cell-feedback-prompt-surface-unknown-unknown"]');
 
     // (A, mobile): two thumbs-down → 0% ratio with red colour.
@@ -219,10 +219,10 @@ test.describe('AI Ops — Consultant Feedback prompt × surface cross-tab (Task 
     await expect(cellAWeb).toContainText('100%');
     await expect(cellAWeb).toHaveClass(/text-green-700/);
 
-    // (B, slack): one thumbs-up → 100% ratio with green colour.
-    await expect(cellBSlack, '(B, slack) cell should render').toBeVisible();
-    await expect(cellBSlack).toContainText('100%');
-    await expect(cellBSlack).toHaveClass(/text-green-700/);
+    // (B, ChatProvider): one thumbs-up → 100% ratio with green colour.
+    await expect(cellBChatProvider, '(B, ChatProvider) cell should render').toBeVisible();
+    await expect(cellBChatProvider).toContainText('100%');
+    await expect(cellBChatProvider).toHaveClass(/text-green-700/);
 
     // (unknown, unknown): one thumbs-down → 0% ratio (red) — locks in
     // that the COALESCE-to-'unknown' fallback for legacy `{}` metadata

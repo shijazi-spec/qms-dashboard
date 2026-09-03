@@ -1,6 +1,6 @@
 /**
  * Three numbers that were reported wrong, all found on 2026-08-20 by comparing
- * what the platform showed against what the Slack digest and the tiles claimed.
+ * what the platform showed against what the ChatProvider digest and the tiles claimed.
  *
  * They are grouped in one file because they share a root cause: a figure was
  * computed with a different rule from the one its own label promised.

@@ -5,7 +5,7 @@
  *
  * The dashboard supports Arabic (RTL) via `html[dir="rtl"]` set by
  * `dashboard/js/i18n.js`. Per the "RTL Layout Convention" section of
- * `replit.md`, layout details that should mirror in RTL must be expressed
+ * `HostingPlatform.md`, layout details that should mirror in RTL must be expressed
  * with CSS logical-direction utilities (`text-start`, `border-s-4`, `ms-2`,
  * `me-2`, `rounded-s-lg`, `gap-2`, …) — NOT physical-direction Tailwind
  * classes (`text-left`, `text-right`, `border-l-4`, `border-r-4`, `ml-*`,
@@ -1088,7 +1088,7 @@ function main() {
   console.error("  Dashboard pages are served to both English (LTR) and Arabic (RTL)");
   console.error("  users. Physical-direction Tailwind classes (`text-left`, `border-l-4`,");
   console.error("  `ml-*`, `space-x-*`, `rounded-l-*`, …) pin the layout to LTR and silently");
-  console.error("  break the Arabic experience. See replit.md → \"RTL Layout Convention\"");
+  console.error("  break the Arabic experience. See HostingPlatform.md → \"RTL Layout Convention\"");
   console.error("  for the full list of logical-direction equivalents.");
   console.error("");
   console.error("Fix recipe:");

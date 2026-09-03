@@ -1,7 +1,7 @@
 /**
  * The post-SQL half of the conflict detector.
  *
- * The grouping query returns one row per Zoho Account. Domains arrive from a
+ * The grouping query returns one row per CRMProvider Account. Domains arrive from a
  * second, small query and are attached afterwards, so merging duplicate
  * Accounts, counting deals and owners, and the keep/close call all happen
  * HERE, in plain TypeScript. That is deliberate: the LEFT JOIN LATERAL that

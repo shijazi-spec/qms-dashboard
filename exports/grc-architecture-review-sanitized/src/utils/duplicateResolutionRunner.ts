@@ -14,11 +14,11 @@
  * aborts the run.
  *
  * Modes (AUTONOMOUS_RESOLUTION_MODE):
- *   shadow     → dry-run everything, queue everything, WRITE NOTHING to Zoho.
+ *   shadow     → dry-run everything, queue everything, WRITE NOTHING to CRMProvider.
  *   assisted   → auto-apply the safe tier; queue the rest.
  *   autonomous → same as assisted (steady state; kept distinct for clarity/telemetry).
  * Kill switch: AUTONOMOUS_RESOLUTION_ENABLED=false → the runner performs no
- * Zoho writes regardless of mode (still computes verdicts + snapshots in shadow
+ * CRMProvider writes regardless of mode (still computes verdicts + snapshots in shadow
  * semantics so the learning curve keeps moving).
  */
 
@@ -38,7 +38,7 @@ import {
   type DuplicateRecord,
 } from "./duplicateRadarDatabase";
 import { buildMergePlan, type CrmModule, type MergePlan } from "./duplicateMergePlanner";
-import { executeMergePlan, zohoWritesAllowedInEnv } from "./duplicateMergeExecutor";
+import { executeMergePlan, CRMProviderWritesAllowedInEnv } from "./duplicateMergeExecutor";
 import {
   evaluateResolutionRisk,
   getResolutionPolicyConfig,
@@ -53,29 +53,29 @@ import {
   initAIApprovalTable,
   findOpenOrRejectedResolutionAction,
 } from "./aiApprovalDatabase";
-import { fetchRecordAttachments, removeZohoTags } from "./zohoCRM";
+import { fetchRecordAttachments, removeCRMProviderTags } from "./CRMProviderCRM";
 import { logger } from "./logger";
 
 /**
- * Inspect the to-be-tagged duplicates for Zoho attachments. Returns one entry
+ * Inspect the to-be-tagged duplicates for CRMProvider attachments. Returns one entry
  * per duplicate that carries evidence (count = -1 means "couldn't verify" — a
- * Zoho error, treated conservatively as evidence-present so a hiccup never
+ * CRMProvider error, treated conservatively as evidence-present so a hiccup never
  * green-lights a merge that might drop a contract). Bounded: called ONLY for
- * clusters the agent would otherwise auto-apply. `module` is the Zoho module
+ * clusters the agent would otherwise auto-apply. `module` is the CRMProvider module
  * name (Accounts/Leads/Deals/Contacts).
  */
 async function attachmentsOnDuplicates(
   module: CrmModule,
-  duplicateZohoIds: string[],
-): Promise<Array<{ zohoId: string; count: number }>> {
-  const found: Array<{ zohoId: string; count: number }> = [];
-  for (const id of duplicateZohoIds) {
+  duplicateCRMProviderIds: string[],
+): Promise<Array<{ CRMProviderId: string; count: number }>> {
+  const found: Array<{ CRMProviderId: string; count: number }> = [];
+  for (const id of duplicateCRMProviderIds) {
     if (!id) continue;
     try {
       const atts = await fetchRecordAttachments(module, id);
-      if (atts && atts.length > 0) found.push({ zohoId: id, count: atts.length });
+      if (atts && atts.length > 0) found.push({ CRMProviderId: id, count: atts.length });
     } catch (e) {
-      found.push({ zohoId: id, count: -1 }); // unknown → conservative
+      found.push({ CRMProviderId: id, count: -1 }); // unknown → conservative
       logger.warn("[dup-resolution-runner] attachment check failed (treating as has-files)", {
         module,
         recordId: id,
@@ -95,13 +95,13 @@ export interface ModuleBreakdownRow {
   rest: number;
   /**
    * Clusters that carry a REAL merge action (duplicates actually tagged
-   * Duplicate-Delete in Zoho via an Apply). This is the honest "data merged"
+   * Duplicate-Delete in CRMProvider via an Apply). This is the honest "data merged"
    * figure — distinct from `solved`, which also counts status='resolved'.
    */
   applied: number;
   /**
    * Clusters marked status='resolved' but with NO merge action recorded —
-   * i.e. closed WITHOUT an actual Zoho merge. Includes legacy clusters from
+   * i.e. closed WITHOUT an actual CRMProvider merge. Includes legacy clusters from
    * the now-removed high-confidence auto-resolve, plus manual "Mark resolved".
    * These were NOT merged; do not report them as merged data.
    */
@@ -112,7 +112,7 @@ export interface ModuleBreakdownRow {
  * Per-module duplicate scoreboard counted in CLUSTERS (= the decisions to make,
  * one per cluster), not raw records. total = clusters containing that module;
  * solved = resolved; rest = still active. Drives the "By module" list on the
- * screen and the Slack run summary. Best-effort → zeros on any error.
+ * screen and the ChatProvider run summary. Best-effort → zeros on any error.
  */
 export async function getModuleResolutionBreakdown(): Promise<ModuleBreakdownRow[]> {
   const order: Array<{ col: string; module: CrmModule }> = [
@@ -132,7 +132,7 @@ export async function getModuleResolutionBreakdown(): Promise<ModuleBreakdownRow
   try {
     // "solved" = the agent ACTED on the cluster — either it's fully resolved,
     // OR it carries a merge action (duplicates tagged Duplicate-Delete, pending
-    // the Zoho admin's hard-delete: the "AI-Applied · pending Zoho delete"
+    // the CRMProvider admin's hard-delete: the "AI-Applied · pending CRMProvider delete"
     // state shown in the radar tabs). Two bugs this fixes:
     //   1) Counting only status='resolved' made every cross-module/partial
     //      apply show as "remaining" even though the agent had done the work
@@ -141,10 +141,10 @@ export async function getModuleResolutionBreakdown(): Promise<ModuleBreakdownRow
     //      (ignored/dismissed/…) fell into a gap → total ≠ solved + rest.
     // rest is now derived as total − solved, so the three ALWAYS add up.
     // "solved" now has a THIRD, DURABLE source: the resolution ledger (keyed by
-    // stable Zoho identity, NOT cluster_id). dc.status + duplicate_merge_actions
+    // stable CRMProvider identity, NOT cluster_id). dc.status + duplicate_merge_actions
     // are both reset/cascade-deleted by "Rebuild Clusters", so before the ledger
     // every rebuild collapsed solved → 0. The ledger persists, and because the
-    // survivor's zoho id reappears in whatever cluster it lands in after the
+    // survivor's CRMProvider id reappears in whatever cluster it lands in after the
     // rescan, a per-module ledger match re-credits the cluster as solved.
     const lgCol: Record<string, string> = {
       total_leads: "lg_leads",
@@ -168,7 +168,7 @@ export async function getModuleResolutionBreakdown(): Promise<ModuleBreakdownRow
       .map((o) => {
         // MERGED (the honest "data merged" figure): a recorded merge action for
         // this module OR a durable ledger entry — i.e. duplicates were actually
-        // tagged Duplicate-Delete in Zoho. A bare dc.status='resolved' does NOT
+        // tagged Duplicate-Delete in CRMProvider. A bare dc.status='resolved' does NOT
         // count here (it can be a legacy auto-resolve / manual close with no
         // merge). This is the figure to report when asked "how much was merged".
         const merged = `(COALESCE(ma.r_all, 0) > 0 OR COALESCE(ma.${maCol[o.col]}, 0) > 0 OR COALESCE(lg.${lgCol[o.col]}, 0) > 0)`;
@@ -176,7 +176,7 @@ export async function getModuleResolutionBreakdown(): Promise<ModuleBreakdownRow
         const solved = `(dc.status = 'resolved' OR ${merged})`;
         // `> 1`, not `> 0`. A cross-module cluster holding ONE lead and one
         // account is not a lead duplicate, but `> 0` counted it as one for
-        // every module present — so the Slack digest reported ~58k clusters
+        // every module present — so the ChatProvider digest reported ~58k clusters
         // "left" while the radar's own true-duplicate count was 10,327, and
         // the same message contradicted itself: "Duplicate groups to review
         // (matches the tab footers): 3,034 total" sat directly above
@@ -211,8 +211,8 @@ export async function getModuleResolutionBreakdown(): Promise<ModuleBreakdownRow
                   COUNT(*) FILTER (WHERE lg.module = 'Accounts') AS lg_accounts
              FROM duplicate_records dr
              JOIN duplicate_resolution_ledger lg
-               ON lg.master_zoho_id = dr.zoho_record_id
-            WHERE dr.zoho_record_id IS NOT NULL
+               ON lg.master_CRMProvider_id = dr.CRMProvider_record_id
+            WHERE dr.CRMProvider_record_id IS NOT NULL
             GROUP BY dr.cluster_id
          ) lg ON lg.cluster_id = dc.id
          -- Only REAL duplicate clusters (≥2 records); exclude 1-record singletons
@@ -227,7 +227,7 @@ export async function getModuleResolutionBreakdown(): Promise<ModuleBreakdownRow
       rows[i].total = t;
       rows[i].solved = s;
       rows[i].rest = Math.max(0, t - s); // invariant: total = solved + rest
-      rows[i].applied = a; // real Zoho merges
+      rows[i].applied = a; // real CRMProvider merges
       rows[i].markedOnly = Math.max(0, s - a); // resolved but never merged
     });
   } catch (e) {
@@ -243,7 +243,7 @@ export async function getModuleResolutionBreakdown(): Promise<ModuleBreakdownRow
  * resolution feedback log — NOT cluster status (which a "Rebuild Clusters" wipes
  * back to 'active'). This is the HONEST "is there progress?" figure: how many
  * Applies actually happened, who did them, how many duplicates were tagged. In
- * shadow mode this is typically 0 (the agent makes no Zoho writes). Use this to
+ * shadow mode this is typically 0 (the agent makes no CRMProvider writes). Use this to
  * answer progress/comparison questions — never cluster resolved-count deltas,
  * which swing to 0 on a rebuild without anything actually being un-merged.
  */
@@ -291,27 +291,27 @@ export async function getRecentApplyStats(sinceHours: number): Promise<{
 
 /**
  * The private resolution channel: #grq-platform-assistant (Sample User + the agent +
- * her manager). Overridable via env if the channel ever moves. The QMS Slack
- * bot must be a member of this channel and SLACK_BOT_TOKEN must be set.
+ * her manager). Overridable via env if the channel ever moves. The QMS ChatProvider
+ * bot must be a member of this channel and ChatProvider_BOT_TOKEN must be set.
  */
-export const RESOLUTION_SLACK_CHANNEL_DEFAULT = "C0B93BCJFFV";
-export function getResolutionSlackChannel(): string {
-  return process.env.AUTONOMOUS_RESOLUTION_SLACK_CHANNEL || RESOLUTION_SLACK_CHANNEL_DEFAULT;
+export const RESOLUTION_ChatProvider_CHANNEL_DEFAULT = "C0B93BCJFFV";
+export function getResolutionChatProviderChannel(): string {
+  return process.env.AUTONOMOUS_RESOLUTION_ChatProvider_CHANNEL || RESOLUTION_ChatProvider_CHANNEL_DEFAULT;
 }
-export function isResolutionSlackConfigured(): boolean {
-  return !!process.env.SLACK_BOT_TOKEN && !!getResolutionSlackChannel();
+export function isResolutionChatProviderConfigured(): boolean {
+  return !!process.env.ChatProvider_BOT_TOKEN && !!getResolutionChatProviderChannel();
 }
 
-/** Resolve the public base URL: explicit env first, else Replit's domain. */
+/** Resolve the public base URL: explicit env first, else HostingPlatform's domain. */
 function publicBaseUrl(): string {
   const explicit = (process.env.PUBLIC_BASE_URL || "").trim().replace(/\/+$/, "");
   if (explicit) return explicit;
-  const replit = (process.env.REPLIT_DOMAINS || "").split(",")[0]?.trim();
-  return replit ? `<REDACTED_URL>` : "";
+  const HostingPlatform = (process.env.HostingPlatform_DOMAINS || "").split(",")[0]?.trim();
+  return HostingPlatform ? `<REDACTED_URL>` : "";
 }
 
 /**
- * Slack mrkdwn for the screen link. Only emits a `<url|text>` hyperlink when we
+ * ChatProvider mrkdwn for the screen link. Only emits a `<url|text>` hyperlink when we
  * have a real https base — otherwise plain text, so we never render a broken
  * `</autonomous-resolution|…>` when no base URL is configured.
  */
@@ -323,14 +323,14 @@ function resolutionScreenLink(): string {
 }
 
 /**
- * Per-tick ping to the private resolution Slack channel. No-op unless
- * SLACK_BOT_TOKEN is set (the bot must be a member of the channel). Stays quiet
+ * Per-tick ping to the private resolution ChatProvider channel. No-op unless
+ * ChatProvider_BOT_TOKEN is set (the bot must be a member of the channel). Stays quiet
  * on empty ticks to avoid 6-hourly noise.
  */
-async function pingResolutionSlack(summary: ResolutionRunSummary): Promise<void> {
+async function pingResolutionChatProvider(summary: ResolutionRunSummary): Promise<void> {
   try {
-    const token = process.env.SLACK_BOT_TOKEN;
-    const channel = getResolutionSlackChannel();
+    const token = process.env.ChatProvider_BOT_TOKEN;
+    const channel = getResolutionChatProviderChannel();
     if (!token || !channel) return;
     if (summary.clustersScanned === 0) return;
     // Quiet unless the agent actually DID something (Sample User 2026-06-20). In shadow
@@ -383,7 +383,7 @@ async function pingResolutionSlack(summary: ResolutionRunSummary): Promise<void>
     }
     const text =
       `${icon} *Autonomous Resolution — ${summary.mode} run* ` +
-      (summary.writesAllowed ? "" : "(shadow: no Zoho writes) ") +
+      (summary.writesAllowed ? "" : "(shadow: no CRMProvider writes) ") +
       `\nScanned ${summary.clustersScanned} · applied ${summary.applied} · ` +
       `queued ${summary.queued} · errors ${summary.errors}` +
       (summary.queued > 0 ? `\n${summary.queued} item(s) need your call.` : "") +
@@ -391,10 +391,10 @@ async function pingResolutionSlack(summary: ResolutionRunSummary): Promise<void>
       breakdownText +
       `\n${resolutionScreenLink()}`;
 
-    const { WebClient } = await import("@slack/web-api");
+    const { WebClient } = await import("@ChatProvider/web-api");
     await new WebClient(token).chat.postMessage({ channel, text });
   } catch (e) {
-    logger.warn("[dup-resolution-runner] slack ping failed (non-fatal)", {
+    logger.warn("[dup-resolution-runner] ChatProvider ping failed (non-fatal)", {
       error: e instanceof Error ? e.message : String(e),
     });
   }
@@ -404,25 +404,25 @@ async function pingResolutionSlack(summary: ResolutionRunSummary): Promise<void>
  * One-off cleanup (Sample User 2026-06-20): delete the bot's OWN zero-progress
  * "Autonomous Resolution — … applied 0 …" pings from the resolution channel.
  * Best-effort: needs the bot to have history scope on the channel and chat:write
- * to delete its own messages. Returns counts + any Slack error so the operator
+ * to delete its own messages. Returns counts + any ChatProvider error so the operator
  * knows if a scope is missing (then they can delete the few manually).
  */
 export async function cleanupZeroResolutionPings(opts?: {
   limit?: number;
 }): Promise<{ scanned: number; deleted: number; error?: string }> {
-  const token = process.env.SLACK_BOT_TOKEN;
-  const channel = getResolutionSlackChannel();
-  if (!token || !channel) return { scanned: 0, deleted: 0, error: "Slack not configured" };
+  const token = process.env.ChatProvider_BOT_TOKEN;
+  const channel = getResolutionChatProviderChannel();
+  if (!token || !channel) return { scanned: 0, deleted: 0, error: "ChatProvider not configured" };
   const max = Math.max(1, Math.min(Math.floor(opts?.limit || 500), 1000));
   let scanned = 0;
   let deleted = 0;
   try {
-    const { WebClient } = await import("@slack/web-api");
-    const slack = new WebClient(token);
+    const { WebClient } = await import("@ChatProvider/web-api");
+    const ChatProvider = new WebClient(token);
     let cursor: string | undefined;
     // Page through recent history; match the bot's own zero-apply pings.
     while (scanned < max) {
-      const resp: any = await slack.conversations.history({
+      const resp: any = await ChatProvider.conversations.history({
         channel,
         limit: 200,
         cursor,
@@ -436,7 +436,7 @@ export async function cleanupZeroResolutionPings(opts?: {
           /applied\s+0\b/.test(text); // zero-apply tick
         if (!isResolutionPing) continue;
         try {
-          await slack.chat.delete({ channel, ts: m.ts });
+          await ChatProvider.chat.delete({ channel, ts: m.ts });
           deleted++;
         } catch (delErr: any) {
           // Can't delete others' messages / rate limited — keep going.
@@ -461,18 +461,18 @@ export async function cleanupZeroResolutionPings(opts?: {
 /**
  * Post a one-off test message to the resolution channel — powers the
  * "Send test ping" button so the channel wiring can be confirmed on demand.
- * Surfaces the exact Slack error (e.g. not_in_channel, invalid_auth) so the
+ * Surfaces the exact ChatProvider error (e.g. not_in_channel, invalid_auth) so the
  * operator knows precisely what to fix.
  */
-export async function sendResolutionSlackTest(
+export async function sendResolutionChatProviderTest(
   triggeredBy = "operator",
 ): Promise<{ ok: boolean; channel: string | null; error?: string }> {
-  const token = process.env.SLACK_BOT_TOKEN;
-  const channel = getResolutionSlackChannel();
-  if (!token) return { ok: false, channel, error: "SLACK_BOT_TOKEN is not set." };
-  if (!channel) return { ok: false, channel: null, error: "No resolution Slack channel configured." };
+  const token = process.env.ChatProvider_BOT_TOKEN;
+  const channel = getResolutionChatProviderChannel();
+  if (!token) return { ok: false, channel, error: "ChatProvider_BOT_TOKEN is not set." };
+  if (!channel) return { ok: false, channel: null, error: "No resolution ChatProvider channel configured." };
   try {
-    const { WebClient } = await import("@slack/web-api");
+    const { WebClient } = await import("@ChatProvider/web-api");
     await new WebClient(token).chat.postMessage({
       channel,
       text:
@@ -486,17 +486,17 @@ export async function sendResolutionSlackTest(
   }
 }
 
-/** Post an arbitrary message to the resolution Slack channel (e.g. a
+/** Post an arbitrary message to the resolution ChatProvider channel (e.g. a
  *  manually-triggered executive brief). Best-effort. */
 export async function postResolutionMessage(
   text: string,
 ): Promise<{ ok: boolean; channel: string | null; error?: string }> {
-  const token = process.env.SLACK_BOT_TOKEN;
-  const channel = getResolutionSlackChannel();
-  if (!token) return { ok: false, channel, error: "SLACK_BOT_TOKEN is not set." };
-  if (!channel) return { ok: false, channel: null, error: "No resolution Slack channel configured." };
+  const token = process.env.ChatProvider_BOT_TOKEN;
+  const channel = getResolutionChatProviderChannel();
+  if (!token) return { ok: false, channel, error: "ChatProvider_BOT_TOKEN is not set." };
+  if (!channel) return { ok: false, channel: null, error: "No resolution ChatProvider channel configured." };
   try {
-    const { WebClient } = await import("@slack/web-api");
+    const { WebClient } = await import("@ChatProvider/web-api");
     await new WebClient(token).chat.postMessage({ channel, text });
     return { ok: true, channel };
   } catch (e) {
@@ -640,8 +640,8 @@ export async function postWeeklyExecBrief(
   // meeting) don't pollute the week-over-week math, which must stay Sunday-anchored.
   const recordSnapshot = opts.recordSnapshot !== false;
   // Comprehensive ghost purge BEFORE the audit is computed (Sample User 2026-07-13:
-  // "checked before we send the automatic-audits / Slack heads-up"). Removes
-  // ALL data deleted in Zoho — any module, any type — so the weekly brief and
+  // "checked before we send the automatic-audits / ChatProvider heads-up"). Removes
+  // ALL data deleted in CRMProvider — any module, any type — so the weekly brief and
   // #automatic-audits reflect clean numbers, not lingering ghosts. Non-fatal:
   // a sweep failure must never block the brief. Disable via env RADAR_WEEKLY_
   // DELETION_SWEEP=false.
@@ -678,16 +678,16 @@ export async function postWeeklyExecBrief(
       });
     }
   }
-  const token = process.env.SLACK_BOT_TOKEN;
+  const token = process.env.ChatProvider_BOT_TOKEN;
   const posted: string[] = [];
   const errors: string[] = [];
-  if (!token) return { ok: false, posted, errors: ["SLACK_BOT_TOKEN not set"] };
+  if (!token) return { ok: false, posted, errors: ["ChatProvider_BOT_TOKEN not set"] };
   const text = `📊 *Weekly Leadership Brief*\n\n${brief}\n${resolutionScreenLink()}`;
-  const { WebClient } = await import("@slack/web-api");
-  const slack = new WebClient(token);
+  const { WebClient } = await import("@ChatProvider/web-api");
+  const ChatProvider = new WebClient(token);
   for (const ch of getWeeklyBriefChannels()) {
     try {
-      await slack.chat.postMessage({ channel: ch, text });
+      await ChatProvider.chat.postMessage({ channel: ch, text });
       posted.push(ch);
     } catch (e) {
       errors.push(`${ch}: ${e instanceof Error ? e.message : String(e)}`);
@@ -709,23 +709,23 @@ export interface NotificationScheduleEntry {
   envKey?: string;
   channel: string;
   what: string;
-  postsToSlack: boolean;
+  postsToChatProvider: boolean;
 }
 // Chronological — mirrors the "daily rhythm" table Sample User.
 export const ADAM_NOTIFICATION_SCHEDULE: NotificationScheduleEntry[] = [
-  { time: "03:00 / 09:00 / 15:00 / 21:00 KSA", cron: "0 */6 * * *", envKey: "DUPLICATE_SCAN_CRON", channel: "— (background)", what: "Every-6h incremental CRM sync — keeps data fresh round the clock", postsToSlack: false },
-  { time: "07:00 KSA · daily", cron: "0 4 * * *", envKey: "DUPLICATE_MORNING_SYNC_CRON", channel: "— (background)", what: "Pre-shift incremental sync — radar current before your shift", postsToSlack: false },
-  { time: "02:00 KSA · Sat & Tue", cron: "0 23 * * 1,5", envKey: "DUPLICATE_FULL_REBUILD_CRON", channel: "— (background)", what: "Twice-weekly FULL rebuild — clean wipe + re-fetch + re-score off-hours", postsToSlack: false },
-  { time: "09:00 & 17:00 KSA · daily", cron: "0 6,14 * * *", envKey: "AUTONOMOUS_RESOLUTION_DIGEST_CRON", channel: "#grq-assistant", what: "Operational apply digest — what the agent applied/queued this shift", postsToSlack: true },
-  { time: "Sunday 06:00 KSA · weekly", cron: "0 3 * * 0", envKey: "AUTONOMOUS_EXEC_BRIEF_CRON", channel: "#grq-assistant + #automatic-audits", what: "Weekly leadership brief — cluster counts, dup-rate vs 2%, week-over-week trend, recommendation (NO SAR exposure: leadership sees only the agreed KPIs)", postsToSlack: true },
-  { time: "Every 6h (:30)", cron: "30 */6 * * *", channel: "#grq-assistant", what: "Autonomous resolution tick (shadow) — per-tick summary, quiet when nothing changed", postsToSlack: true },
-  { time: "1st of month · 09:00 KSA", cron: "0 6 1 * *", envKey: "AUTONOMOUS_SCHEDULE_REVIEW_CRON", channel: "#grq-assistant", what: "Monthly review of THIS notification schedule — edit timings if needed", postsToSlack: true },
+  { time: "03:00 / 09:00 / 15:00 / 21:00 KSA", cron: "0 */6 * * *", envKey: "DUPLICATE_SCAN_CRON", channel: "— (background)", what: "Every-6h incremental CRM sync — keeps data fresh round the clock", postsToChatProvider: false },
+  { time: "07:00 KSA · daily", cron: "0 4 * * *", envKey: "DUPLICATE_MORNING_SYNC_CRON", channel: "— (background)", what: "Pre-shift incremental sync — radar current before your shift", postsToChatProvider: false },
+  { time: "02:00 KSA · Sat & Tue", cron: "0 23 * * 1,5", envKey: "DUPLICATE_FULL_REBUILD_CRON", channel: "— (background)", what: "Twice-weekly FULL rebuild — clean wipe + re-fetch + re-score off-hours", postsToChatProvider: false },
+  { time: "09:00 & 17:00 KSA · daily", cron: "0 6,14 * * *", envKey: "AUTONOMOUS_RESOLUTION_DIGEST_CRON", channel: "#grq-assistant", what: "Operational apply digest — what the agent applied/queued this shift", postsToChatProvider: true },
+  { time: "Sunday 06:00 KSA · weekly", cron: "0 3 * * 0", envKey: "AUTONOMOUS_EXEC_BRIEF_CRON", channel: "#grq-assistant + #automatic-audits", what: "Weekly leadership brief — cluster counts, dup-rate vs 2%, week-over-week trend, recommendation (NO SAR exposure: leadership sees only the agreed KPIs)", postsToChatProvider: true },
+  { time: "Every 6h (:30)", cron: "30 */6 * * *", channel: "#grq-assistant", what: "Autonomous resolution tick (shadow) — per-tick summary, quiet when nothing changed", postsToChatProvider: true },
+  { time: "1st of month · 09:00 KSA", cron: "0 6 1 * *", envKey: "AUTONOMOUS_SCHEDULE_REVIEW_CRON", channel: "#grq-assistant", what: "Monthly review of THIS notification schedule — edit timings if needed", postsToChatProvider: true },
 ];
 
-/** Render the schedule as a Slack-friendly list. */
+/** Render the schedule as a ChatProvider-friendly list. */
 export function buildNotificationScheduleText(): string {
   const lines = ADAM_NOTIFICATION_SCHEDULE.map(
-    (e) => `• *${e.time}* — ${e.what}` + (e.postsToSlack ? ` → ${e.channel}` : ` _(background)_`),
+    (e) => `• *${e.time}* — ${e.what}` + (e.postsToChatProvider ? ` → ${e.channel}` : ` _(background)_`),
   ).join("\n");
   return `*Adam — Notification Schedule (KSA)*\n${lines}`;
 }
@@ -743,7 +743,7 @@ export const AGENT_PERFORMED_BY =
   "Adam — GRQ Assistant (on behalf of Sample User)";
 
 /**
- * Twice-daily APPLY DIGEST posted to the resolution Slack channel — at 09:00
+ * Twice-daily APPLY DIGEST posted to the resolution ChatProvider channel — at 09:00
  * (start of day) and 17:00 (end of day) KSA. Replaces the per-apply ping:
  * instead of one message per merge, it batches all AI solves/migrations in the
  * window into a single morning/evening summary. Best-effort; always posts (a
@@ -759,7 +759,7 @@ export async function buildRadarTabStatus(): Promise<string> {
   const parts: string[] = [];
   const n = (x: number) => Math.round(x || 0).toLocaleString();
   // Pull the durable per-module breakdown ONCE — used for both the Overview
-  // "merged" total and the per-module line. `applied` = real Zoho merges that
+  // "merged" total and the per-module line. `applied` = real CRMProvider merges that
   // survive a Rebuild (ledger-backed); `solved` also counts a bare resolved
   // status (rebuild-fragile). We report the DURABLE figure so the digest never
   // falsely shows "0 done" just because a Rebuild reset cluster statuses.
@@ -897,7 +897,7 @@ export async function buildRadarTabStatus(): Promise<string> {
       );
     }
   } catch { /* skip */ }
-  // Pending Zoho admin delete — AI-Applied clusters whose Duplicate-Delete
+  // Pending CRMProvider admin delete — AI-Applied clusters whose Duplicate-Delete
   // records the admin hasn't deleted yet. The actionable backlog: once the
   // admin clears them, "Verify in CRM" marks them Resolved.
   try {
@@ -912,7 +912,7 @@ export async function buildRadarTabStatus(): Promise<string> {
     const pend = Number(r.rows?.[0]?.n || 0);
     if (pend > 0) {
       parts.push(
-        `›  *Pending Zoho admin delete:* ${n(pend)} AI-Applied cluster(s) awaiting the admin's delete → then Verify in CRM`,
+        `›  *Pending CRMProvider admin delete:* ${n(pend)} AI-Applied cluster(s) awaiting the admin's delete → then Verify in CRM`,
       );
     }
   } catch { /* skip */ }
@@ -995,8 +995,8 @@ export async function postResolutionDigest(opts: {
   sinceHours: number;
 }): Promise<void> {
   try {
-    const token = process.env.SLACK_BOT_TOKEN;
-    const channel = getResolutionSlackChannel();
+    const token = process.env.ChatProvider_BOT_TOKEN;
+    const channel = getResolutionChatProviderChannel();
     if (!token || !channel) return;
 
     let agentApplies = 0;
@@ -1060,7 +1060,7 @@ export async function postResolutionDigest(opts: {
           `No merges applied in this window.`;
 
     const text = head + scoreboard + `\n${resolutionScreenLink()}`;
-    const { WebClient } = await import("@slack/web-api");
+    const { WebClient } = await import("@ChatProvider/web-api");
     await new WebClient(token).chat.postMessage({ channel, text });
   } catch (e) {
     logger.warn("[dup-resolution-runner] digest failed (non-fatal)", {
@@ -1098,7 +1098,7 @@ export function getResolutionRunConfig(): ResolutionRunConfig {
 
 // ── In-platform mode override (DB-backed; overlays the env baseline) ───────────
 // Lets an admin promote shadow → assisted → autonomous (and the kill switch)
-// from the dashboard WITHOUT editing Replit env / republishing — it takes effect
+// from the dashboard WITHOUT editing HostingPlatform env / republishing — it takes effect
 // on the next tick. The agent never changes its own mode (segregation of duties).
 
 let _settingsReady = false;
@@ -1195,21 +1195,21 @@ export async function resolveResolutionRunConfig(): Promise<
 }
 
 /**
- * Hard environment guardrail. The agent must NEVER mutate the SHARED live Zoho
+ * Hard environment guardrail. The agent must NEVER mutate the SHARED live CRMProvider
  * org from a non-production environment, even when the kill switch is on and the
- * mode is assisted/autonomous. Dev and prod share the same Zoho credentials but
+ * mode is assisted/autonomous. Dev and prod share the same CRMProvider credentials but
  * run on SEPARATE databases, so a dev tick (or a dev operator flipping the
  * toggle) could otherwise tag/merge real CRM records. Live writes therefore
  * require BOTH `NODE_ENV=production` AND the operator's explicit kill-switch +
  * mode. Set `RESOLUTION_ALLOW_WRITES_OUTSIDE_PROD=true` only for a dedicated
- * non-prod org that does NOT share production's Zoho creds.
+ * non-prod org that does NOT share production's CRMProvider creds.
  */
 export function liveWritesPermitted(
   cfg: { enabled: boolean },
   mode: ResolutionMode,
 ): boolean {
   return (
-    zohoWritesAllowedInEnv() &&
+    CRMProviderWritesAllowedInEnv() &&
     cfg.enabled &&
     (mode === "assisted" || mode === "autonomous")
   );
@@ -1243,7 +1243,7 @@ export interface BuildRiskInputArgs {
   mixed: { domains: string[]; phones: string[] };
   /** Epoch ms — injectable for tests. */
   nowMs: number;
-  /** Count of to-be-tagged duplicates carrying Zoho attachments (default 0). */
+  /** Count of to-be-tagged duplicates carrying CRMProvider attachments (default 0). */
   duplicatesWithAttachments?: number;
 }
 
@@ -1286,7 +1286,7 @@ export function buildResolutionRiskInput(args: BuildRiskInputArgs): ResolutionRi
     verificationFailed: cluster.verification_state === "failed",
     conflictCount: plan.fieldDecisions.filter((d) => d.action === "conflict").length,
     hasCustomFieldAssumption: plan.warnings.some((w) => /custom field/i.test(w)),
-    anyMissingZohoId: plan.masterZohoId == null || included.some((r) => !r.hasZohoId),
+    anyMissingCRMProviderId: plan.masterCRMProviderId == null || included.some((r) => !r.hasCRMProviderId),
     masterCompleteness: master?.completeness ?? 0,
     distinctOwners: owners.size,
     distinctLayouts: layouts.size,
@@ -1350,7 +1350,7 @@ function riskLevelFor(reasons: string[]): "low" | "medium" | "high" | "critical"
   if (reasons.length === 0) return "low";
   const text = reasons.join(" ").toLowerCase();
   if (/pipeline|arr|active deal|cs overlap/.test(text)) return "critical";
-  if (/confidence|conflict|no zoho id|verification/.test(text)) return "high";
+  if (/confidence|conflict|no CRMProvider id|verification/.test(text)) return "high";
   return "medium";
 }
 
@@ -1384,7 +1384,7 @@ export async function runAutonomousResolution(
   };
 
   // Writes only happen in assisted/autonomous AND when the kill switch is on
-  // AND we are in production (the dev environment shares prod's live Zoho creds).
+  // AND we are in production (the dev environment shares prod's live CRMProvider creds).
   const writesAllowed = liveWritesPermitted(cfg, mode);
   summary.writesAllowed = writesAllowed;
 
@@ -1412,7 +1412,7 @@ export async function runAutonomousResolution(
     });
   }
 
-  await pingResolutionSlack(summary).catch(() => {});
+  await pingResolutionChatProvider(summary).catch(() => {});
 
   summary.finishedAt = new Date().toISOString();
   logger.info("[dup-resolution-runner] tick done", {
@@ -1513,24 +1513,24 @@ export async function undoClusterResolution(
         : r.rows[0].report_json
       : {};
     const module: string = plan.module || "Accounts";
-    const taggedIds: string[] = (report.taggedRecordIds || plan.duplicateZohoIds || []).filter(
+    const taggedIds: string[] = (report.taggedRecordIds || plan.duplicateCRMProviderIds || []).filter(
       Boolean,
     );
-    // Undo is ALSO a live Zoho mutation (it removes the Duplicate-Delete tag),
+    // Undo is ALSO a live CRMProvider mutation (it removes the Duplicate-Delete tag),
     // so it must obey the same environment guardrail as executeMergePlan — dev
-    // shares prod's Zoho creds and must never touch the real org.
-    if (taggedIds.length && !zohoWritesAllowedInEnv()) {
+    // shares prod's CRMProvider creds and must never touch the real org.
+    if (taggedIds.length && !CRMProviderWritesAllowedInEnv()) {
       return {
         ok: false,
         untagged: 0,
         module,
         message:
-          "Undo is blocked outside production (dev shares production's Zoho credentials). Undo from the deployed app, or set RESOLUTION_ALLOW_WRITES_OUTSIDE_PROD=true only for a dedicated non-prod Zoho org.",
+          "Undo is blocked outside production (dev shares production's CRMProvider credentials). Undo from the deployed app, or set RESOLUTION_ALLOW_WRITES_OUTSIDE_PROD=true only for a dedicated non-prod CRMProvider org.",
       };
     }
     let untagged = 0;
     if (taggedIds.length) {
-      await removeZohoTags(module, taggedIds, ["Duplicate-Delete"]);
+      await removeCRMProviderTags(module, taggedIds, ["Duplicate-Delete"]);
       untagged = taggedIds.length;
     }
     await updateClusterStatus(clusterId, "active").catch(() => {});
@@ -1697,7 +1697,7 @@ async function processModule(ctx: {
     ruleIds: [] as number[],
   }));
 
-  // Evidence-protection check is a Zoho call, so run it ONLY for clusters that
+  // Evidence-protection check is a CRMProvider call, so run it ONLY for clusters that
   // would otherwise auto-apply (and aren't already rule-blocked). If any
   // to-be-tagged duplicate carries attachments, the gate escalates — we never
   // auto-merge away a record that might hold a signed contract/NDA. When it
@@ -1706,18 +1706,18 @@ async function processModule(ctx: {
   let evidenceRecommendation: string | null = null;
   let firstPass = evaluateResolutionRisk(riskInput, policyCfg);
   if (ruleResult.override !== "escalate" && firstPass.verdict === "auto") {
-    const dupAttach = await attachmentsOnDuplicates(module, plan.duplicateZohoIds);
+    const dupAttach = await attachmentsOnDuplicates(module, plan.duplicateCRMProviderIds);
     if (dupAttach.length > 0) {
       riskInput = { ...riskInput, duplicatesWithAttachments: dupAttach.length };
       const nameOf = (zid: string) =>
-        plan.records.find((r) => r.zohoId === zid)?.name || zid;
+        plan.records.find((r) => r.CRMProviderId === zid)?.name || zid;
       // Strongest evidence-holder = highest known count (unknown counts sort last).
       const strongest = [...dupAttach].sort(
         (a, b) => (b.count < 0 ? 0 : b.count) - (a.count < 0 ? 0 : a.count),
       )[0];
       const cntTxt = strongest.count < 0 ? "attachments (count unverified)" : `${strongest.count} attachment(s)`;
       evidenceRecommendation =
-        `Evidence on a to-be-deleted record: "${nameOf(strongest.zohoId)}" (${strongest.zohoId}) holds ${cntTxt}. ` +
+        `Evidence on a to-be-deleted record: "${nameOf(strongest.CRMProviderId)}" (${strongest.CRMProviderId}) holds ${cntTxt}. ` +
         `Recommend keeping THAT record as the survivor (or move its files first), then re-run. ` +
         (dupAttach.length > 1 ? `${dupAttach.length} duplicates carry files — attachments are split, review carefully.` : "");
     }
@@ -1734,8 +1734,8 @@ async function processModule(ctx: {
   if (evidenceRecommendation) reasons.push(evidenceRecommendation);
 
   // Apply the always-link rule hint to the plan if present and unset.
-  if (ruleResult.alwaysLink && !plan.linkAccountZohoId && plan.accountCandidates.length) {
-    plan.linkAccountZohoId = plan.accountCandidates[0].zohoId;
+  if (ruleResult.alwaysLink && !plan.linkAccountCRMProviderId && plan.accountCandidates.length) {
+    plan.linkAccountCRMProviderId = plan.accountCandidates[0].CRMProviderId;
   }
 
   const item: ResolutionRunItem = {
@@ -1770,7 +1770,7 @@ async function processModule(ctx: {
   const clusterConfidence = Number((cluster as any).confidence_score ?? 0);
 
   // (1) Nothing to do — no duplicates and no link target.
-  if (plan.duplicateZohoIds.length === 0 && !plan.linkAccountZohoId) {
+  if (plan.duplicateCRMProviderIds.length === 0 && !plan.linkAccountCRMProviderId) {
     skipReasons.push(
       "plan has 0 duplicates to tag and no Account_Name link target — nothing actionable",
     );
@@ -1920,7 +1920,7 @@ async function processModule(ctx: {
       },
       payloadPreview:
         `${module} cluster #${clusterId}: survivor "${plan.masterName}", ` +
-        `${plan.duplicateZohoIds.length} duplicate(s) to tag. ` +
+        `${plan.duplicateCRMProviderIds.length} duplicate(s) to tag. ` +
         (reasons.length ? `Escalated: ${reasons.slice(0, 3).join("; ")}.` : "Safe-tier (shadow)."),
       riskLevel: riskLevelFor(reasons),
       complianceRefs: [

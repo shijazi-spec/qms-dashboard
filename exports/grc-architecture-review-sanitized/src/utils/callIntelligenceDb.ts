@@ -10,15 +10,15 @@ export interface CallRecord {
   id?: number;
   call_id: string;
   source:
-    | "five9"
-    | "twilio"
+    | "ContactCenterProvider"
+    | "TelephonyProvider"
     | "mobile"
-    | "google_meet"
-    | "google_drive"
+    | "IdentityProvider_meet"
+    | "IdentityProvider_drive"
     | "bulk_upload"
     | "manual"
     | "api"
-    | "zoho_calls";
+    | "CRMProvider_calls";
   lead_id?: string;
   deal_id?: string;
   contact_name?: string;
@@ -140,7 +140,7 @@ export interface CallGovernanceResult {
  * stages an operator and a QA reviewer care about:
  *
  *   uploaded            — file received, no transcription run yet
- *   transcribing        — Whisper / Five9-recording-fetch in flight
+ *   transcribing        — Whisper / ContactCenterProvider-recording-fetch in flight
  *   transcribed         — transcript persisted; ready for evaluation
  *   evaluating          — scorecard run in flight
  *   evaluated           — AI evaluation complete; QA review may be pending
@@ -196,7 +196,7 @@ export const CALL_STATUS_VALUES: readonly CallStatus[] = [
  *   pending     → uploaded     (file landed but no work has run yet)
  *   processing  → transcribing (in-flight work; "transcribing" is the
  *                               first sub-stage the old "processing"
- *                               umbrella covered, conservatively chosen
+ *                               Example Organization covered, conservatively chosen
  *                               so historical in-flight rows don't
  *                               jump straight to "evaluated")
  *   analyzed    → evaluated    (terminal happy-path; aligns with the
@@ -227,7 +227,7 @@ async function migrateCallStatusEnum(): Promise<void> {
 //
 // The init runs 33 CREATE TABLE / CREATE INDEX / ALTER TABLE statements
 // across multiple tables. They're idempotent (IF NOT EXISTS / IF NOT EXISTS
-// COLUMN) so re-running is safe, but on a cold Replit container the first
+// COLUMN) so re-running is safe, but on a cold HostingPlatform container the first
 // run takes 5–15s because the pool has to open a fresh TCP+SSL+auth
 // connection and Postgres has to parse + plan + execute every statement.
 //
@@ -299,9 +299,9 @@ async function _doInitCallIntelligenceTables(): Promise<void> {
       status VARCHAR(50) NOT NULL DEFAULT 'pending',
       metadata JSONB DEFAULT '{}',
       -- audio_blob* columns: persist the recording bytes in Postgres so
-      -- the audio survives a Replit redeploy that wipes the uploads/
+      -- the audio survives a HostingPlatform redeploy that wipes the uploads/
       -- filesystem. Declared in the canonical CREATE TABLE (not only
-      -- via the runtime ensureAudioBlobColumns() ALTER) so Replit's
+      -- via the runtime ensureAudioBlobColumns() ALTER) so HostingPlatform's
       -- deploy-time schema-diff tool sees them as expected columns and
       -- doesn't propose dropping them on every Publish flow.
       -- The runtime ensureAudioBlobColumns() ALTER is still kept as a
@@ -316,7 +316,7 @@ async function _doInitCallIntelligenceTables(): Promise<void> {
       -- the blob is read. Was historically only added via a runtime
       -- ALTER; declared here so the schema-diff tool doesn't flag it.
       audio_file_path TEXT,
-      -- linked_via: diagnostic field that records how a Zoho Lead/Deal
+      -- linked_via: diagnostic field that records how a CRMProvider Lead/Deal
       -- was attached to this call (phone, activity, manual). Used by
       -- the auto-link analytics + the "Why was this linked?" tooltip
       -- in the CRM Link cell. Same story — declared here for schema
@@ -565,7 +565,7 @@ async function _doInitCallIntelligenceTables(): Promise<void> {
 
   // One-shot backfill: earlier versions of the bulk-audio upload
   // stored the phone number extracted from the filename directly in
-  // call_records.lead_id. That value is not a Zoho Lead record-id, so
+  // call_records.lead_id. That value is not a CRMProvider Lead record-id, so
   // the CRM Link cell built /crm/.../tab/Leads/+966... → Invalid URL,
   // and the auto-link matcher then refused to overwrite the "already
   // set" lead_id. Move the phone into metadata.contact_phone (where
@@ -592,7 +592,7 @@ async function _doInitCallIntelligenceTables(): Promise<void> {
   // before the auto-link + whisper-1 fixes. The boot sweep is
   // idempotent (each pass has a WHERE filter that skips already-
   // populated rows) and the auto-link pass is per-boot-capped so
-  // a 200-row backlog can't blow through the Zoho daily quota in
+  // a 200-row backlog can't blow through the CRMProvider daily quota in
   // one cold start.
   try {
     const { backfillUnpopulatedCallData } = await import(
@@ -1352,7 +1352,7 @@ export async function getComplianceRecords(
   // placed to the same number — SDRs often log activity on one call out
   // of three to the same lead, and grouping by phone makes that gap
   // immediately visible. The phone lives in metadata.contact_phone
-  // (set by the bulk-upload filename parser and the Zoho Calls import);
+  // (set by the bulk-upload filename parser and the CRMProvider Calls import);
   // call_records has no dedicated phone column. Falls back to call_id
   // for legacy rows where the early loader stuffed the phone fragment
   // there before the metadata column existed (see migration at ~L553).
@@ -1704,7 +1704,7 @@ export async function getCallAnalyticsSummary(
   //     legacy 4-state enum used just 'analyzed' here — see Phase 2
   //     migration in this file's header.
   //   - total_with_compliance_row: any row in call_compliance (incl.
-  //     the "not_checked" sentinel rows written when Zoho was
+  //     the "not_checked" sentinel rows written when CRMProvider was
   //     unreachable / call had no linked Lead/Deal)
   //   - total_with_real_check: rows where the check actually ran (excludes
   //     the sentinels). This is the true denominator for "Notes Updated"
@@ -2581,7 +2581,7 @@ export async function getActiveSDRScorecard(
                   : "minor",
             evaluation_logic:
               attr.passingCriteria || attr.evaluationLogic || "",
-            evidence_fields: attr.zohoFields || [],
+            evidence_fields: attr.CRMProviderFields || [],
             scoring_type:
               attr.scoringType === "pass_fail" ? "pass_fail" : "numeric",
             target: attr.target || 100,
@@ -2966,7 +2966,7 @@ export async function getSDRReviewsForCall(
  * structure (every attribute carries a `section_id`). Scores each
  * checkpoint on the 0/1/2 rubric (Not Met / Partially Met / Fully Met)
  * with `null` for checkpoints whose data dependency is outside the
- * transcript (Five9 timestamps, conversion ratios, etc.) — those are
+ * transcript (ContactCenterProvider timestamps, conversion ratios, etc.) — those are
  * explicitly excluded from the weighted overall so a transcript-only
  * evaluation doesn't get penalised for data the analyzer can't see.
  *
@@ -2999,7 +2999,7 @@ export function buildCopcSDREvaluationPrompt(
           const target = (a as any).target || "-";
           const metric = (a as any).metric || a.evaluation_logic || "";
           const dep = (a as any).data_dependency || "";
-          const deferTag = dep.includes("five9_real_ingest")
+          const deferTag = dep.includes("ContactCenterProvider_real_ingest")
             ? " [DATA: deferred — score null]"
             : dep.includes("NEW")
               ? " [DATA: not yet available — score null if no evidence]"
@@ -3022,7 +3022,7 @@ Scoring rubric (per checkpoint):
   null = Cannot Score (no evidence in the transcript — do NOT penalise)
 
 Rules:
-  • Use \`null\` for checkpoints tagged [DATA: deferred] or [DATA: not yet available] — you cannot score Five9 login gaps, idle ratios, conversion funnels, etc. from a transcript alone.
+  • Use \`null\` for checkpoints tagged [DATA: deferred] or [DATA: not yet available] — you cannot score ContactCenterProvider login gaps, idle ratios, conversion funnels, etc. from a transcript alone.
   • Provide a one-sentence evidence quote from the transcript when scoring 0 or 1, so the operator sees WHY.
   • Treat Arabic / Saudi-dialect transcripts as first-class input. Polite phrasing and indirect requests count as evidence — do not over-penalise.
   • Be consistent: the same behavior gets the same score across calls.
@@ -3345,10 +3345,10 @@ export async function getAITrainingStats(): Promise<{
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Call-record audio path + Five9 integration_config writes (Task #746)
+// Call-record audio path + ContactCenterProvider integration_config writes (Task #746)
 //
 // Moved out of `src/mastra/routes/callIntelligenceRoutes.ts` so all writes
-// against `call_records` and the Five9 `integration_config` row live in this
+// against `call_records` and the ContactCenterProvider `integration_config` row live in this
 // (grandfathered) module and the secret-leak coverage gate no longer has to
 // track the route file separately.
 // ──────────────────────────────────────────────────────────────────────────────
@@ -3363,7 +3363,7 @@ export async function updateCallRecordAudioPath(
 }
 
 // Audio persistence across redeploys.
-// Replit (and most container hosts) wipe the local filesystem on each
+// HostingPlatform (and most container hosts) wipe the local filesystem on each
 // redeploy — `uploads/calls/*.wav` files are gone, leaving call_records
 // rows pointing at paths that no longer exist. Storing the audio bytes
 // in Postgres (BYTEA) makes the recording survive container restarts so
@@ -3527,33 +3527,33 @@ async function ensureIntegrationConfigTable(): Promise<void> {
   return integrationConfigTableReady;
 }
 
-export async function upsertFive9IntegrationConfig(
+export async function upsertContactCenterProviderIntegrationConfig(
   config: Record<string, unknown>,
 ): Promise<void> {
   await ensureIntegrationConfigTable();
   await pool.query(
     `INSERT INTO integration_config (integration_type, config, is_active)
-     VALUES ('five9', $1, true)
+     VALUES ('ContactCenterProvider', $1, true)
      ON CONFLICT (integration_type)
      DO UPDATE SET config = $1, updated_at = NOW()`,
     [JSON.stringify(config)],
   );
 }
 
-export async function getActiveFive9IntegrationConfig(): Promise<Record<
+export async function getActiveContactCenterProviderIntegrationConfig(): Promise<Record<
   string,
   unknown
 > | null> {
   await ensureIntegrationConfigTable();
   const result = await pool.query(
-    "SELECT config FROM integration_config WHERE integration_type = 'five9' AND is_active = true",
+    "SELECT config FROM integration_config WHERE integration_type = 'ContactCenterProvider' AND is_active = true",
   );
   return result.rows[0]?.config ?? null;
 }
 
-export async function markFive9IntegrationSynced(): Promise<void> {
+export async function markContactCenterProviderIntegrationSynced(): Promise<void> {
   await pool.query(
-    "UPDATE integration_config SET last_sync_at = NOW() WHERE integration_type = 'five9'",
+    "UPDATE integration_config SET last_sync_at = NOW() WHERE integration_type = 'ContactCenterProvider'",
   );
 }
 

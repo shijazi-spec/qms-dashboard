@@ -357,27 +357,27 @@ const _dashboardApiRoutesRaw = [
       return async (c: any) => {
         try {
           const hasOAuthConfig = !!(
-            process.env.ZOHO_CLIENT_ID &&
-            process.env.ZOHO_CLIENT_SECRET &&
-            process.env.ZOHO_REFRESH_TOKEN
+            process.env.CRMProvider_CLIENT_ID &&
+            process.env.CRMProvider_CLIENT_SECRET &&
+            process.env.CRMProvider_REFRESH_TOKEN
           );
-          const hasStaticToken = !!process.env.ZOHO_ACCESS_TOKEN;
-          const hasGoogleCalendar = !!(
-            process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_EMAIL
+          const hasStaticToken = !!process.env.CRMProvider_ACCESS_TOKEN;
+          const hasIdentityProviderCalendar = !!(
+            process.env.IdentityProvider_CLIENT_ID || process.env.IdentityProvider_CLIENT_EMAIL
           );
           return c.json({
-            zoho: {
+            CRMProvider: {
               connected: hasOAuthConfig || hasStaticToken,
               message:
                 hasOAuthConfig || hasStaticToken
                   ? "Connected"
                   : "Not configured",
             },
-            googleCalendar: {
-              connected: hasGoogleCalendar,
-              message: hasGoogleCalendar ? "Connected" : "Not configured",
+            IdentityProviderCalendar: {
+              connected: hasIdentityProviderCalendar,
+              message: hasIdentityProviderCalendar ? "Connected" : "Not configured",
             },
-            email: { connected: true, message: "Replit Mail configured" },
+            email: { connected: true, message: "HostingPlatform Mail configured" },
           });
         } catch (error) {
           safeLogger.error("Error checking integration status:", error);
@@ -390,8 +390,8 @@ const _dashboardApiRoutesRaw = [
     path: "/api/crm/data",
     method: "GET",
     createHandler: async ({ mastra }: any) => {
-      const { fetchZohoRecords, getZohoConnectionStatus } =
-        await import("../../utils/zohoCRM");
+      const { fetchCRMProviderRecords, getCRMProviderConnectionStatus } =
+        await import("../../utils/CRMProviderCRM");
       return async (c: any) => {
         const logger = mastra?.getLogger();
         try {
@@ -415,17 +415,17 @@ const _dashboardApiRoutesRaw = [
           const module = rawModule;
           const page = parseInt(c.req.query("page") || "1");
           const perPage = parseInt(c.req.query("per_page") || "50");
-          const status = getZohoConnectionStatus();
+          const status = getCRMProviderConnectionStatus();
           if (!status.configured)
             return c.json(
               {
                 success: false,
-                error: "Zoho CRM not configured",
+                error: "CRMProvider CRM not configured",
                 message: status.message,
               },
               400,
             );
-          const records = await fetchZohoRecords(module, { page, perPage });
+          const records = await fetchCRMProviderRecords(module, { page, perPage });
           return c.json({
             success: true,
             module,
@@ -454,21 +454,21 @@ const _dashboardApiRoutesRaw = [
     path: "/api/crm/enrich",
     method: "POST",
     createHandler: async () => {
-      const { lookupRecordsByZohoIds, runLiveQualityCheck } =
+      const { lookupRecordsByCRMProviderIds, runLiveQualityCheck } =
         await import("../../utils/duplicateRadarDatabase");
       return async (c: any) => {
         try {
           const body = await c.req.json();
           const records: any[] = body.records || [];
-          const zohoIds = records.map((r: any) => r.id).filter(Boolean);
+          const CRMProviderIds = records.map((r: any) => r.id).filter(Boolean);
           const [clusterMap, qualityMap] = await Promise.all([
-            lookupRecordsByZohoIds(zohoIds),
+            lookupRecordsByCRMProviderIds(CRMProviderIds),
             runLiveQualityCheck(records),
           ]);
           return c.json({
             success: true,
             enrichment: Object.fromEntries(
-              zohoIds.map((id: string) => [
+              CRMProviderIds.map((id: string) => [
                 id,
                 {
                   cluster: clusterMap[id] || null,
@@ -623,7 +623,7 @@ const _dashboardApiRoutesRaw = [
 
           try {
             await inngest.send({
-              name: "replit/cron.trigger",
+              name: "HostingPlatform/cron.trigger",
               data: {
                 workflowId: "quality-audit-workflow",
                 manualTrigger: true,
@@ -640,7 +640,7 @@ const _dashboardApiRoutesRaw = [
 
           // Fire an "Unplanned AI Audit" notification so manual runs are
           // surfaced in the notifications panel and (when configured)
-          // Slack / email. The recurring weekly / monthly / quarterly
+          // ChatProvider / email. The recurring weekly / monthly / quarterly
           // schedules continue to rely on fireAuditCompletedTrigger and
           // the Inngest cron pipeline as before — this is purely
           // additive for the manual-trigger path.
@@ -799,7 +799,7 @@ const _dashboardApiRoutesRaw = [
             );
           const mode = getDataMode();
           // These three were sequential awaits, so the request cost the SUM of
-          // a full Zoho Leads pull, a full Deals pull and the user fetch —
+          // a full CRMProvider Leads pull, a full Deals pull and the user fetch —
           // measured at 139s live on 2026-08-23, which is a guaranteed proxy
           // timeout and the reason the home page's agent panel hangs. They are
           // independent, so the request now costs the SLOWEST rather than the
@@ -809,7 +809,7 @@ const _dashboardApiRoutesRaw = [
           // The fetch is also DE-DUPLICATED across concurrent callers. Without
           // this, N people opening the dashboard while the cache is cold (a
           // restart, or the 15-minute TTL expiring) each triggered their own
-          // full Zoho pull — N times the work and N times the rate-limit
+          // full CRMProvider pull — N times the work and N times the rate-limit
           // pressure, for one identical answer. Callers asking for the same
           // window now share one in-flight fetch; a different date window still
           // fetches on its own, because the answers differ.

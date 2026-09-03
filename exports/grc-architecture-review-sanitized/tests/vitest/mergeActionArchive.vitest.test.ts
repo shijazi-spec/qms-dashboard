@@ -3,13 +3,13 @@
  *
  * /api/duplicates/rebuild runs TRUNCATE duplicate_records, duplicate_clusters
  * RESTART IDENTITY CASCADE, and duplicate_merge_actions.cluster_id is
- * ON DELETE CASCADE — so every "AI-Applied · pending Zoho admin delete" marker
+ * ON DELETE CASCADE — so every "AI-Applied · pending CRMProvider admin delete" marker
  * is destroyed. backfillResolutionLedger does NOT cover it: that records only
  * the cluster's master id as "resolved", losing both the pending-vs-verified
  * distinction and which duplicates were tagged.
  *
  * Live verification on 2026-08-19 found 44 such clusters across all four
- * modules with ZERO records actually deleted in Zoho, so this backlog is real
+ * modules with ZERO records actually deleted in CRMProvider, so this backlog is real
  * outstanding work, not history.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -38,13 +38,13 @@ const sqlOf = (re: RegExp) =>
 beforeEach(() => query.mockReset().mockResolvedValue({ rows: [], rowCount: 0 }));
 
 describe("archive", () => {
-  it("keys on Zoho ids, never cluster ids", async () => {
+  it("keys on CRMProvider ids, never cluster ids", async () => {
     await archiveMergeActions();
     const sql = sqlOf(/INSERT INTO duplicate_merge_actions_archive/i)!;
     // The rebuild renumbers clusters (RESTART IDENTITY), so a cluster_id key
     // would point at an unrelated cluster afterwards.
-    expect(sql).toMatch(/master_zoho_id/);
-    expect(sql).toMatch(/merged_zoho_ids/);
+    expect(sql).toMatch(/master_CRMProvider_id/);
+    expect(sql).toMatch(/merged_CRMProvider_ids/);
   });
 
   it("keeps the tagged duplicates, not just the master", async () => {
@@ -52,7 +52,7 @@ describe("archive", () => {
     const sql = sqlOf(/INSERT INTO duplicate_merge_actions_archive/i)!;
     // Which records were tagged for deletion is the part the resolution ledger
     // throws away.
-    expect(sql).toMatch(/jsonb_agg\(dr2\.zoho_record_id\)/);
+    expect(sql).toMatch(/jsonb_agg\(dr2\.CRMProvider_record_id\)/);
   });
 
   it("preserves the action type so pending is not laundered into resolved", async () => {
@@ -94,10 +94,10 @@ describe("the truncate cannot run without a snapshot", () => {
 });
 
 describe("restore", () => {
-  it("re-attaches by master Zoho id and module", async () => {
+  it("re-attaches by master CRMProvider id and module", async () => {
     await restoreMergeActions();
     const sql = sqlOf(/INSERT INTO duplicate_merge_actions\s*\n?\s*\(cluster_id/i)!;
-    expect(sql).toMatch(/dr\.zoho_record_id = a\.master_zoho_id/);
+    expect(sql).toMatch(/dr\.CRMProvider_record_id = a\.master_CRMProvider_id/);
     expect(sql).toMatch(/= a\.module/);
   });
 

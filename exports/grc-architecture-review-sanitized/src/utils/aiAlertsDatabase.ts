@@ -95,12 +95,12 @@ export async function initAIAlertsTable(): Promise<void> {
   // `notified_channel` is a free-form short label rather than an enum so
   // future delivery surfaces (PagerDuty, Opsgenie, …) can be added without
   // an enum migration. Known values today:
-  //   • 'slack'           — Slack send succeeded; email not configured
-  //   • 'email'           — Email send succeeded; Slack not configured
-  //   • 'slack+email'     — Both surfaces succeeded
-  //   • 'slack_only'      — Slack ok, email configured but failed
-  //   • 'email_only'      — Email ok, Slack configured but failed
-  //   • 'not_configured'  — Neither TOOL_HEALTH_SLACK_CHANNEL nor
+  //   • 'ChatProvider'           — ChatProvider send succeeded; email not configured
+  //   • 'email'           — Email send succeeded; ChatProvider not configured
+  //   • 'ChatProvider+email'     — Both surfaces succeeded
+  //   • 'ChatProvider_only'      — ChatProvider ok, email configured but failed
+  //   • 'email_only'      — Email ok, ChatProvider configured but failed
+  //   • 'not_configured'  — Neither TOOL_HEALTH_ChatProvider_CHANNEL nor
   //                          TOOL_HEALTH_ALERT_EMAIL was set; ops needs
   //                          to configure a channel
   //   • 'throttled'       — A sibling page already sent within the
@@ -306,8 +306,8 @@ export async function openAlertExistsByKey(
 // ──────────────────────────────────────────────────────────────────────────────
 // Tool-health notifier dead-letter (Task #288)
 //
-// `notifyToolHealthBreach` swallows Slack/email errors and returns
-// `{ slackSent: false, emailSent: false }`. When BOTH channels fail (or the
+// `notifyToolHealthBreach` swallows ChatProvider/email errors and returns
+// `{ ChatProviderSent: false, emailSent: false }`. When BOTH channels fail (or the
 // notifier itself throws) the cron previously moved on with no durable record
 // of the missed page — on-call had no way to learn that alert #N was opened
 // but never delivered.
@@ -337,7 +337,7 @@ export interface ToolHealthNotifyDeadLetterInput {
   /** Id of the underlying breach alert row, when known. */
   breach_alert_id?: number;
   /**
-   * Short, human-readable reason the page failed (e.g. "Slack send failed
+   * Short, human-readable reason the page failed (e.g. "ChatProvider send failed
    * and no email recipients configured", "notifier threw"). Embedded in the
    * dead-letter description so on-call can act without crawling logs.
    */
@@ -350,14 +350,14 @@ export async function recordToolHealthNotifyDeadLetter(
   const title = `[Dead-Letter] Tool-health page not delivered: ${input.tool_name}`;
   const idSuffix = input.breach_alert_id != null ? ` (alert #${input.breach_alert_id})` : '';
   const description =
-    `On-call paging failed for "${input.tool_name}" — neither Slack nor ` +
+    `On-call paging failed for "${input.tool_name}" — neither ChatProvider nor ` +
     `email delivered the ${input.reason} breach notification` +
     `${idSuffix}. Reason: ${input.failure_reason}. ` +
     `Original breach: ${input.breach_title} ` +
     `(severity: ${input.breach_severity.toUpperCase()}).`;
   const suggestion =
     'Inspect the most recent ToolHealthNotifier error in the server logs, ' +
-    'confirm Slack/Resend credentials, and manually notify on-call about the ' +
+    'confirm ChatProvider/EmailProvider credentials, and manually notify on-call about the ' +
     'underlying breach. Once the page is delivered out-of-band, resolve this ' +
     'dead-letter row with a note pointing at the original breach alert.';
   return await createAIAlert({
@@ -799,7 +799,7 @@ export async function getOpenAlertsByType(
  * Used by the storage-health morning digest cron (Task #604): once the
  * configured quiet-hours window closes, the digest needs to enumerate every
  * alert that fired during that window so it can summarise them in a single
- * Slack/email push instead of relying on the operator to open `/ai-ops` first
+ * ChatProvider/email push instead of relying on the operator to open `/ai-ops` first
  * thing in the morning. Alerts that were already auto-resolved by the next
  * cron pass before the digest runs are intentionally excluded — they are no
  * longer actionable.

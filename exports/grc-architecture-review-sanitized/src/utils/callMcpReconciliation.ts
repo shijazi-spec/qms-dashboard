@@ -54,7 +54,7 @@ export function normalizePhoneDigits(raw: string | undefined | null): string {
   // lost a digit during data entry / dialer export. We have a real case:
   // Sample User's lead, phone "<REDACTED_PHONE>" (Screenshot 464,
   // call-eval bug report 2026-05-24, where auto-link failed despite the
-  // lead being in Zoho). Take the last 9 digits so it matches a Zoho
+  // lead being in CRMProvider). Take the last 9 digits so it matches a CRMProvider
   // record stored in any of the canonical formats above.
   if (digits.length === 11 && digits.startsWith("96")) return digits.slice(-9);
   return digits;
@@ -134,7 +134,7 @@ export function buildTranscriptVsEvaluationReport(input: {
     issues.push({
       code: "no_lead_link",
       severity: "warning",
-      message: "Call is not linked to a Zoho Lead.",
+      message: "Call is not linked to a CRMProvider Lead.",
       suggestion: "Match by phone or CRM activity, then PATCH metadata / ingest with lead_id.",
     });
   }

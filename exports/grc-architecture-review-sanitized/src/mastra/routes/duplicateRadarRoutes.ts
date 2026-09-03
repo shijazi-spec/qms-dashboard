@@ -22,7 +22,7 @@ async function requireDuplicateRadarAccess(c: any) {
 // ---------------------------------------------------------------------------
 // Preflight Structured Push helpers — smarter primary-contact selection +
 // a Deal Description noting the other reachable contacts on the account.
-// Pure (no Zoho/DB access) so they're safe to use in both the dry-run
+// Pure (no CRMProvider/DB access) so they're safe to use in both the dry-run
 // preview and the real-run payload builders.
 // ---------------------------------------------------------------------------
 
@@ -80,15 +80,15 @@ function buildOtherContactsDescription(
 }
 
 // Layer 1 of the push resolution ladder: for each row, resolve an EXISTING
-// Zoho Account by the contact's real EMAIL domain first (the reliable employer
+// CRMProvider Account by the contact's real EMAIL domain first (the reliable employer
 // signal), then the row's own domain, then its company name. Sets
-// matched_account_zoho_id so the planner routes matched contacts to A1 (LINK to
+// matched_account_CRMProvider_id so the planner routes matched contacts to A1 (LINK to
 // existing) instead of creating a new account or rejecting them — guaranteeing
 // a person who belongs to an account we already have is never lost. Lookups are
 // deduped per key. Rows that already carry a matched id are left untouched.
 async function enrichRowsWithExistingAccounts(
   spRows: any[],
-): Promise<{ rows: any[]; via: Map<number, string>; possibleClientOf: (row: any) => { zohoId: string; name: string } | null }> {
+): Promise<{ rows: any[]; via: Map<number, string>; possibleClientOf: (row: any) => { CRMProviderId: string; name: string } | null }> {
   const { getAccountDirectory } = await import("../../utils/duplicateRadarDatabase");
   const { realDomainRoot, normalizeCoreName, significantTokens, domainRootToken } =
     await import("../../utils/preflightStructuredPush");
@@ -97,32 +97,32 @@ async function enrichRowsWithExistingAccounts(
 
   // Fuzzy indexes for the "possible existing client" FLAG (never auto-links —
   // that stays on exact matches; this only warns for human verification).
-  const byCore = new Map<string, { zohoId: string; name: string }>();
-  const byNameToken = new Map<string, { zohoId: string; name: string }>();
+  const byCore = new Map<string, { CRMProviderId: string; name: string }>();
+  const byNameToken = new Map<string, { CRMProviderId: string; name: string }>();
   for (const ref of dir.byId.values()) {
     const core = normalizeCoreName(ref.name);
     if (core.length >= 4 && !byCore.has(core)) byCore.set(core, ref);
     for (const tok of significantTokens(ref.name)) if (!byNameToken.has(tok)) byNameToken.set(tok, ref);
   }
   // Warn only for rows that did NOT auto-match (else they'd be A1 already).
-  const possibleClientOf = (row: any): { zohoId: string; name: string } | null => {
-    if (String(row?.matched_account_zoho_id || "").trim()) return null;
+  const possibleClientOf = (row: any): { CRMProviderId: string; name: string } | null => {
+    if (String(row?.matched_account_CRMProvider_id || "").trim()) return null;
     const core = normalizeCoreName(row?.company);
     if (core.length >= 4 && byCore.has(core)) return byCore.get(core)!;
     const root = domainRootToken(row?.domain) || domainRootToken(row?.email);
     if (root && root.length >= 4 && byNameToken.has(root)) return byNameToken.get(root)!;
     return null;
   };
-  const byDomain = (d: string | null): { zohoId: string; name: string } | null =>
+  const byDomain = (d: string | null): { CRMProviderId: string; name: string } | null =>
     d ? dir.byDomain.get(d) || null : null;
-  const byName = (n: string): { zohoId: string; name: string } | null => {
+  const byName = (n: string): { CRMProviderId: string; name: string } | null => {
     const k = String(n || "").trim().toLowerCase();
     return k.length >= 3 ? dir.byName.get(k) || null : null;
   };
   const via = new Map<number, string>();
   const rows: any[] = [];
   for (const r of spRows) {
-    const presetId = String(r.matched_account_zoho_id || "").trim();
+    const presetId = String(r.matched_account_CRMProvider_id || "").trim();
     if (presetId) {
       via.set(r.row_index, "preset");
       // Fill the account NAME for a preset id (from the preflight CS match)
@@ -137,12 +137,12 @@ async function enrichRowsWithExistingAccounts(
     }
     const emailDom = realDomainRoot(r.email);
     const rowDom = realDomainRoot(r.domain);
-    let ref: { zohoId: string; name: string } | null = null;
+    let ref: { CRMProviderId: string; name: string } | null = null;
     let matchedVia = "";
     if (emailDom) { ref = byDomain(emailDom); if (ref) matchedVia = "email_domain"; }
     if (!ref && rowDom) { ref = byDomain(rowDom); if (ref) matchedVia = "row_domain"; }
     if (!ref && String(r.company || "").trim().length >= 3) { ref = byName(r.company); if (ref) matchedVia = "company_name"; }
-    if (ref) { via.set(r.row_index, matchedVia); rows.push({ ...r, matched_account_zoho_id: ref.zohoId, matched_account_name: ref.name }); }
+    if (ref) { via.set(r.row_index, matchedVia); rows.push({ ...r, matched_account_CRMProvider_id: ref.CRMProviderId, matched_account_name: ref.name }); }
     else rows.push(r);
   }
   return { rows, via, possibleClientOf };
@@ -241,13 +241,13 @@ function parseRecordTabFilters(url: URL): {
 
 // Shared loader for the four record-tab endpoints (leads/deals/contacts/
 // accounts). On-open live-verify (Sample User 2026-07-15): the inline record lists
-// draw straight from the mirror, so a record already DELETED in Zoho could
+// draw straight from the mirror, so a record already DELETED in CRMProvider could
 // still show a row until a sweep reached it — same class of ghost the cluster
 // preview had. When the tab requests ?verify=1 we live-check the records in
-// the clusters shown on THIS page against Zoho, prune the ghosts + mark
+// the clusters shown on THIS page against CRMProvider, prune the ghosts + mark
 // converted leads, recompute those clusters' stats, then re-read — so the list
 // only shows records that still exist in the CRM. Bounded to the visible page's
-// clusters + a hard record cap so it can't hammer Zoho; failure is non-fatal
+// clusters + a hard record cap so it can't hammer CRMProvider; failure is non-fatal
 // (the list still renders from the mirror).
 async function loadRecordTabWithVerify(
   recordType: "lead" | "deal" | "contact" | "account",
@@ -336,14 +336,14 @@ import {
   cleanupStaleRecords,
   cleanupOrphanClusters,
   markRecordsStalePendingByIds,
-  removeRecordsByZohoIds,
+  removeRecordsByCRMProviderIds,
   getClusterRecordTypeMeta,
   getSyncState,
   getAllClustersByInflation,
   getOwnerOpenDeals,
   bulkUpdateOwnerDeals,
   reconcileCrmIds,
-  verifyCrmIdsInZoho,
+  verifyCrmIdsInCRMProvider,
   getClustersBySignal,
   findOrCreateClusterByCompany,
   getSeparationParticipants,
@@ -387,13 +387,13 @@ import type { DuplicateFilters } from "../../utils/duplicateRadarDatabase";
 import { extractCsFieldsFromRawData } from "../../utils/duplicateRadarCsOverlap";
 
 import {
-  fetchAllZohoRecords,
-  fetchDeletedZohoRecords,
-  fetchZohoRecordById,
+  fetchAllCRMProviderRecords,
+  fetchDeletedCRMProviderRecords,
+  fetchCRMProviderRecordById,
   fetchRecordAttachments,
-  fetchZohoRelatedRecords,
-  removeZohoTags,
-} from "../../utils/zohoCRM";
+  fetchCRMProviderRelatedRecords,
+  removeCRMProviderTags,
+} from "../../utils/CRMProviderCRM";
 import {
   DEAL_COMPLIANCE_STAGES,
   requiredDocsForStage,
@@ -426,8 +426,8 @@ import {
   getResolutionRunConfig,
   resolveResolutionRunConfig,
   setResolutionSetting,
-  isResolutionSlackConfigured,
-  sendResolutionSlackTest,
+  isResolutionChatProviderConfigured,
+  sendResolutionChatProviderTest,
   postResolutionMessage,
   buildExecutiveBriefText,
   postWeeklyExecBrief,
@@ -438,7 +438,7 @@ import {
   type ResolutionMode,
 } from "../../utils/duplicateResolutionRunner";
 
-// Management tier allowed to flip the agent's mode / kill switch (writes to Zoho).
+// Management tier allowed to flip the agent's mode / kill switch (writes to CRMProvider).
 const AUTONOMOUS_RESOLUTION_MANAGE_ROLES = [
   "admin",
   "head_of_operations_quality",
@@ -454,9 +454,9 @@ import {
 import { getGradeHistory } from "../../utils/duplicateResolutionGrades";
 // Default to fetching the entire module so duplicate detection reflects the
 // real CRM. Set DUPLICATE_SCAN_LIMIT to a positive integer to re-cap (useful
-// for staging or when Zoho daily-credit budget is tight). An unset, blank,
-// "0", or non-numeric value means "no cap" → fetchAllZohoRecords treats
-// Infinity as "page until Zoho says more_records=false".
+// for staging or when CRMProvider daily-credit budget is tight). An unset, blank,
+// "0", or non-numeric value means "no cap" → fetchAllCRMProviderRecords treats
+// Infinity as "page until CRMProvider says more_records=false".
 const SCAN_MAX_PER_MODULE = (() => {
   const raw = process.env.DUPLICATE_SCAN_LIMIT;
   if (!raw) return Infinity;
@@ -499,7 +499,7 @@ const scanState: ScanState = {
 let scanGeneration = 0;
 
 // A scan that's been "scanning" longer than this is treated as stalled and its
-// lock can be reclaimed (e.g. the process was killed mid-run, or Zoho hung).
+// lock can be reclaimed (e.g. the process was killed mid-run, or CRMProvider hung).
 const STALE_SCAN_MS = (() => {
   const n = parseInt(process.env.DUPLICATE_SCAN_STALE_MS || "", 10);
   return Number.isFinite(n) && n > 0 ? n : 20 * 60 * 1000; // default 20 min
@@ -579,7 +579,7 @@ interface ExtractedRecord {
   modifiedTime: string;
   layoutName?: string;
   layoutId?: string;
-  zohoModule?: string;
+  CRMProviderModule?: string;
   pipeline?: string;
   products?: string;
   mobile?: string;
@@ -630,7 +630,7 @@ async function processModule(
   clustersUpdated: Set<number>,
   extractRecord: (record: any) => ExtractedRecord,
   // Incremental sync: when set (ISO8601), only records modified at/after this
-  // time are fetched from Zoho (via the If-Modified-Since header). undefined =
+  // time are fetched from CRMProvider (via the If-Modified-Since header). undefined =
   // full pull (first sync, or an explicit "Rebuild all").
   ifModifiedSince?: string,
   // Live progress reporter — receives this module's completion fraction (0..1)
@@ -646,7 +646,7 @@ async function processModule(
 
   try {
     await upsertSyncState(moduleName, 0, "syncing");
-    records = await fetchAllZohoRecords(moduleName, {
+    records = await fetchAllCRMProviderRecords(moduleName, {
       maxRecords: SCAN_MAX_PER_MODULE,
       ifModifiedSince,
       // Surface live page counts: update the chip with the running fetched
@@ -679,7 +679,7 @@ async function processModule(
   }
 
   logger.info(
-    `📥 [DuplicateRadar] Fetched ${records.length} ${moduleName} from Zoho`,
+    `📥 [DuplicateRadar] Fetched ${records.length} ${moduleName} from CRMProvider`,
   );
   scanState.moduleStatuses[moduleName] = "processing";
   scanState.recordCounts[moduleName] = records.length;
@@ -719,12 +719,12 @@ async function processModule(
     for (let i = 0; i < _ids.length; i += PF_CHUNK) {
       const slice = _ids.slice(i, i + PF_CHUNK);
       const ex = await pool.query(
-        `SELECT dr.zoho_record_id AS z, dr.cluster_id, dr.company_name, dr.domain,
+        `SELECT dr.CRMProvider_record_id AS z, dr.cluster_id, dr.company_name, dr.domain,
                 dr.email, dr.phone, dr.record_name,
                 dr.deal_value, dr.owner_name, dr.owner_email
            FROM duplicate_records dr
            JOIN duplicate_clusters dc ON dc.id = dr.cluster_id
-          WHERE dr.zoho_record_id = ANY($1::text[])`,
+          WHERE dr.CRMProvider_record_id = ANY($1::text[])`,
         [slice],
       );
       for (const row of ex.rows) _existingById.set(row.z, row);
@@ -781,7 +781,7 @@ async function processModule(
       const data = extractRecord(record);
       if (!data.companyName || data.companyName === "Unknown") {
         // Previously a silent `continue`. Now we count it so the post-loop
-        // summary can flag a Zoho layout that doesn't populate Company /
+        // summary can flag a CRMProvider layout that doesn't populate Company /
         // Account_Name / Last_Name as expected — that was the only other
         // explanation for an apparently-successful sync with 0 writes.
         droppedNoCompany++;
@@ -813,7 +813,7 @@ async function processModule(
           // company-name clustering behaviour verbatim.
           recordType,
           data.recordName,
-          // Zoho id → lets the clusterer honor the separation ledger so a record
+          // CRMProvider id → lets the clusterer honor the separation ledger so a record
           // the operator split/dismissed apart is never silently re-fused.
           record.id,
         );
@@ -833,7 +833,7 @@ async function processModule(
       await upsertRecord({
         cluster_id: _clusterId,
         record_type: recordType,
-        zoho_record_id: record.id,
+        CRMProvider_record_id: record.id,
         record_name: data.recordName,
         company_name: data.companyName,
         email: data.email || undefined,
@@ -858,7 +858,7 @@ async function processModule(
         raw_data: record.data,
         layout_name: data.layoutName,
         layout_id: data.layoutId,
-        zoho_module: data.zohoModule || moduleName,
+        CRMProvider_module: data.CRMProviderModule || moduleName,
         pipeline: data.pipeline,
         products: data.products,
         contact_name: data.contactName,
@@ -911,7 +911,7 @@ async function processModule(
   }
   if (droppedNoCompany > 0)
     logger.warn(
-      `⚠️ [DuplicateRadar] ${moduleName}: dropped ${droppedNoCompany} record(s) with no extractable company name (Zoho layout likely missing Company / Account_Name / Last_Name)`,
+      `⚠️ [DuplicateRadar] ${moduleName}: dropped ${droppedNoCompany} record(s) with no extractable company name (CRMProvider layout likely missing Company / Account_Name / Last_Name)`,
     );
   if (skipped > 0)
     logger.warn(
@@ -933,7 +933,7 @@ async function processModule(
     `⏱️ [DuplicateRadar] ${moduleName} done in ${((Date.now() - t0) / 1000).toFixed(1)}s — fetched ${records.length}, written ${written}, skipped ${skipped + droppedNoCompany}, reused-cluster ${reusedCluster}/${written} (fast-path skipped the full clusterer), no-rescore ${<REDACTED_TOKEN>}/${written} (scoring-phase skip)`,
   );
   // CHIP HONESTY: report the count actually persisted to the database, not
-  // the count fetched from Zoho. Previously this passed records.length even
+  // the count fetched from CRMProvider. Previously this passed records.length even
   // when every upsertRecord threw — sync_status went 'completed' / 5000
   // while duplicate_records stayed empty, which is what hid the silent
   // failure for weeks. If `written < records.length` something dropped
@@ -945,8 +945,8 @@ async function processModule(
 
 /**
  * Run module-fetch tasks with bounded concurrency. Default 1 (sequential) keeps
- * the number of simultaneous Zoho API calls low so a multi-module sync doesn't
- * trip Zoho's rate / concurrency limit — the cause of "Leads/Deals/Accounts:
+ * the number of simultaneous CRMProvider API calls low so a multi-module sync doesn't
+ * trip CRMProvider's rate / concurrency limit — the cause of "Leads/Deals/Accounts:
  * error" while one module squeaked through. A task that throws still rejects
  * (same as Promise.all). Results preserve input order.
  */
@@ -968,8 +968,8 @@ async function runModulesWithConcurrency<T>(
   return results;
 }
 
-// Detect records deleted/merged inside Zoho CRM since the last successful sync
-// and purge them from the duplicate radar. Without this, a manual Zoho merge
+// Detect records deleted/merged inside CRMProvider CRM since the last successful sync
+// and purge them from the duplicate radar. Without this, a manual CRMProvider merge
 // would leave the losing record visible in the radar forever (Modified_Time
 // filters never return deleted records).
 async function runDeletionDetection(
@@ -977,10 +977,10 @@ async function runDeletionDetection(
   // Per-module last_sync_at captured BEFORE this scan's fetch ran. CRITICAL
   // (Sample User 2026-07-07 "deleted data still shows" bug): the fetch calls
   // upsertSyncState which sets last_sync_at = NOW(), so re-reading it here gave
-  // "now" → the Zoho /deleted feed window became [now, now] = empty and NO
-  // deletion was ever detected. Ghost records (deleted/merged in Zoho) then
+  // "now" → the CRMProvider /deleted feed window became [now, now] = empty and NO
+  // deletion was ever detected. Ghost records (deleted/merged in CRMProvider) then
   // lingered in the radar forever — clusters showed records that 404 when
-  // opened in Zoho. Using the PRE-fetch baseline asks Zoho for everything
+  // opened in CRMProvider. Using the PRE-fetch baseline asks CRMProvider for everything
   // deleted SINCE the last completed sync, which is the whole point of the pass.
   baselines: Record<string, string | undefined>,
 ): Promise<{
@@ -1001,8 +1001,8 @@ async function runDeletionDetection(
   // deletions whenever a sync is skipped by the single-flight guard, fails
   // transiently, or the deletion lands just outside the window — the ghost then
   // lingers forever (the modified-since fetch never returns deleted records).
-  // Widen `since` to at least N days ago so every sweep re-asks Zoho for
-  // everything deleted recently and RECOVERS earlier misses. removeRecordsByZohoIds
+  // Widen `since` to at least N days ago so every sweep re-asks CRMProvider for
+  // everything deleted recently and RECOVERS earlier misses. removeRecordsByCRMProviderIds
   // is idempotent, so re-seeing an already-pruned id is a harmless no-op. The
   // /deleted feed is bulk-paginated (cheap), not per-record. 0 disables the floor.
   const lookbackDays = parseInt(
@@ -1028,7 +1028,7 @@ async function runDeletionDetection(
       if (lookbackFloorIso && new Date(lookbackFloorIso) < new Date(baseline)) {
         since = lookbackFloorIso;
       }
-      const deleted = await fetchDeletedZohoRecords(m.name, {
+      const deleted = await fetchDeletedCRMProviderRecords(m.name, {
         type: "all",
         modifiedSince: since,
       });
@@ -1037,12 +1037,12 @@ async function runDeletionDetection(
         continue;
       }
       const ids = deleted.map((d) => d.id).filter(Boolean);
-      // Remove by zoho_record_id ALONE (no module filter): Zoho ids are globally
+      // Remove by CRMProvider_record_id ALONE (no module filter): CRMProvider ids are globally
       // unique, and the /deleted feed already scoped these to this module — but
-      // the module filter silently MISSED ghost rows whose zoho_module column is
+      // the module filter silently MISSED ghost rows whose CRMProvider_module column is
       // NULL (legacy rows) or mismatched, leaving them lingering. (Sample User 2026-07-15)
       const { removedCount, affectedClusterIds } =
-        await removeRecordsByZohoIds(ids);
+        await removeRecordsByCRMProviderIds(ids);
       affectedClusterIds.forEach((id) => clustersUpdated.add(id));
       perModule[m.name] = removedCount;
       totalRemoved += removedCount;
@@ -1057,7 +1057,7 @@ async function runDeletionDetection(
   return { totalRemoved, perModule };
 }
 
-async function scanZohoCRMForDuplicates(
+async function scanCRMProviderCRMForDuplicates(
   detectionType: "manual" | "scheduled" | "interval-fallback" = "manual",
   // When true, force a FULL rebuild (wipe + re-pull every record) instead of
   // the default incremental (changed-records-only) sync. Wired to a "Rebuild
@@ -1109,7 +1109,7 @@ async function scanZohoCRMForDuplicates(
   // current, so a stale concurrent run can't overwrite a newer run's state.
   const myGeneration = ++scanGeneration;
   logger.info(
-    `🔍 [DuplicateRadar] Starting Zoho CRM duplicate scan (${detectionType}) [gen ${myGeneration}]...`,
+    `🔍 [DuplicateRadar] Starting CRMProvider CRM duplicate scan (${detectionType}) [gen ${myGeneration}]...`,
   );
 
   scanState.status = "scanning";
@@ -1135,7 +1135,7 @@ async function scanZohoCRMForDuplicates(
     // and can drop status='resolved' / merge_actions — so the per-module
     // "solved" scoreboard kept collapsing to 0 each 6-hourly sync. Snapshot the
     // current solved-state into the durable resolution-ledger (keyed by survivor
-    // Zoho id) FIRST, so the breakdown's ledger join re-credits "solved" to
+    // CRMProvider id) FIRST, so the breakdown's ledger join re-credits "solved" to
     // whatever cluster each survivor lands in after this scan. Idempotent +
     // best-effort (never blocks the scan).
     await backfillResolutionLedger().catch((e) =>
@@ -1147,7 +1147,7 @@ async function scanZohoCRMForDuplicates(
     // ── Recover ORPHANED `syncing` rows ──────────────────────────────────
     // The single-flight guard above is IN-PROCESS (scanState), so it cannot see
     // a run that died with its process — a deploy / republish / instance recycle
-    // kills the scan mid-module and leaves that module's zoho_sync_state row on
+    // kills the scan mid-module and leaves that module's CRMProvider_sync_state row on
     // `syncing` forever. Observed 2026-08-30: Leads sat "syncing" with a
     // watermark 6h behind every other module. Flip anything abandoned to
     // `failed` so the chips tell the truth and the module is retried cleanly.
@@ -1170,8 +1170,8 @@ async function scanZohoCRMForDuplicates(
 
     // ── Decide FULL vs INCREMENTAL ───────────────────────────────────────
     // Incremental = fetch only records modified since each module's last
-    // successful sync (Zoho If-Modified-Since header) and DON'T wipe existing
-    // data — updates land in place (upsertRecord is idempotent by Zoho id) and
+    // successful sync (CRMProvider If-Modified-Since header) and DON'T wipe existing
+    // data — updates land in place (upsertRecord is idempotent by CRMProvider id) and
     // the deletion-detection pass purges merged/deleted rows.
     //
     // PER-MODULE: incremental kicks in as soon as ANY module has a baseline
@@ -1202,7 +1202,7 @@ async function scanZohoCRMForDuplicates(
     // modules without one fetch in full (and, because we skip the global wipe
     // in incremental mode, their full upsert just refreshes those rows).
     // 10-min safety overlap so records modified mid-sync aren't missed
-    // (re-processing a handful is harmless — upsert is idempotent by Zoho id).
+    // (re-processing a handful is harmless — upsert is idempotent by CRMProvider id).
     const sinceFor = (m: string): string | undefined => {
       if (!incremental || !baselines[m]) return undefined;
       return new Date(new Date(baselines[m]!).getTime() - 10 * 60 * 1000).toISOString();
@@ -1227,8 +1227,8 @@ async function scanZohoCRMForDuplicates(
 
     // B3: Module fetch (sequential by default — see runModulesWithConcurrency)
     scanState.progress = incremental
-      ? "Fetching changed records from Zoho CRM..."
-      : "Fetching all modules from Zoho CRM...";
+      ? "Fetching changed records from CRMProvider CRM..."
+      : "Fetching all modules from CRMProvider CRM...";
     scanState.percentage = 10;
     broadcastSSE("progress", {
       percentage: 10,
@@ -1272,8 +1272,8 @@ async function scanZohoCRMForDuplicates(
     };
 
     // Fetch modules with BOUNDED concurrency (default 1 = sequential). Fetching
-    // all 4 modules in parallel × ZOHO_FETCH_CONCURRENCY pages each meant up to
-    // ~16 simultaneous Zoho calls, which tripped Zoho's rate/concurrency limit
+    // all 4 modules in parallel × CRMProvider_FETCH_CONCURRENCY pages each meant up to
+    // ~16 simultaneous CRMProvider calls, which tripped CRMProvider's rate/concurrency limit
     // and failed 3 of 4 modules. Sequential keeps it to one module at a time.
     // Tune with DUPLICATE_MODULE_CONCURRENCY (1–4).
     const MODULE_CONCURRENCY = (() => {
@@ -1310,7 +1310,7 @@ async function scanZohoCRMForDuplicates(
             modifiedTime: d.Modified_Time || "",
             layoutName: d.Layout?.name || d.$layout?.name || "",
             layoutId: d.Layout?.id || d.$layout?.id || "",
-            zohoModule: "Accounts",
+            CRMProviderModule: "Accounts",
             website: websiteRaw,
             crNumber: d.CR_Number || d.Registration_Number || "",
             vatNumber: d.VAT_Number || d.Tax_ID || "",
@@ -1345,7 +1345,7 @@ async function scanZohoCRMForDuplicates(
             modifiedTime: d.Modified_Time || "",
             layoutName: d.Layout?.name || d.$layout?.name || "",
             layoutId: d.Layout?.id || d.$layout?.id || "",
-            zohoModule: "Deals",
+            CRMProviderModule: "Deals",
             pipeline: d.Pipeline || "",
             products: d.Product_Details
               ? JSON.stringify(d.Product_Details)
@@ -1374,7 +1374,7 @@ async function scanZohoCRMForDuplicates(
             modifiedTime: d.Modified_Time || "",
             layoutName: d.Layout?.name || d.$layout?.name || "",
             layoutId: d.Layout?.id || d.$layout?.id || "",
-            zohoModule: "Contacts",
+            CRMProviderModule: "Contacts",
             title: d.Title || "",
             accountName: d.Account_Name?.name || "",
             country: d.Mailing_Country || d.Other_Country || "",
@@ -1399,7 +1399,7 @@ async function scanZohoCRMForDuplicates(
             modifiedTime: d.Modified_Time || "",
             layoutName: d.Layout?.name || d.$layout?.name || "",
             layoutId: d.Layout?.id || d.$layout?.id || "",
-            zohoModule: "Leads",
+            CRMProviderModule: "Leads",
             title: d.Designation || d.Title || "",
             leadType: d.Lead_Type || "",
             country: d.Country || "",
@@ -1411,17 +1411,17 @@ async function scanZohoCRMForDuplicates(
 
     // All-modules-failed guard (Sample User 2026-06-23): the per-module resilience
     // above intentionally lets a PARTIAL sync complete (some modules synced) —
-    // but if EVERY module failed (Zoho outage / OAuth cooldown / connectivity),
+    // but if EVERY module failed (CRMProvider outage / OAuth cooldown / connectivity),
     // don't let the scan report a green "done" with 0 records (which reads as
     // "data is fresh"). Fail loudly so the operator knows it did NOT complete.
     if (SCAN_MODULES.every((m) => scanState.moduleStatuses[m] === "error")) {
       throw new Error(
-        "Zoho sync failed for every module (rate-limit / OAuth cooldown or connectivity) — no data was fetched. The scan did not complete; please retry.",
+        "CRMProvider sync failed for every module (rate-limit / OAuth cooldown or connectivity) — no data was fetched. The scan did not complete; please retry.",
       );
     }
 
     // Tasks pagination removed per platform-wide Tasks data removal.
-    // `totalRecords` was previously the count fetched from Zoho — that
+    // `totalRecords` was previously the count fetched from CRMProvider — that
     // counter looked healthy even when every upsertRecord threw. Use
     // `written` (the count actually persisted) so the scan summary, the
     // detection log, and the dashboard agree with what's queryable.
@@ -1453,7 +1453,7 @@ async function scanZohoCRMForDuplicates(
     // user-facing tell.
     if (totalFetched > 0 && totalRecords === 0) {
       logger.error(
-        `❌ [DuplicateRadar] Scan persisted 0 records despite fetching ${totalFetched} from Zoho — every upsert was skipped or threw. Check the warnings above (${totalSkipped} skipped).`,
+        `❌ [DuplicateRadar] Scan persisted 0 records despite fetching ${totalFetched} from CRMProvider — every upsert was skipped or threw. Check the warnings above (${totalSkipped} skipped).`,
       );
     } else if (totalSkipped > 0) {
       logger.warn(
@@ -1464,17 +1464,17 @@ async function scanZohoCRMForDuplicates(
     scanState.percentage = 60;
     broadcastSSE("progress", {
       percentage: 60,
-      message: `All modules fetched (${totalFetched} from Zoho, ${totalRecords} persisted)`,
+      message: `All modules fetched (${totalFetched} from CRMProvider, ${totalRecords} persisted)`,
     });
 
-    // Deletion-detection pass: ask Zoho which records were deleted/merged
+    // Deletion-detection pass: ask CRMProvider which records were deleted/merged
     // since our last sync and purge them locally. This is what makes a
-    // manual Zoho merge propagate into the duplicate radar.
+    // manual CRMProvider merge propagate into the duplicate radar.
     const scanMode = process.env.DUPLICATE_SCAN_MODE || "incremental";
-    scanState.progress = "Checking Zoho for deleted/merged records...";
+    scanState.progress = "Checking CRMProvider for deleted/merged records...";
     broadcastSSE("progress", {
       percentage: 62,
-      message: "Checking Zoho for deletions...",
+      message: "Checking CRMProvider for deletions...",
     });
     const deletionResult = await runDeletionDetection(clustersUpdated, baselines);
     if (deletionResult.totalRemoved > 0) {
@@ -1484,7 +1484,7 @@ async function scanZohoCRMForDuplicates(
       );
       broadcastSSE("progress", {
         percentage: 65,
-        message: `Removed ${deletionResult.totalRemoved} deleted/merged Zoho records`,
+        message: `Removed ${deletionResult.totalRemoved} deleted/merged CRMProvider records`,
       });
     }
 
@@ -1580,11 +1580,11 @@ async function scanZohoCRMForDuplicates(
 
     // Layer-2 of Mark-Handled persistence (Sample User 2026-06-16). Every scan
     // re-clusters records and the new cluster row defaults to status='active'
-    // even when the survivor Zoho ids are in the resolution ledger from a
+    // even when the survivor CRMProvider ids are in the resolution ledger from a
     // prior Mark Handled click. Walk active clusters now and flip status back
     // to 'resolved' when every present module has a ledger match — this is
     // the durable counterpart to the view-time filter in getCrossModuleOverlaps.
-    // Auto-merge contacts that were tagged "pending Zoho admin delete" → resolve
+    // Auto-merge contacts that were tagged "pending CRMProvider admin delete" → resolve
     // them now IF the admin has actually deleted the tagged duplicates (so they
     // stay AI-Applied · pending until then). Must run BEFORE the ledger-restore
     // below, which reads the entries this writes.
@@ -1595,14 +1595,14 @@ async function scanZohoCRMForDuplicates(
     );
 
     // Reconcile empty-delete ledger: flip pending_delete → deleted for any
-    // record the admin has actually removed from Zoho since the last sync.
+    // record the admin has actually removed from CRMProvider since the last sync.
     await (await import("../../utils/emptyRecordsDatabase"))
       .reconcileEmptyDeleteDeletions()
       .catch(() => {});
 
     // Auto-prune ghosts in VISIBLE clusters (Sample User 2026-07-13 "deleted deals
     // still appear in Cross-Module after sync"). runDeletionDetection above only
-    // catches deletions Zoho still lists in its /deleted feed; a record that was
+    // catches deletions CRMProvider still lists in its /deleted feed; a record that was
     // HARD-purged (recycle bin emptied) or missed by every window lingers in its
     // active cluster until someone manually clicks "Verify & prune deleted",
     // which rotates across all ~160k records and rarely reaches it. Here we
@@ -1636,7 +1636,7 @@ async function scanZohoCRMForDuplicates(
     }
 
     // Persist per-record cleanup_class (empty/test/junk/orphaned/tagged) from
-    // the synced snapshot — snapshot-only, no live Zoho calls — so later reads
+    // the synced snapshot — snapshot-only, no live CRMProvider calls — so later reads
     // can hide cleanup records from the other Radar tabs (Sample User 2026-07-01).
     try {
       const { classifyCleanupRecords } = await import(
@@ -1683,7 +1683,7 @@ async function scanZohoCRMForDuplicates(
       triggered_by:
         detectionType === "scheduled"
           ? "Automated Weekly Scan"
-          : "Zoho CRM Scan",
+          : "CRMProvider CRM Scan",
       status: "completed",
       completed_at: new Date(),
     });
@@ -1720,13 +1720,13 @@ async function scanZohoCRMForDuplicates(
     return resultData;
   } catch (error: any) {
     logger.error("❌ [DuplicateRadar] Scan error:", error);
-    // Surface Zoho rate-limit cooldowns with a user-actionable message
+    // Surface CRMProvider rate-limit cooldowns with a user-actionable message
     // instead of leaking the raw OAuth body or "An internal error occurred".
     const rateLimited =
-      error?.isZohoRateLimited ||
+      error?.isCRMProviderRateLimited ||
       /too many requests/i.test(String(error?.message || ""));
     const userMessage = rateLimited
-      ? "Zoho is temporarily rate-limited (too many token refresh attempts in a short window). Wait a few minutes, then click Run scan again."
+      ? "CRMProvider is temporarily rate-limited (too many token refresh attempts in a short window). Wait a few minutes, then click Run scan again."
       : error?.message || "An internal error occurred";
 
     const errorResult = {
@@ -1746,7 +1746,7 @@ async function scanZohoCRMForDuplicates(
       scanState.status = "failed";
       scanState.completedAt = Date.now();
       scanState.progress = rateLimited
-        ? "Scan failed — Zoho rate-limited"
+        ? "Scan failed — CRMProvider rate-limited"
         : "Scan failed";
       scanState.error = userMessage;
       scanState.result = errorResult;
@@ -1757,7 +1757,7 @@ async function scanZohoCRMForDuplicates(
   }
 }
 
-export { scanZohoCRMForDuplicates };
+export { scanCRMProviderCRMForDuplicates };
 
 initDuplicateRadarTables().catch((err) => {
   logger.error("Failed to initialize duplicate radar tables:", err);
@@ -1787,7 +1787,7 @@ export const duplicateRadarRoutes = [
           return c.json({
             config: cfg,
             can_manage: canManage,
-            slack: { configured: isResolutionSlackConfigured() },
+            ChatProvider: { configured: isResolutionChatProviderConfigured() },
             grades_latest: Object.values(latestByModule),
             module_breakdown: await getModuleResolutionBreakdown().catch(() => []),
             learnings: await getResolutionLearnings().catch(() => null),
@@ -1837,7 +1837,7 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    // Post a (generated) executive brief to the resolution Slack channel.
+    // Post a (generated) executive brief to the resolution ChatProvider channel.
     path: "/api/duplicates/autonomous/executive-brief/post",
     method: "POST" as const,
     createHandler: async () => {
@@ -1851,7 +1851,7 @@ export const duplicateRadarRoutes = [
           const stamped =
             text + `\n\n_Shared by ${(user as any)?.email || "an operator"} from the Autonomous Resolution screen._`;
           const res = await postResolutionMessage(stamped);
-          if (!res.ok) return c.json({ error: res.error || "Slack post failed" }, 502);
+          if (!res.ok) return c.json({ error: res.error || "ChatProvider post failed" }, 502);
           return c.json({ ok: true, channel: res.channel });
         } catch (e: any) {
           return c.json({ error: e?.message || String(e) }, 500);
@@ -1873,7 +1873,7 @@ export const duplicateRadarRoutes = [
           if (!user) return unauthorizedResponse(c);
           const res = await postWeeklyExecBrief({ recordSnapshot: false });
           if (!res.ok) {
-            return c.json({ error: (res.errors || []).join("; ") || "Slack post failed" }, 502);
+            return c.json({ error: (res.errors || []).join("; ") || "ChatProvider post failed" }, 502);
           }
           return c.json({ ok: true, posted: res.posted, errors: res.errors });
         } catch (e: any) {
@@ -2226,7 +2226,7 @@ export const duplicateRadarRoutes = [
           const body = await c.req.json().catch(() => ({}));
           const scope = body?.scope === "partner" ? "partner" : "corporate";
           const limit = parseInt(body?.limit, 10);
-          // Per-group survivor overrides { "domain|name": zohoIdToKeep }.
+          // Per-group survivor overrides { "domain|name": CRMProviderIdToKeep }.
           const overrides: Record<string, string> = {};
           if (body?.overrides && typeof body.overrides === "object") {
             for (const [k, v] of Object.entries(body.overrides)) {
@@ -2305,7 +2305,7 @@ export const duplicateRadarRoutes = [
             (exactContacts.remaining || 0) +
             (namePhoneContacts.remaining || 0);
           // Loop only while this pass made progress — a progress-based guard that
-          // can't spin forever even if `remaining` is stuck (e.g. Zoho rate-limit).
+          // can't spin forever even if `remaining` is stuck (e.g. CRMProvider rate-limit).
           return c.json({
             success: true,
             accounts,
@@ -2323,8 +2323,8 @@ export const duplicateRadarRoutes = [
   {
     // Dismiss an account auto-merge group as "NOT duplicates" (Sample User 2026-06-23).
     // Records the group's accounts as mutually separated (durable) so the group
-    // is excluded from this AND future previews/merges — no Zoho write.
-    //   POST /api/duplicates/accounts/dismiss-merge-group  { zohoIds: string[] }
+    // is excluded from this AND future previews/merges — no CRMProvider write.
+    //   POST /api/duplicates/accounts/dismiss-merge-group  { CRMProviderIds: string[] }
     path: "/api/duplicates/accounts/dismiss-merge-group",
     method: "POST" as const,
     createHandler: async () => {
@@ -2333,21 +2333,21 @@ export const duplicateRadarRoutes = [
           const user = await requireDuplicateRadarAccess(c);
           if (!user) return unauthorizedResponse(c);
           const body = await c.req.json().catch(() => ({}));
-          const zohoIds: string[] = Array.isArray(body?.zohoIds)
-            ? body.zohoIds.map((z: any) => String(z || "").trim()).filter(Boolean)
+          const CRMProviderIds: string[] = Array.isArray(body?.CRMProviderIds)
+            ? body.CRMProviderIds.map((z: any) => String(z || "").trim()).filter(Boolean)
             : [];
-          if (zohoIds.length < 2) {
+          if (CRMProviderIds.length < 2) {
             return c.json({ error: "Need at least 2 account ids to dismiss." }, 400);
           }
           const performedBy = `${(user as any)?.email || "user"} (dismiss account merge group)`;
           const { recordSeparations } = await import("../../utils/duplicateRadarDatabase");
           // Each account is its own group → recordSeparations separates all pairs.
           const pairs = await recordSeparations(
-            zohoIds.map((z) => [z]),
+            CRMProviderIds.map((z) => [z]),
             "dismiss",
             performedBy,
           );
-          return c.json({ success: true, separatedPairs: pairs, accounts: zohoIds.length });
+          return c.json({ success: true, separatedPairs: pairs, accounts: CRMProviderIds.length });
         } catch (e: any) {
           return c.json({ error: e?.message || String(e) }, 500);
         }
@@ -2483,7 +2483,7 @@ export const duplicateRadarRoutes = [
   {
     // Clear the autonomous resolver's stale SHADOW proposals — bulk-reject every
     // PENDING 'duplicate-resolution' card in one call. Management-tier. These were
-    // never applied to Zoho (shadow), so this writes NOTHING to the CRM — it just
+    // never applied to CRMProvider (shadow), so this writes NOTHING to the CRM — it just
     // empties the review backlog so the queue shows only real escalations.
     // Optional onlyVerdict ('auto'|'escalate') clears just one tier.
     //   POST /api/duplicates/autonomous/clear-shadow-proposals
@@ -2524,7 +2524,7 @@ export const duplicateRadarRoutes = [
           const r = await pool.query(
             `UPDATE ai_pending_actions
                 SET status = 'rejected',
-                    rejection_reason = 'Cleared in bulk — backlog reset, never applied to Zoho.',
+                    rejection_reason = 'Cleared in bulk — backlog reset, never applied to CRMProvider.',
                     reviewed_by_email = $1,
                     reviewed_by_name = $2,
                     reviewed_at = NOW()
@@ -2543,7 +2543,7 @@ export const duplicateRadarRoutes = [
     // "Post operational digest now" — manually fire the SAME twice-daily apply
     // digest (per-tab status board) on demand, so you can see it immediately
     // instead of waiting for the 09:00 / 17:00 KSA run. Posts to the resolution
-    // Slack channel. Management-tier only (it broadcasts to the team channel).
+    // ChatProvider channel. Management-tier only (it broadcasts to the team channel).
     path: "/api/duplicates/autonomous/digest/send",
     method: "POST" as const,
     createHandler: async () => {
@@ -2616,15 +2616,15 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    // Send a one-off test ping to the resolution Slack channel.
-    path: "/api/duplicates/autonomous/slack-test",
+    // Send a one-off test ping to the resolution ChatProvider channel.
+    path: "/api/duplicates/autonomous/ChatProvider-test",
     method: "POST" as const,
     createHandler: async () => {
       return async (c: any) => {
         try {
           const user = await requireDuplicateRadarAccess(c);
           if (!user) return unauthorizedResponse(c);
-          const result = await sendResolutionSlackTest(
+          const result = await sendResolutionChatProviderTest(
             (user as any)?.email || "operator",
           );
           return c.json(result, result.ok ? 200 : 400);
@@ -2636,8 +2636,8 @@ export const duplicateRadarRoutes = [
   },
   {
     // One-off cleanup: delete the bot's zero-progress "applied 0" resolution
-    // pings from the Slack channel (Sample User 2026-06-20). Management-tier.
-    path: "/api/duplicates/autonomous/cleanup-slack-pings",
+    // pings from the ChatProvider channel (Sample User 2026-06-20). Management-tier.
+    path: "/api/duplicates/autonomous/cleanup-ChatProvider-pings",
     method: "POST" as const,
     createHandler: async () => {
       return async (c: any) => {
@@ -2821,9 +2821,9 @@ export const duplicateRadarRoutes = [
           const recordType = MODULE_RECORD_TYPE[module];
           const records = await getRecordsByClusterId(id);
           const ids = records
-            .filter((r) => r.record_type === recordType && r.zoho_record_id)
-            .map((r) => r.zoho_record_id as string)
-            .slice(0, 25); // bound the Zoho calls
+            .filter((r) => r.record_type === recordType && r.CRMProvider_record_id)
+            .map((r) => r.CRMProvider_record_id as string)
+            .slice(0, 25); // bound the CRMProvider calls
           const counts: Record<string, number> = {};
           await Promise.all(
             ids.map(async (zid) => {
@@ -2831,7 +2831,7 @@ export const duplicateRadarRoutes = [
                 const atts = await fetchRecordAttachments(module, zid);
                 counts[zid] = Array.isArray(atts) ? atts.length : 0;
               } catch {
-                counts[zid] = -1; // unknown (Zoho error) — UI shows a neutral dash
+                counts[zid] = -1; // unknown (CRMProvider error) — UI shows a neutral dash
               }
             }),
           );
@@ -2849,8 +2849,8 @@ export const duplicateRadarRoutes = [
     // counts. Sample User (2026-06-10): "instead of attachments here we
     // can add the no. of deals that inside the account itself".
     //   GET /api/duplicates/clusters/:id/deal-counts
-    //   Response: { counts: { <accountZohoId>: N, ... } }
-    //   -1 = Zoho error (UI renders a neutral dash, no crash).
+    //   Response: { counts: { <accountCRMProviderId>: N, ... } }
+    //   -1 = CRMProvider error (UI renders a neutral dash, no crash).
     path: "/api/duplicates/clusters/:id/deal-counts",
     method: "GET" as const,
     createHandler: async () => {
@@ -2862,14 +2862,14 @@ export const duplicateRadarRoutes = [
           if (isNaN(id)) return c.json({ error: "Invalid cluster ID" }, 400);
           const records = await getRecordsByClusterId(id);
           const accountIds = records
-            .filter((r) => r.record_type === "account" && r.zoho_record_id)
-            .map((r) => r.zoho_record_id as string)
-            .slice(0, 25); // bound the Zoho fan-out per click
+            .filter((r) => r.record_type === "account" && r.CRMProvider_record_id)
+            .map((r) => r.CRMProvider_record_id as string)
+            .slice(0, 25); // bound the CRMProvider fan-out per click
           const counts: Record<string, number> = {};
           await Promise.all(
             accountIds.map(async (zid) => {
               try {
-                const deals = await fetchZohoRelatedRecords(
+                const deals = await fetchCRMProviderRelatedRecords(
                   "Accounts",
                   zid,
                   "Deals",
@@ -2892,7 +2892,7 @@ export const duplicateRadarRoutes = [
     //   GET /api/duplicates/clusters/:id/account-deals
     //   Lists the Deals linked to each Account in the cluster, so the Account
     //   merge pop-up can show them and let the operator move a Deal from one
-    //   Account to another. Response: { accounts:[{zohoId,name}], deals:{<acct>:[{id,name,stage}]} }
+    //   Account to another. Response: { accounts:[{CRMProviderId,name}], deals:{<acct>:[{id,name,stage}]} }
     path: "/api/duplicates/clusters/:id/account-deals",
     method: "GET" as const,
     createHandler: async () => {
@@ -2904,9 +2904,9 @@ export const duplicateRadarRoutes = [
           if (isNaN(id)) return c.json({ error: "Invalid cluster ID" }, 400);
           const records = await getRecordsByClusterId(id);
           const accounts = records
-            .filter((r) => r.record_type === "account" && r.zoho_record_id)
+            .filter((r) => r.record_type === "account" && r.CRMProvider_record_id)
             .map((r) => ({
-              zohoId: r.zoho_record_id as string,
+              CRMProviderId: r.CRMProvider_record_id as string,
               name: r.record_name || r.company_name || "Account",
             }))
             .slice(0, 25);
@@ -2917,13 +2917,13 @@ export const duplicateRadarRoutes = [
           await Promise.all(
             accounts.map(async (a) => {
               try {
-                const ds = await fetchZohoRelatedRecords(
+                const ds = await fetchCRMProviderRelatedRecords(
                   "Accounts",
-                  a.zohoId,
+                  a.CRMProviderId,
                   "Deals",
                   { perPage: 200 },
                 );
-                deals[a.zohoId] = (Array.isArray(ds) ? ds : []).map(
+                deals[a.CRMProviderId] = (Array.isArray(ds) ? ds : []).map(
                   (d: any) => ({
                     id: String(d.id),
                     name: d.Deal_Name || d.Name || "Deal",
@@ -2931,7 +2931,7 @@ export const duplicateRadarRoutes = [
                   }),
                 );
               } catch {
-                deals[a.zohoId] = [];
+                deals[a.CRMProviderId] = [];
               }
             }),
           );
@@ -2945,9 +2945,9 @@ export const duplicateRadarRoutes = [
   {
     //   POST /api/duplicates/link-record-to-account
     //   Move a single Deal or Contact under an Account by setting its
-    //   Account_Name lookup in Zoho. Reuses the same primitive the merge
+    //   Account_Name lookup in CRMProvider. Reuses the same primitive the merge
     //   executor uses for "link survivor to account". Admin-gated; supports
-    //   dry_run. Body: { module:'Deals'|'Contacts', record_zoho_id, account_zoho_id, dry_run? }
+    //   dry_run. Body: { module:'Deals'|'Contacts', record_CRMProvider_id, account_CRMProvider_id, dry_run? }
     path: "/api/duplicates/link-record-to-account",
     method: "POST" as const,
     createHandler: async () => {
@@ -2960,15 +2960,15 @@ export const duplicateRadarRoutes = [
           if (!sessionUser) return ua(c);
           const body = await c.req.json().catch(() => ({}));
           const module = String(body?.module || "");
-          const recordId = String(body?.record_zoho_id || "");
-          const accountId = String(body?.account_zoho_id || "");
+          const recordId = String(body?.record_CRMProvider_id || "");
+          const accountId = String(body?.account_CRMProvider_id || "");
           const dryRun = body?.dry_run === true;
           if (!["Deals", "Contacts"].includes(module)) {
             return c.json({ error: "module must be 'Deals' or 'Contacts'" }, 400);
           }
           if (!recordId || !accountId) {
             return c.json(
-              { error: "record_zoho_id and account_zoho_id are required" },
+              { error: "record_CRMProvider_id and account_CRMProvider_id are required" },
               400,
             );
           }
@@ -2979,8 +2979,8 @@ export const duplicateRadarRoutes = [
               message: `Would set ${module} ${recordId} Account_Name → ${accountId}`,
             });
           }
-          const { updateZohoRecord } = await import("../../utils/zohoCRM");
-          await updateZohoRecord(module, recordId, {
+          const { updateCRMProviderRecord } = await import("../../utils/CRMProviderCRM");
+          await updateCRMProviderRecord(module, recordId, {
             Account_Name: { id: accountId },
           });
           logger.info(
@@ -2989,8 +2989,8 @@ export const duplicateRadarRoutes = [
           return c.json({
             success: true,
             module,
-            record_zoho_id: recordId,
-            account_zoho_id: accountId,
+            record_CRMProvider_id: recordId,
+            account_CRMProvider_id: accountId,
           });
         } catch (error: any) {
           logger.error("Error linking record to account:", error);
@@ -3000,12 +3000,12 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    // Post-merge verification — re-query Zoho for every record this cluster
+    // Post-merge verification — re-query CRMProvider for every record this cluster
     // has tagged Duplicate-Delete (via prior merge_actions). Reports how many
     // the admin has actually deleted vs. still pending. Closes the "did the
     // tag-and-delete handoff actually happen?" visibility gap.
     //   GET /api/duplicates/clusters/:id/verify-tags
-    // Response: { total, deleted, alive, errors, byRecord: [{zohoId, module, status}] }
+    // Response: { total, deleted, alive, errors, byRecord: [{CRMProviderId, module, status}] }
     path: "/api/duplicates/clusters/:id/verify-tags",
     method: "GET" as const,
     createHandler: async () => {
@@ -3049,12 +3049,12 @@ export const duplicateRadarRoutes = [
             });
           }
 
-          // Resolve db ids → (zoho_record_id, zoho_module). Bound to ≤50
+          // Resolve db ids → (CRMProvider_record_id, CRMProvider_module). Bound to ≤50
           // ids per call so a runaway merge_action history can't pin us in
-          // a 5-minute Zoho fan-out.
+          // a 5-minute CRMProvider fan-out.
           const dbIds = Array.from(dbIdSet).slice(0, 50);
           const recs = await pool.query(
-            `SELECT id, zoho_record_id, zoho_module, record_type, record_name
+            `SELECT id, CRMProvider_record_id, CRMProvider_module, record_type, record_name
                FROM duplicate_records
               WHERE id = ANY($1::int[])`,
             [dbIds],
@@ -3067,10 +3067,10 @@ export const duplicateRadarRoutes = [
           };
           const byRecord: Array<{
             dbId: number;
-            zohoId: string | null;
+            CRMProviderId: string | null;
             module: string | null;
             name: string | null;
-            status: "deleted" | "alive" | "no-zoho-id" | "error";
+            status: "deleted" | "alive" | "no-CRMProvider-id" | "error";
             error?: string;
           }> = [];
           let deleted = 0,
@@ -3078,28 +3078,28 @@ export const duplicateRadarRoutes = [
             errors = 0;
           await Promise.all(
             recs.rows.map(async (row: any) => {
-              const zohoId = row.zoho_record_id || null;
+              const CRMProviderId = row.CRMProvider_record_id || null;
               const moduleName =
-                row.zoho_module ||
+                row.CRMProvider_module ||
                 RECORD_TYPE_TO_MODULE[row.record_type as string] ||
                 null;
-              if (!zohoId || !moduleName) {
+              if (!CRMProviderId || !moduleName) {
                 byRecord.push({
                   dbId: row.id,
-                  zohoId,
+                  CRMProviderId,
                   module: moduleName,
                   name: row.record_name || null,
-                  status: "no-zoho-id",
+                  status: "no-CRMProvider-id",
                 });
                 return;
               }
               try {
-                const live = await fetchZohoRecordById(moduleName, zohoId);
+                const live = await fetchCRMProviderRecordById(moduleName, CRMProviderId);
                 if (live === null) {
                   deleted++;
                   byRecord.push({
                     dbId: row.id,
-                    zohoId,
+                    CRMProviderId,
                     module: moduleName,
                     name: row.record_name || null,
                     status: "deleted",
@@ -3108,7 +3108,7 @@ export const duplicateRadarRoutes = [
                   alive++;
                   byRecord.push({
                     dbId: row.id,
-                    zohoId,
+                    CRMProviderId,
                     module: moduleName,
                     name: row.record_name || null,
                     status: "alive",
@@ -3118,7 +3118,7 @@ export const duplicateRadarRoutes = [
                 errors++;
                 byRecord.push({
                   dbId: row.id,
-                  zohoId,
+                  CRMProviderId,
                   module: moduleName,
                   name: row.record_name || null,
                   status: "error",
@@ -3128,7 +3128,7 @@ export const duplicateRadarRoutes = [
             }),
           );
           // 2026-06-18 — reconcile like /recheck: records confirmed gone from
-          // Zoho (404) are marked stale_pending and purged, so the cluster
+          // CRMProvider (404) are marked stale_pending and purged, so the cluster
           // collapses to the survivor(s) instead of listing deleted dupes.
           let purged = 0;
           const deletedDbIds = byRecord
@@ -3161,13 +3161,13 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    // BULK verify-and-resolve: for every AI-Applied (pending Zoho delete)
-    // cluster — optionally a single module — re-query Zoho for the tagged
+    // BULK verify-and-resolve: for every AI-Applied (pending CRMProvider delete)
+    // cluster — optionally a single module — re-query CRMProvider for the tagged
     // Duplicate-Delete records and mark Resolved ONLY those where the admin has
     // deleted every one. For when the admin clears a big batch at once. Bounded
     // (≤ maxClusters, ≤50 records/cluster) and conservative — a cluster is only
     // resolved when EVERY tagged duplicate is provably gone (no alive, no
-    // no-zoho-id, no Zoho error). Reuses the verify-tags logic + resolveCluster.
+    // no-CRMProvider-id, no CRMProvider error). Reuses the verify-tags logic + resolveCluster.
     //   POST /api/duplicates/verify-resolve-applied
     //   Body: { module?: 'Accounts'|'Leads'|'Deals'|'Contacts', maxClusters?: number }
     //   Response: { checked, resolved, pending, errored, noTags, more, perCluster }
@@ -3249,13 +3249,13 @@ export const duplicateRadarRoutes = [
           const perCluster: any[] = [];
 
           // Sequential across clusters (so a big batch can't fan out into a
-          // thousand concurrent Zoho calls); records WITHIN a cluster checked in
+          // thousand concurrent CRMProvider calls); records WITHIN a cluster checked in
           // parallel, bounded to ≤50.
           for (const cid of ids) {
             const dbIdSet = new Set<number>();
             if (scope === "dismissed") {
               // A dismissed cluster has no tagged subset — the question is
-              // whether the WHOLE group is still in Zoho, so check every member.
+              // whether the WHOLE group is still in CRMProvider, so check every member.
               const all = await pool.query(
                 `SELECT id FROM duplicate_records WHERE cluster_id = $1`,
                 [cid],
@@ -3282,7 +3282,7 @@ export const duplicateRadarRoutes = [
             if (dbIdSet.size === 0 && scope !== "dismissed") {
               // The action fired but recorded no merged_record_ids, so there is
               // nothing to look up and the cluster can NEVER leave "AI-Applied ·
-              // pending Zoho admin delete" — it just sits there forever. Five
+              // pending CRMProvider admin delete" — it just sits there forever. Five
               // clusters were in exactly this state on 2026-08-19.
               //
               // A resolve action means "keep the primary, delete the rest", so
@@ -3303,7 +3303,7 @@ export const duplicateRadarRoutes = [
             }
             const dbIds = Array.from(dbIdSet).slice(0, 50);
             const recs = await pool.query(
-              `SELECT id, zoho_record_id, zoho_module, record_type
+              `SELECT id, CRMProvider_record_id, CRMProvider_module, record_type
                  FROM duplicate_records WHERE id = ANY($1::int[])`,
               [dbIds],
             );
@@ -3314,16 +3314,16 @@ export const duplicateRadarRoutes = [
             await Promise.all(
               recs.rows.map(async (row: any) => {
                 total++;
-                const zohoId = row.zoho_record_id || null;
+                const CRMProviderId = row.CRMProvider_record_id || null;
                 const mod =
-                  row.zoho_module || RTM[row.record_type as string] || null;
-                if (!zohoId || !mod) {
+                  row.CRMProvider_module || RTM[row.record_type as string] || null;
+                if (!CRMProviderId || !mod) {
                   // Can't confirm deletion → conservatively treat as not-gone.
                   alive++;
                   return;
                 }
                 try {
-                  const live = await fetchZohoRecordById(mod, zohoId);
+                  const live = await fetchCRMProviderRecordById(mod, CRMProviderId);
                   if (live === null) deleted++;
                   else alive++;
                 } catch {
@@ -3342,7 +3342,7 @@ export const duplicateRadarRoutes = [
               else pending++;
               perCluster.push({
                 id: cid,
-                outcome: gone ? "all_deleted_in_zoho" : errs > 0 ? "error" : "still_present",
+                outcome: gone ? "all_deleted_in_CRMProvider" : errs > 0 ? "error" : "still_present",
                 deleted,
                 alive,
                 total,
@@ -3353,7 +3353,7 @@ export const duplicateRadarRoutes = [
                 "resolve",
                 sessionUser.email || "admin",
                 undefined,
-                `Verified in CRM (bulk): all ${total} Duplicate-Delete record(s) confirmed deleted in Zoho.`,
+                `Verified in CRM (bulk): all ${total} Duplicate-Delete record(s) confirmed deleted in CRMProvider.`,
               );
               resolved++;
               perCluster.push({ id: cid, outcome: "resolved", deleted, total });
@@ -3370,7 +3370,7 @@ export const duplicateRadarRoutes = [
             scope,
             checked: ids.length,
             // In `dismissed` scope nothing is mutated: `resolved` counts
-            // clusters whose records are ALL gone from Zoho, not clusters this
+            // clusters whose records are ALL gone from CRMProvider, not clusters this
             // call resolved.
             resolved,
             pending,
@@ -3429,10 +3429,10 @@ export const duplicateRadarRoutes = [
   },
   {
     // Per-cluster re-check: for every record currently in the cluster,
-    // re-fetch from Zoho and report its live state — does the record still
+    // re-fetch from CRMProvider and report its live state — does the record still
     // exist? what's its current Account_Name? what tags? Used right after
     // an Apply to confirm the migrate-tag-cascade chain actually landed in
-    // Zoho without needing to wait for the next 6h scan.
+    // CRMProvider without needing to wait for the next 6h scan.
     //   GET /api/duplicates/clusters/:id/recheck
     path: "/api/duplicates/clusters/:id/recheck",
     method: "GET" as const,
@@ -3452,22 +3452,22 @@ export const duplicateRadarRoutes = [
             account: "Accounts",
           };
           // Bound the fan-out — clusters with hundreds of records would
-          // otherwise burn our Zoho quota in one click.
+          // otherwise burn our CRMProvider quota in one click.
           const targets = records
-            .filter((r) => r.zoho_record_id)
+            .filter((r) => r.CRMProvider_record_id)
             .slice(0, 50);
           const truncated = records.length > targets.length;
 
           const out = await Promise.all(
             targets.map(async (r) => {
               const moduleName =
-                r.zoho_module ||
+                r.CRMProvider_module ||
                 RECORD_TYPE_TO_MODULE[r.record_type as string];
-              const zohoId = r.zoho_record_id as string;
+              const CRMProviderId = r.CRMProvider_record_id as string;
               if (!moduleName) {
                 return {
                   dbId: r.id,
-                  zohoId,
+                  CRMProviderId,
                   module: null,
                   name: r.record_name || null,
                   recordType: r.record_type,
@@ -3476,11 +3476,11 @@ export const duplicateRadarRoutes = [
                 };
               }
               try {
-                const live = await fetchZohoRecordById(moduleName, zohoId);
+                const live = await fetchCRMProviderRecordById(moduleName, CRMProviderId);
                 if (live === null) {
                   return {
                     dbId: r.id,
-                    zohoId,
+                    CRMProviderId,
                     module: moduleName,
                     name: r.record_name || null,
                     recordType: r.record_type,
@@ -3496,7 +3496,7 @@ export const duplicateRadarRoutes = [
                   data.Account_Name?.name || data.account_name || null;
                 return {
                   dbId: r.id,
-                  zohoId,
+                  CRMProviderId,
                   module: moduleName,
                   name: r.record_name || null,
                   recordType: r.record_type,
@@ -3511,7 +3511,7 @@ export const duplicateRadarRoutes = [
               } catch (e: any) {
                 return {
                   dbId: r.id,
-                  zohoId,
+                  CRMProviderId,
                   module: moduleName,
                   name: r.record_name || null,
                   recordType: r.record_type,
@@ -3531,7 +3531,7 @@ export const duplicateRadarRoutes = [
               (x: any) => x.status === "alive" && x.hasDuplicateDeleteTag,
             ).length,
           };
-          // 2026-06-18 — reconcile: records confirmed GONE from Zoho (404) are
+          // 2026-06-18 — reconcile: records confirmed GONE from CRMProvider (404) are
           // marked stale_pending and purged, so a resolved cluster collapses to
           // just the survivor instead of lingering with already-deleted dupes.
           // Only acts on definitively-deleted rows (never on transient errors).
@@ -3592,7 +3592,7 @@ export const duplicateRadarRoutes = [
           // operator overrode it. The preview counts cover all NON-survivor
           // records — same set the executor would walk.
           const sameModuleRecords = records.filter(
-            (r) => r.record_type === recordType && r.zoho_record_id,
+            (r) => r.record_type === recordType && r.CRMProvider_record_id,
           );
           if (sameModuleRecords.length < 2) {
             return c.json({ module, deals: 0, contacts: 0, scope: "no-dups" });
@@ -3603,7 +3603,7 @@ export const duplicateRadarRoutes = [
             sameModuleRecords.find((r) => r.is_primary) ||
             sameModuleRecords[0];
           const dups = sameModuleRecords.filter(
-            (r) => r.zoho_record_id !== survivor.zoho_record_id,
+            (r) => r.CRMProvider_record_id !== survivor.CRMProvider_record_id,
           );
 
           // Same list shape as duplicateMergeExecutor.MODULE_REPARENT.
@@ -3620,12 +3620,12 @@ export const duplicateRadarRoutes = [
 
           const counts = { deals: 0, contacts: 0 };
           for (const dup of dups.slice(0, 25)) {
-            // Bound the fan-out: 25 dups × 2 lists = 50 Zoho calls max.
+            // Bound the fan-out: 25 dups × 2 lists = 50 CRMProvider calls max.
             for (const rp of REPARENT_LISTS) {
               try {
-                const children = await fetchZohoRelatedRecords(
+                const children = await fetchCRMProviderRelatedRecords(
                   module,
-                  dup.zoho_record_id as string,
+                  dup.CRMProvider_record_id as string,
                   rp.list,
                   { perPage: 200 },
                 );
@@ -3653,9 +3653,9 @@ export const duplicateRadarRoutes = [
     // Deal-stage DOCUMENT compliance (Sales SOP 7.5.10): lists deals in
     // Proposal/Paid/Agreement Signed + the documents each stage requires.
     // Field/data-entry compliance is owned by the Quality Dashboard audit;
-    // this surface is purely the Zoho-Attachments layer. Per-deal document
+    // this surface is purely the CRMProvider-Attachments layer. Per-deal document
     // verification is loaded via the doc-compliance endpoint (lazy, bounds
-    // Zoho calls).
+    // CRMProvider calls).
     path: "/api/duplicates/deal-compliance",
     method: "GET" as const,
     createHandler: async () => {
@@ -3664,7 +3664,7 @@ export const duplicateRadarRoutes = [
           const user = await requireDuplicateRadarAccess(c);
           if (!user) return unauthorizedResponse(c);
           // Which stages to check — from the Advanced Filters Stage selector
-          // (?stages=A,B,C); defaults to the real closing stages. Zoho's list
+          // (?stages=A,B,C); defaults to the real closing stages. CRMProvider's list
           // endpoint ignores `criteria`, so we filter in CODE (reliable).
           const stagesParam = (c.req.query("stages") || "").trim();
           const wanted = stagesParam
@@ -3672,9 +3672,9 @@ export const duplicateRadarRoutes = [
             : [...DEAL_COMPLIANCE_STAGES];
           const wantedLower = new Set(wanted.map((s: string) => s.toLowerCase()));
 
-          // SOURCE: the local mirror by default, live Zoho only on request.
+          // SOURCE: the local mirror by default, live CRMProvider only on request.
           //
-          // This used to always pull 3,000 deals live from Zoho, which cost
+          // This used to always pull 3,000 deals live from CRMProvider, which cost
           // 10.2s measured on 2026-08-24 — on tab open AND on every stage-filter
           // Apply. The browser was never blocked (0 long tasks, 85ms to render
           // 976 rows); it was simply waiting, which is what read as the tab
@@ -3685,8 +3685,8 @@ export const duplicateRadarRoutes = [
           // with Sample User 2026-08-24:
           //   FRESHNESS  — a deal created or re-staged since the last sync will
           //                not appear until the next one. The "Refresh from
-          //                Zoho (live)" button passes ?live=1 and still hits
-          //                Zoho, so there is always a way to see this second.
+          //                CRMProvider (live)" button passes ?live=1 and still hits
+          //                CRMProvider, so there is always a way to see this second.
           //   COVERAGE   — the mirror holds ALL deals, not the most-recently-
           //                modified 3,000, so "In scope" can legitimately grow.
           //                That is more complete, not inflated.
@@ -3696,7 +3696,7 @@ export const duplicateRadarRoutes = [
           let allDeals: any[] = [];
           try {
             allDeals = useLive
-              ? await fetchAllZohoRecords("Deals", {
+              ? await fetchAllCRMProviderRecords("Deals", {
                   sortBy: "Modified_Time",
                   sortOrder: "desc",
                   maxRecords: 3000,
@@ -3713,7 +3713,7 @@ export const duplicateRadarRoutes = [
                   // Only the handful of raw_data fields actually rendered are
                   // extracted, in SQL.
                   const q = await pool.query(
-                    `SELECT zoho_record_id, record_name, stage, owner_name, owner_email,
+                    `SELECT CRMProvider_record_id, record_name, stage, owner_name, owner_email,
                             deal_value, source, created_date, layout_name,
                             NULLIF(BTRIM(COALESCE(
                               raw_data->'Account_Name'->>'name',
@@ -3728,10 +3728,10 @@ export const duplicateRadarRoutes = [
                   // Reshape to the same {id, data:{…}} envelope the live path
                   // returns, so every consumer below is untouched.
                   return q.rows.map((r: any) => ({
-                    id: r.zoho_record_id,
+                    id: r.CRMProvider_record_id,
                     owner: r.owner_name || r.owner_email || "",
                     data: {
-                      Deal_Name: r.record_name || r.zoho_record_id,
+                      Deal_Name: r.record_name || r.CRMProvider_record_id,
                       Stage: r.stage || r.raw_stage || "",
                       Amount: r.deal_value != null ? Number(r.deal_value) : null,
                       Lead_Source: r.source || "",
@@ -3790,8 +3790,8 @@ export const duplicateRadarRoutes = [
           let deals = allDeals.filter((r: any) =>
             wantedLower.has(String(r.data?.Stage || "").trim().toLowerCase()),
           );
-          // Segment chip (Sample User 2026-07-15): filter the live Zoho deals to the
-          // chosen product by their Layout — Zoho returns Layout as {id,name}.
+          // Segment chip (Sample User 2026-07-15): filter the live CRMProvider deals to the
+          // chosen product by their Layout — CRMProvider returns Layout as {id,name}.
           // Same classification as buildSegmentPredicate (substring, corporate=ExampleOrg).
           const dcSegment = (c.req.query("segment") || "").trim();
           if (dcSegment && dcSegment !== "all") {
@@ -3836,7 +3836,7 @@ export const duplicateRadarRoutes = [
           // every fresh session showed hundreds of deals as "not yet checked"
           // and the only way to populate them was the operator pressing
           // "Check all documents" and waiting while their browser drove
-          // hundreds of live Zoho calls (Sample User 2026-08-25: "this page is a
+          // hundreds of live CRMProvider calls (Sample User 2026-08-25: "this page is a
           // disaster, it stopped the whole PC"). The background sweep now
           // keeps this table current; the page just reads it.
           //
@@ -3848,14 +3848,14 @@ export const duplicateRadarRoutes = [
             const ids = rows.map((r) => String(r.id)).filter(Boolean);
             if (ids.length) {
               const dc = await pool.query(
-                `SELECT zoho_deal_id, compliant, present_docs, missing_docs,
+                `SELECT CRMProvider_deal_id, compliant, present_docs, missing_docs,
                         attachment_count, checked_at, checked_by
                    FROM deal_doc_compliance
-                  WHERE zoho_deal_id = ANY($1::text[])`,
+                  WHERE CRMProvider_deal_id = ANY($1::text[])`,
                 [ids],
               );
               const byId = new Map<string, any>();
-              for (const r of dc.rows as any[]) byId.set(String(r.zoho_deal_id), r);
+              for (const r of dc.rows as any[]) byId.set(String(r.CRMProvider_deal_id), r);
               checkedCount = byId.size;
               for (const row of rows as any[]) {
                 const hit = byId.get(String(row.id));
@@ -3884,7 +3884,7 @@ export const duplicateRadarRoutes = [
             try {
               const { pool } = await import("../../utils/duplicateRadarDatabase");
               const s = await pool.query(
-                `SELECT last_sync_at FROM zoho_sync_state WHERE module = 'Deals'`,
+                `SELECT last_sync_at FROM CRMProvider_sync_state WHERE module = 'Deals'`,
               );
               const v = s.rows[0]?.last_sync_at;
               lastSyncAt = v ? new Date(v).toISOString() : null;
@@ -3898,7 +3898,7 @@ export const duplicateRadarRoutes = [
             wanted,
             distinct_stages: distinctStages,
             by_stage: byStage,
-            source: useLive ? "zoho_live" : "mirror",
+            source: useLive ? "CRMProvider_live" : "mirror",
             last_sync_at: lastSyncAt,
             // How much of the listed set the background sweep has covered, so
             // the tab can say so instead of implying a human must go and check.
@@ -3913,7 +3913,7 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    // Per-deal document (attachment) compliance — fetches the deal's Zoho
+    // Per-deal document (attachment) compliance — fetches the deal's CRMProvider
     // attachments and keyword-matches the SOP-required documents for its stage.
     path: "/api/duplicates/deals/:id/doc-compliance",
     method: "GET" as const,
@@ -3929,7 +3929,7 @@ export const duplicateRadarRoutes = [
           try {
             atts = await fetchRecordAttachments("Deals", id);
           } catch (e: any) {
-            return c.json({ error: `Zoho attachments fetch failed: ${e?.message || e}` }, 502);
+            return c.json({ error: `CRMProvider attachments fetch failed: ${e?.message || e}` }, 502);
           }
           // Company documents (VAT, CR, National Address) live on the Account,
           // so the Account's attachments are consulted for those. Without this
@@ -3941,7 +3941,7 @@ export const duplicateRadarRoutes = [
             const q = await pool.query(
               `SELECT NULLIF(BTRIM(raw_data->'Account_Name'->>'id'), '') AS account_id
                  FROM duplicate_records
-                WHERE record_type = 'deal' AND zoho_record_id = $1
+                WHERE record_type = 'deal' AND CRMProvider_record_id = $1
                 LIMIT 1`,
               [String(id)],
             );
@@ -3973,7 +3973,7 @@ export const duplicateRadarRoutes = [
           // Best-effort: a DB hiccup must not fail the live compliance answer.
           try {
             await upsertDealDocCompliance({
-              zohoDealId: String(id),
+              CRMProviderDealId: String(id),
               stage,
               compliant: !!result.compliant,
               presentDocs: (result.presentDocs || []).map((p: any) => p.label),
@@ -4006,7 +4006,7 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    // BATCH doc-compliance (Sample User 2026-07-29) — check up to 50 deals' Zoho
+    // BATCH doc-compliance (Sample User 2026-07-29) — check up to 50 deals' CRMProvider
     // attachments in ONE request, server-side, with bounded concurrency + the
     // existing 429 backoff. The dashboard's "Check all documents" used to fire
     // 200 separate browser fetches with heavy per-row work, which hung the
@@ -4070,7 +4070,7 @@ export const duplicateRadarRoutes = [
     // Document-compliance report for the Head of Sales: missing-document rate,
     // which owner it sits with, and one sheet per stage (Proposal / Agreement
     // Signed / Paid). Reads the STORED checks kept current by the background
-    // sweep, so it makes no Zoho calls and is instant.
+    // sweep, so it makes no CRMProvider calls and is instant.
     // GET /api/duplicates/deal-compliance.xlsx?segment=
     path: "/api/duplicates/deal-compliance.xlsx",
     method: "GET" as const,
@@ -4163,10 +4163,10 @@ export const duplicateRadarRoutes = [
           try {
             const { pool } = await import("../../utils/duplicateRadarDatabase");
             const q = await pool.query(
-              `SELECT zoho_record_id AS id,
+              `SELECT CRMProvider_record_id AS id,
                       NULLIF(BTRIM(raw_data->'Account_Name'->>'id'), '') AS account_id
                  FROM duplicate_records
-                WHERE record_type = 'deal' AND zoho_record_id = ANY($1::text[])`,
+                WHERE record_type = 'deal' AND CRMProvider_record_id = ANY($1::text[])`,
               [deals.map((d: any) => d.id)],
             );
             for (const row of q.rows as any[]) {
@@ -4187,7 +4187,7 @@ export const duplicateRadarRoutes = [
             acctCache.set(accountId, p);
             return p;
           };
-          // Bounded concurrency keeps us under Zoho's attachment rate limit
+          // Bounded concurrency keeps us under CRMProvider's attachment rate limit
           // while still finishing a batch in a few seconds.
           const CONC = 3;
           let cursor = 0;
@@ -4200,7 +4200,7 @@ export const duplicateRadarRoutes = [
                 const r = evaluateDocCompliance(d.stage, atts, await acctAttsFor(d.id));
                 try {
                   await upsertDealDocCompliance({
-                    zohoDealId: d.id,
+                    CRMProviderDealId: d.id,
                     stage: d.stage,
                     compliant: !!r.compliant,
                     presentDocs: (r.presentDocs || []).map((p: any) => p.label),
@@ -4259,7 +4259,7 @@ export const duplicateRadarRoutes = [
           const rows = await getDealDocCompliance(ids);
           const results: Record<string, any> = {};
           for (const r of rows) {
-            results[r.zoho_deal_id] = {
+            results[r.CRMProvider_deal_id] = {
               compliant: !!r.compliant,
               present: Array.isArray(r.present_docs) ? r.present_docs : [],
               missing: Array.isArray(r.missing_docs) ? r.missing_docs : [],
@@ -4538,9 +4538,9 @@ export const duplicateRadarRoutes = [
             return c.json({ error: "Cluster not found" }, 404);
           }
           // Live-verify on OPEN (Sample User 2026-07-15): the preview was showing
-          // records already DELETED in Zoho (e.g. ARGAS) because they sit in the
+          // records already DELETED in CRMProvider (e.g. ARGAS) because they sit in the
           // mirror until a sweep reaches them. When the modal passes ?verify=1 we
-          // live-check THIS cluster's records against Zoho, prune the ghosts +
+          // live-check THIS cluster's records against CRMProvider, prune the ghosts +
           // mark converted leads, recompute the cluster's stats, and re-read — so
           // the preview only ever shows records that still exist in the CRM.
           const doVerify = new URL(c.req.url).searchParams.get("verify") === "1";
@@ -4619,7 +4619,7 @@ export const duplicateRadarRoutes = [
   {
     // Phase 1 — Agentic Duplicate Resolution: PROPOSE a non-destructive merge
     // plan for an Accounts cluster. READ-ONLY: builds the plan in memory and
-    // returns it; performs NO writes to Zoho or the radar DB. Gated on the
+    // returns it; performs NO writes to CRMProvider or the radar DB. Gated on the
     // read-level duplicate-radar role (same as the cluster detail view) — the
     // destructive /execute path (separate, admin-gated) will consume the plan.
     // Response: { success, plan } — see MergePlan in duplicateMergePlanner.ts.
@@ -4655,17 +4655,17 @@ export const duplicateRadarRoutes = [
             );
           }
 
-          const includeZohoIds = Array.isArray(body?.record_zoho_ids)
-            ? body.record_zoho_ids.filter((x: any) => typeof x === "string")
+          const includeCRMProviderIds = Array.isArray(body?.record_CRMProvider_ids)
+            ? body.record_CRMProvider_ids.filter((x: any) => typeof x === "string")
             : null;
-          const masterZohoId =
-            typeof body?.master_zoho_id === "string"
-              ? body.master_zoho_id
+          const masterCRMProviderId =
+            typeof body?.master_CRMProvider_id === "string"
+              ? body.master_CRMProvider_id
               : null;
-          const linkAccountZohoId =
-            body && "link_account_zoho_id" in body
-              ? typeof body.link_account_zoho_id === "string"
-                ? body.link_account_zoho_id
+          const linkAccountCRMProviderId =
+            body && "link_account_CRMProvider_id" in body
+              ? typeof body.link_account_CRMProvider_id === "string"
+                ? body.link_account_CRMProvider_id
                 : ""
               : undefined;
           const forceMergeContacts = body?.force_merge === true;
@@ -4688,9 +4688,9 @@ export const duplicateRadarRoutes = [
               tagName: "Duplicate-Delete",
               generatedBy,
               generatedAt: new Date().toISOString(),
-              includeZohoIds,
-              masterZohoId,
-              linkAccountZohoId,
+              includeCRMProviderIds,
+              masterCRMProviderId,
+              linkAccountCRMProviderId,
               taggedAccountDbIds,
               forceMergeContacts,
             });
@@ -4712,9 +4712,9 @@ export const duplicateRadarRoutes = [
     // tags duplicates `Duplicate-Delete`, stamps audit notes, and resolves the
     // cluster. The platform NEVER deletes. DESTRUCTIVE → requireAdminOrKey.
     //
-    // Body: { confirm?: boolean, dry_run?: boolean, master_zoho_id?: string }
+    // Body: { confirm?: boolean, dry_run?: boolean, master_CRMProvider_id?: string }
     //   - dry-run is the default; a real write requires confirm === true.
-    //   - master_zoho_id lets the operator override the survivor.
+    //   - master_CRMProvider_id lets the operator override the survivor.
     // The plan is rebuilt server-side from live records (the client plan is
     // never trusted) and re-validated before execution.
     path: "/api/duplicates/clusters/:id/execute",
@@ -4732,17 +4732,17 @@ export const duplicateRadarRoutes = [
 
           const body = await c.req.json().catch(() => ({}));
           const dryRun = body?.confirm !== true || body?.dry_run === true;
-          const masterZohoId =
-            typeof body?.master_zoho_id === "string"
-              ? body.master_zoho_id
+          const masterCRMProviderId =
+            typeof body?.master_CRMProvider_id === "string"
+              ? body.master_CRMProvider_id
               : null;
-          const includeZohoIds = Array.isArray(body?.record_zoho_ids)
-            ? body.record_zoho_ids.filter((x: any) => typeof x === "string")
+          const includeCRMProviderIds = Array.isArray(body?.record_CRMProvider_ids)
+            ? body.record_CRMProvider_ids.filter((x: any) => typeof x === "string")
             : null;
-          const linkAccountZohoId =
-            body && "link_account_zoho_id" in body
-              ? typeof body.link_account_zoho_id === "string"
-                ? body.link_account_zoho_id
+          const linkAccountCRMProviderId =
+            body && "link_account_CRMProvider_id" in body
+              ? typeof body.link_account_CRMProvider_id === "string"
+                ? body.link_account_CRMProvider_id
                 : ""
               : undefined;
           const forceMergeContacts = body?.force_merge === true;
@@ -4790,9 +4790,9 @@ export const duplicateRadarRoutes = [
                 (sessionUser as any)?.role ||
                 "duplicate-radar",
               generatedAt: new Date().toISOString(),
-              masterZohoId,
-              includeZohoIds,
-              linkAccountZohoId,
+              masterCRMProviderId,
+              includeCRMProviderIds,
+              linkAccountCRMProviderId,
               taggedAccountDbIds: taggedAccountDbIdsExec,
               forceMergeContacts,
             });
@@ -4824,17 +4824,17 @@ export const duplicateRadarRoutes = [
             // operator chose + the outcome, so the agent learns the org's
             // real preferences over time. Best-effort, never blocks.
             try {
-              const proposedMasterZohoId = masterZohoId
+              const proposedMasterCRMProviderId = masterCRMProviderId
                 ? buildMergePlan(module, id, records, {
                     tagName: "Duplicate-Delete",
-                    includeZohoIds,
-                  }).masterZohoId
-                : plan.masterZohoId;
+                    includeCRMProviderIds,
+                  }).masterCRMProviderId
+                : plan.masterCRMProviderId;
               await recordResolutionEvent({
                 clusterId: id,
                 eventType: "dry_run",
-                proposedMasterZohoId,
-                chosenMasterZohoId: plan.masterZohoId,
+                proposedMasterCRMProviderId,
+                chosenMasterCRMProviderId: plan.masterCRMProviderId,
                 fieldsMigrated: report.fieldsMigrated.length,
                 duplicatesTagged: report.taggedRecordIds.length,
                 reparented:
@@ -4859,7 +4859,7 @@ export const duplicateRadarRoutes = [
           // launch the in-process worker WITHOUT awaiting, and return the
           // job id immediately. The worker rebuilds the plan from live
           // records, runs executeMergePlan + learning capture, and pings
-          // Slack on completion — see src/utils/mergeJobRunner.ts.
+          // ChatProvider on completion — see src/utils/mergeJobRunner.ts.
           const {
             getActiveOrLatestMergeJob,
             createMergeJob,
@@ -4897,16 +4897,16 @@ export const duplicateRadarRoutes = [
             }
           }
 
-          const total = plan.duplicateZohoIds?.length ?? moduleCount - 1;
+          const total = plan.duplicateCRMProviderIds?.length ?? moduleCount - 1;
           const job = await createMergeJob({
             clusterId: id,
             module,
             total,
-            masterZohoId: plan.masterZohoId,
+            masterCRMProviderId: plan.masterCRMProviderId,
             createdBy:
               (sessionUser as any)?.email || (sessionUser as any)?.role || "admin",
-            includeZohoIds,
-            linkAccountZohoId,
+            includeCRMProviderIds,
+            linkAccountCRMProviderId,
             forceMergeContacts,
           });
 
@@ -5111,8 +5111,8 @@ export const duplicateRadarRoutes = [
             .join("\n");
           const briefing =
             `MERGE BRIEFING — cluster ${id}\n` +
-            `Survivor: ${plan.masterName} (${plan.masterZohoId ?? "no-zoho-id"}) — ${plan.masterReason}\n` +
-            `Duplicates to tag "${plan.tagName}": ${plan.duplicateZohoIds.length} (${plan.duplicateZohoIds.join(", ") || "none"})\n` +
+            `Survivor: ${plan.masterName} (${plan.masterCRMProviderId ?? "no-CRMProvider-id"}) — ${plan.masterReason}\n` +
+            `Duplicates to tag "${plan.tagName}": ${plan.duplicateCRMProviderIds.length} (${plan.duplicateCRMProviderIds.join(", ") || "none"})\n` +
             `Field decisions (${plan.fieldDecisions.length}):\n${fieldLines || "- none"}\n` +
             `Warnings:\n${(plan.warnings.map((w) => "- " + w).join("\n")) || "- none"}\n\n` +
             `ORG LEARNINGS\n` +
@@ -5144,8 +5144,8 @@ export const duplicateRadarRoutes = [
             await recordResolutionEvent({
               clusterId: id,
               eventType: "preview",
-              proposedMasterZohoId: plan.masterZohoId,
-              chosenMasterZohoId: plan.masterZohoId,
+              proposedMasterCRMProviderId: plan.masterCRMProviderId,
+              chosenMasterCRMProviderId: plan.masterCRMProviderId,
               plan,
               performedBy: (user as any)?.email || "reviewer",
             });
@@ -5223,7 +5223,7 @@ export const duplicateRadarRoutes = [
               const ids = mixed.domain_groups[dom] || [];
               if (ids.length === 0) continue;
               // Pick the first record's company_name as the seed for the
-              // new cluster — the operator can rename later via Zoho.
+              // new cluster — the operator can rename later via CRMProvider.
               const seedRec = allRecords.find(
                 (r) => (r.id as number | undefined) === ids[0],
               );
@@ -5356,11 +5356,11 @@ export const duplicateRadarRoutes = [
             const groups: string[][] = [];
             for (const cid of [id, ...newClusterIds]) {
               const rr = await dpool.query(
-                `SELECT zoho_record_id FROM duplicate_records
-                  WHERE cluster_id = $1 AND zoho_record_id IS NOT NULL`,
+                `SELECT CRMProvider_record_id FROM duplicate_records
+                  WHERE cluster_id = $1 AND CRMProvider_record_id IS NOT NULL`,
                 [cid],
               );
-              groups.push(rr.rows.map((r: any) => r.zoho_record_id as string));
+              groups.push(rr.rows.map((r: any) => r.CRMProvider_record_id as string));
             }
             const n = await recordSeparations(
               groups,
@@ -5541,11 +5541,11 @@ export const duplicateRadarRoutes = [
   {
     // Follow-up 3 — Bulk-close lead records in selected cross-module
     // clusters. For each cluster_id, the helper PUTs Lead_Status='Lost Lead'
-    // on every Lead record's Zoho id, then marks the cluster resolved if
-    // every Zoho write succeeded. Body:
+    // on every Lead record's CRMProvider id, then marks the cluster resolved if
+    // every CRMProvider write succeeded. Body:
     //   { cluster_ids: number[], dry_run?: boolean, max_clusters?: number }
     //
-    // Auth: requireAdminOrKey — this is a destructive write to Zoho.
+    // Auth: requireAdminOrKey — this is a destructive write to CRMProvider.
     //
     // Response: per-cluster summary so the operator can see exactly what
     // closed, what was skipped (already-Lost), what failed and why.
@@ -5731,9 +5731,9 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    // CLIENTHUB ↔ ZOHO reconcile by CRM ID (Sample User 2026-08-03). Upload a
+    // CLIENTHUB ↔ CRMProvider reconcile by CRM ID (Sample User 2026-08-03). Upload a
     // ClientHub export (.xlsx with a "CRM ID" column) OR POST JSON
-    // { crmIds: [] }; classifies each id against the Zoho mirror so a
+    // { crmIds: [] }; classifies each id against the CRMProvider mirror so a
     // count gap can be attributed exactly. Read-only.
     path: "/api/duplicates/cs-lifecycle/reconcile-ids",
     method: "POST" as const,
@@ -5771,7 +5771,7 @@ export const duplicateRadarRoutes = [
             let phaseCol = -1;
             (headerRow.values as any[]).forEach((h, idx) => {
               const n = norm(h);
-              if (crmCol < 0 && (n === "crmid" || n === "crmrecordid" || n === "zohoid" || n === "recordid")) crmCol = idx;
+              if (crmCol < 0 && (n === "crmid" || n === "crmrecordid" || n === "CRMProviderid" || n === "recordid")) crmCol = idx;
               // The ClientHub export tags each row with its phase in a Stage /
               // Phase column — use it to reconcile ALL phases, not just Termination.
               if (phaseCol < 0 && (n === "stage" || n === "phase" || n === "csphase" || n === "lifecyclephase")) phaseCol = idx;
@@ -5814,7 +5814,7 @@ export const duplicateRadarRoutes = [
   },
   {
     // LIVE "lost data" check (Sample User 2026-08-04) — for the CRM IDs the reconcile
-    // flagged not_in_mirror, ask Zoho directly whether the record still exists.
+    // flagged not_in_mirror, ask CRMProvider directly whether the record still exists.
     // Splits genuinely-lost (gone from the CRM) from a mere local sync gap.
     // JSON body { crmIds: string[] }. Read-only live GETs.
     path: "/api/duplicates/cs-lifecycle/verify-missing-ids",
@@ -5829,7 +5829,7 @@ export const duplicateRadarRoutes = [
             ? body.crmIds.map((x: any) => String(x))
             : [];
           if (!crmIds.length) return c.json({ error: "No CRM IDs provided." }, 400);
-          const result = await verifyCrmIdsInZoho(crmIds, { max: 1000 });
+          const result = await verifyCrmIdsInCRMProvider(crmIds, { max: 1000 });
           return c.json({ success: true, ...result });
         } catch (e: any) {
           logger.error("cs-lifecycle/verify-missing-ids failed", e);
@@ -5842,7 +5842,7 @@ export const duplicateRadarRoutes = [
   {
     // Radar client config (Sample User 2026-08-12) — env-driven values the dashboard
     // JS needs but can't read directly. Currently the product-token lists that
-    // map a Zoho Account "Products" value to ExampleOrg vs WalaOne, so a new
+    // map a CRMProvider Account "Products" value to ExampleOrg vs WalaOne, so a new
     // ExampleOrg sub-product (WalaOffer / WalaBravo / …) is added via env, no code
     // change. Tokens are normalized (lowercased, spaces stripped) to match the
     // client's _accountProduct comparison.
@@ -5902,7 +5902,7 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    // OWNER OFFBOARDING — DESTRUCTIVE bulk write to Zoho (Sample User 2026-07-30).
+    // OWNER OFFBOARDING — DESTRUCTIVE bulk write to CRMProvider (Sample User 2026-07-30).
     // Admin-gated. Body: { owner, dealIds[], action: 'close_lost'|'move',
     // targetStage?, lostReason? }. Re-checks each id (still owned + open) before
     // writing; returns per-deal outcomes + skipped.
@@ -6011,7 +6011,7 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    path: "/api/duplicates/scan-zoho",
+    path: "/api/duplicates/scan-CRMProvider",
     method: "POST" as const,
     createHandler: async () => {
       return async (c: any) => {
@@ -6043,16 +6043,16 @@ export const duplicateRadarRoutes = [
           // Previously the only way to get a full pull was /rebuild, which
           // wipes duplicate_records and duplicate_clusters first — far too
           // destructive for the common case of repairing a module whose
-          // watermark is wrong. Records upsert on zoho_record_id, so a full
+          // watermark is wrong. Records upsert on CRMProvider_record_id, so a full
           // re-pull is safe to run at any time; it is also the only path that
-          // notices records deleted in Zoho, since an incremental fetch by
+          // notices records deleted in CRMProvider, since an incremental fetch by
           // definition never returns them.
           const fullPull = body?.full === true;
           logger.info(
-            `🚀 [DuplicateRadar] Zoho CRM scan triggered via API (async)${fullPull ? " [FULL re-pull, no wipe]" : ""}`,
+            `🚀 [DuplicateRadar] CRMProvider CRM scan triggered via API (async)${fullPull ? " [FULL re-pull, no wipe]" : ""}`,
           );
 
-          scanZohoCRMForDuplicates("manual", fullPull).catch((err) => {
+          scanCRMProviderCRMForDuplicates("manual", fullPull).catch((err) => {
             logger.error("[DuplicateRadar] Background scan error:", err);
             scanState.status = "failed";
             scanState.error = err?.message || "Background scan failed";
@@ -6065,7 +6065,7 @@ export const duplicateRadarRoutes = [
             status: "scanning",
           });
         } catch (error: any) {
-          logger.error("Error starting Zoho CRM scan:", error);
+          logger.error("Error starting CRMProvider CRM scan:", error);
           return c.json({ error: "An internal error occurred" }, 500);
         }
       };
@@ -6148,7 +6148,7 @@ export const duplicateRadarRoutes = [
           // forceFull=true: we just wiped everything, so a full re-pull is
           // mandatory — an incremental (changed-only) fetch here would leave
           // the radar nearly empty.
-          scanZohoCRMForDuplicates("manual", true)
+          scanCRMProviderCRMForDuplicates("manual", true)
             .then(async () => {
               // Re-attach the AI-Applied markers archived before the truncate.
               // Runs only after a SUCCESSFUL rescan — restoring onto a
@@ -6182,7 +6182,7 @@ export const duplicateRadarRoutes = [
           return c.json({
             success: true,
             message:
-              "Clusters wiped. A fresh Zoho scan is rebuilding them. Watch /api/duplicates/scan-stream for progress.",
+              "Clusters wiped. A fresh CRMProvider scan is rebuilding them. Watch /api/duplicates/scan-stream for progress.",
             status: "scanning",
           });
         } catch (error: any) {
@@ -6528,7 +6528,7 @@ export const duplicateRadarRoutes = [
           ];
           const source = cursorQuery(
             drCsvPool,
-            `SELECT dr.cluster_id, dr.zoho_record_id, dr.id, dr.record_type, dr.record_name, dr.company_name, dr.domain,
+            `SELECT dr.cluster_id, dr.CRMProvider_record_id, dr.id, dr.record_type, dr.record_name, dr.company_name, dr.domain,
                     dr.owner_name, dr.owner_email, dr.status, dr.stage, dr.deal_value, dr.source, dr.created_date,
                     dr.confidence_score, dr.ai_recommendation, dr.is_primary,
                     dc.confidence_score AS cluster_confidence_score,
@@ -6553,7 +6553,7 @@ export const duplicateRadarRoutes = [
               }
               const pb = rowPlaybook(rec, playbookState);
               yield [
-                rec["zoho_record_id"] ?? rec["id"],
+                rec["CRMProvider_record_id"] ?? rec["id"],
                 rec["record_type"],
                 rec["record_name"],
                 rec["company_name"],
@@ -6670,7 +6670,7 @@ export const duplicateRadarRoutes = [
 
             const recordColumns = [
               { header: "Cluster ID", key: "cluster_id", width: 12 },
-              { header: "Zoho ID", key: "zoho_record_id", width: 22 },
+              { header: "CRMProvider ID", key: "CRMProvider_record_id", width: 22 },
               { header: "Name", key: "record_name", width: 30 },
               { header: "Company", key: "company_name", width: 30 },
               { header: "Email", key: "email", width: 28 },
@@ -6695,7 +6695,7 @@ export const duplicateRadarRoutes = [
             // owner-to-consult / survivorship-rule for each row.
             const typeIdx = xlsxFilterParams.length + 1;
             const recSql = `
-              SELECT dr.cluster_id, dr.zoho_record_id, dr.record_name, dr.company_name, dr.email,
+              SELECT dr.cluster_id, dr.CRMProvider_record_id, dr.record_name, dr.company_name, dr.email,
                      dr.domain, dr.phone, dr.owner_name, dr.owner_email, dr.is_primary,
                      COALESCE(dr.status, dr.stage, '') AS status_or_stage,
                      dr.deal_value, dr.source, dr.confidence_score, dr.ai_recommendation,
@@ -6812,7 +6812,7 @@ export const duplicateRadarRoutes = [
             if (includeRaw) {
               const allSrc = cursorQuery(
                 drXlsxPool,
-                `SELECT dr.cluster_id, dr.zoho_record_id, dr.record_name, dr.company_name, dr.email, dr.domain,
+                `SELECT dr.cluster_id, dr.CRMProvider_record_id, dr.record_name, dr.company_name, dr.email, dr.domain,
                         dr.phone, dr.owner_name, dr.owner_email, dr.is_primary,
                         COALESCE(dr.status, dr.stage, '') AS status_or_stage,
                         dr.deal_value, dr.source, dr.confidence_score, dr.ai_recommendation,
@@ -6985,7 +6985,7 @@ export const duplicateRadarRoutes = [
             is_cross_module: meta.is_cross_module,
             record_types: meta.record_types,
             ai_summary: meta.is_cross_module
-              ? `Cross-module cluster (${meta.record_types.join(" + ")}) for ${cluster.domain || cluster.company_name}. Same-module records get MERGE; cross-module get LINK (set Account_Name / Contact_Name in Zoho — never merge across modules).`
+              ? `Cross-module cluster (${meta.record_types.join(" + ")}) for ${cluster.domain || cluster.company_name}. Same-module records get MERGE; cross-module get LINK (set Account_Name / Contact_Name in CRMProvider — never merge across modules).`
               : `Analyzed ${records.length} ${meta.primary_type || "record"}(s) for ${cluster.domain || cluster.company_name}. Smart scoring considers data completeness, deal activity, recency, and record age.`,
           });
         } catch (error: any) {
@@ -7058,7 +7058,7 @@ export const duplicateRadarRoutes = [
 
           await addRecordToCluster({
             cluster_id: cluster.id!,
-            zoho_record_id: `test_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            CRMProvider_record_id: `test_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             record_type: record_type || "lead",
             record_name: recordName,
             email: email,
@@ -7174,7 +7174,7 @@ export const duplicateRadarRoutes = [
 
           // Re-open: put a resolved/ignored cluster back to ACTIVE so it can be
           // merged/applied. For clusters marked resolved before they were
-          // actually merged in Zoho (or dismissed by mistake).
+          // actually merged in CRMProvider (or dismissed by mistake).
           if (action === "reopen") {
             const cluster = await getClusterById(id);
             if (!cluster) return c.json({ error: "Cluster not found" }, 404);
@@ -7389,17 +7389,17 @@ export const duplicateRadarRoutes = [
   },
   {
     // R3 (quick-wins): Mark cluster Resolved AND verify the non-primary
-    // records were actually deleted in Zoho. The operator's "Mark
-    // Resolved" click asserts a manual Zoho merge happened — this
-    // endpoint checks that assertion against Zoho's current state so
+    // records were actually deleted in CRMProvider. The operator's "Mark
+    // Resolved" click asserts a manual CRMProvider merge happened — this
+    // endpoint checks that assertion against CRMProvider's current state so
     // the dashboard can show Verified / Failed badges instead of just
     // trusting the operator's word.
     //
     // Behaviour:
     //   1. Resolve the cluster (existing resolveCluster flow)
-    //   2. For each non-primary record, search Zoho by exact id
+    //   2. For each non-primary record, search CRMProvider by exact id
     //   3. Persist verification_state = 'verified' | 'failed' + notes
-    //   4. If verification failed (records still in Zoho), flip cluster
+    //   4. If verification failed (records still in CRMProvider), flip cluster
     //      status back to 'active' so it doesn't silently disappear
     //      from operator queues.
     path: "/api/duplicates/clusters/:id/resolve-and-verify",
@@ -7441,10 +7441,10 @@ export const duplicateRadarRoutes = [
             body.notes,
           );
 
-          const { verifyClusterMergedInZoho, listClusterSnapshots } = await import(
+          const { verifyClusterMergedInCRMProvider, listClusterSnapshots } = await import(
             "../../utils/duplicateRadarDatabase"
           );
-          const verification = await verifyClusterMergedInZoho(id);
+          const verification = await verifyClusterMergedInCRMProvider(id);
 
           // Verification failed → flip the cluster back to active so it
           // reappears in operator queues. The verification_state stays
@@ -7676,7 +7676,7 @@ export const duplicateRadarRoutes = [
           // case in legacy rows still gets a complete packet.
           const recordsRes = await sharedDuplicateRadarPool.query(
             `
-              SELECT dr.cluster_id, dr.zoho_record_id, dr.record_name, dr.record_type,
+              SELECT dr.cluster_id, dr.CRMProvider_record_id, dr.record_name, dr.record_type,
                      dr.company_name, dr.email, dr.domain, dr.phone,
                      dr.owner_name, dr.owner_email, dr.is_primary,
                      COALESCE(dr.status, dr.stage, '') AS status_or_stage,
@@ -7987,7 +7987,7 @@ export const duplicateRadarRoutes = [
 
           const records = await getRecordsByClusterId(clusterId);
           const recordIds = records
-            .map((r) => r.zoho_record_id)
+            .map((r) => r.CRMProvider_record_id)
             .filter(Boolean) as string[];
           const tasks = await getTasksForRecords(recordIds);
           const taskCount = await getTaskCountForCluster(clusterId);
@@ -8103,7 +8103,7 @@ export const duplicateRadarRoutes = [
             conds.push(`cs_overlap_verdict = $${params.length}`);
           }
           // Segment chip (Sample User 2026-07-15): restrict to clusters holding ≥1
-          // record on the chosen Zoho Layout, same predicate as every other tab.
+          // record on the chosen CRMProvider Layout, same predicate as every other tab.
           const csoSegment = url.searchParams.get("segment") || undefined;
           const { buildSegmentPredicate: _bspCso } = await import(
             "../../utils/duplicateRadarDatabase"
@@ -8759,11 +8759,11 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    // DEAL STAGE AUDIT (Sample User 2026-07-21) — READ-ONLY. Every distinct Zoho Deal
+    // DEAL STAGE AUDIT (Sample User 2026-07-21) — READ-ONLY. Every distinct CRMProvider Deal
     // Stage value with counts, a corporate/marketplace split and the pipelines
     // it appears on, plus suspected near-duplicate values (e.g. "Hold" vs
     // "On Hold"). Writes nothing: re-staging records and removing a dead
-    // picklist option are manual Zoho steps, in that order.
+    // picklist option are manual CRMProvider steps, in that order.
     //   GET /api/duplicates/deal-stage-audit
     path: "/api/duplicates/deal-stage-audit",
     method: "GET" as const,
@@ -8788,7 +8788,7 @@ export const duplicateRadarRoutes = [
     // CS OWNER ROSTER (Sample User 2026-07-20) — the distinct "CS Owner Name" values
     // across Deal records, with per-owner deal/account counts, plus how many CS
     // deals have no owner. Nothing in the platform listed the CS team before
-    // this; the name only existed per-deal in Zoho.
+    // this; the name only existed per-deal in CRMProvider.
     //   GET /api/duplicates/cs-lifecycle/owners?segment=&limit=
     path: "/api/duplicates/cs-lifecycle/owners",
     method: "GET" as const,
@@ -8814,13 +8814,13 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    // Force-refresh one or more Deals directly from Zoho's single-record API
+    // Force-refresh one or more Deals directly from CRMProvider's single-record API
     // (real-time, not subject to the bulk-read eventual-consistency lag that
     // can cause CS Lifecycle violations to show stale Phase / Company_Domain
     // values long after the CRM record was updated). For each id we pull the
     // live record, run it through the same Deal extractor used by the bulk
     // sync, and upsert it so the next /violations call reflects current CRM
-    // state. Reusing the existing cluster (by zoho_record_id) avoids
+    // state. Reusing the existing cluster (by CRMProvider_record_id) avoids
     // re-clustering side-effects.
     path: "/api/duplicates/cs-lifecycle/refresh-deals",
     method: "POST" as const,
@@ -8831,14 +8831,14 @@ export const duplicateRadarRoutes = [
           if (!user) return unauthorizedResponse(c);
 
           const body = await c.req.json().catch(() => ({}));
-          const zohoIds: string[] = Array.isArray(body?.zohoIds)
-            ? body.zohoIds.filter((x: any) => typeof x === "string" && x.trim())
+          const CRMProviderIds: string[] = Array.isArray(body?.CRMProviderIds)
+            ? body.CRMProviderIds.filter((x: any) => typeof x === "string" && x.trim())
             : [];
-          if (zohoIds.length === 0) {
-            return c.json({ error: "zohoIds array required" }, 400);
+          if (CRMProviderIds.length === 0) {
+            return c.json({ error: "CRMProviderIds array required" }, 400);
           }
           const MAX = 50;
-          if (zohoIds.length > MAX) {
+          if (CRMProviderIds.length > MAX) {
             return c.json({ error: `Refresh at most ${MAX} deals per request` }, 400);
           }
 
@@ -8848,27 +8848,27 @@ export const duplicateRadarRoutes = [
           const missing: string[] = [];
           const failed: { id: string; error: string }[] = [];
 
-          for (const zohoId of zohoIds) {
+          for (const CRMProviderId of CRMProviderIds) {
             try {
-              const live = await fetchZohoRecordById("Deals", zohoId);
+              const live = await fetchCRMProviderRecordById("Deals", CRMProviderId);
               if (!live) {
-                missing.push(zohoId);
+                missing.push(CRMProviderId);
                 continue;
               }
               const d: any = live.data;
               const existing = await pool.query(
-                `SELECT cluster_id FROM duplicate_records WHERE zoho_record_id = $1 LIMIT 1`,
-                [zohoId],
+                `SELECT cluster_id FROM duplicate_records WHERE CRMProvider_record_id = $1 LIMIT 1`,
+                [CRMProviderId],
               );
               const clusterId = existing.rows[0]?.cluster_id;
               if (!clusterId) {
-                missing.push(zohoId);
+                missing.push(CRMProviderId);
                 continue;
               }
               await upsertRecord({
                 cluster_id: clusterId,
                 record_type: "deal",
-                zoho_record_id: live.id,
+                CRMProvider_record_id: live.id,
                 record_name: d.Deal_Name || "Unknown Deal",
                 company_name: d.Account_Name?.name || d.Deal_Name || "Unknown",
                 email: d.Contact_Email || undefined,
@@ -8888,27 +8888,27 @@ export const duplicateRadarRoutes = [
                 raw_data: d,
                 layout_name: d.Layout?.name || d.$layout?.name || "",
                 layout_id: d.Layout?.id || d.$layout?.id || "",
-                zoho_module: "Deals",
+                CRMProvider_module: "Deals",
                 pipeline: d.Pipeline || "",
                 products: d.Product_Details ? JSON.stringify(d.Product_Details) : "",
                 contact_name: d.Contact_Name?.name || "",
                 account_name: d.Account_Name?.name || "",
               });
-              refreshed.push(zohoId);
+              refreshed.push(CRMProviderId);
             } catch (err: any) {
               logger.warn(
-                `⚠️ [CS-Lifecycle Refresh] Failed to refresh Deal ${zohoId}: ${err?.message || err}`,
+                `⚠️ [CS-Lifecycle Refresh] Failed to refresh Deal ${CRMProviderId}: ${err?.message || err}`,
               );
-              failed.push({ id: zohoId, error: String(err?.message || err) });
+              failed.push({ id: CRMProviderId, error: String(err?.message || err) });
             }
           }
 
           logger.info(
-            `🔄 [CS-Lifecycle Refresh] User ${user.email} refreshed ${refreshed.length}/${zohoIds.length} deals live from Zoho`,
+            `🔄 [CS-Lifecycle Refresh] User ${user.email} refreshed ${refreshed.length}/${CRMProviderIds.length} deals live from CRMProvider`,
           );
           return c.json({
             success: true,
-            requested: zohoIds.length,
+            requested: CRMProviderIds.length,
             refreshed_count: refreshed.length,
             missing_count: missing.length,
             failed_count: failed.length,
@@ -8924,11 +8924,11 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    // Generic per-module live refresh from Zoho. Same pattern as
+    // Generic per-module live refresh from CRMProvider. Same pattern as
     // /api/duplicates/cs-lifecycle/refresh-deals but works for any of the
     // four duplicate-radar record types (lead / deal / contact / account)
-    // so each per-module tab can offer the same "Refresh from Zoho (live)"
-    // UX. For each id we fetch the live record from Zoho's single-record
+    // so each per-module tab can offer the same "Refresh from CRMProvider (live)"
+    // UX. For each id we fetch the live record from CRMProvider's single-record
     // API, run the same per-module extractor used by the bulk sync, and
     // upsert it into the existing cluster so the next /api/duplicates/{type}
     // call reflects the up-to-date CRM values.
@@ -8945,14 +8945,14 @@ export const duplicateRadarRoutes = [
           const MODULE_MAP: Record<
             string,
             {
-              zohoModule: "Leads" | "Deals" | "Contacts" | "Accounts";
+              CRMProviderModule: "Leads" | "Deals" | "Contacts" | "Accounts";
               recordType: "lead" | "deal" | "contact" | "account";
             }
           > = {
-            leads: { zohoModule: "Leads", recordType: "lead" },
-            deals: { zohoModule: "Deals", recordType: "deal" },
-            contacts: { zohoModule: "Contacts", recordType: "contact" },
-            accounts: { zohoModule: "Accounts", recordType: "account" },
+            leads: { CRMProviderModule: "Leads", recordType: "lead" },
+            deals: { CRMProviderModule: "Deals", recordType: "deal" },
+            contacts: { CRMProviderModule: "Contacts", recordType: "contact" },
+            accounts: { CRMProviderModule: "Accounts", recordType: "account" },
           };
           const cfg = MODULE_MAP[moduleRaw];
           if (!cfg) {
@@ -8964,16 +8964,16 @@ export const duplicateRadarRoutes = [
               400,
             );
           }
-          const zohoIds: string[] = Array.isArray(body?.zohoIds)
-            ? body.zohoIds.filter(
+          const CRMProviderIds: string[] = Array.isArray(body?.CRMProviderIds)
+            ? body.CRMProviderIds.filter(
                 (x: any) => typeof x === "string" && x.trim(),
               )
             : [];
-          if (zohoIds.length === 0) {
-            return c.json({ error: "zohoIds array required" }, 400);
+          if (CRMProviderIds.length === 0) {
+            return c.json({ error: "CRMProviderIds array required" }, 400);
           }
           const MAX = 50;
-          if (zohoIds.length > MAX) {
+          if (CRMProviderIds.length > MAX) {
             return c.json(
               { error: `Refresh at most ${MAX} records per request` },
               400,
@@ -9134,27 +9134,27 @@ export const duplicateRadarRoutes = [
           const missing: string[] = [];
           const failed: { id: string; error: string }[] = [];
 
-          for (const zohoId of zohoIds) {
+          for (const CRMProviderId of CRMProviderIds) {
             try {
-              const live = await fetchZohoRecordById(cfg.zohoModule, zohoId);
+              const live = await fetchCRMProviderRecordById(cfg.CRMProviderModule, CRMProviderId);
               if (!live) {
-                missing.push(zohoId);
+                missing.push(CRMProviderId);
                 continue;
               }
               const existing = await pool.query(
-                `SELECT cluster_id FROM duplicate_records WHERE zoho_record_id = $1 AND record_type = $2 LIMIT 1`,
-                [zohoId, cfg.recordType],
+                `SELECT cluster_id FROM duplicate_records WHERE CRMProvider_record_id = $1 AND record_type = $2 LIMIT 1`,
+                [CRMProviderId, cfg.recordType],
               );
               const clusterId = existing.rows[0]?.cluster_id;
               if (!clusterId) {
-                missing.push(zohoId);
+                missing.push(CRMProviderId);
                 continue;
               }
               const e = extract(live);
               await upsertRecord({
                 cluster_id: clusterId,
                 record_type: cfg.recordType,
-                zoho_record_id: live.id,
+                CRMProvider_record_id: live.id,
                 record_name: e.recordName,
                 company_name: e.companyName,
                 email: e.email || undefined,
@@ -9179,7 +9179,7 @@ export const duplicateRadarRoutes = [
                 raw_data: live.data,
                 layout_name: e.layoutName,
                 layout_id: e.layoutId,
-                zoho_module: cfg.zohoModule,
+                CRMProvider_module: cfg.CRMProviderModule,
                 pipeline: e.pipeline,
                 products: e.products,
                 contact_name: e.contactName,
@@ -9195,22 +9195,22 @@ export const duplicateRadarRoutes = [
                 lead_type: e.leadType,
                 account_type: e.accountType,
               });
-              refreshed.push(zohoId);
+              refreshed.push(CRMProviderId);
             } catch (err: any) {
               logger.warn(
-                `⚠️ [Radar Refresh] Failed to refresh ${cfg.zohoModule} ${zohoId}: ${err?.message || err}`,
+                `⚠️ [Radar Refresh] Failed to refresh ${cfg.CRMProviderModule} ${CRMProviderId}: ${err?.message || err}`,
               );
-              failed.push({ id: zohoId, error: String(err?.message || err) });
+              failed.push({ id: CRMProviderId, error: String(err?.message || err) });
             }
           }
 
           logger.info(
-            `🔄 [Radar Refresh] User ${user.email} refreshed ${refreshed.length}/${zohoIds.length} ${cfg.zohoModule} live from Zoho`,
+            `🔄 [Radar Refresh] User ${user.email} refreshed ${refreshed.length}/${CRMProviderIds.length} ${cfg.CRMProviderModule} live from CRMProvider`,
           );
           return c.json({
             success: true,
             module: moduleRaw,
-            requested: zohoIds.length,
+            requested: CRMProviderIds.length,
             refreshed_count: refreshed.length,
             missing_count: missing.length,
             failed_count: failed.length,
@@ -9284,10 +9284,10 @@ export const duplicateRadarRoutes = [
   },
   {
     // AI-resolve a single Account-Hint: write the suggested Account_Name
-    // directly onto the Zoho Deal record and mark the hint applied. Refuses
+    // directly onto the CRMProvider Deal record and mark the hint applied. Refuses
     // when confidence is below the threshold (default 70%); the operator
     // can still use the manual Applied / Dismiss buttons for low-signal
-    // rows. DESTRUCTIVE (writes to Zoho) → requireAdminOrKey.
+    // rows. DESTRUCTIVE (writes to CRMProvider) → requireAdminOrKey.
     //   POST /api/duplicates/account-hints/:id/resolve-with-ai
     //   Body: { minConfidence?: number }
     path: "/api/duplicates/account-hints/:id/resolve-with-ai",
@@ -9337,7 +9337,7 @@ export const duplicateRadarRoutes = [
     // Bulk AI-resolve every pending Account Hint at-or-above the confidence
     // threshold. Same per-row logic as the single-id endpoint above, but
     // looped — useful when the user has hundreds of high-confidence hints
-    // pending. DESTRUCTIVE (writes to Zoho) → requireAdminOrKey.
+    // pending. DESTRUCTIVE (writes to CRMProvider) → requireAdminOrKey.
     //   POST /api/duplicates/account-hints/resolve-all-with-ai
     //   Body: { minConfidence?: number, limit?: number }
     path: "/api/duplicates/account-hints/resolve-all-with-ai",
@@ -9381,7 +9381,7 @@ export const duplicateRadarRoutes = [
   },
   {
     // Mark a hint as dismissed (sales reviewed and rejected) or applied
-    // (sales fixed the Zoho Account_Name and the next sync will reclassify).
+    // (sales fixed the CRMProvider Account_Name and the next sync will reclassify).
     // Body: { status: "dismissed" | "applied" }
     path: "/api/duplicates/account-hints/:id/status",
     method: "POST" as const,
@@ -9525,8 +9525,8 @@ export const duplicateRadarRoutes = [
   },
   {
     // HITL apply for a stalled deal — close (Stage=Closed Lost) or reengage
-    // (Stage forward). Admin-gated Zoho write; never deletes.
-    //   POST /api/duplicates/record-hints/stale-deals/apply { dealZohoId, action }
+    // (Stage forward). Admin-gated CRMProvider write; never deletes.
+    //   POST /api/duplicates/record-hints/stale-deals/apply { dealCRMProviderId, action }
     path: "/api/duplicates/record-hints/stale-deals/apply",
     method: "POST" as const,
     createHandler: async () => async (c: any) => {
@@ -9536,14 +9536,14 @@ export const duplicateRadarRoutes = [
         const su = await requireAdminOrKey(c);
         if (!su) return unauth(c);
         const body = await c.req.json().catch(() => ({}));
-        const dealZohoId = String(body?.dealZohoId ?? "").trim();
+        const dealCRMProviderId = String(body?.dealCRMProviderId ?? "").trim();
         const action =
           body?.action === "close" ? "close" : body?.action === "reengage" ? "reengage" : null;
-        if (!dealZohoId || !action) {
-          return c.json({ error: "dealZohoId and action (close|reengage) required" }, 400);
+        if (!dealCRMProviderId || !action) {
+          return c.json({ error: "dealCRMProviderId and action (close|reengage) required" }, 400);
         }
         const { applyStaleDealDisposition } = await import("../../utils/recordLinkHints");
-        const r = await applyStaleDealDisposition(dealZohoId, action, su.email || "admin");
+        const r = await applyStaleDealDisposition(dealCRMProviderId, action, su.email || "admin");
         return c.json({ success: r.applied, ...r });
       } catch (e: any) {
         logger.error("record-hints/stale-deals/apply failed", e);
@@ -9552,8 +9552,8 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    //   POST /api/duplicates/record-hints/stale-deals/dismiss { dealZohoId }
-    //   Operator ✗ "wrong / not stale" — hides the deal from §4. No Zoho write.
+    //   POST /api/duplicates/record-hints/stale-deals/dismiss { dealCRMProviderId }
+    //   Operator ✗ "wrong / not stale" — hides the deal from §4. No CRMProvider write.
     path: "/api/duplicates/record-hints/stale-deals/dismiss",
     method: "POST" as const,
     createHandler: async () => async (c: any) => {
@@ -9563,10 +9563,10 @@ export const duplicateRadarRoutes = [
         const su = await requireAdminOrKey(c);
         if (!su) return unauth(c);
         const body = await c.req.json().catch(() => ({}));
-        const dealZohoId = String(body?.dealZohoId ?? "").trim();
-        if (!dealZohoId) return c.json({ error: "dealZohoId required" }, 400);
+        const dealCRMProviderId = String(body?.dealCRMProviderId ?? "").trim();
+        if (!dealCRMProviderId) return c.json({ error: "dealCRMProviderId required" }, 400);
         const { dismissStaleDeal } = await import("../../utils/recordLinkHints");
-        const r = await dismissStaleDeal(dealZohoId, su.email || "admin");
+        const r = await dismissStaleDeal(dealCRMProviderId, su.email || "admin");
         return c.json({ success: r.dismissed, ...r });
       } catch (e: any) {
         logger.error("record-hints/stale-deals/dismiss failed", e);
@@ -9575,9 +9575,9 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    //   POST /api/duplicates/record-hints/stale-deals/resolve { dealZohoId }
-    //   Operator ✓ "Resolved — I already handled this deal MANUALLY in Zoho".
-    //   Records it as resolved (not dismissed) and drops it off §4. No Zoho write.
+    //   POST /api/duplicates/record-hints/stale-deals/resolve { dealCRMProviderId }
+    //   Operator ✓ "Resolved — I already handled this deal MANUALLY in CRMProvider".
+    //   Records it as resolved (not dismissed) and drops it off §4. No CRMProvider write.
     path: "/api/duplicates/record-hints/stale-deals/resolve",
     method: "POST" as const,
     createHandler: async () => async (c: any) => {
@@ -9587,10 +9587,10 @@ export const duplicateRadarRoutes = [
         const su = await requireAdminOrKey(c);
         if (!su) return unauth(c);
         const body = await c.req.json().catch(() => ({}));
-        const dealZohoId = String(body?.dealZohoId ?? "").trim();
-        if (!dealZohoId) return c.json({ error: "dealZohoId required" }, 400);
+        const dealCRMProviderId = String(body?.dealCRMProviderId ?? "").trim();
+        if (!dealCRMProviderId) return c.json({ error: "dealCRMProviderId required" }, 400);
         const { resolveStaleDeal } = await import("../../utils/recordLinkHints");
-        const r = await resolveStaleDeal(dealZohoId, su.email || "admin");
+        const r = await resolveStaleDeal(dealCRMProviderId, su.email || "admin");
         return c.json({ success: r.dismissed, ...r });
       } catch (e: any) {
         logger.error("record-hints/stale-deals/resolve failed", e);
@@ -9599,7 +9599,7 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    //   POST /api/duplicates/record-hints/stale-deals/reopen { dealZohoId }
+    //   POST /api/duplicates/record-hints/stale-deals/reopen { dealCRMProviderId }
     //   Un-handle: bring a Closed/Resolved/Dismissed deal back to the Open list.
     path: "/api/duplicates/record-hints/stale-deals/reopen",
     method: "POST" as const,
@@ -9610,10 +9610,10 @@ export const duplicateRadarRoutes = [
         const su = await requireAdminOrKey(c);
         if (!su) return unauth(c);
         const body = await c.req.json().catch(() => ({}));
-        const dealZohoId = String(body?.dealZohoId ?? "").trim();
-        if (!dealZohoId) return c.json({ error: "dealZohoId required" }, 400);
+        const dealCRMProviderId = String(body?.dealCRMProviderId ?? "").trim();
+        if (!dealCRMProviderId) return c.json({ error: "dealCRMProviderId required" }, 400);
         const { reopenStaleDeal } = await import("../../utils/recordLinkHints");
-        const r = await reopenStaleDeal(dealZohoId);
+        const r = await reopenStaleDeal(dealCRMProviderId);
         return c.json({ success: r.reopened, ...r });
       } catch (e: any) {
         logger.error("record-hints/stale-deals/reopen failed", e);
@@ -9652,9 +9652,9 @@ export const duplicateRadarRoutes = [
   },
   {
     // AI-resolve a single Record-Link-Hint: write the suggested target
-    // directly onto the Zoho source record's link field and mark the hint
+    // directly onto the CRMProvider source record's link field and mark the hint
     // applied. Refuses when confidence is below the threshold (default
-    // 70%). DESTRUCTIVE (writes to Zoho) → requireAdminOrKey.
+    // 70%). DESTRUCTIVE (writes to CRMProvider) → requireAdminOrKey.
     //   POST /api/duplicates/record-hints/:id/resolve-with-ai
     //   Body: { minConfidence?: number }
     path: "/api/duplicates/record-hints/:id/resolve-with-ai",
@@ -9694,7 +9694,7 @@ export const duplicateRadarRoutes = [
   {
     // Bulk AI-resolve every pending Record-Link Hint at-or-above the
     // confidence threshold. Same per-row logic as the single-id endpoint
-    // above, but looped. DESTRUCTIVE (writes to Zoho) → requireAdminOrKey.
+    // above, but looped. DESTRUCTIVE (writes to CRMProvider) → requireAdminOrKey.
     //   POST /api/duplicates/record-hints/resolve-all-with-ai
     //   Body: { type?: "contact_account"|"deal_contact", minConfidence?: number, limit?: number }
     path: "/api/duplicates/record-hints/resolve-all-with-ai",
@@ -9736,7 +9736,7 @@ export const duplicateRadarRoutes = [
   },
   {
     // Mark a record-link hint as dismissed (operator reviewed and rejected)
-    // or applied (operator fixed the link manually in Zoho).
+    // or applied (operator fixed the link manually in CRMProvider).
     // Body: { status: "dismissed" | "applied" }
     path: "/api/duplicates/record-hints/:id/status",
     method: "POST" as const,
@@ -9779,7 +9779,7 @@ export const duplicateRadarRoutes = [
     // The existing /api/duplicates/preflight endpoint is built for
     // dashboard operators running batches. This one is the machine-to-
     // machine variant: one record in, one verdict + a should_create
-    // boolean back. Zoho workflows, web-form backends, and marketing
+    // boolean back. CRMProvider workflows, web-form backends, and marketing
     // tools call this BEFORE creating a record so genuine duplicates
     // never enter CRM in the first place (Plauti benchmark: real-time
     // prevention cuts duplicate creation 60% within 90 days).
@@ -9791,7 +9791,7 @@ export const duplicateRadarRoutes = [
     //   {
     //     "domain": "<REDACTED_HOST>",                     // optional
     //     "email":  "user@example.invalid",                // optional (domain extracted)
-    //     "company_name": "ACME Co",                 // optional
+    //     "company_name": "Example Organization Co",                 // optional
     //     "phone": "<REDACTED_PHONE>",                  // optional
     //     "ref":   "web-form-submission-12345"       // optional, echoed back
     //   }
@@ -9870,7 +9870,7 @@ export const duplicateRadarRoutes = [
                 ref: body.ref ?? null,
               },
             ],
-            // Webhook callers (Zoho workflows, intake forms) tend to fire
+            // Webhook callers (CRMProvider workflows, intake forms) tend to fire
             // right when a record is being created — staleness matters.
             // Default to ON for the single-record webhook so the verdict
             // reflects the latest CS section. Caller can override with
@@ -10067,7 +10067,7 @@ export const duplicateRadarRoutes = [
           // (Tier 1 #2 recommendation from the 2026-05-30 review). The
           // preflight engine already accepts these on PreflightInputRow;
           // wiring them in here means the engine can use email + phone
-          // for cross-Zoho matching instead of falling back to domain-only.
+          // for cross-CRMProvider matching instead of falling back to domain-only.
           const mobileIdx = findCol("mobile_phone", "mobile phone", "mobile", "cell", "cell phone");
           const corporatePhoneIdx = findCol("corporate_phone", "corporate phone", "phone", "work phone", "office phone");
           // Secondary phone fields (Sample User 2026-07-23): Apollo/enrichment rows
@@ -10084,7 +10084,7 @@ export const duplicateRadarRoutes = [
           );
           const firstNameIdx = findCol("first_name", "first name", "firstname");
           const lastNameIdx = findCol("last_name", "last name", "lastname");
-          // Contact job title — carried through to the Zoho Contact/Lead
+          // Contact job title — carried through to the CRMProvider Contact/Lead
           // payload's Title field on push. Optional: a workbook without any
           // of these columns simply produces an empty title (no behavior
           // change for existing uploads).
@@ -10092,7 +10092,7 @@ export const duplicateRadarRoutes = [
           // fall back to ANY header that contains a title-ish word — so a
           // non-standard Mawsool header ("Job Title (EN)", "Position / Role",
           // "المسمى الوظيفي", a trailing space, …) still maps instead of
-          // silently dropping every title (which sent leads/contacts to Zoho
+          // silently dropping every title (which sent leads/contacts to CRMProvider
           // with a blank Title and made "Backfill Titles" find nothing).
           let titleIdx = findCol(
             "title", "job title", "job_title", "jobtitle", "designation", "position",
@@ -10163,7 +10163,7 @@ export const duplicateRadarRoutes = [
                 const at = email.lastIndexOf("@");
                 if (at > 0 && at < email.length - 1) domain = email.slice(at + 1);
               }
-              // Strip leading https:// www. and trailing / from domain
+              // Strip leading <REDACTED_URL_SCHEME> www. and trailing / from domain
               domain = domain
                 .replace(/^https?:\/\//i, "")
                 .replace(/^www\./i, "")
@@ -10270,7 +10270,7 @@ export const duplicateRadarRoutes = [
           // Within-file dedup detection (Tier 1 #1 recommendation). Same
           // domain appearing twice within an uploaded list is the most
           // common operator mistake when merging multiple lead sources —
-          // catching it here saves Zoho cleanup later. Flag by domain
+          // catching it here saves CRMProvider cleanup later. Flag by domain
           // first (strongest signal), then by email as a separate axis
           // (catches "two contacts at the same company" which is
           // legitimate vs "same exact email twice" which is not).
@@ -10492,11 +10492,11 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    // Populate the Layout picker on the "Push PASS rows to Zoho" modal.
-    // Returns one entry per layout configured on the requested Zoho
-    // module (default Leads). Admin-gated because it touches Zoho
+    // Populate the Layout picker on the "Push PASS rows to CRMProvider" modal.
+    // Returns one entry per layout configured on the requested CRMProvider
+    // module (default Leads). Admin-gated because it touches CRMProvider
     // credentials.
-    path: "/api/duplicates/preflight/zoho-layouts",
+    path: "/api/duplicates/preflight/CRMProvider-layouts",
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
@@ -10508,13 +10508,13 @@ export const duplicateRadarRoutes = [
           if (!user) return unauthorizedResponse(c);
           const url = new URL(c.req.url);
           const module = (url.searchParams.get("module") || "Leads").trim();
-          const { fetchZohoLayouts } = await import("../../utils/zohoCRM");
-          const layouts = await fetchZohoLayouts(module);
+          const { fetchCRMProviderLayouts } = await import("../../utils/CRMProviderCRM");
+          const layouts = await fetchCRMProviderLayouts(module);
           return c.json({ success: true, module, layouts });
         } catch (error: any) {
-          logger.error("Error fetching Zoho layouts:", error);
+          logger.error("Error fetching CRMProvider layouts:", error);
           return c.json(
-            { error: "Failed to fetch Zoho layouts — " + (error?.message || "unknown") },
+            { error: "Failed to fetch CRMProvider layouts — " + (error?.message || "unknown") },
             500,
           );
         }
@@ -10522,8 +10522,8 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    // Populate the Owner picker on the Push-to-Zoho modal.
-    path: "/api/duplicates/preflight/zoho-users",
+    // Populate the Owner picker on the Push-to-CRMProvider modal.
+    path: "/api/duplicates/preflight/CRMProvider-users",
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
@@ -10533,8 +10533,8 @@ export const duplicateRadarRoutes = [
           );
           const user = await requireAdminOrKey(c);
           if (!user) return unauthorizedResponse(c);
-          const { fetchZohoUsers } = await import("../../utils/zohoCRM");
-          const users = await fetchZohoUsers("ActiveUsers");
+          const { fetchCRMProviderUsers } = await import("../../utils/CRMProviderCRM");
+          const users = await fetchCRMProviderUsers("ActiveUsers");
           // Return only the operator-relevant fields, sorted by name.
           const trimmed = users
             .map((u) => ({
@@ -10548,9 +10548,9 @@ export const duplicateRadarRoutes = [
             );
           return c.json({ success: true, users: trimmed });
         } catch (error: any) {
-          logger.error("Error fetching Zoho users:", error);
+          logger.error("Error fetching CRMProvider users:", error);
           return c.json(
-            { error: "Failed to fetch Zoho users — " + (error?.message || "unknown") },
+            { error: "Failed to fetch CRMProvider users — " + (error?.message || "unknown") },
             500,
           );
         }
@@ -10558,13 +10558,13 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    // Push the PASS rows from a Preflight run into Zoho as new Leads.
+    // Push the PASS rows from a Preflight run into CRMProvider as new Leads.
     // Admin-gated (HIGH risk write — creates records in production CRM).
     //
     // Body:
     //   {
     //     rows: PreflightResultRow[]  // typically the verdict='pass' subset
-    //     layout_id: string            // required — Zoho Layout to land on
+    //     layout_id: string            // required — CRMProvider Layout to land on
     //     owner_mode: 'self' | 'round_robin' | 'custom'
     //     owner_id?: string            // required when owner_mode='custom'
     //     round_robin_user_ids?: string[]  // required when owner_mode='round_robin'
@@ -10583,7 +10583,7 @@ export const duplicateRadarRoutes = [
     //     find every record this push created.
     //   - Audit row written to event_logs with the count + layout +
     //     source + dry_run flag.
-    path: "/api/duplicates/preflight/push-to-zoho",
+    path: "/api/duplicates/preflight/push-to-CRMProvider",
     method: "POST" as const,
     createHandler: async () => {
       return async (c: any) => {
@@ -10665,7 +10665,7 @@ export const duplicateRadarRoutes = [
             );
           }
 
-          // Build the Zoho Lead payloads.
+          // Build the CRMProvider Lead payloads.
           const { splitContactName, PREFLIGHT_LEAD_SOURCE, PREFLIGHT_LEAD_TAG } = await import(
             "../../utils/preflightStructuredPush"
           );
@@ -10702,7 +10702,7 @@ export const duplicateRadarRoutes = [
           });
 
           if (dryRun) {
-            // No Zoho calls. Return what WOULD happen.
+            // No CRMProvider calls. Return what WOULD happen.
             return c.json({
               success: true,
               dry_run: true,
@@ -10717,10 +10717,10 @@ export const duplicateRadarRoutes = [
             });
           }
 
-          const { createZohoRecordsBulk, addZohoTags } = await import(
-            "../../utils/zohoCRM"
+          const { createCRMProviderRecordsBulk, addCRMProviderTags } = await import(
+            "../../utils/CRMProviderCRM"
           );
-          const outcomes = await createZohoRecordsBulk("Leads", payloads);
+          const outcomes = await createCRMProviderRecordsBulk("Leads", payloads);
           const created = outcomes.filter((o) => o.status === "success").length;
           const failed = outcomes.filter((o) => o.status === "error").length;
           // Tag the created Leads (best-effort — never fails the push).
@@ -10729,7 +10729,7 @@ export const duplicateRadarRoutes = [
               .filter((o) => o.status === "success" && o.id)
               .map((o) => String(o.id));
             if (leadIds.length && PREFLIGHT_LEAD_TAG) {
-              await addZohoTags("Leads", leadIds, [PREFLIGHT_LEAD_TAG]);
+              await addCRMProviderTags("Leads", leadIds, [PREFLIGHT_LEAD_TAG]);
             }
           } catch (_) {
             /* tagging is non-fatal */
@@ -10744,7 +10744,7 @@ export const duplicateRadarRoutes = [
               userId: sessionUser?.userId ?? 0,
               userEmail: sessionUser?.email ?? "system",
               userRole: sessionUser?.role,
-              actionType: "PUSH_TO_ZOHO",
+              actionType: "PUSH_TO_CRMProvider",
               entityType: "Leads",
               entityId: layoutId,
               entityName: source,
@@ -10771,9 +10771,9 @@ export const duplicateRadarRoutes = [
             owner_mode: ownerMode,
           });
         } catch (error: any) {
-          logger.error("Error in preflight push-to-zoho:", error);
+          logger.error("Error in preflight push-to-CRMProvider:", error);
           return c.json(
-            { error: "Push to Zoho failed — " + (error?.message || "unknown") },
+            { error: "Push to CRMProvider failed — " + (error?.message || "unknown") },
             500,
           );
         }
@@ -10781,7 +10781,7 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    // Structured push to Zoho — four actions (re-engage, multi-contact,
+    // Structured push to CRMProvider — four actions (re-engage, multi-contact,
     // new-company Account→Contact→Deal, Leads). Dry-run by default.
     // Action 1: Push a Deal under an existing Account (churned-past-cool-off).
     // Action 2: Create Account + all contacts + one Deal (multi-contact new).
@@ -10860,7 +10860,7 @@ export const duplicateRadarRoutes = [
             await import("../../utils/preflightStructuredPush");
           const PRODUCTS_FIELD = PREFLIGHT_PRODUCT ? [PREFLIGHT_PRODUCT] : null;
 
-          // Resolve the default Sales Person AND CS Member (both Zoho USER lookup
+          // Resolve the default Sales Person AND CS Member (both CRMProvider USER lookup
           // fields) by email once, so Deals carry valid user references. Null if
           // not found → the field is simply omitted (CS_Member is not mandatory;
           // sending the old string "ExampleOrg" was rejected as INVALID_DATA).
@@ -10868,13 +10868,13 @@ export const duplicateRadarRoutes = [
           let csMemberId: string | null = null;
           if (!dryRun && action !== 4) {
             // HARDCODED ids take priority and BYPASS the Users API entirely.
-            // CS_Member is a REQUIRED user-lookup on the Deal layout and Zoho's
+            // CS_Member is a REQUIRED user-lookup on the Deal layout and CRMProvider's
             // create API accepts ONLY { id }. Resolving an email→id needs the
-            // Zoho Users API — but this org's CRM token is missing the users-read
+            // CRMProvider Users API — but this org's CRM token is missing the users-read
             // scope (the SAME failure that breaks "Check required fields"), so
-            // fetchZohoUsers THROWS, CS_Member is left empty, and every deal
+            // fetchCRMProviderUsers THROWS, CS_Member is left empty, and every deal
             // rejects with MANDATORY_NOT_FOUND CS_Member. Set the env secret
-            // PREFLIGHT_CS_MEMBER_ID (a Zoho user id — Setup → Users → open the
+            // PREFLIGHT_CS_MEMBER_ID (a CRMProvider user id — Setup → Users → open the
             // user → the number in the URL) to fill it without the Users API.
             const envCsId = String(process.env.PREFLIGHT_CS_MEMBER_ID || "").trim();
             const envSpId = String(process.env.PREFLIGHT_SALESPERSON_ID || "").trim();
@@ -10882,8 +10882,8 @@ export const duplicateRadarRoutes = [
             if (envSpId) salesPersonId = envSpId;
             if (!csMemberId || !salesPersonId) {
               try {
-                const { fetchZohoUsers } = await import("../../utils/zohoCRM");
-                const users = await fetchZohoUsers("ActiveUsers");
+                const { fetchCRMProviderUsers } = await import("../../utils/CRMProviderCRM");
+                const users = await fetchCRMProviderUsers("ActiveUsers");
                 const findUserId = (email: string): string | null => {
                   const m = users.find(u => String(u.email || "").toLowerCase() === email.toLowerCase());
                   return m?.id ? String(m.id) : null;
@@ -10916,8 +10916,8 @@ export const duplicateRadarRoutes = [
             title: String(r.title ?? r.input?.title ?? ""),
             verdict: String(r.verdict ?? ""),
             cluster_id: r.cluster_id != null ? Number(r.cluster_id) : null,
-            matched_account_zoho_id: (r.matched_account_zoho_id ?? r.input?.matched_account_zoho_id) != null
-              ? String(r.matched_account_zoho_id ?? r.input?.matched_account_zoho_id)
+            matched_account_CRMProvider_id: (r.matched_account_CRMProvider_id ?? r.input?.matched_account_CRMProvider_id) != null
+              ? String(r.matched_account_CRMProvider_id ?? r.input?.matched_account_CRMProvider_id)
               : null,
             matched_account_name: (r.matched_account_name ?? r.input?.matched_account_name) != null
               ? String(r.matched_account_name ?? r.input?.matched_account_name)
@@ -10954,7 +10954,7 @@ export const duplicateRadarRoutes = [
           }
 
           // ----------------------------------------------------------------
-          // DRY-RUN — no Zoho calls.
+          // DRY-RUN — no CRMProvider calls.
           // ----------------------------------------------------------------
           if (dryRun) {
 
@@ -11003,15 +11003,15 @@ export const duplicateRadarRoutes = [
               // deals for never-converted accounts (showed 0 when the real push
               // would create them).
               const {
-                getAccountZohoIdByCluster: resolveAccForPreview,
-                getAccountZohoIdByDomainOrName: resolveAccByDomainName,
+                getAccountCRMProviderIdByCluster: resolveAccForPreview,
+                getAccountCRMProviderIdByDomainOrName: resolveAccByDomainName,
               } = await import("../../utils/duplicateRadarDatabase");
               let sampleCo: (typeof plan.companies)[number] | null = null;
               let sampleAccId: string | null = null;
               // Pass 1: resolve the existing account for every A1 company.
               const resolvedA1: Array<{ co: (typeof plan.companies)[number]; accId: string }> = [];
               for (const co of plan.companies) {
-                const matchedAcc = co.contacts.map(c => c.matched_account_zoho_id).find(Boolean) || null;
+                const matchedAcc = co.contacts.map(c => c.matched_account_CRMProvider_id).find(Boolean) || null;
                 const accId =
                   matchedAcc ??
                   (co.clusterId != null
@@ -11026,7 +11026,7 @@ export const duplicateRadarRoutes = [
               let a1LiveSet = new Set<string>();
               if (resolvedA1.length > 0) {
                 try {
-                  const { getLiveClientAccounts } = await import("../../utils/zohoCRM");
+                  const { getLiveClientAccounts } = await import("../../utils/CRMProviderCRM");
                   a1LiveSet = await getLiveClientAccounts(resolvedA1.map(x => x.accId));
                 } catch { a1LiveSet = new Set(); }
               }
@@ -11175,31 +11175,31 @@ export const duplicateRadarRoutes = [
           // ----------------------------------------------------------------
           // REAL RUN — ordered batched creates with id-mapping.
           // ----------------------------------------------------------------
-          const { createZohoRecordsBulk, addZohoTags, addDealContactRoles } = await import("../../utils/zohoCRM");
-          const { getAccountZohoIdByCluster, getAccountZohoIdByDomainOrName } =
+          const { createCRMProviderRecordsBulk, addCRMProviderTags, addDealContactRoles } = await import("../../utils/CRMProviderCRM");
+          const { getAccountCRMProviderIdByCluster, getAccountCRMProviderIdByDomainOrName } =
             await import("../../utils/duplicateRadarDatabase");
 
 
           // Track counts
           const created = { accounts: 0, contacts: 0, deals: 0, leads: 0 };
           const failed = { accounts: 0, contacts: 0, deals: 0, leads: 0 };
-          let existingContactsLinked = 0; // A1: contacts already in Zoho (reused, not duplicated)
+          let existingContactsLinked = 0; // A1: contacts already in CRMProvider (reused, not duplicated)
           let reusedAccounts = 0; // accounts found live and reused instead of duplicated
           let existingDealsSkipped = 0; // deals that already exist under the account (idempotent retry)
           let dealsSkippedNoContact = 0; // company had no resolvable contact → can't set mandatory Contact_Name
-          let dealsSkippedGoneAccount = 0; // account no longer exists in Zoho (merged/deleted) → skip, don't reject
+          let dealsSkippedGoneAccount = 0; // account no longer exists in CRMProvider (merged/deleted) → skip, don't reject
           const dealSkips: Array<{ company: string; reason: string }> = []; // per-company "why no deal" for the UI
           let liveClientsRejected = 0; // A1 existing accounts with a signed/paid deal → REJECTED (live client, not pushed)
           let contactsExistingAsLead = 0; // contact rows that already exist as a Lead → REJECTED (already in CRM)
-          let leadsSkippedExisting = 0; // leads already in Zoho (by email/phone) — skipped, not duplicated
+          let leadsSkippedExisting = 0; // leads already in CRMProvider (by email/phone) — skipped, not duplicated
           let outcomesSample: any[] = [];
-          // Zoho per-record failure reasons (code + message) so the UI can show
+          // CRMProvider per-record failure reasons (code + message) so the UI can show
           // WHY a create failed (required field, duplicate, invalid layout, …).
           const errorSamples: Array<{ stage: string; code?: string; message?: string; field?: string }> = [];
           const collectErrors = (stage: string, outs: any[]) => {
             for (const o of outs) {
               if (o?.status === "error" && errorSamples.length < 10) {
-                // Zoho names the offending field in details.api_name (both
+                // CRMProvider names the offending field in details.api_name (both
                 // MANDATORY_NOT_FOUND and INVALID_DATA) — surface it so we know
                 // exactly which field to add/fix.
                 const field = o?.details?.api_name || o?.details?.expected_data_type || undefined;
@@ -11211,12 +11211,12 @@ export const duplicateRadarRoutes = [
           if (action === 4) {
             // --- ACTION 4: create Leads only ---
             // Idempotent guard: skip prospects that already exist as a Lead by
-            // EMAIL or PHONE (phone covers the phone-only leads Zoho's built-in
+            // EMAIL or PHONE (phone covers the phone-only leads CRMProvider's built-in
             // email-dup check can't catch). Runs BEFORE any create — email/phone
-            // lookups THROW on a Zoho error, so a failure aborts with zero
+            // lookups THROW on a CRMProvider error, so a failure aborts with zero
             // written rather than duplicating. Intra-batch dedup too.
-            const { findRecordIdsByEmails, findRecordIdsByPhones, normalizePhoneKey, searchZohoRecords } =
-              await import("../../utils/zohoCRM");
+            const { findRecordIdsByEmails, findRecordIdsByPhones, normalizePhoneKey, searchCRMProviderRecords } =
+              await import("../../utils/CRMProviderCRM");
             const leadEmails = plan.leads.map(r => String(r.email || "").trim()).filter(Boolean);
             const leadPhones = plan.leads.map(r => String(r.phone || "").trim()).filter(Boolean);
             const leadFoundEmail = await findRecordIdsByEmails("Leads", leadEmails);
@@ -11226,9 +11226,9 @@ export const duplicateRadarRoutes = [
             // leads that have NO email AND NO phone (e.g. 7× "Ajialuna") because
             // email/phone were the ONLY dedup keys and those leads carry neither.
             // Collapse to a single lead per company: skip a company that already
-            // has a Mawsool lead in Zoho, or that we already created earlier in
+            // has a Mawsool lead in CRMProvider, or that we already created earlier in
             // THIS batch. The existing-company check is best-effort (company
-            // names with ( ) , can't go in a Zoho criteria, so they fall back to
+            // names with ( ) , can't go in a CRMProvider criteria, so they fall back to
             // the email/phone + in-batch checks).
             const existingLeadCompanies = new Set<string>();
             {
@@ -11239,7 +11239,7 @@ export const duplicateRadarRoutes = [
                 const chunk = safe.slice(s, s + CHUNK);
                 const criteria = "(" + chunk.map(nm => `(Company:equals:${nm})`).join("or") + `)and(Lead_Source:equals:${PREFLIGHT_LEAD_SOURCE})`;
                 try {
-                  const rows = await searchZohoRecords("Leads", criteria);
+                  const rows = await searchCRMProviderRecords("Leads", criteria);
                   for (const row of rows) {
                     const k = normalizeCompanyName(String(row.data?.Company || ""));
                     if (k) existingLeadCompanies.add(k);
@@ -11255,7 +11255,7 @@ export const duplicateRadarRoutes = [
               const em = String(r.email || "").trim().toLowerCase();
               const pk = normalizePhoneKey(r.phone);
               const ck = normalizeCompanyName(String(r.company || r.domain || ""));
-              // Already in Zoho as a Lead → skip (idempotent retry). Match on
+              // Already in CRMProvider as a Lead → skip (idempotent retry). Match on
               // email, phone, OR company (one-lead-per-company).
               if ((em && leadFoundEmail.has(em)) || (pk && leadFoundPhone.has(pk)) || (ck && existingLeadCompanies.has(ck))) {
                 leadsSkippedExisting++;
@@ -11272,12 +11272,12 @@ export const duplicateRadarRoutes = [
             });
 
             // "Make sure the company is not an existing client" — for leads that
-            // carry a real company domain (email or row), live-check Zoho: drop
+            // carry a real company domain (email or row), live-check CRMProvider: drop
             // any whose domain belongs to a LIVE client (existing signed/paid,
             // not churned-after-renewal). Those are handled by CS, never
             // cold-contacted as a fresh lead. Bounded to this slice's domains.
             {
-              const { findAccountIdsByDomains, getLiveClientAccounts } = await import("../../utils/zohoCRM");
+              const { findAccountIdsByDomains, getLiveClientAccounts } = await import("../../utils/CRMProviderCRM");
               const { realDomainRoot } = await import("../../utils/preflightStructuredPush");
               const domOf = (r: any) => realDomainRoot(r.email) || realDomainRoot(r.domain);
               const domains = Array.from(new Set(freshLeads.map(domOf).filter(Boolean) as string[]));
@@ -11303,7 +11303,7 @@ export const duplicateRadarRoutes = [
               // Sample User 2026-07-06 (REVERSES the 07-05 "name = company" rule): the
               // Lead NAME must be the CONTACT PERSON so SDRs can call the lead by
               // name. Last_Name/First_Name = the person; the company stays in the
-              // Company field (Zoho shows "Person – Company" at the top). Only
+              // Company field (CRMProvider shows "Person – Company" at the top). Only
               // when the row has no person name do we fall back to the company so
               // Last_Name (required) is never blank.
               const _nm = splitContactName(r.contact_name || company);
@@ -11331,7 +11331,7 @@ export const duplicateRadarRoutes = [
             });
 
             const leadOut = leadPayloads.length > 0
-              ? await createZohoRecordsBulk("Leads", leadPayloads)
+              ? await createCRMProviderRecordsBulk("Leads", leadPayloads)
               : [];
             created.leads = leadOut.filter(o => o.status === "success").length;
             failed.leads = leadOut.filter(o => o.status === "error").length;
@@ -11340,7 +11340,7 @@ export const duplicateRadarRoutes = [
             // Tag created Leads (best-effort).
             try {
               const leadIds = leadOut.filter(o => o.status === "success" && o.id).map(o => String(o.id));
-              if (leadIds.length && PREFLIGHT_LEAD_TAG) await addZohoTags("Leads", leadIds, [PREFLIGHT_LEAD_TAG]);
+              if (leadIds.length && PREFLIGHT_LEAD_TAG) await addCRMProviderTags("Leads", leadIds, [PREFLIGHT_LEAD_TAG]);
             } catch (_) { /* tagging non-fatal */ }
           } else {
             // --- ACTIONS 1/2/3: Account → Contact → Deal ---
@@ -11353,7 +11353,7 @@ export const duplicateRadarRoutes = [
             // (no orphan account/deal). Rows are recorded in skipped.
             {
               const { findRecordIdsByEmails, findRecordIdsByPhones, normalizePhoneKey } =
-                await import("../../utils/zohoCRM");
+                await import("../../utils/CRMProviderCRM");
               const allRows = plan.companies.flatMap(co => co.contacts);
               const emails = allRows.map(r => String(r.email || "").trim()).filter(Boolean);
               const phones = allRows.map(r => String(r.phone || "").trim()).filter(Boolean);
@@ -11396,7 +11396,7 @@ export const duplicateRadarRoutes = [
 
             {
               const { findAccountIdsByDomains, findAccountIdsByNames } =
-                await import("../../utils/zohoCRM");
+                await import("../../utils/CRMProviderCRM");
               const { realDomainRoot } = await import("../../utils/preflightStructuredPush");
               const domainKey = (co: any) =>
                 String(realDomainRoot(co.domain) || co.domain || "").trim().toLowerCase();
@@ -11408,17 +11408,17 @@ export const duplicateRadarRoutes = [
               const acctByName = await findAccountIdsByNames(plan.companies.map(co => co.companyName));
 
               const resolveLive = (co: any): string | null => {
-                // LIVE ids FIRST. The enriched `matched_account_zoho_id` comes
+                // LIVE ids FIRST. The enriched `matched_account_CRMProvider_id` comes
                 // from the synced account directory (getAccountDirectory) — a
                 // SNAPSHOT that goes stale: when an account is merged or renamed
-                // in Zoho its old id is deprecated, and writing { Account_Name:
+                // in CRMProvider its old id is deprecated, and writing { Account_Name:
                 // { id: <deprecated> } } is rejected as INVALID_DATA (the exact
                 // 47-contact failure we hit). A live domain / exact-name lookup
                 // always returns the SURVIVING id. The stale local id is only a
                 // last-resort fallback for an account a live search can't find
                 // (no domain stored + name variance).
                 const matchedAcc =
-                  co.contacts.map((c: any) => c.matched_account_zoho_id).find(Boolean) || null;
+                  co.contacts.map((c: any) => c.matched_account_CRMProvider_id).find(Boolean) || null;
                 return acctByDomain.get(domainKey(co)) || acctByName.get(nameKey(co)) || matchedAcc || null;
               };
 
@@ -11426,8 +11426,8 @@ export const duplicateRadarRoutes = [
                 for (const co of plan.companies) {
                   const existingId =
                     resolveLive(co) ??
-                    (co.clusterId != null ? await getAccountZohoIdByCluster(co.clusterId) : null) ??
-                    (await getAccountZohoIdByDomainOrName(co.domain, co.companyName));
+                    (co.clusterId != null ? await getAccountCRMProviderIdByCluster(co.clusterId) : null) ??
+                    (await getAccountCRMProviderIdByDomainOrName(co.domain, co.companyName));
                   if (!existingId) {
                     companiesSkippedNoAccount.push(co);
                   } else {
@@ -11460,7 +11460,7 @@ export const duplicateRadarRoutes = [
                     if (web) p.Website = web;
                     return p;
                   });
-                  const accOut = await createZohoRecordsBulk("Accounts", accountPayloads);
+                  const accOut = await createCRMProviderRecordsBulk("Accounts", accountPayloads);
                   created.accounts = accOut.filter(o => o.status === "success").length;
                   failed.accounts = accOut.filter(o => o.status === "error").length;
                   collectErrors("account", accOut);
@@ -11486,9 +11486,9 @@ export const duplicateRadarRoutes = [
             // cold-contacted) → NOT pushed at all (no contact, no deal). A past
             // client (churned after renewal) or never-converted account is NOT
             // live → it flows through to get the re-engagement / new deal.
-            // Checked live in Zoho. (A2/A3 open new accounts → nothing to check.)
+            // Checked live in CRMProvider. (A2/A3 open new accounts → nothing to check.)
             if (action === 1 && companiesWithAccount.length > 0) {
-              const { getLiveClientAccounts } = await import("../../utils/zohoCRM");
+              const { getLiveClientAccounts } = await import("../../utils/CRMProviderCRM");
               const liveSet = await getLiveClientAccounts(
                 companiesWithAccount.map(co => accountIdMap.get(co.companyKey) || "").filter(Boolean),
               );
@@ -11524,23 +11524,23 @@ export const duplicateRadarRoutes = [
             const contactIdsByCompany = new Map<string, string[]>();
 
             if (companiesWithAccount.length > 0) {
-              // Check each contact's email against Zoho FIRST (ALL of A1/A2/A3)
+              // Check each contact's email against CRMProvider FIRST (ALL of A1/A2/A3)
               // so we never fail on a duplicate-email contact: an existing
               // contact is REUSED (its id links the Deal's Contact_Name) instead
-              // of Zoho rejecting a duplicate and leaving the Deal with no
+              // of CRMProvider rejecting a duplicate and leaving the Deal with no
               // contact (MANDATORY_NOT_FOUND Contact_Name).
-              const { normalizePhoneKey } = await import("../../utils/zohoCRM");
+              const { normalizePhoneKey } = await import("../../utils/CRMProviderCRM");
               const preexistingByRow = new Map<number, string>();
               {
                 // Batched existence check by EMAIL and PHONE (OR-chunks). Both
-                // THROW on a Zoho error — and this runs BEFORE any create, so a
+                // THROW on a CRMProvider error — and this runs BEFORE any create, so a
                 // failure aborts with zero records written instead of silently
                 // treating everyone as new and duplicating existing contacts.
                 // PHONE is the fix for phone-only contacts (no email), which the
                 // email check can't see — the exact gap that duplicated the
                 // Mawsool contacts on every retry.
                 const { findContactIdsByEmails, findRecordIdsByPhones } =
-                  await import("../../utils/zohoCRM");
+                  await import("../../utils/CRMProviderCRM");
                 const emails = companiesWithAccount.flatMap(co =>
                   co.contacts.map(r => String(r.email || "").trim()).filter(Boolean),
                 );
@@ -11575,7 +11575,7 @@ export const duplicateRadarRoutes = [
                 for (const row of co.contacts) {
                   const em = String(row.email || "").trim().toLowerCase();
                   const pk = normalizePhoneKey(row.phone);
-                  // Contact already in Zoho (by email or phone) → reuse it, don't
+                  // Contact already in CRMProvider (by email or phone) → reuse it, don't
                   // create a duplicate. Register the existing id for deal linkage.
                   const existingId = preexistingByRow.get(row.row_index);
                   if (existingId) {
@@ -11619,7 +11619,7 @@ export const duplicateRadarRoutes = [
               }
 
               const conOut = contactPayloads.length > 0
-                ? await createZohoRecordsBulk("Contacts", contactPayloads)
+                ? await createCRMProviderRecordsBulk("Contacts", contactPayloads)
                 : [];
               created.contacts = conOut.filter(o => o.status === "success").length;
               failed.contacts = conOut.filter(o => o.status === "error").length;
@@ -11720,7 +11720,7 @@ export const duplicateRadarRoutes = [
 
               // LAST-RESORT CS_Member / Sales_Person resolution (Sample User 2026-07-05).
               // CS_Member is a mandatory user-lookup, but this org's token can't
-              // read the Users API (fetchZohoUsers throws — same failure as
+              // read the Users API (fetchCRMProviderUsers throws — same failure as
               // "Check required fields"), so csMemberId is still null here and the
               // deal would reject MANDATORY_NOT_FOUND CS_Member. Bypass the Users
               // API entirely: READ one resolved Account (a CRUD read, which works)
@@ -11728,12 +11728,12 @@ export const duplicateRadarRoutes = [
               // makes deals create without any manual id or env var.
               if (!csMemberId || !salesPersonId) {
                 try {
-                  const { fetchZohoRecordById } = await import("../../utils/zohoCRM");
+                  const { fetchCRMProviderRecordById } = await import("../../utils/CRMProviderCRM");
                   const anyAccId = companiesWithAccount
                     .map(co => accountIdMap.get(co.companyKey))
                     .find(Boolean);
                   if (anyAccId) {
-                    const acc = await fetchZohoRecordById("Accounts", String(anyAccId));
+                    const acc = await fetchCRMProviderRecordById("Accounts", String(anyAccId));
                     const ownerId = acc?.data?.Owner?.id ? String(acc.data.Owner.id) : "";
                     if (ownerId) {
                       if (!csMemberId) csMemberId = ownerId;
@@ -11744,7 +11744,7 @@ export const duplicateRadarRoutes = [
                 } catch (e: any) {
                   const _m = String(e?.message || e);
                   // If the owner read was RATE-LIMITED (a concurrent sync exhausted
-                  // the shared Zoho quota), propagate it so the whole push returns
+                  // the shared CRMProvider quota), propagate it so the whole push returns
                   // a retryable rate-limit error — instead of silently leaving
                   // CS_Member empty, which would surface as MANDATORY_NOT_FOUND and
                   // look like a permanent failure. The UI waits + retries these.
@@ -11755,7 +11755,7 @@ export const duplicateRadarRoutes = [
 
               // Deal_Name = the ACTUAL account name (Sample User 2026-07-05: "add the
               // account name in the deal name"). For a reused account the real
-              // Zoho name (e.g. "Ctelecoms (Consolidated Telecoms)") often
+              // CRMProvider name (e.g. "Ctelecoms (Consolidated Telecoms)") often
               // differs from the Excel company label ("Ctelecoms") — the deal
               // must be named after the account it sits under. Look the name up
               // by the resolved account id from the account directory; fall back
@@ -11771,7 +11771,7 @@ export const duplicateRadarRoutes = [
               // Idempotent guard: skip a company whose account already has an
               // OPEN deal of the same name (a retry) so we don't stack dupes.
               // (An old CLOSED/lost deal of the same name does NOT block a new one.)
-              const { findExistingDealKeys } = await import("../../utils/zohoCRM");
+              const { findExistingDealKeys } = await import("../../utils/CRMProviderCRM");
               const existingDealKeys = await findExistingDealKeys(
                 companiesWithAccount
                   .map(co => ({
@@ -11781,14 +11781,14 @@ export const duplicateRadarRoutes = [
                   .filter(p => p.accountId),
               );
 
-              // Per-deal edge-case guards (Sample User 2026-07-06). fetchZohoRecordById
+              // Per-deal edge-case guards (Sample User 2026-07-06). fetchCRMProviderRecordById
               // is a CRUD read (works even with the Users API blocked) and does
               // double duty: (a) confirm the account still EXISTS live — a
               // merged/deleted id would reject with INVALID_DATA Account_Name;
               // (b) read the account's OWN current Owner to use as CS_Member, so
               // one slice's deactivated first-account owner can't poison every
               // deal (INVALID_DATA CS_Member). Imported once, reused per company.
-              const { fetchZohoRecordById: _fetchAcc } = await import("../../utils/zohoCRM");
+              const { fetchCRMProviderRecordById: _fetchAcc } = await import("../../utils/CRMProviderCRM");
               // Per-company skip reasons (dealSkips, declared above) so the
               // operator can see exactly WHY a company (e.g. Ctelecoms) got no
               // deal — instead of a bare "0 created".
@@ -11812,7 +11812,7 @@ export const duplicateRadarRoutes = [
                     if (/too many requests|rate.?limit|cooling down/i.test(_m)) throw e; // retryable
                     // other read error → keep the shared csMemberId, proceed
                   }
-                  if (acc === null) { dealsSkippedGoneAccount++; dealSkips.push({ company: _label, reason: "account deleted/merged in Zoho" }); continue; } // account gone → skip
+                  if (acc === null) { dealsSkippedGoneAccount++; dealSkips.push({ company: _label, reason: "account deleted/merged in CRMProvider" }); continue; } // account gone → skip
                   const ownerId = acc?.data?.Owner?.id ? String(acc.data.Owner.id) : "";
                   if (ownerId) dealCsMember = ownerId; // this account's current owner
                 }
@@ -11860,7 +11860,7 @@ export const duplicateRadarRoutes = [
               }
 
               const dealOut = dealPayloads.length > 0
-                ? await createZohoRecordsBulk("Deals", dealPayloads)
+                ? await createCRMProviderRecordsBulk("Deals", dealPayloads)
                 : [];
               created.deals = dealOut.filter(o => o.status === "success").length;
               failed.deals = dealOut.filter(o => o.status === "error").length;
@@ -11869,7 +11869,7 @@ export const duplicateRadarRoutes = [
               // Tag created Deals (best-effort).
               try {
                 const dealIds = dealOut.filter(o => o.status === "success" && o.id).map(o => String(o.id));
-                if (dealIds.length && PREFLIGHT_DEAL_TAG) await addZohoTags("Deals", dealIds, [PREFLIGHT_DEAL_TAG]);
+                if (dealIds.length && PREFLIGHT_DEAL_TAG) await addCRMProviderTags("Deals", dealIds, [PREFLIGHT_DEAL_TAG]);
               } catch (_) { /* tagging non-fatal */ }
               // Associate every created contact of a company to its Deal's
               // Contact Roles (the primary is also the Deal's Contact_Name).
@@ -11907,7 +11907,7 @@ export const duplicateRadarRoutes = [
               userId: sessionUser?.userId ?? 0,
               userEmail: sessionUser?.email ?? "system",
               userRole: sessionUser?.role,
-              actionType: "PUSH_TO_ZOHO",
+              actionType: "PUSH_TO_CRMProvider",
               entityType: action === 4 ? "Leads" : "Deals",
               entityId: action === 4 ? LEAD.layoutId : DEAL.layoutId,
               entityName: source,
@@ -11943,7 +11943,7 @@ export const duplicateRadarRoutes = [
         } catch (error: any) {
           logger.error("Error in preflight structured-push:", error);
           return c.json(
-            { error: "Structured push to Zoho failed — " + (error?.message || "unknown") },
+            { error: "Structured push to CRMProvider failed — " + (error?.message || "unknown") },
             500,
           );
         }
@@ -11989,10 +11989,10 @@ export const duplicateRadarRoutes = [
             .filter(r => r.email || r.phone || r.contact_name);
           const sliced = count > 0 ? candidates.slice(offset, offset + count) : candidates;
 
-          const { findRecordIdsByEmails, findRecordIdsByPhones, normalizePhoneKey, findRecordIdsByFullNames, fullNameKey, updateZohoRecordsBulk } = await import("../../utils/zohoCRM");
+          const { findRecordIdsByEmails, findRecordIdsByPhones, normalizePhoneKey, findRecordIdsByFullNames, fullNameKey, updateCRMProviderRecordsBulk } = await import("../../utils/CRMProviderCRM");
           const { splitContactName } = await import("../../utils/preflightStructuredPush");
           // Match order: EMAIL (batched) → PHONE (batched) → NAME (BATCHED, unique
-          // match only). Name matching used to be one Zoho search PER ROW, which
+          // match only). Name matching used to be one CRMProvider search PER ROW, which
           // timed out large slices; it's now OR-chunked like email/phone.
           const idByEmail = await findRecordIdsByEmails(module, sliced.map(r => r.email).filter(Boolean));
           const idByPhone = await findRecordIdsByPhones(module, sliced.map(r => r.phone).filter(Boolean));
@@ -12065,7 +12065,7 @@ export const duplicateRadarRoutes = [
             });
           }
 
-          const out = updates.length > 0 ? await updateZohoRecordsBulk(module, updates) : [];
+          const out = updates.length > 0 ? await updateCRMProviderRecordsBulk(module, updates) : [];
           const updated = out.filter(o => o.status === "success").length;
           const failed = out.filter(o => o.status === "error").length;
           const errorSample = out.filter(o => o.status === "error").slice(0, 5).map(o => ({ code: o.code, message: o.message }));
@@ -12088,7 +12088,7 @@ export const duplicateRadarRoutes = [
     // The structured push files a contact under Leads (batch ④) only when it
     // can't match an existing Account by email-domain, row-domain, or EXACT
     // company name. A THIN row (no email / no domain) whose company is stored in
-    // Zoho under any name variance — Arabic, a suffix, different punctuation, or
+    // CRMProvider under any name variance — Arabic, a suffix, different punctuation, or
     // simply not yet in the synced account directory — slips through as a NEW
     // Lead, i.e. a duplicate of a client we already have (the "Bader Bahati →
     // Riyadh First Health Cluster" case). This scan re-checks every Lead of a
@@ -12105,7 +12105,7 @@ export const duplicateRadarRoutes = [
           if (!sessionUser) return unauthorizedResponse(c);
 
           const body = await c.req.json().catch(() => ({}));
-          // Lead_Source to scan (single word so the Zoho criteria stays valid —
+          // Lead_Source to scan (single word so the CRMProvider criteria stays valid —
           // criteria search breaks on spaces/parens). Defaults to the Mawsool
           // import this whole tool exists for.
           const source = String(body?.source || "Mawsool").trim() || "Mawsool";
@@ -12116,12 +12116,12 @@ export const duplicateRadarRoutes = [
           // contains it (case-insensitive). Empty = all (previous behavior).
           const createdBy = String(body?.created_by || "").trim().toLowerCase();
 
-          const { fetchAllZohoRecords } = await import("../../utils/zohoCRM");
+          const { fetchAllCRMProviderRecords } = await import("../../utils/CRMProviderCRM");
           const { getAccountDirectory } = await import("../../utils/duplicateRadarDatabase");
           const { normalizeCoreName } = await import("../../utils/preflightStructuredPush");
 
           // 1) LIVE-fetch every Lead of this source in one paginated call.
-          const leadsAll = await fetchAllZohoRecords("Leads", {
+          const leadsAll = await fetchAllCRMProviderRecords("Leads", {
             criteria: `(Lead_Source:equals:${source})`,
             fields: ["Company", "Last_Name", "First_Name", "Full_Name", "Email", "Phone", "Mobile", "Lead_Status", "Created_Time", "Created_By", "Owner"],
           });
@@ -12137,7 +12137,7 @@ export const duplicateRadarRoutes = [
           // 2) Load the account directory and build the FUZZY core-name index
           //    the push never uses for auto-linking (it links on EXACT only).
           const dir = await getAccountDirectory();
-          const byCore = new Map<string, { zohoId: string; name: string }>();
+          const byCore = new Map<string, { CRMProviderId: string; name: string }>();
           const coreCount = new Map<string, number>();
           for (const ref of dir.byId.values()) {
             const core = normalizeCoreName(ref.name);
@@ -12167,7 +12167,7 @@ export const duplicateRadarRoutes = [
               email: String(d.Email || "").trim() || null,
               phone: String(d.Phone || d.Mobile || "").trim() || null,
               lead_status: String(d.Lead_Status || "").trim() || null,
-              matched_account_id: match.zohoId,
+              matched_account_id: match.CRMProviderId,
               matched_account_name: match.name,
               matched_via: exact ? "exact_name" : "fuzzy_core_name",
               name_differs: match.name.trim().toLowerCase() !== company.toLowerCase(),
@@ -12195,7 +12195,7 @@ export const duplicateRadarRoutes = [
     // leads with NO email/phone (nothing to dedup on) — e.g. 7 copies of
     // "Ajialuna Educational Company". Groups every Lead of a source by
     // normalized company, KEEPS the most-complete lead per company, and lists /
-    // tags the rest Duplicate-Delete for the admin to remove in Zoho (HITL —
+    // tags the rest Duplicate-Delete for the admin to remove in CRMProvider (HITL —
     // never hard-deleted).
     //   Report mode (default): fetch + group, return the duplicate ids + counts.
     //     No writes.
@@ -12214,14 +12214,14 @@ export const duplicateRadarRoutes = [
 
           // ── APPLY MODE — tag the provided duplicate ids (no fetch). ──
           if (body?.apply === true && Array.isArray(body?.ids) && body.ids.length) {
-            const { addZohoTags } = await import("../../utils/zohoCRM");
+            const { addCRMProviderTags } = await import("../../utils/CRMProviderCRM");
             const ids: string[] = body.ids.map((x: any) => String(x)).filter(Boolean);
             const TAG = String(body?.tag || "Duplicate-Delete");
             let tagged = 0;
             const errs: string[] = [];
             for (let i = 0; i < ids.length; i += 100) {
               const chunk = ids.slice(i, i + 100);
-              try { await addZohoTags("Leads", chunk, [TAG]); tagged += chunk.length; }
+              try { await addCRMProviderTags("Leads", chunk, [TAG]); tagged += chunk.length; }
               catch (e: any) { errs.push(e?.message || String(e)); }
             }
             return c.json({ success: true, apply: true, tagged, failed: ids.length - tagged, errors: errs.slice(0, 3) });
@@ -12233,9 +12233,9 @@ export const duplicateRadarRoutes = [
           // pushed by us, identified by Created_By / Owner. The ~36k SDR / older
           // Mawsool leads must NOT be tagged Duplicate-Delete. Empty = all.
           const createdBy = String(body?.created_by || "").trim().toLowerCase();
-          const { fetchAllZohoRecords } = await import("../../utils/zohoCRM");
+          const { fetchAllCRMProviderRecords } = await import("../../utils/CRMProviderCRM");
           const { normalizeCompanyName } = await import("../../utils/duplicateRadarDatabase");
-          const leadsAll = await fetchAllZohoRecords("Leads", {
+          const leadsAll = await fetchAllCRMProviderRecords("Leads", {
             criteria: `(Lead_Source:equals:${source})`,
             fields: ["Company", "Last_Name", "First_Name", "Email", "Phone", "Mobile", "Title", "Lead_Status", "Created_Time", "Created_By", "Owner"],
           });
@@ -12311,7 +12311,7 @@ export const duplicateRadarRoutes = [
     // exact api_names) for the Deals and Leads modules, plus the specific fields
     // the push fills (products / employees / sales person), so we can confirm
     // the api_names match what the push sends — no guessing. No writes.
-    path: "/api/duplicates/preflight/zoho-required-fields",
+    path: "/api/duplicates/preflight/CRMProvider-required-fields",
     method: "GET" as const,
     createHandler: async () => {
       return async (c: any) => {
@@ -12319,7 +12319,7 @@ export const duplicateRadarRoutes = [
           const { requireAdminOrKey, unauthorizedResponse } = await import("../../utils/rbacMiddleware");
           const sessionUser = await requireAdminOrKey(c);
           if (!sessionUser) return unauthorizedResponse(c);
-          const { fetchZohoFields } = await import("../../utils/zohoCRM");
+          const { fetchCRMProviderFields } = await import("../../utils/CRMProviderCRM");
           const rx = /product|employ|sales|person/i;
           const summarize = (fields: any[]) => ({
             required: fields.filter(f => f.required).map(f => ({ api_name: f.api_name, label: f.label, type: f.data_type })),
@@ -12327,10 +12327,10 @@ export const duplicateRadarRoutes = [
               .filter(f => rx.test(f.label) || rx.test(f.api_name))
               .map(f => ({ api_name: f.api_name, label: f.label, type: f.data_type, required: f.required })),
           });
-          const [deals, leads] = await Promise.all([fetchZohoFields("Deals"), fetchZohoFields("Leads")]);
+          const [deals, leads] = await Promise.all([fetchCRMProviderFields("Deals"), fetchCRMProviderFields("Leads")]);
           return c.json({ success: true, deals: summarize(deals), leads: summarize(leads) });
         } catch (error: any) {
-          logger.error("Error in zoho-required-fields:", error);
+          logger.error("Error in CRMProvider-required-fields:", error);
           return c.json({ error: "Field metadata fetch failed — " + (error?.message || "unknown") }, 500);
         }
       };
@@ -12338,9 +12338,9 @@ export const duplicateRadarRoutes = [
   },
   {
     // READ-ONLY. Layer 1 of the resolution ladder for the WHOLE upload: resolve
-    // each contact's existing Zoho Account by EMAIL domain → row domain →
+    // each contact's existing CRMProvider Account by EMAIL domain → row domain →
     // company name (the email-domain check is the new signal the import gate
-    // never ran). Returns per-row matched_account_zoho_id + matched_via and a
+    // never ran). Returns per-row matched_account_CRMProvider_id + matched_via and a
     // summary, so the client can enrich its rows, refresh the action badges,
     // and send the enriched rows to the push. No writes. Body: { rows }.
     path: "/api/duplicates/preflight/resolve-existing-accounts",
@@ -12363,8 +12363,8 @@ export const duplicateRadarRoutes = [
             company: String(r.company ?? r.input?.company_name ?? r.company_name ?? ""),
             domain: String(r.domain ?? r.input?.domain ?? ""),
             email: String(r.email ?? ""),
-            matched_account_zoho_id: (r.matched_account_zoho_id ?? r.input?.matched_account_zoho_id) != null
-              ? String(r.matched_account_zoho_id ?? r.input?.matched_account_zoho_id)
+            matched_account_CRMProvider_id: (r.matched_account_CRMProvider_id ?? r.input?.matched_account_CRMProvider_id) != null
+              ? String(r.matched_account_CRMProvider_id ?? r.input?.matched_account_CRMProvider_id)
               : null,
           }));
 
@@ -12372,10 +12372,10 @@ export const duplicateRadarRoutes = [
 
           // Per-row matches (only the matched ones — keeps payload small).
           const matches = enriched
-            .filter(r => String(r.matched_account_zoho_id || "").trim())
+            .filter(r => String(r.matched_account_CRMProvider_id || "").trim())
             .map(r => ({
               row_index: r.row_index,
-              matched_account_zoho_id: String(r.matched_account_zoho_id),
+              matched_account_CRMProvider_id: String(r.matched_account_CRMProvider_id),
               matched_account_name: String(r.matched_account_name || ""),
               matched_via: via.get(r.row_index) || "unknown",
             }));
@@ -12597,7 +12597,7 @@ export const duplicateRadarRoutes = [
             { header: "CS Phase", key: "phase", width: 16 },
             { header: "Churn Date", key: "churn_date", width: 14 },
             { header: "Days Since Churn", key: "churn_days", width: 14 },
-            // Sample User 2026-06-17 — clickable Zoho links per rejected row.
+            // Sample User 2026-06-17 — clickable CRMProvider links per rejected row.
             // Operator clicks straight to the existing Lead / Deal /
             // Account to verify the rejection without going back into
             // the dashboard. Empty cell when the cluster has no
@@ -12637,7 +12637,7 @@ export const duplicateRadarRoutes = [
           // link. Empty cell when there's no matching record.
           const mkLink = (lk: any) =>
             lk && lk.url
-              ? { text: lk.label || "Open in Zoho", hyperlink: lk.url, tooltip: lk.url }
+              ? { text: lk.label || "Open in CRMProvider", hyperlink: lk.url, tooltip: lk.url }
               : "";
           // CS Phase column — render the lifecycle_state enum as a human label
           // for the Head of Sales. Termination rows additionally carry the
@@ -12797,7 +12797,7 @@ export const duplicateRadarRoutes = [
             max_check:
               typeof body.max_check === "number" ? body.max_check : undefined,
             // Opt-in: when the operator wants a fresh CS overlap verdict
-            // (e.g. they just nudged a Phase in Zoho), pass
+            // (e.g. they just nudged a Phase in CRMProvider), pass
             // ?refresh_overlap=true in the body. Default false keeps the
             // batch endpoint fast.
             refresh_overlap: body.refresh_overlap === true,
@@ -12812,8 +12812,8 @@ export const duplicateRadarRoutes = [
   },
   {
     // Per-row "↻ Re-check from CRM" (Sample User 2026-06-25). After the operator
-    // corrects a mis-tagged client in Zoho, this re-fetches ONLY that company's
-    // deals from Zoho, busts the CS-client directory cache, and re-runs the
+    // corrects a mis-tagged client in CRMProvider, this re-fetches ONLY that company's
+    // deals from CRMProvider, busts the CS-client directory cache, and re-runs the
     // preflight verdict for the affected rows — so a stale BLOCK flips to PASS
     // in seconds without re-uploading or waiting for the full scan. Reuses the
     // exact resync logic as scripts/resyncCorrectedDeals.ts.
@@ -12850,11 +12850,11 @@ export const duplicateRadarRoutes = [
             );
           }
 
-          // 1) Re-fetch this company's deals from Zoho + bust the directory cache.
-          const { resyncCompanyDealsFromZoho } = await import(
+          // 1) Re-fetch this company's deals from CRMProvider + bust the directory cache.
+          const { resyncCompanyDealsFromCRMProvider } = await import(
             "../../utils/duplicateRadarResync"
           );
-          const resync = await resyncCompanyDealsFromZoho([{ domains, names }]);
+          const resync = await resyncCompanyDealsFromCRMProvider([{ domains, names }]);
 
           // 2) Re-run preflight for the affected rows against the fresh data.
           //    refresh_overlap=true so the CS verdict is recomputed, not cached.
@@ -12973,8 +12973,8 @@ export const duplicateRadarRoutes = [
 
   // ── Empty / Orphaned Records cleanup tab (Sample User 2026-06-25) ──────────────
   // Surfaces orphaned/empty/test records → admin tags them "Empty-Delete" (HITL,
-  // never auto-deletes; admin deletes in Zoho). Detection off local data; the
-  // only live Zoho call is the lazy per-account attachment check.
+  // never auto-deletes; admin deletes in CRMProvider). Detection off local data; the
+  // only live CRMProvider call is the lazy per-account attachment check.
   {
     path: "/api/duplicates/empty-records/deals",
     method: "GET" as const,
@@ -13035,21 +13035,21 @@ export const duplicateRadarRoutes = [
         try {
           atts = await fetchRecordAttachments("Accounts", id);
         } catch (e: any) {
-          return c.json({ error: `Zoho attachments fetch failed: ${e?.message || e}` }, 502);
+          return c.json({ error: `CRMProvider attachments fetch failed: ${e?.message || e}` }, 502);
         }
         // An account is only truly empty when it ALSO has no live deals/contacts —
-        // the local mirror can be stale, so confirm against Zoho here too (Sample User
+        // the local mirror can be stale, so confirm against CRMProvider here too (Sample User
         // 2026-06-26: real accounts with deals were wrongly shown as deletable).
         let dealsCount = 0;
         let contactsCount = 0;
         try {
-          const deals = await fetchZohoRelatedRecords("Accounts", id, "Deals", { perPage: 1 });
+          const deals = await fetchCRMProviderRelatedRecords("Accounts", id, "Deals", { perPage: 1 });
           dealsCount = Array.isArray(deals) ? deals.length : 0;
-          const contacts = await fetchZohoRelatedRecords("Accounts", id, "Contacts", { perPage: 1 });
+          const contacts = await fetchCRMProviderRelatedRecords("Accounts", id, "Contacts", { perPage: 1 });
           contactsCount = Array.isArray(contacts) ? contacts.length : 0;
         } catch (e: any) {
           // Inconclusive → fail safe: report it as not-empty so it is NOT tagged.
-          return c.json({ error: `Zoho related-list fetch failed: ${e?.message || e}` }, 502);
+          return c.json({ error: `CRMProvider related-list fetch failed: ${e?.message || e}` }, 502);
         }
         return c.json({
           count: Array.isArray(atts) ? atts.length : 0,
@@ -13081,11 +13081,11 @@ export const duplicateRadarRoutes = [
           "../../utils/emptyRecordsDatabase"
         );
         const r = await checkRecordEmptiness(module as "Deals" | "Accounts" | "Contacts", id);
-        // GHOST (already deleted in Zoho) → PRUNE our mirror copy here (Sample User
+        // GHOST (already deleted in CRMProvider) → PRUNE our mirror copy here (Sample User
         // 2026-07-19). The UI removed the row locally on `ghost`, but nothing was
         // persisted, so the very next Refresh re-fetched it from the mirror and it
         // "came back". Pruning makes the removal durable. We only delete OUR copy
-        // of a record Zoho no longer has — the platform never deletes in Zoho.
+        // of a record CRMProvider no longer has — the platform never deletes in CRMProvider.
         let pruned = false;
         if (r.ghost) {
           try {
@@ -13107,7 +13107,7 @@ export const duplicateRadarRoutes = [
   {
     // Read-only BATCH emptiness check — verifies a whole page of ids in ONE request
     // (auto-check on fetch, without firing 50 separate calls that trip the rate
-    // limit). Makes NO change. Body: { module, zohoIds[] }.
+    // limit). Makes NO change. Body: { module, CRMProviderIds[] }.
     path: "/api/duplicates/empty-records/check-batch",
     method: "POST" as const,
     createHandler: async () => async (c: any) => {
@@ -13118,12 +13118,12 @@ export const duplicateRadarRoutes = [
         const module = String(body?.module || "");
         if (!["Deals", "Accounts", "Contacts"].includes(module))
           return c.json({ error: "module must be Deals|Accounts|Contacts" }, 400);
-        const zohoIds = Array.isArray(body?.zohoIds)
-          ? body.zohoIds.map((x: any) => String(x)).filter(Boolean)
+        const CRMProviderIds = Array.isArray(body?.CRMProviderIds)
+          ? body.CRMProviderIds.map((x: any) => String(x)).filter(Boolean)
           : [];
-        if (!zohoIds.length) return c.json({ success: true, results: [] });
+        if (!CRMProviderIds.length) return c.json({ success: true, results: [] });
         const { getEmptinessBatch } = await import("../../utils/emptyRecordsDatabase");
-        const results = await getEmptinessBatch(module as "Deals" | "Accounts" | "Contacts", zohoIds);
+        const results = await getEmptinessBatch(module as "Deals" | "Accounts" | "Contacts", CRMProviderIds);
         return c.json({ success: true, results });
       } catch (e: any) {
         logger.error("empty-records check-batch failed", e);
@@ -13143,8 +13143,8 @@ export const duplicateRadarRoutes = [
         if (!id) return c.json({ error: "deal id required" }, 400);
         const { pool } = await import("../../utils/duplicateRadarDatabase");
         const dr = await pool.query(
-          `SELECT zoho_record_id, raw_data FROM duplicate_records
-            WHERE record_type='deal' AND zoho_record_id=$1 LIMIT 1`,
+          `SELECT CRMProvider_record_id, raw_data FROM duplicate_records
+            WHERE record_type='deal' AND CRMProvider_record_id=$1 LIMIT 1`,
           [id],
         );
         if (!dr.rows.length) return c.json({ suggestion: null });
@@ -13153,7 +13153,7 @@ export const duplicateRadarRoutes = [
         return c.json({
           suggestion: inf
             ? {
-                accountId: inf.account.zoho_record_id,
+                accountId: inf.account.CRMProvider_record_id,
                 accountName: inf.account.account_name || inf.account.company_name || "",
                 confidence: inf.confidence,
               }
@@ -13177,23 +13177,23 @@ export const duplicateRadarRoutes = [
         if (!su) return unauth(c);
         const body = await c.req.json().catch(() => ({}));
         const module = String(body?.module || "");
-        const zohoIds: string[] = Array.isArray(body?.zohoIds)
-          ? body.zohoIds.map((x: any) => String(x)).filter(Boolean)
+        const CRMProviderIds: string[] = Array.isArray(body?.CRMProviderIds)
+          ? body.CRMProviderIds.map((x: any) => String(x)).filter(Boolean)
           : [];
         if (!["Deals", "Accounts", "Contacts"].includes(module))
           return c.json({ error: "module must be Deals|Accounts|Contacts" }, 400);
-        if (!zohoIds.length) return c.json({ error: "zohoIds required" }, 400);
+        if (!CRMProviderIds.length) return c.json({ error: "CRMProviderIds required" }, 400);
         const tag = process.env.EMPTY_DELETE_TAG || "Empty-Delete";
-        const { addZohoTags } = await import("../../utils/zohoCRM");
+        const { addCRMProviderTags } = await import("../../utils/CRMProviderCRM");
         const { markEmptyDeleteTagged } = await import(
           "../../utils/emptyRecordsDatabase"
         );
         let tagged = 0;
-        for (let i = 0; i < zohoIds.length; i += 100) {
-          const batch = zohoIds.slice(i, i + 100);
-          await addZohoTags(module, batch, [tag]);
+        for (let i = 0; i < CRMProviderIds.length; i += 100) {
+          const batch = CRMProviderIds.slice(i, i + 100);
+          await addCRMProviderTags(module, batch, [tag]);
           // Record locally so the cleanup list drops them on the NEXT refresh,
-          // without waiting for the slow full sync to re-pull the Zoho tag.
+          // without waiting for the slow full sync to re-pull the CRMProvider tag.
           await markEmptyDeleteTagged(module, batch, su?.email || null);
           tagged += batch.length;
         }
@@ -13216,20 +13216,20 @@ export const duplicateRadarRoutes = [
         if (!su) return unauth(c);
         const body = await c.req.json().catch(() => ({}));
         const module = String(body?.module || "");
-        const zohoIds: string[] = Array.isArray(body?.zohoIds)
-          ? body.zohoIds.map((x: any) => String(x)).filter(Boolean)
+        const CRMProviderIds: string[] = Array.isArray(body?.CRMProviderIds)
+          ? body.CRMProviderIds.map((x: any) => String(x)).filter(Boolean)
           : [];
         if (!["Deals", "Accounts", "Contacts"].includes(module))
           return c.json({ error: "module must be Deals|Accounts|Contacts" }, 400);
-        if (!zohoIds.length) return c.json({ error: "zohoIds required" }, 400);
+        if (!CRMProviderIds.length) return c.json({ error: "CRMProviderIds required" }, 400);
         const tag = process.env.EMPTY_DELETE_TAG || "Empty-Delete";
         const { unmarkEmptyDeleteTagged } = await import(
           "../../utils/emptyRecordsDatabase"
         );
         let untagged = 0;
-        for (let i = 0; i < zohoIds.length; i += 100) {
-          const batch = zohoIds.slice(i, i + 100);
-          await removeZohoTags(module, batch, [tag]);
+        for (let i = 0; i < CRMProviderIds.length; i += 100) {
+          const batch = CRMProviderIds.slice(i, i + 100);
+          await removeCRMProviderTags(module, batch, [tag]);
           await unmarkEmptyDeleteTagged(batch);
           untagged += batch.length;
         }
@@ -13243,7 +13243,7 @@ export const duplicateRadarRoutes = [
   {
     // Admin-gated: Dismiss flagged records as "reviewed — keep, NOT empty"
     // (false positives, e.g. a deal that actually has data). They drop off the
-    // cleanup list durably and never reappear. No Zoho write.
+    // cleanup list durably and never reappear. No CRMProvider write.
     path: "/api/duplicates/empty-records/dismiss",
     method: "POST" as const,
     createHandler: async () => async (c: any) => {
@@ -13255,21 +13255,21 @@ export const duplicateRadarRoutes = [
         const body = await c.req.json().catch(() => ({}));
         const module = String(body?.module || "");
         const undo = body?.undo === true;
-        const zohoIds: string[] = Array.isArray(body?.zohoIds)
-          ? body.zohoIds.map((x: any) => String(x)).filter(Boolean)
+        const CRMProviderIds: string[] = Array.isArray(body?.CRMProviderIds)
+          ? body.CRMProviderIds.map((x: any) => String(x)).filter(Boolean)
           : [];
         if (!["Deals", "Accounts", "Contacts"].includes(module))
           return c.json({ error: "module must be Deals|Accounts|Contacts" }, 400);
-        if (!zohoIds.length) return c.json({ error: "zohoIds required" }, 400);
+        if (!CRMProviderIds.length) return c.json({ error: "CRMProviderIds required" }, 400);
         const { markEmptyRecordsDismissed, undismissEmptyRecords } = await import(
           "../../utils/emptyRecordsDatabase"
         );
         if (undo) {
-          await undismissEmptyRecords(zohoIds);
-          return c.json({ success: true, undismissed: zohoIds.length });
+          await undismissEmptyRecords(CRMProviderIds);
+          return c.json({ success: true, undismissed: CRMProviderIds.length });
         }
-        await markEmptyRecordsDismissed(module, zohoIds, su?.email || null);
-        return c.json({ success: true, dismissed: zohoIds.length });
+        await markEmptyRecordsDismissed(module, CRMProviderIds, su?.email || null);
+        return c.json({ success: true, dismissed: CRMProviderIds.length });
       } catch (e: any) {
         logger.error("empty-records/dismiss failed", e);
         return c.json({ error: "An internal error occurred" }, 500);
@@ -13277,7 +13277,7 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    // Admin-gated: link an orphaned deal to an account (re-parent in Zoho).
+    // Admin-gated: link an orphaned deal to an account (re-parent in CRMProvider).
     path: "/api/duplicates/empty-records/link-deal",
     method: "POST" as const,
     createHandler: async () => async (c: any) => {
@@ -13290,8 +13290,8 @@ export const duplicateRadarRoutes = [
         const dealId = String(body?.dealId || "");
         const accountId = String(body?.accountId || "");
         if (!dealId || !accountId) return c.json({ error: "dealId and accountId required" }, 400);
-        const { updateZohoRecord } = await import("../../utils/zohoCRM");
-        await updateZohoRecord("Deals", dealId, { Account_Name: { id: accountId } });
+        const { updateCRMProviderRecord } = await import("../../utils/CRMProviderCRM");
+        await updateCRMProviderRecord("Deals", dealId, { Account_Name: { id: accountId } });
         return c.json({ success: true });
       } catch (e: any) {
         logger.error("empty-records/link-deal failed", e);
@@ -13301,7 +13301,7 @@ export const duplicateRadarRoutes = [
   },
   {
     // Read-access: show every ledger row + counts for the "Tagged · pending delete"
-    // sub-section.  No Zoho call; purely our own ledger.
+    // sub-section.  No CRMProvider call; purely our own ledger.
     path: "/api/duplicates/empty-records/tagged-status",
     method: "GET" as const,
     createHandler: async () => async (c: any) => {
@@ -13320,8 +13320,8 @@ export const duplicateRadarRoutes = [
   },
   {
     // Manually dismiss ONE tagged record from the pending queue — local ledger
-    // disposition (pending_delete → dismissed), no Zoho write.
-    //   POST /api/duplicates/empty-records/dismiss-tagged  { zohoId }
+    // disposition (pending_delete → dismissed), no CRMProvider write.
+    //   POST /api/duplicates/empty-records/dismiss-tagged  { CRMProviderId }
     path: "/api/duplicates/empty-records/dismiss-tagged",
     method: "POST" as const,
     createHandler: async () => async (c: any) => {
@@ -13329,22 +13329,22 @@ export const duplicateRadarRoutes = [
         const user = await requireDuplicateRadarAccess(c);
         if (!user) return unauthorizedResponse(c);
         const body = await c.req.json().catch(() => ({}));
-        // Bulk path: { zohoIds: [...] } dismisses many in ONE query so a whole
+        // Bulk path: { CRMProviderIds: [...] } dismisses many in ONE query so a whole
         // page can be cleared without one request per row (the 429 source).
-        const manyRaw = Array.isArray(body?.zohoIds)
-          ? body.zohoIds
-          : Array.isArray(body?.zoho_ids)
-            ? body.zoho_ids
+        const manyRaw = Array.isArray(body?.CRMProviderIds)
+          ? body.CRMProviderIds
+          : Array.isArray(body?.CRMProvider_ids)
+            ? body.CRMProvider_ids
             : null;
         if (manyRaw) {
           const { dismissTaggedRecords } = await import("../../utils/emptyRecordsDatabase");
           const dismissed = await dismissTaggedRecords(manyRaw.map((x: any) => String(x)));
           return c.json({ success: true, dismissed });
         }
-        const zohoId = String(body?.zohoId ?? body?.zoho_id ?? "").trim();
-        if (!zohoId) return c.json({ error: "zohoId or zohoIds required" }, 400);
+        const CRMProviderId = String(body?.CRMProviderId ?? body?.CRMProvider_id ?? "").trim();
+        if (!CRMProviderId) return c.json({ error: "CRMProviderId or CRMProviderIds required" }, 400);
         const { dismissTaggedRecord } = await import("../../utils/emptyRecordsDatabase");
-        await dismissTaggedRecord(zohoId);
+        await dismissTaggedRecord(CRMProviderId);
         return c.json({ success: true, dismissed: 1 });
       } catch (e: any) {
         logger.error("empty-records/dismiss-tagged failed", e);
@@ -13491,7 +13491,7 @@ export const duplicateRadarRoutes = [
 
   {
     // Admin-gated: general deletion-reconcile — verify a rotating batch of
-    // records against live Zoho and PRUNE the ones deleted/merged in the CRM
+    // records against live CRMProvider and PRUNE the ones deleted/merged in the CRM
     // (incremental sync never reports deletions, so they linger + keep their
     // cluster showing). POST /api/duplicates/reconcile-deleted { module?, limit? }
     path: "/api/duplicates/reconcile-deleted",
@@ -13530,8 +13530,8 @@ export const duplicateRadarRoutes = [
   },
   {
     // Admin-gated: DEFINITIVE deletion reconcile (Sample User 2026-07-15). Diffs the
-    // WHOLE mirror against Zoho's live id set and prunes every record no longer
-    // in Zoho — catches HARD-deleted / long-ago / null-module ghosts the /deleted
+    // WHOLE mirror against CRMProvider's live id set and prunes every record no longer
+    // in CRMProvider — catches HARD-deleted / long-ago / null-module ghosts the /deleted
     // feed and the rotating verify miss. Fetches all ids per module, so it runs
     // as a fire-and-forget BACKGROUND job (returns immediately; watch the logs
     // for [id-set-reconcile]). Safety-capped (won't mass-prune on a partial fetch).
@@ -13549,7 +13549,7 @@ export const duplicateRadarRoutes = [
         );
         // Fire-and-forget — takes a few minutes; don't hold the request.
         // TWO passes (Sample User 2026-07-23):
-        //   1) sweepDeletedByFeed — asks Zoho's /deleted feed DIRECTLY which
+        //   1) sweepDeletedByFeed — asks CRMProvider's /deleted feed DIRECTLY which
         //      records it removed (authoritative, bulk-paginated) and prunes
         //      exactly those. This CATCHES bulk "uploaded then removed" batches
         //      the id-set reconcile can't, because it never needs a complete live
@@ -13575,7 +13575,7 @@ export const duplicateRadarRoutes = [
           success: true,
           started: true,
           message:
-            "Deep clean started — first asks Zoho's deleted-records feed exactly what was removed (catches bulk deletions), then reconciles the full id set as a backstop. Runs in the background (a few minutes); the tabs clear as it finishes.",
+            "Deep clean started — first asks CRMProvider's deleted-records feed exactly what was removed (catches bulk deletions), then reconciles the full id set as a backstop. Runs in the background (a few minutes); the tabs clear as it finishes.",
         });
       } catch (e: any) {
         logger.error("reconcile-deleted-full failed", e);
@@ -13586,7 +13586,7 @@ export const duplicateRadarRoutes = [
   {
     // Admin-gated: manually trigger the deletion-reconcile pass (also runs
     // automatically on every post-sync).  Checks pending_delete rows against
-    // live Zoho; stamps ledger 'deleted' + prunes mirror when gone.
+    // live CRMProvider; stamps ledger 'deleted' + prunes mirror when gone.
     path: "/api/duplicates/empty-records/recheck-deletions",
     method: "POST" as const,
     createHandler: async () => async (c: any) => {
@@ -13607,9 +13607,9 @@ export const duplicateRadarRoutes = [
     },
   },
   {
-    // Admin-gated: AI-Apply batch — verify each empty candidate against Zoho
+    // Admin-gated: AI-Apply batch — verify each empty candidate against CRMProvider
     // (prune ghosts, skip docs/protected stages), then tag survivors Empty-Delete.
-    // Never deletes in Zoho; the admin removes tagged records.
+    // Never deletes in CRMProvider; the admin removes tagged records.
     path: "/api/duplicates/empty-records/ai-apply",
     method: "POST" as const,
     createHandler: async () => async (c: any) => {
@@ -13638,7 +13638,7 @@ export const duplicateRadarRoutes = [
         logger.error("empty-records/ai-apply failed", e);
         // Admin-gated debug tool: surface the REAL error so the operator can see
         // WHAT failed (Sample User 2026-07-15 — the opaque "internal error" was
-        // undiagnosable). Zoho rate-limit/timeout during an active sync is the
+        // undiagnosable). CRMProvider rate-limit/timeout during an active sync is the
         // usual cause; the message makes that visible instead of hiding it.
         const detail =
           e instanceof Error ? e.message : String(e || "unknown error");
@@ -13648,7 +13648,7 @@ export const duplicateRadarRoutes = [
   },
   {
     // Admin-gated: live-verify the ids the operator currently sees on a page
-    // against Zoho (the same gate AI-Apply uses) WITHOUT tagging — confirms which
+    // against CRMProvider (the same gate AI-Apply uses) WITHOUT tagging — confirms which
     // are genuinely empty, auto-Dismisses any that turn out to have deals/contacts,
     // and prunes ghosts. Bounded by the caller to one visible page.
     path: "/api/duplicates/empty-records/verify-page",
@@ -13663,16 +13663,16 @@ export const duplicateRadarRoutes = [
         const module = String(body?.module || "");
         if (!["Deals", "Accounts", "Contacts"].includes(module))
           return c.json({ error: "module must be Deals|Accounts|Contacts" }, 400);
-        const zohoIds = Array.isArray(body?.zohoIds)
-          ? body.zohoIds.map((x: any) => String(x)).filter(Boolean).slice(0, 100)
+        const CRMProviderIds = Array.isArray(body?.CRMProviderIds)
+          ? body.CRMProviderIds.map((x: any) => String(x)).filter(Boolean).slice(0, 100)
           : [];
-        if (!zohoIds.length) return c.json({ error: "zohoIds required" }, 400);
+        if (!CRMProviderIds.length) return c.json({ error: "CRMProviderIds required" }, 400);
         const { verifyEmptyCandidates } = await import("../../utils/emptyRecordsDatabase");
         const AGENT =
           "Adam — GRQ Assistant (on behalf of " + (su?.email || "operator") + ")";
         const r = await verifyEmptyCandidates(
           module as "Deals" | "Accounts" | "Contacts",
-          zohoIds,
+          CRMProviderIds,
           AGENT,
         );
         return c.json({ success: true, ...r });

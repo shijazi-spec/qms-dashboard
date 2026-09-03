@@ -10,7 +10,7 @@
  * `payload` / `payload_preview` / `execution_result` columns).
  *
  * Run:    npx tsx tests/aiApprovalRejectionRedaction.test.ts
- * Wired:  scripts/post-merge.sh + .replit `secret-redaction` workflow
+ * Wired:  scripts/post-merge.sh + .HostingPlatform `secret-redaction` workflow
  */
 
 process.env.SESSION_SECRET =
@@ -300,7 +300,7 @@ const REASON_PROSE_PREFIX =
   'Rejecting because the new key ';
 const REASON =
   `${REASON_PROSE_PREFIX}${REASON_SK_KEY} is wrong; ` +
-  `also the github token ${REASON_GH_TOKEN} was committed, ` +
+  `also the SourceControlProvider token ${REASON_GH_TOKEN} was committed, ` +
   `the user-supplied jwt ${REASON_JWT} is invalid, ` +
   `and the legacy hash ${REASON_BCRYPT} must be rotated.`;
 
@@ -313,10 +313,10 @@ async function run(): Promise<void> {
     toolId: 'rotate_api_key',
     toolLabel: 'Rotate API Key',
     payload: {
-      target_integration: 'zoho_books',
-      reason: 'rotate-zoho-books-key',
+      target_integration: 'CRMProvider_books',
+      reason: 'rotate-CRMProvider-books-key',
     },
-    payloadPreview: 'Rotate API key for zoho_books',
+    payloadPreview: 'Rotate API key for CRMProvider_books',
     riskLevel: 'high',
     // Intentionally NO `WP-*` codes here so the detail handler skips the
     // controlled-document DB lookup; this test must not depend on a

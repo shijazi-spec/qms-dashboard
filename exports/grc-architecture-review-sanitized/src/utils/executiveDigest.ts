@@ -3,9 +3,9 @@ import { logger } from "./logger";
 import {
   analyzeRecordHygiene,
   DEFAULT_GOVERNANCE_RULES,
-  fetchAllZohoRecords,
-  type ZohoCRMRecord,
-} from "./zohoCRM";
+  fetchAllCRMProviderRecords,
+  type CRMProviderCRMRecord,
+} from "./CRMProviderCRM";
 import { getGovernanceDocumentByModule } from "./database";
 import {
   getWeeklyFeedbackDigest,
@@ -28,8 +28,8 @@ const KSA_WEEKDAY_THURSDAY = 4;
 const DIGEST_DASHBOARD_LINK = process.env.DIGEST_DASHBOARD_URL || "/executive";
 
 export type DigestCadence = "weekly" | "monthly" | "quarterly";
-export type DigestChannel = "email" | "slack";
-export type DigestSendTarget = "email" | "slack" | "both";
+export type DigestChannel = "email" | "ChatProvider";
+export type DigestSendTarget = "email" | "ChatProvider" | "both";
 
 export interface DigestWindow {
   cadence: DigestCadence;
@@ -106,9 +106,9 @@ export interface DigestData {
       | "stable"
       | "rules_changed"
       | "scope_changed";
-    /** Plain-English context for the trend, surfaced in the Slack digest
+    /** Plain-English context for the trend, surfaced in the ChatProvider digest
      *  so leadership never sees "Trend improving" when the rules under
-     *  it actually moved. Null when trend was a clean apples-to-apples
+     *  it actually moved. Null when trend was a clean IdentityProviders-to-IdentityProviders
      *  comparison. */
     trend_caveat?: string | null;
   };
@@ -187,7 +187,7 @@ export interface DigestFanoutResult {
   cadence: DigestCadence;
   window: DigestWindow;
   email: DigestSendResult;
-  slack: DigestSendResult;
+  ChatProvider: DigestSendResult;
 }
 
 export interface DigestRunRecord {
@@ -205,14 +205,14 @@ export interface DigestDeliveryHealth {
   cadence: DigestCadence;
   window_start: string;
   window_end: string;
-  run_key_slack: string;
+  run_key_ChatProvider: string;
   run_key_email: string;
-  slack_enabled: boolean;
-  direct_audit_slack_enabled: boolean;
-  has_slack_credentials: boolean;
-  slack_channel_resolved: string | null;
+  ChatProvider_enabled: boolean;
+  direct_audit_ChatProvider_enabled: boolean;
+  has_ChatProvider_credentials: boolean;
+  ChatProvider_channel_resolved: string | null;
   has_digest_email_recipient: boolean;
-  idempotent_run_exists_slack: boolean;
+  idempotent_run_exists_ChatProvider: boolean;
   idempotent_run_exists_email: boolean;
 }
 
@@ -303,7 +303,7 @@ function isStalled(statusText: string): boolean {
   ].some((token) => s.includes(token));
 }
 
-function getRecordTimestamp(record: ZohoCRMRecord): Date | null {
+function getRecordTimestamp(record: CRMProviderCRMRecord): Date | null {
   const raw =
     record.createdTime ||
     record.data?.Created_Time ||
@@ -314,7 +314,7 @@ function getRecordTimestamp(record: ZohoCRMRecord): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function recordSignalText(record: ZohoCRMRecord): string {
+function recordSignalText(record: CRMProviderCRMRecord): string {
   const parts = [
     record.module,
     record.data?.Layout?.name || record.data?.Layout,
@@ -331,7 +331,7 @@ function recordSignalText(record: ZohoCRMRecord): string {
   return normalize(parts.filter(Boolean).join(" "));
 }
 
-function recordProgressSignal(record: ZohoCRMRecord): string {
+function recordProgressSignal(record: CRMProviderCRMRecord): string {
   const status = [
     record.data?.Stage?.name || record.data?.Stage,
     record.data?.Lead_Status?.name || record.data?.Lead_Status,
@@ -390,7 +390,7 @@ export function resolveDigestSectionRules(): DigestSectionRule[] {
   }
 }
 
-function matchesRule(record: ZohoCRMRecord, rule: DigestSectionRule): boolean {
+function matchesRule(record: CRMProviderCRMRecord, rule: DigestSectionRule): boolean {
   if (rule.module !== "Both" && record.module !== rule.module) return false;
   const signal = recordSignalText(record);
   if (rule.excludeKeywords && rule.excludeKeywords.length > 0) {
@@ -404,7 +404,7 @@ function matchesRule(record: ZohoCRMRecord, rule: DigestSectionRule): boolean {
 }
 
 function buildBusinessSections(
-  records: ZohoCRMRecord[],
+  records: CRMProviderCRMRecord[],
   rules: DigestSectionRule[],
   governanceRulesByModule: Record<string, any[]>,
 ): DigestBusinessSection[] {
@@ -500,7 +500,7 @@ async function resolveDigestGovernanceRulesByModule(): Promise<
 }
 
 function summarizeFindingTypes(
-  records: ZohoCRMRecord[],
+  records: CRMProviderCRMRecord[],
   governanceRulesByModule: Record<string, any[]>,
 ): Array<{ module: string; issue_type: string; severity: string; count: number }> {
   const counts = new Map<string, { module: string; issue_type: string; severity: string; count: number }>();
@@ -544,7 +544,7 @@ export function computeDigestWindow(
     // KSA-midnight, which falls on the previous UTC date) so that
     // start.toISOString().slice(0,10) renders the correct Friday and
     // matches the convention used by downstream consumers
-    // (window_start in slack blocks etc).
+    // (window_start in ChatProvider blocks etc).
     const fridayUtc = new Date(
       Date.UTC(anchorParts.year, anchorParts.monthIndex, anchorParts.day - 6, 0, 0, 0, 0),
     );
@@ -709,21 +709,21 @@ async function recordDigestRun(params: {
   }
 }
 
-async function fetchWindowedBusinessRecords(window: DigestWindow): Promise<ZohoCRMRecord[]> {
-  const hasZohoCreds = !!(
-    process.env.ZOHO_ACCESS_TOKEN ||
-    (process.env.ZOHO_CLIENT_ID && process.env.ZOHO_CLIENT_SECRET && process.env.ZOHO_REFRESH_TOKEN) ||
-    (process.env.ZOHO_CLIENT_ID_NEW && process.env.ZOHO_CLIENT_SECRET && process.env.ZOHO_REFRESH_TOKEN)
+async function fetchWindowedBusinessRecords(window: DigestWindow): Promise<CRMProviderCRMRecord[]> {
+  const hasCRMProviderCreds = !!(
+    process.env.CRMProvider_ACCESS_TOKEN ||
+    (process.env.CRMProvider_CLIENT_ID && process.env.CRMProvider_CLIENT_SECRET && process.env.CRMProvider_REFRESH_TOKEN) ||
+    (process.env.CRMProvider_CLIENT_ID_NEW && process.env.CRMProvider_CLIENT_SECRET && process.env.CRMProvider_REFRESH_TOKEN)
   );
-  if (!hasZohoCreds) {
-    logger.info("[Digest] Zoho credentials missing; business sections will be empty");
+  if (!hasCRMProviderCreds) {
+    logger.info("[Digest] CRMProvider credentials missing; business sections will be empty");
     return [];
   }
 
   const maxRecords = Number(process.env.DIGEST_MAX_RECORDS_PER_MODULE || "5000");
   const [leads, deals] = await Promise.all([
-    fetchAllZohoRecords("Leads", { maxRecords }),
-    fetchAllZohoRecords("Deals", { maxRecords }),
+    fetchAllCRMProviderRecords("Leads", { maxRecords }),
+    fetchAllCRMProviderRecords("Deals", { maxRecords }),
   ]);
   const all = [...leads, ...deals];
   const startMs = window.start.getTime();
@@ -887,7 +887,7 @@ export async function generateDigestData(
     // 10%). Either condition violated and the diff is meaningless: the
     // score change is from a different ruler / different scope, not
     // from quality changing. Surface this honestly instead of saying
-    // "improving" / "declining" on apples-to-oranges data.
+    // "improving" / "declining" on IdentityProviders-to-oranges data.
     if (!hashA || !hashB) {
       auditTrend = "rules_changed";
       auditTrendCaveat =
@@ -1610,11 +1610,11 @@ export function resetEnterpriseGRCSnapshotCache(): void {
 
 /**
  * Lightweight snapshot of the same enterprise-wide GRC signals the executive
- * digest summarises, without the Zoho CRM scan or business-section build.
+ * digest summarises, without the CRMProvider CRM scan or business-section build.
  *
  * Mirrors `generateDigestData` numerically (uses the same queries and the
  * same `computeEnterpriseHealthScore`) so any UI rendering this snapshot
- * agrees with the Slack/email digest by construction. Cached in-process for
+ * agrees with the ChatProvider/email digest by construction. Cached in-process for
  * `GRC_SNAPSHOT_CACHE_TTL_MS` (default 30 s) so the dashboard's per-request
  * call doesn't multiply DB load on refresh storms.
  */
@@ -1817,11 +1817,11 @@ function escapeHtmlAttr(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function escapeSlack(s: string): string {
+function escapeChatProvider(s: string): string {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-export function buildSopGapSlackBlocks(sop: SopGapSummary): Array<Record<string, unknown>> {
+export function buildSopGapChatProviderBlocks(sop: SopGapSummary): Array<Record<string, unknown>> {
   if (sop.documents_scanned === 0 || sop.requirements_total === 0) {
     return [];
   }
@@ -1833,7 +1833,7 @@ export function buildSopGapSlackBlocks(sop: SopGapSummary): Array<Record<string,
     lines.push(
       ...top.map(
         (g) =>
-          `- ${escapeSlack(g.framework_hint || g.category)} ${escapeSlack(g.raw_citation)} _(${escapeSlack(g.document_title)})_`,
+          `- ${escapeChatProvider(g.framework_hint || g.category)} ${escapeChatProvider(g.raw_citation)} _(${escapeChatProvider(g.document_title)})_`,
       ),
     );
   }
@@ -1999,7 +1999,7 @@ ${buildSopGapHtml(data.sop_gap_summary)}
 </body></html>`;
 }
 
-export function buildDigestSlackBlocks(data: DigestData): any[] {
+export function buildDigestChatProviderBlocks(data: DigestData): any[] {
   const healthEmoji = (score: number): string =>
     score >= 90 ? "Excellent" : score >= 75 ? "Good" : score >= 60 ? "Needs Attention" : "At Risk";
   const hasAbsoluteDashboardUrl = /^https?:\/\//i.test(DIGEST_DASHBOARD_LINK);
@@ -2089,7 +2089,7 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
         text: `*Quality snapshot:* NC Open ${data.nc_summary.open} - CAPA Open ${data.capa_summary.open} - Risks ${data.risk_summary.total_active} - KPI Red ${data.kpi_summary.red}`,
       },
     },
-    ...buildSopGapSlackBlocks(data.sop_gap_summary),
+    ...buildSopGapChatProviderBlocks(data.sop_gap_summary),
     {
       type: "context",
       elements: [
@@ -2135,18 +2135,18 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
   return blocks;
 }
 
-function resolveSlackChannel(cadence: DigestCadence, override?: string): string | null {
+function resolveChatProviderChannel(cadence: DigestCadence, override?: string): string | null {
   if (override) return override;
-  if (cadence === "monthly" && process.env.DIGEST_SLACK_CHANNEL_MONTHLY)
-    return process.env.DIGEST_SLACK_CHANNEL_MONTHLY;
-  if (cadence === "quarterly" && process.env.DIGEST_SLACK_CHANNEL_QUARTERLY)
-    return process.env.DIGEST_SLACK_CHANNEL_QUARTERLY;
-  if (cadence === "weekly" && process.env.DIGEST_SLACK_CHANNEL_WEEKLY)
-    return process.env.DIGEST_SLACK_CHANNEL_WEEKLY;
+  if (cadence === "monthly" && process.env.DIGEST_ChatProvider_CHANNEL_MONTHLY)
+    return process.env.DIGEST_ChatProvider_CHANNEL_MONTHLY;
+  if (cadence === "quarterly" && process.env.DIGEST_ChatProvider_CHANNEL_QUARTERLY)
+    return process.env.DIGEST_ChatProvider_CHANNEL_QUARTERLY;
+  if (cadence === "weekly" && process.env.DIGEST_ChatProvider_CHANNEL_WEEKLY)
+    return process.env.DIGEST_ChatProvider_CHANNEL_WEEKLY;
   return (
-    process.env.DIGEST_SLACK_CHANNEL ||
-    process.env.SLACK_CHANNEL_ID ||
-    process.env.SLACK_QMS_CHANNEL ||
+    process.env.DIGEST_ChatProvider_CHANNEL ||
+    process.env.ChatProvider_CHANNEL_ID ||
+    process.env.ChatProvider_QMS_CHANNEL ||
     null
   );
 }
@@ -2181,15 +2181,15 @@ export async function sendDigestEmail(
   }
 
   try {
-    if (process.env.RESEND_API_KEY) {
+    if (process.env.EmailProvider_API_KEY) {
       const response = await fetch("<REDACTED_URL>", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+          Authorization: `Bearer ${process.env.EmailProvider_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: process.env.RESEND_FROM || "ExampleOrg QMS <user@example.invalid>",
+          from: process.env.EmailProvider_FROM || "ExampleOrg QMS <user@example.invalid>",
           to: recipientEmail,
           subject: `${cadenceLabel(cadence)} Quality Digest - ${new Date().toLocaleDateString()}`,
           html,
@@ -2197,11 +2197,11 @@ export async function sendDigestEmail(
       });
       if (response.ok) {
         await recordDigestRun({ runKey, cadence, channel: "email", window, status: "success" });
-        return { success: true, method: "resend", runKey, cadence };
+        return { success: true, method: "EmailProvider", runKey, cadence };
       }
     }
   } catch (err) {
-    logger.warn("[Digest][email] Resend branch failed, trying fallback", {
+    logger.warn("[Digest][email] EmailProvider branch failed, trying fallback", {
       error: err instanceof Error ? err.message : String(err),
       runKey,
     });
@@ -2220,10 +2220,10 @@ export async function sendDigestEmail(
     });
     if (response.ok) {
       await recordDigestRun({ runKey, cadence, channel: "email", window, status: "success" });
-      return { success: true, method: "replit_mail", runKey, cadence };
+      return { success: true, method: "HostingPlatform_mail", runKey, cadence };
     }
   } catch (err) {
-    logger.warn("[Digest][email] Replit mail branch failed", {
+    logger.warn("[Digest][email] HostingPlatform mail branch failed", {
       error: err instanceof Error ? err.message : String(err),
       runKey,
     });
@@ -2234,39 +2234,39 @@ export async function sendDigestEmail(
   return { success: false, error, runKey, cadence };
 }
 
-export async function sendDigestSlack(
+export async function sendDigestChatProvider(
   options: DigestSendOptions = {},
 ): Promise<DigestSendResult> {
   const cadence = options.cadence || "weekly";
   const window = options.window || computeDigestWindow(cadence, options.now || new Date());
-  const runKey = buildDigestRunKey(cadence, window, "slack");
+  const runKey = buildDigestRunKey(cadence, window, "ChatProvider");
 
-  const slackEnabled = envBool("DIGEST_SLACK_NOTIFY", true);
-  if (!slackEnabled) {
-    return { success: true, skipped: true, method: "slack-disabled", runKey, cadence };
+  const ChatProviderEnabled = envBool("DIGEST_ChatProvider_NOTIFY", true);
+  if (!ChatProviderEnabled) {
+    return { success: true, skipped: true, method: "ChatProvider-disabled", runKey, cadence };
   }
 
-  const hasSlackCreds = !!(process.env.SLACK_BOT_TOKEN || process.env.SLACK_API_TOKEN);
-  if (!hasSlackCreds) {
+  const hasChatProviderCreds = !!(process.env.ChatProvider_BOT_TOKEN || process.env.ChatProvider_API_TOKEN);
+  if (!hasChatProviderCreds) {
     return {
       success: true,
       skipped: true,
-      method: "slack-no-credentials",
+      method: "ChatProvider-no-credentials",
       runKey,
       cadence,
     };
   }
 
-  const channel = resolveSlackChannel(cadence, options.channelOverride);
+  const channel = resolveChatProviderChannel(cadence, options.channelOverride);
   if (!channel) {
-    return { success: true, skipped: true, method: "slack-no-channel", runKey, cadence };
+    return { success: true, skipped: true, method: "ChatProvider-no-channel", runKey, cadence };
   }
 
   if (options.enforceIdempotency !== false && (await hasSuccessfulDigestRun(runKey))) {
     return {
       success: true,
       skipped: true,
-      method: "slack-idempotent",
+      method: "ChatProvider-idempotent",
       runKey,
       cadence,
       windowStart: window.start.toISOString(),
@@ -2275,7 +2275,7 @@ export async function sendDigestSlack(
   }
 
   const data = await generateDigestData({ cadence, window, now: options.now });
-  const blocks = buildDigestSlackBlocks(data);
+  const blocks = buildDigestChatProviderBlocks(data);
   const fallback = `${cadenceLabel(cadence)} executive digest (${data.period})`;
 
   if (options.preview) {
@@ -2283,7 +2283,7 @@ export async function sendDigestSlack(
       success: true,
       preview: true,
       blocks,
-      method: "slack-preview",
+      method: "ChatProvider-preview",
       runKey,
       cadence,
       windowStart: window.start.toISOString(),
@@ -2291,11 +2291,11 @@ export async function sendDigestSlack(
     };
   }
 
-  const { enqueueSlackOutboxMessage, processOutboxMessageById, processDueOutboxMessages } =
+  const { enqueueChatProviderOutboxMessage, processOutboxMessageById, processDueOutboxMessages } =
     await import("./notificationOutbox");
   await processDueOutboxMessages(20);
   const dedupeKey = options.enforceIdempotency === false ? undefined : runKey;
-  const outbox = await enqueueSlackOutboxMessage({
+  const outbox = await enqueueChatProviderOutboxMessage({
     source: `executive_digest_${cadence}`,
     destination: channel,
     text: fallback,
@@ -2312,33 +2312,33 @@ export async function sendDigestSlack(
   const delivered = await processOutboxMessageById(outbox.id);
   if (!delivered) {
     const error = "Outbox enqueue succeeded but delivery record unavailable";
-    await recordDigestRun({ runKey, cadence, channel: "slack", window, status: "failed", error });
+    await recordDigestRun({ runKey, cadence, channel: "ChatProvider", window, status: "failed", error });
     return { success: false, error, runKey, cadence };
   }
   if (delivered.status === "sent") {
-    await recordDigestRun({ runKey, cadence, channel: "slack", window, status: "success" });
-    return { success: true, method: "slack-outbox", runKey, cadence };
+    await recordDigestRun({ runKey, cadence, channel: "ChatProvider", window, status: "success" });
+    return { success: true, method: "ChatProvider-outbox", runKey, cadence };
   }
   if (delivered.status === "pending" || delivered.status === "processing") {
     await recordDigestRun({
       runKey,
       cadence,
-      channel: "slack",
+      channel: "ChatProvider",
       window,
       status: "queued",
       error: delivered.last_error || undefined,
     });
     return {
       success: true,
-      method: "slack-outbox-queued",
+      method: "ChatProvider-outbox-queued",
       runKey,
       cadence,
       error: delivered.last_error || undefined,
     };
   }
 
-  const error = delivered.last_error || "Slack delivery failed";
-  await recordDigestRun({ runKey, cadence, channel: "slack", window, status: "failed", error });
+  const error = delivered.last_error || "ChatProvider delivery failed";
+  await recordDigestRun({ runKey, cadence, channel: "ChatProvider", window, status: "failed", error });
   return { success: false, error, runKey, cadence };
 }
 
@@ -2348,19 +2348,19 @@ export async function runDigestFanout(
 ): Promise<DigestFanoutResult> {
   const now = options.now || new Date();
   const window = options.window || computeDigestWindow(cadence, now);
-  const [emailResult, slackResult] = await Promise.allSettled([
+  const [emailResult, ChatProviderResult] = await Promise.allSettled([
     sendDigestEmail({ ...options, cadence, now, window }),
-    sendDigestSlack({ ...options, cadence, now, window }),
+    sendDigestChatProvider({ ...options, cadence, now, window }),
   ]);
   const email =
     emailResult.status === "fulfilled"
       ? emailResult.value
       : ({ success: false, error: emailResult.reason ? String(emailResult.reason) : "email fanout failed" } as DigestSendResult);
-  const slack =
-    slackResult.status === "fulfilled"
-      ? slackResult.value
-      : ({ success: false, error: slackResult.reason ? String(slackResult.reason) : "slack fanout failed" } as DigestSendResult);
-  return { cadence, window, email, slack };
+  const ChatProvider =
+    ChatProviderResult.status === "fulfilled"
+      ? ChatProviderResult.value
+      : ({ success: false, error: ChatProviderResult.reason ? String(ChatProviderResult.reason) : "ChatProvider fanout failed" } as DigestSendResult);
+  return { cadence, window, email, ChatProvider };
 }
 
 export async function getDigestDeliveryHealth(
@@ -2368,33 +2368,33 @@ export async function getDigestDeliveryHealth(
   now = new Date(),
 ): Promise<DigestDeliveryHealth> {
   const window = computeDigestWindow(cadence, now);
-  const runKeySlack = buildDigestRunKey(cadence, window, "slack");
+  const runKeyChatProvider = buildDigestRunKey(cadence, window, "ChatProvider");
   const runKeyEmail = buildDigestRunKey(cadence, window, "email");
-  const slackEnabled = envBool("DIGEST_SLACK_NOTIFY", true);
-  const directAuditSlackEnabled = envBool("DIRECT_AUDIT_SLACK_NOTIFY", true);
-  const hasSlackCredentials = !!(
-    process.env.SLACK_BOT_TOKEN || process.env.SLACK_API_TOKEN
+  const ChatProviderEnabled = envBool("DIGEST_ChatProvider_NOTIFY", true);
+  const directAuditChatProviderEnabled = envBool("DIRECT_AUDIT_ChatProvider_NOTIFY", true);
+  const hasChatProviderCredentials = !!(
+    process.env.ChatProvider_BOT_TOKEN || process.env.ChatProvider_API_TOKEN
   );
-  const slackChannelResolved = resolveSlackChannel(cadence);
+  const ChatProviderChannelResolved = resolveChatProviderChannel(cadence);
   const hasDigestEmailRecipient = !!(
     process.env.QUALITY_DIGEST_EMAIL || process.env.ADMIN_EMAIL
   );
-  const [idempotentRunExistsSlack, idempotentRunExistsEmail] = await Promise.all([
-    hasSuccessfulDigestRun(runKeySlack),
+  const [idempotentRunExistsChatProvider, idempotentRunExistsEmail] = await Promise.all([
+    hasSuccessfulDigestRun(runKeyChatProvider),
     hasSuccessfulDigestRun(runKeyEmail),
   ]);
   return {
     cadence,
     window_start: window.start.toISOString(),
     window_end: window.end.toISOString(),
-    run_key_slack: runKeySlack,
+    run_key_ChatProvider: runKeyChatProvider,
     run_key_email: runKeyEmail,
-    slack_enabled: slackEnabled,
-    direct_audit_slack_enabled: directAuditSlackEnabled,
-    has_slack_credentials: hasSlackCredentials,
-    slack_channel_resolved: slackChannelResolved,
+    ChatProvider_enabled: ChatProviderEnabled,
+    direct_audit_ChatProvider_enabled: directAuditChatProviderEnabled,
+    has_ChatProvider_credentials: hasChatProviderCredentials,
+    ChatProvider_channel_resolved: ChatProviderChannelResolved,
     has_digest_email_recipient: hasDigestEmailRecipient,
-    idempotent_run_exists_slack: idempotentRunExistsSlack,
+    idempotent_run_exists_ChatProvider: idempotentRunExistsChatProvider,
     idempotent_run_exists_email: idempotentRunExistsEmail,
   };
 }

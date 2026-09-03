@@ -17,8 +17,8 @@ import { MCPServer } from "@mastra/mcp";
 
 import { sharedPostgresStorage } from "./storage";
 import { registerCronTrigger } from "../triggers/cronTriggers";
-import { registerSlackConsultantRatingRoutes } from "../triggers/slackConsultantRatingTrigger";
-import { registerGrqAssistantSlackRoutes } from "../triggers/grqAssistantSlackChat";
+import { registerChatProviderConsultantRatingRoutes } from "../triggers/ChatProviderConsultantRatingTrigger";
+import { registerGrqAssistantChatProviderRoutes } from "../triggers/grqAssistantChatProviderChat";
 import { qualitySpecialistAgent } from "./agents/qualitySpecialistAgent";
 import { qmsConsultantAgent } from "./agents/qmsConsultantAgent";
 import { duplicateResolutionAgent } from "./agents/duplicateResolutionAgent";
@@ -72,9 +72,9 @@ import { documentationTrackerRoutes } from "./routes/documentationTrackerRoutes"
 import { northStarSourceRoutes } from "./routes/northStarSourceRoutes";
 import { kpiCatalogRoutes } from "./routes/kpiCatalogRoutes";
 import { duplicateRadarRoutes } from "./routes/duplicateRadarRoutes";
-import { zohoAgingRoutes } from "./routes/zohoAgingRoutes";
-import { zohoActivitiesRoutes } from "./routes/zohoActivitiesRoutes";
-import { zohoTasksRoutes } from "./routes/zohoTasksRoutes";
+import { CRMProviderAgingRoutes } from "./routes/CRMProviderAgingRoutes";
+import { CRMProviderActivitiesRoutes } from "./routes/CRMProviderActivitiesRoutes";
+import { CRMProviderTasksRoutes } from "./routes/CRMProviderTasksRoutes";
 import { infographicRoutes } from "./routes/infographicRoutes";
 import { rbacRoutes } from "./routes/rbacRoutes";
 import { scorecardRoutes } from "./routes/scorecardRoutes";
@@ -121,7 +121,7 @@ import { logger as safeLogger } from "../utils/logger";
 assertAdminApiKeyStrengthOrThrow();
 
 // ─── Rate-limit kill-switch prod guard ────────────────────────────────────────
-// RATE_LIMIT_DISABLED is a development-only escape hatch (used on Replit dev
+// RATE_LIMIT_DISABLED is a development-only escape hatch (used on HostingPlatform dev
 // where typing demo flows trips the per-IP limits). If it survives into a
 // production deploy via a forgotten env var, the entire HTTP rate limiter
 // falls open and the platform has no DoS / brute-force protection. Fail boot
@@ -242,9 +242,9 @@ export const mastra = new Mastra({
       // this only because everything dedupes to the workspace zod 3.25.76.
       "zod",
       "@mastra/core",
-      "@ai-sdk/openai",
+      "@ai-sdk/LLMProvider",
       "@openrouter/ai-sdk-provider",
-      "@slack/web-api",
+      "@ChatProvider/web-api",
       "inngest",
       "inngest/hono",
       "hono",
@@ -255,8 +255,8 @@ export const mastra = new Mastra({
       "pg-query-stream",
       "pdfkit",
       "pino",
-      "resend",
-      "openai",
+      "EmailProvider",
+      "LLMProvider",
       "exa-js",
       "xmlbuilder",
     ],
@@ -264,13 +264,13 @@ export const mastra = new Mastra({
   },
   server: {
     host: "<REDACTED_IP>",
-    // MUST honour the platform-assigned PORT. Replit Autoscale gives each
+    // MUST honour the platform-assigned PORT. HostingPlatform Autoscale gives each
     // deployment a dynamic port and health-checks THAT port; a hardcoded 5000
     // meant the container listened on 5000 while the prober hit e.g.
     // <REDACTED_IP>:1104 -> "dial tcp <REDACTED_IP>:1104: connect: connection refused"
     // -> healthcheck fails -> promote aborts, even though the build succeeded
     // and the app was running fine. Falls back to 5000 so local dev and the
-    // `[env] PORT = "5000"` / `localPort = 5000` mapping in .replit behave
+    // `[env] PORT = "5000"` / `localPort = 5000` mapping in .HostingPlatform behave
     // exactly as before.
     port: Number(process.env.PORT) || 5000,
     cors: false,
@@ -337,9 +337,9 @@ export const mastra = new Mastra({
       ...kpiCatalogRoutes,
       ...kpiRoutes,
       ...duplicateRadarRoutes,
-      ...zohoAgingRoutes,
-      ...zohoActivitiesRoutes,
-      ...zohoTasksRoutes,
+      ...CRMProviderAgingRoutes,
+      ...CRMProviderActivitiesRoutes,
+      ...CRMProviderTasksRoutes,
       ...rbacRoutes,
       ...scorecardRoutes,
       ...pdplRoutes,
@@ -378,10 +378,10 @@ export const mastra = new Mastra({
       // ── i18n / Language API ──────────────────────────────────────────────
       ...i18nRoutes,
 
-      // ── Slack consultant rating bot (Task #801) ──────────────────────────
-      ...registerSlackConsultantRatingRoutes(),
-      // Two-way GRQ Assistant chat over Slack (@mention / "GRQ …" / DM → reply).
-      ...registerGrqAssistantSlackRoutes(),
+      // ── ChatProvider consultant rating bot (Task #801) ──────────────────────────
+      ...registerChatProviderConsultantRatingRoutes(),
+      // Two-way GRQ Assistant chat over ChatProvider (@mention / "GRQ …" / DM → reply).
+      ...registerGrqAssistantChatProviderRoutes(),
     ],
   },
   logger:
@@ -517,7 +517,7 @@ export const mastra = new Mastra({
 (function startScheduledJobFallback() {
   // Operator escape hatch — set DISABLE_SCHEDULED_JOB_FALLBACK=true on a
   // memory-tight host to skip the in-process cron fallback entirely. Each
-  // helper fans out parallel Zoho fetches (DuplicateRadar + QualityAudit +
+  // helper fans out parallel CRMProvider fetches (DuplicateRadar + QualityAudit +
   // ConsultantScanner all pull 6 modules × CONCURRENCY=4 pages × 200
   // records, ~600MB+ resident at peak) which can OOM-kill the process.
   // When Inngest is wired up in front of this service, the fallback is
@@ -576,10 +576,10 @@ export const mastra = new Mastra({
         { name: "KPIAutoCalc", fn: () => runKPIAutoCalcIfStale() },
         { name: "CsOverlapScan", fn: () => runCsOverlapScanIfStale() },
         // Deletion-feed sweep — sync-independent (~every 3h). Prunes records
-        // Zoho deleted from the mirror + pending-delete ledger, so stuck syncs
+        // CRMProvider deleted from the mirror + pending-delete ledger, so stuck syncs
         // no longer leave deleted data lingering (Sample User 2026-07-23).
         { name: "DeletionFeedSweep", fn: () => runDeletionFeedSweepIfStale() },
-        // Deal document compliance — a rolling slice of Zoho attachment checks
+        // Deal document compliance — a rolling slice of CRMProvider attachment checks
         // every tick, so the Deal Compliance tab reads stored results instead
         // of making the operator's browser do hundreds of live calls
         // (Sample User 2026-08-25). Disable with DEAL_DOC_SWEEP_ENABLED=false.
@@ -605,7 +605,7 @@ export const mastra = new Mastra({
           },
         },
         // Autonomous Duplicate Resolution — 6h fallback. Internally gated by
-        // AUTONOMOUS_RESOLUTION_ENABLED/_MODE (default shadow → no Zoho writes).
+        // AUTONOMOUS_RESOLUTION_ENABLED/_MODE (default shadow → no CRMProvider writes).
         { name: "AutonomousResolution", fn: () => runAutonomousResolutionIfStale() },
         // Twice-daily apply digest (09:00 / 17:00 KSA). No-ops outside those windows.
         { name: "ResolutionDigest", fn: () => runResolutionDigestIfDue() },

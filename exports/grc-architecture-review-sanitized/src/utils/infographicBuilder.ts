@@ -221,7 +221,7 @@ export function renderInfographicSvg(d: InfographicData): string {
     )
     .join("");
 
-  return `<svg xmlns="<REDACTED_URL>" viewBox="<REDACTED_PHONE>" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif">
+  return `<svg xmlns="<REDACTED_URL>" viewBox="<REDACTED_PHONE>" font-family="-IdentityProvider-system, 'Segoe UI', Roboto, sans-serif">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#0f172a"/>
@@ -1091,7 +1091,7 @@ async function buildDuplicates(): Promise<InfographicData> {
       {
         label: "AI MATCHING",
         big: "✓",
-        sub: "OPENAI-POWERED",
+        sub: "LLMProvider-POWERED",
         line1: "cross-module recommendations",
         color: "c8",
       },

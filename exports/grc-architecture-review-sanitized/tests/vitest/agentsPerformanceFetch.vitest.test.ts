@@ -1,7 +1,7 @@
 /**
  * /api/agents/performance fetch strategy.
  *
- * The endpoint pulls the full Zoho Leads set, the full Deals set and the user
+ * The endpoint pulls the full CRMProvider Leads set, the full Deals set and the user
  * list. Those three were sequential awaits, so the request cost their SUM —
  * measured at 139,286 ms live on 2026-08-23, which is a guaranteed proxy
  * timeout. dashboard/index.html is the caller, so the home page's agent panel
@@ -10,10 +10,10 @@
  * Two changes, neither of which alters a single returned value:
  *   - the three fetches run concurrently, so the request costs the SLOWEST
  *   - concurrent callers asking for the same date window share one in-flight
- *     fetch, instead of each triggering their own full Zoho pull
+ *     fetch, instead of each triggering their own full CRMProvider pull
  *
  * These tests model that logic directly. They deliberately do NOT boot the
- * route (it needs Zoho credentials and a database); they pin the behaviour the
+ * route (it needs CRMProvider credentials and a database); they pin the behaviour the
  * handler now relies on, which is where the concurrency risk actually lives.
  */
 import { describe, it, expect, vi } from "vitest";
@@ -51,7 +51,7 @@ describe("concurrent callers share one fetch", () => {
     await expect(all).resolves.toEqual(["result", "result", "result"]);
 
     // The whole point: N dashboard opens on a cold cache used to mean N full
-    // Zoho pulls and N times the rate-limit pressure for one identical answer.
+    // CRMProvider pulls and N times the rate-limit pressure for one identical answer.
     expect(work).toHaveBeenCalledTimes(1);
   });
 
@@ -78,11 +78,11 @@ describe("the guard releases correctly", () => {
   it("does not wedge after a failure", async () => {
     const work = vi
       .fn()
-      .mockRejectedValueOnce(new Error("zoho down"))
+      .mockRejectedValueOnce(new Error("CRMProvider down"))
       .mockResolvedValueOnce("recovered");
     const f = makeFetcher(work as any);
 
-    await expect(f("same")).rejects.toThrow("zoho down");
+    await expect(f("same")).rejects.toThrow("CRMProvider down");
     // A guard that kept the rejected promise would hand the same error to
     // every future caller — the endpoint would stay broken until restart.
     await expect(f("same")).resolves.toBe("recovered");
@@ -93,9 +93,9 @@ describe("the guard releases correctly", () => {
     const f = makeFetcher(() => d.promise);
     const a = f("same");
     const b = f("same");
-    d.reject(new Error("zoho down"));
-    await expect(a).rejects.toThrow("zoho down");
-    await expect(b).rejects.toThrow("zoho down");
+    d.reject(new Error("CRMProvider down"));
+    await expect(a).rejects.toThrow("CRMProvider down");
+    await expect(b).rejects.toThrow("CRMProvider down");
   });
 });
 

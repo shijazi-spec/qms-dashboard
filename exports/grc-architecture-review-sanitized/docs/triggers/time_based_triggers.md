@@ -59,10 +59,10 @@ Time-based triggers work differently from webhook triggers:
 
 | Aspect | Time-Based (Cron) | Webhook-Based |
 |--------|-------------------|---------------|
-| **Registration** | Call `registerCronTrigger()` directly | Spread into `apiRoutes`: `...registerSlackTrigger()` |
+| **Registration** | Call `registerCronTrigger()` directly | Spread into `apiRoutes`: `...registerChatProviderTrigger()` |
 | **Location** | Before Mastra initialization | Inside `apiRoutes` array |
 | **Returns** | Empty array `[]` | Array with API route config |
-| **Creates endpoint** | No | Yes (e.g., `/slack/webhook`) |
+| **Creates endpoint** | No | Yes (e.g., `/ChatProvider/webhook`) |
 | **Trigger source** | Schedule (cron) | External HTTP request |
 
 **Example - Time-Based (DO THIS):**
@@ -81,7 +81,7 @@ registerCronTrigger({
 // DON'T spread registerCronTrigger into apiRoutes
 // This is only for webhook triggers
 apiRoutes: [
-  ...registerSlackTrigger({ ... }), // ✅ Correct for webhooks
+  ...registerChatProviderTrigger({ ... }), // ✅ Correct for webhooks
   ...registerCronTrigger({ ... }),  // ❌ Wrong! Don't do this
 ]
 ```
@@ -159,7 +159,7 @@ const generateReport = createStep({
 
 const sendNotification = createStep({
   id: "send-notification",
-  description: "Sends the report via email or Slack",
+  description: "Sends the report via email or ChatProvider",
   
   inputSchema: z.object({
     reportData: z.string(),
@@ -176,7 +176,7 @@ const sendNotification = createStep({
     logger?.info("📧 Sending report notification...");
     
     // Your notification logic here
-    // e.g., send email, post to Slack, etc.
+    // e.g., send email, post to ChatProvider, etc.
     
     return {
       success: true,
@@ -294,7 +294,7 @@ inputSchema: z.object({}) as any
 The `registerCronTrigger` function:
 
 1. Creates an Inngest function that listens to both:
-   - A custom event (`replit/cron.trigger`)
+   - A custom event (`HostingPlatform/cron.trigger`)
    - A cron schedule (your expression)
 2. Executes your workflow when the schedule fires
 3. Provides automatic retries and durability through Inngest
@@ -352,4 +352,4 @@ See these files for complete examples:
 
 ## Webhook Triggers
 
-For event-driven automations (Slack messages, GitHub events, etc.), see [Connector Webhook Triggers](./webhook_connector_triggers.md).
+For event-driven automations (ChatProvider messages, SourceControlProvider events, etc.), see [Connector Webhook Triggers](./webhook_connector_triggers.md).

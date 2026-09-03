@@ -3,7 +3,7 @@
  *
  * Run: npx vitest run tests/vitest/sdrCallValidationVerdict.vitest.test.ts
  *
- * Scope: pure verdict rollup — does NOT touch the database, Zoho, or the rules
+ * Scope: pure verdict rollup — does NOT touch the database, CRMProvider, or the rules
  * engine. The integration path (saveTranscript → evaluateAndPersistGovernance →
  * call_governance_results) is exercised in vitest integration suites that hit
  * a real DB; this file just locks down the rollup math.

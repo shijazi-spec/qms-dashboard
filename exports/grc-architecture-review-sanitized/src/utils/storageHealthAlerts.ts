@@ -10,7 +10,7 @@
  * fresh `getAiMetricsTableStats()` snapshot in here, and we either:
  *
  *   • Open a single high-severity `ai_alerts` row (alert_type='storage_health')
- *     and notify Slack / email / in-app — but ONLY if no open alert already
+ *     and notify ChatProvider / email / in-app — but ONLY if no open alert already
  *     exists for the same dedupe key, so a multi-day backlog cannot spam
  *     the channel.
  *
@@ -23,7 +23,7 @@
  * for additional telemetry tables, the key namespace already supports it.
  *
  * All side-effects are injected via `StorageHealthAlertDeps` so this
- * function is unit-testable without a database, Slack, or Resend.
+ * function is unit-testable without a database, ChatProvider, or EmailProvider.
  */
 
 import { logger } from './logger';
@@ -43,7 +43,7 @@ export const STORAGE_HEALTH_MODULE = 'ai_ops' as const;
  * Default re-page cadence (Task #679). When a storage_health alert has been
  * "open" for at least this many minutes AND its last on-call notification
  * is at least this many minutes old, the daily cron will re-send the
- * Slack/email page so a stuck prune cannot sit in open state without
+ * ChatProvider/email page so a stuck prune cannot sit in open state without
  * anyone being paged. Mirrors the tool-health re-notify pattern.
  *
  * Override with the `STORAGE_HEALTH_REPAGE_AFTER_MIN` env var. A value of
@@ -58,8 +58,8 @@ export interface StorageHealthAlertResult {
   alertDeduped: boolean;
   /** Number of previously-open alerts auto-resolved on this pass. */
   alertsResolved: number;
-  /** True when Slack was attempted and reported success. */
-  slackSent: boolean;
+  /** True when ChatProvider was attempted and reported success. */
+  ChatProviderSent: boolean;
   /** True when email was attempted and reported success on at least one recipient. */
   emailSent: boolean;
   /** True when an in-app notification was created. */
@@ -68,7 +68,7 @@ export interface StorageHealthAlertResult {
   exceedsRetention: boolean;
   /**
    * True when the current cron pass fell inside the configured quiet-hours
-   * window and Slack / email pushes were intentionally suppressed. The
+   * window and ChatProvider / email pushes were intentionally suppressed. The
    * `ai_alerts` row and in-app notification are still created in real time
    * (so the morning view shows the issue immediately) — only the noisy
    * channels that would page on-call at 3 a.m. are skipped.
@@ -107,9 +107,9 @@ export interface StorageHealthAlertDeps {
     link?: string;
     severity: 'critical' | 'high' | 'medium' | 'low';
   }) => Promise<unknown>;
-  /** Sends a Slack message via webhook URL (returns true on success). */
-  sendSlack: (webhookUrl: string, text: string) => Promise<boolean>;
-  /** Sends an email via Resend (returns true on success). */
+  /** Sends a ChatProvider message via webhook URL (returns true on success). */
+  sendChatProvider: (webhookUrl: string, text: string) => Promise<boolean>;
+  /** Sends an email via EmailProvider (returns true on success). */
   sendEmail: (input: {
     to: string[];
     subject: string;
@@ -126,7 +126,7 @@ export interface StorageHealthAlertDeps {
 }
 
 /**
- * Quiet-hours window (UTC by default) during which Slack / email pushes are
+ * Quiet-hours window (UTC by default) during which ChatProvider / email pushes are
  * suppressed for storage-health pages. The in-app notification and the
  * `ai_alerts` row are still created in real time so the morning view shows
  * the issue immediately.
@@ -294,7 +294,7 @@ export function buildStorageHealthMessage(stats: AiMetricsTableStats): {
  * `openAlertExistsByKey`, so a multi-day backlog of breaches yields exactly
  * one open alert + one page until it auto-resolves.
  *
- * Notification failures (Slack / email / in-app) are logged but never thrown,
+ * Notification failures (ChatProvider / email / in-app) are logged but never thrown,
  * so a transient external outage cannot abort the cron pass.
  */
 export async function evaluateAndAlertStorageHealth(
@@ -309,7 +309,7 @@ export async function evaluateAndAlertStorageHealth(
     alertCreated: false,
     alertDeduped: false,
     alertsResolved: 0,
-    slackSent: false,
+    ChatProviderSent: false,
     emailSent: false,
     inAppCreated: false,
     exceedsRetention: stats.exceedsRetention,
@@ -437,14 +437,14 @@ export async function evaluateAndAlertStorageHealth(
 
   // Quiet-hours suppression. The breach is real and the in-app
   // notification + ai_alerts row above are already in place — we just
-  // skip the noisy Slack / email channels until the window closes so
+  // skip the noisy ChatProvider / email channels until the window closes so
   // on-call isn't paged at 3 a.m. about a backlog they cannot act on
   // until morning. The morning view shows the issue immediately because
   // the alert row was created in real time.
   if (inQuietHours) {
     result.quietHoursSuppressed = true;
     logger.info(
-      '[StorageHealthAlerts] Quiet hours active — Slack/email suppressed',
+      '[StorageHealthAlerts] Quiet hours active — ChatProvider/email suppressed',
       {
         startHour: quietHours.startHour,
         endHour: quietHours.endHour,
@@ -454,18 +454,18 @@ export async function evaluateAndAlertStorageHealth(
     return result;
   }
 
-  // Slack — re-uses the existing AI_COST cron's webhook so ops doesn't
+  // ChatProvider — re-uses the existing AI_COST cron's webhook so ops doesn't
   // have to configure a second integration.
-  const slackWebhook = env.SLACK_WEBHOOK_URL;
-  if (slackWebhook) {
-    const slackText =
+  const ChatProviderWebhook = env.ChatProvider_WEBHOOK_URL;
+  if (ChatProviderWebhook) {
+    const ChatProviderText =
       `:warning: *AI Storage Health Alert* — ${title}.\n` +
       description +
-      `\n<${env.APP_BASE_URL ?? ''}/ai-ops|Open AI Operations panel>`;
+      `\n<${env.APP_BASE_URL ?? ''}/ai-ops|LLMProvider Operations panel>`;
     try {
-      result.slackSent = await deps.sendSlack(slackWebhook, slackText);
+      result.ChatProviderSent = await deps.sendChatProvider(ChatProviderWebhook, ChatProviderText);
     } catch (err) {
-      logger.warn('[StorageHealthAlerts] Slack notification failed', {
+      logger.warn('[StorageHealthAlerts] ChatProvider notification failed', {
         error: err instanceof Error ? err.message : String(err),
       });
     }
@@ -527,7 +527,7 @@ export async function evaluateAndAlertStorageHealth(
 // pages on the *first* breach (dedupe), so a stuck prune slowly drifts out
 // of incident response.
 //
-// `repageStaleStorageHealthAlerts` closes that gap by re-sending the Slack
+// `repageStaleStorageHealthAlerts` closes that gap by re-sending the ChatProvider
 // /email page for any storage_health alert whose `notified_at` is older
 // than the configured threshold (default 24 h). Mirrors the tool-health
 // re-notify cadence:
@@ -562,7 +562,7 @@ export interface StorageHealthRepageDeps {
     channel: string,
     whenMs: number,
   ) => Promise<void>;
-  sendSlack: (webhookUrl: string, text: string) => Promise<boolean>;
+  sendChatProvider: (webhookUrl: string, text: string) => Promise<boolean>;
   sendEmail: (input: {
     to: string[];
     subject: string;
@@ -589,15 +589,15 @@ export interface StorageHealthRepageResult {
   alertsThrottled: number;
   /** Alerts that would have been re-paged but quiet hours suppressed it. */
   alertsQuietHoursSuppressed: number;
-  /** Alerts where we attempted a re-page (Slack and/or email). */
+  /** Alerts where we attempted a re-page (ChatProvider and/or email). */
   alertsRepaged: number;
-  /** Slack webhook calls that returned ok. */
-  slackSent: number;
+  /** ChatProvider webhook calls that returned ok. */
+  ChatProviderSent: number;
   /** Email sends that returned success. */
   emailSent: number;
   /**
    * True when the cron tick fell inside quiet-hours and the sweep
-   * intentionally suppressed Slack/email. The alerts are still counted as
+   * intentionally suppressed ChatProvider/email. The alerts are still counted as
    * "considered" so the cron log line shows the sweep ran.
    */
   quietHoursActive: boolean;
@@ -630,16 +630,16 @@ function buildRepageMessages(
   alert: AIAlert,
   ageMinutes: number,
   appBaseUrl: string,
-): { slackText: string; emailSubject: string; emailHtml: string } {
+): { ChatProviderText: string; emailSubject: string; emailHtml: string } {
   const ageHours = Math.round((ageMinutes / 60) * 10) / 10;
-  const slackText =
+  const ChatProviderText =
     `:rotating_light: *AI Storage Health — alert still OPEN after ${ageHours}h* ` +
     `(re-page).\n` +
     `${alert.title}\n` +
     `Severity: ${alert.severity}. ` +
     `No-one has acknowledged the storage_health alert opened by the daily ` +
     `prune cron. ${alert.description ?? ''}\n` +
-    `<${appBaseUrl}/ai-ops|Open AI Operations panel>`;
+    `<${appBaseUrl}/ai-ops|LLMProvider Operations panel>`;
   const emailSubject =
     `🚨 ExampleOrg AI Storage Alert STILL OPEN after ${ageHours}h — please triage`;
   const emailHtml =
@@ -653,7 +653,7 @@ function buildRepageMessages(
     `<p><em>Re-pages will continue every ` +
     `STORAGE_HEALTH_REPAGE_AFTER_MIN minutes until the alert is ` +
     `acknowledged or resolved.</em></p>`;
-  return { slackText, emailSubject, emailHtml };
+  return { ChatProviderText, emailSubject, emailHtml };
 }
 
 /**
@@ -662,8 +662,8 @@ function buildRepageMessages(
  * pass — the throttle (notified_at within `repageAfterMin`) ensures at
  * most one re-page per alert per window.
  *
- * Notification failures are logged but never thrown so a transient Slack
- * /Resend outage cannot abort the surrounding cron pass.
+ * Notification failures are logged but never thrown so a transient ChatProvider
+ * /EmailProvider outage cannot abort the surrounding cron pass.
  */
 export async function repageStaleStorageHealthAlerts(
   deps: StorageHealthRepageDeps,
@@ -683,7 +683,7 @@ export async function repageStaleStorageHealthAlerts(
     alertsThrottled: 0,
     alertsQuietHoursSuppressed: 0,
     alertsRepaged: 0,
-    slackSent: 0,
+    ChatProviderSent: 0,
     emailSent: 0,
     quietHoursActive: inQuietHours,
   };
@@ -711,7 +711,7 @@ export async function repageStaleStorageHealthAlerts(
   result.alertsConsidered = openAlerts.length;
   if (openAlerts.length === 0) return result;
 
-  const slackWebhook = env.SLACK_WEBHOOK_URL;
+  const ChatProviderWebhook = env.ChatProvider_WEBHOOK_URL;
   const emailRaw = env.AI_COST_ALERT_EMAIL;
   const emailRecipients = emailRaw
     ? emailRaw
@@ -781,21 +781,21 @@ export async function repageStaleStorageHealthAlerts(
     }
 
     const ageMinutes = Math.round(ageMs / 60_000);
-    const { slackText, emailSubject, emailHtml } = buildRepageMessages(
+    const { ChatProviderText, emailSubject, emailHtml } = buildRepageMessages(
       alert,
       ageMinutes,
       appBaseUrl,
     );
 
-    let slackOk = false;
+    let ChatProviderOk = false;
     let emailOk = false;
 
-    if (slackWebhook) {
+    if (ChatProviderWebhook) {
       try {
-        slackOk = await deps.sendSlack(slackWebhook, slackText);
-        if (slackOk) result.slackSent++;
+        ChatProviderOk = await deps.sendChatProvider(ChatProviderWebhook, ChatProviderText);
+        if (ChatProviderOk) result.ChatProviderSent++;
       } catch (err) {
-        logger.warn('[StorageHealthAlerts] Re-page Slack send failed', {
+        logger.warn('[StorageHealthAlerts] Re-page ChatProvider send failed', {
           alertId: alert.id,
           error: err instanceof Error ? err.message : String(err),
         });
@@ -823,13 +823,13 @@ export async function repageStaleStorageHealthAlerts(
     // on. The channel label captures the actual delivery outcome so the
     // AI Ops "Notified" column reflects reality.
     const channel =
-      slackOk && emailOk
-        ? 'slack+email_repage'
-        : slackOk
-          ? 'slack_repage'
+      ChatProviderOk && emailOk
+        ? 'ChatProvider+email_repage'
+        : ChatProviderOk
+          ? 'ChatProvider_repage'
           : emailOk
             ? 'email_repage'
-            : !slackWebhook && emailRecipients.length === 0
+            : !ChatProviderWebhook && emailRecipients.length === 0
               ? 'not_configured_repage'
               : 'failed_repage';
 

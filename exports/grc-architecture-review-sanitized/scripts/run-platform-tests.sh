@@ -184,20 +184,20 @@ check T-INFO-EMAIL-MISSING "Email share missing recipients" VAL 400 POST /api/in
 check T-INFO-EMAIL-INVALID "Email share invalid address" VAL 400 POST /api/infographic/risks/share/email \
   -H "Content-Type: application/json" -d '{"to":["not-an-email"]}'
 
-# Slack share — should succeed in either mode (file or message)
-echo "  Testing Slack share..."
-slack_resp=$(curl -s -m 25 -X POST -H "Content-Type: application/json" -H "$KEY" \
+# ChatProvider share — should succeed in either mode (file or message)
+echo "  Testing ChatProvider share..."
+ChatProvider_resp=$(curl -s -m 25 -X POST -H "Content-Type: application/json" -H "$KEY" \
   -d '{"comment":"[automated test runner]"}' \
-  "$BASE/api/infographic/risks/share/slack" 2>/dev/null || echo "{}")
-if echo "$slack_resp" | grep -q '"success":true'; then
-  mode=$(echo "$slack_resp" | grep -oE '"mode":"[^"]+"' | head -1)
-  ROWS_T1+="| T-INFO-SLACK | Slack share (graceful) | \`POST /api/infographic/risks/share/slack\` | success:true | $mode | ✅ |\n"
+  "$BASE/api/infographic/risks/share/ChatProvider" 2>/dev/null || echo "{}")
+if echo "$ChatProvider_resp" | grep -q '"success":true'; then
+  mode=$(echo "$ChatProvider_resp" | grep -oE '"mode":"[^"]+"' | head -1)
+  ROWS_T1+="| T-INFO-ChatProvider | ChatProvider share (graceful) | \`POST /api/infographic/risks/share/ChatProvider\` | success:true | $mode | ✅ |\n"
   PASS=$((PASS+1))
-  echo "  [PASS] T-INFO-SLACK · Slack share · $mode"
+  echo "  [PASS] T-INFO-ChatProvider · ChatProvider share · $mode"
 else
-  ROWS_T1+="| T-INFO-SLACK | Slack share (graceful) | \`POST /api/infographic/risks/share/slack\` | success:true | failed | ❌ |\n"
+  ROWS_T1+="| T-INFO-ChatProvider | ChatProvider share (graceful) | \`POST /api/infographic/risks/share/ChatProvider\` | success:true | failed | ❌ |\n"
   FAIL=$((FAIL+1))
-  echo "  [FAIL] T-INFO-SLACK · $slack_resp"
+  echo "  [FAIL] T-INFO-ChatProvider · $ChatProvider_resp"
 fi
 
 # ----- Module 13 — Management Review (T2) -----

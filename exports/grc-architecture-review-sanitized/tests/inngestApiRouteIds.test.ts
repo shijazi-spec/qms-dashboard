@@ -6,7 +6,7 @@
  * routes produce the SAME id, `inngest.serve()` throws "Duplicate function ID"
  * at boot and the process exits before the HTTP port opens — visible only as a
  * deploy healthcheck 500. This has already broken production twice: once for the
- * cron path, and once when two `/webhooks/slack/*` registrars both collapsed to
+ * cron path, and once when two `/webhooks/ChatProvider/*` registrars both collapsed to
  * `api-webhooks`.
  *
  * This test scans the source for every `registerApiRoute("<literal>")` call,
@@ -109,12 +109,12 @@ async function run() {
     );
   }
 
-  // Sanity: the two production-wired Slack webhook routes must differ.
-  const slackAction = apiRouteFunctionId("/webhooks/slack/action");
-  const slackRating = apiRouteFunctionId("/webhooks/slack/consultant-rating");
+  // Sanity: the two production-wired ChatProvider webhook routes must differ.
+  const ChatProviderAction = apiRouteFunctionId("/webhooks/ChatProvider/action");
+  const ChatProviderRating = apiRouteFunctionId("/webhooks/ChatProvider/consultant-rating");
   assert(
-    slackAction !== slackRating,
-    `the two /webhooks/slack/* routes must have distinct ids (got "${slackAction}" for both)`,
+    ChatProviderAction !== ChatProviderRating,
+    `the two /webhooks/ChatProvider/* routes must have distinct ids (got "${ChatProviderAction}" for both)`,
   );
 
   console.log(`\nResult: ${passed} passed, ${failed} failed\n`);

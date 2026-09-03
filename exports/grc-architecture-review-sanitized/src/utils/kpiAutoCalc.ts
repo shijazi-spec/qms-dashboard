@@ -115,7 +115,7 @@ export async function runKPIAutoCalc(
   }
 
   // 2) SDR + Sales process KPIs (from the Duplicate Radar's local synced data —
-  //    no live Zoho calls). Codes without a safe local source stay "--".
+  //    no live CRMProvider calls). Codes without a safe local source stay "--".
   try {
     const proc = await computeProcessKPIs(includeCycleTimes);
     for (const [code, result] of Object.entries(proc)) {

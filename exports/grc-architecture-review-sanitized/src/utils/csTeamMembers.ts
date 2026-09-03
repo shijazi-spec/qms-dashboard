@@ -5,7 +5,7 @@
  * WHY THIS FILE EXISTS
  * --------------------
  * The platform had no CS roster at all: the only trace of a CS person was the
- * per-deal "CS Owner Name" field in Zoho. So "who are the CS owners?" could only
+ * per-deal "CS Owner Name" field in CRMProvider. So "who are the CS owners?" could only
  * be answered by scraping whatever names happened to be typed on deals — which
  * misses anyone with no deals yet, and silently includes typos and people who
  * have left. Sample User authoritative list, so it lives here as the
@@ -14,7 +14,7 @@
  * WHAT IT IS AND IS NOT
  * ---------------------
  * This is the ESTABLISHMENT list (who is on the team). It is NOT the assignment
- * data — `getCsOwners()` still derives per-person deal counts from live Zoho
+ * data — `getCsOwners()` still derives per-person deal counts from live CRMProvider
  * records. Cross-referencing the two is the point: it surfaces
  *   - roster members with ZERO deals (nobody assigned / new joiner), and
  *   - owner names on deals that are NOT on the roster (typo, ex-employee, or a
@@ -23,7 +23,7 @@
  * MAINTENANCE
  * -----------
  * When someone joins or leaves, edit MEMBERS below (or set the env override).
- * Add any spelling the CRM actually contains to `aliases` — Zoho holds a free
+ * Add any spelling the CRM actually contains to `aliases` — CRMProvider holds a free
  * text display name, so Arabic spellings and "Al X" / "Al-X" / "AlX" variants
  * all occur. Matching is Arabic-aware and punctuation-insensitive, so most
  * variants resolve without an explicit alias.

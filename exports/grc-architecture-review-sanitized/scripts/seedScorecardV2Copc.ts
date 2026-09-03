@@ -146,8 +146,8 @@ function buildDimensionsPayload(canonical: CanonicalScorecard) {
         data_dependency: cp.data_dependency,
         passingCriteria: cp.metric,
         severityIfFailed:
-          cp.data_dependency.includes("five9_real_ingest")
-            ? "minor" // deferred until Five9 ships
+          cp.data_dependency.includes("ContactCenterProvider_real_ingest")
+            ? "minor" // deferred until ContactCenterProvider ships
             : section.id === "activity_and_process"
               ? "major"
               : "minor",

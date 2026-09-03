@@ -6,7 +6,7 @@
  *
  * WHAT THIS TESTS:
  * - Inngest event routing (event/api.webhooks.{provider}.action)
- *   Note: Slack/Telegram use event/api.webhooks.webhooks.action due to /webhooks/{provider}/action path
+ *   Note: ChatProvider/Telegram use event/api.webhooks.webhooks.action due to /webhooks/{provider}/action path
  * - The forwarding function created by registerApiRoute
  * - HTTP forwarding to your webhook handler (e.g., /linear/webhook)
  * - Webhook payload validation in your handler
@@ -32,7 +32,7 @@ import { inngest } from "../src/mastra/inngest/client";
 // ============================================================================
 
 // Change this to match your connector name
-const PROVIDER: string = "linear"; // e.g., "linear", "github", etc
+const PROVIDER: string = "linear"; // e.g., "linear", "SourceControlProvider", etc
 
 // Mock webhook payload - This **must** match your connector's webhook schema.
 // Keep data obviously fake (use "MOCK:" prefixes, fake IDs like "mock-123")
@@ -64,11 +64,11 @@ async function testWebhookTrigger() {
 
   try {
     /**
-     * Send an Inngest event that simulates what Replit Webhook Service sends in production.
+     * Send an Inngest event that simulates what HostingPlatform Webhook Service sends in production.
      *
      * In production, the flow is:
-     * 1. External webhook → Replit Webhook Service
-     * 2. Replit transforms it → Inngest Cloud (sends event/api.webhooks.{provider}.action)
+     * 1. External webhook → HostingPlatform Webhook Service
+     * 2. HostingPlatform transforms it → Inngest Cloud (sends event/api.webhooks.{provider}.action)
      * 3. Inngest Cloud → triggers the forwarding function (id: "api-{provider}")
      * 4. Forwarding function → POSTs to your webhook handler (/{provider}/webhook)
      * 5. Webhook handler → validates payload and starts workflow
@@ -83,7 +83,7 @@ async function testWebhookTrigger() {
       // Event name must match what registerApiRoute creates an Inngest function to listen for
       name: eventName,
 
-      // Data structure matches what Replit Webhook Service sends to Inngest
+      // Data structure matches what HostingPlatform Webhook Service sends to Inngest
       data: {
         method: "POST",
         headers: { "content-type": "application/json" },

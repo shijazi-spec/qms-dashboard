@@ -15,22 +15,22 @@ let oidcConfig: client.Configuration | null = null;
 /**
  * OIDC provider configuration — provider-agnostic.
  *
- * The QMS app uses Replit Auth (OIDC) by default but supports any
- * generic OIDC issuer (Google OAuth, Auth0, Okta, etc.) via env vars.
- * Every provider-specific value is read from env vars with Replit-style
+ * The QMS app uses HostingPlatform Auth (OIDC) by default but supports any
+ * generic OIDC issuer (IdentityProvider OAuth, Auth0, Okta, etc.) via env vars.
+ * Every provider-specific value is read from env vars with HostingPlatform-style
  * fallbacks so this code runs anywhere without `if (env === '…')` forks:
  *
  *   OIDC_ISSUER_URL    — defaults to ISSUER_URL → <REDACTED_URL>
- *                        For Google: <REDACTED_URL>
- *   OIDC_CLIENT_ID     — defaults to REPL_ID (Replit's auto-injected ID)
- *                        For Google: the Web-client ID from Google Cloud Console
- *   OIDC_CLIENT_SECRET — required for Google (no fallback). Replit's PKCE
- *                        flow never required a secret; Google does.
- *   PUBLIC_BASE_URL    — defaults to REPLIT_DOMAINS / REPLIT_DEV_DOMAIN.
+ *                        For IdentityProvider: <REDACTED_URL>
+ *   OIDC_CLIENT_ID     — defaults to REPL_ID (HostingPlatform's auto-injected ID)
+ *                        For IdentityProvider: the Web-client ID from IdentityProvider Cloud Console
+ *   OIDC_CLIENT_SECRET — required for IdentityProvider (no fallback). HostingPlatform's PKCE
+ *                        flow never required a secret; IdentityProvider does.
+ *   PUBLIC_BASE_URL    — defaults to HostingPlatform_DOMAINS / HostingPlatform_DEV_DOMAIN.
  *                        For a custom host: the canonical https URL.
  *
- * Set the OIDC_* vars on a non-Replit host → falls through to Replit vars
- * on Replit. One codebase, multiple deploy targets.
+ * Set the OIDC_* vars on a non-HostingPlatform host → falls through to HostingPlatform vars
+ * on HostingPlatform. One codebase, multiple deploy targets.
  */
 function getIssuerUrl(): string {
   return (
@@ -44,15 +44,15 @@ function getClientId(): string {
   const id = process.env.OIDC_CLIENT_ID || process.env.REPL_ID;
   if (!id) {
     throw new Error(
-      "OIDC client ID missing — set OIDC_CLIENT_ID (Google/other) or REPL_ID (Replit).",
+      "OIDC client ID missing — set OIDC_CLIENT_ID (IdentityProvider/other) or REPL_ID (HostingPlatform).",
     );
   }
   return id;
 }
 
 function getClientSecret(): string | undefined {
-  // Replit OIDC uses PKCE with no client secret; Google requires both.
-  // Returning undefined when unset preserves the Replit flow exactly.
+  // HostingPlatform OIDC uses PKCE with no client secret; IdentityProvider requires both.
+  // Returning undefined when unset preserves the HostingPlatform flow exactly.
   return process.env.OIDC_CLIENT_SECRET || undefined;
 }
 
@@ -60,7 +60,7 @@ async function getOidcConfig(): Promise<client.Configuration> {
   if (!oidcConfig) {
     const secret = getClientSecret();
     // The `openid-client` library's discovery() accepts an optional client
-    // secret as the third arg. For PKCE-only providers (Replit), omit it.
+    // secret as the third arg. For PKCE-only providers (HostingPlatform), omit it.
     oidcConfig = secret
       ? await client.discovery(new URL(getIssuerUrl()), getClientId(), secret)
       : await client.discovery(new URL(getIssuerUrl()), getClientId());
@@ -70,30 +70,30 @@ async function getOidcConfig(): Promise<client.Configuration> {
 
 function getDomain(): string {
   // PUBLIC_BASE_URL is the canonical, provider-neutral source. The
-  // REPLIT_* fallbacks are kept so the Replit deploy continues to work
-  // without anyone having to change Replit Secrets.
+  // HostingPlatform_* fallbacks are kept so the HostingPlatform deploy continues to work
+  // without anyone having to change HostingPlatform Secrets.
   const explicit = process.env.PUBLIC_BASE_URL;
   if (explicit) {
     // Accept either bare host (<REDACTED_HOST>) or full URL (<REDACTED_URL>
     return explicit.replace(/^https?:\/\//, "").replace(/\/$/, "");
   }
   return (
-    process.env.REPLIT_DOMAINS?.split(",")[0] ||
-    process.env.REPLIT_DEV_DOMAIN ||
+    process.env.HostingPlatform_DOMAINS?.split(",")[0] ||
+    process.env.HostingPlatform_DEV_DOMAIN ||
     "localhost:5000"
   );
 }
 
 /**
  * Provider name for audit logs / the platform_users.auth_provider column.
- * Inferred from the issuer URL — <REDACTED_HOST> → 'google',
- * <REDACTED_HOST> → 'replit'. Used so the QMS audit trail correctly attributes
- * each login to the actual IdP, not always "replit".
+ * Inferred from the issuer URL — <REDACTED_HOST> → 'IdentityProvider',
+ * <REDACTED_HOST> → 'HostingPlatform'. Used so the QMS audit trail correctly attributes
+ * each login to the actual IdP, not always "HostingPlatform".
  */
-function getAuthProviderName(): "google" | "replit" | "other" {
+function getAuthProviderName(): "IdentityProvider" | "HostingPlatform" | "other" {
   const issuer = getIssuerUrl().toLowerCase();
-  if (issuer.includes("google")) return "google";
-  if (issuer.includes("replit")) return "replit";
+  if (issuer.includes("IdentityProvider")) return "IdentityProvider";
+  if (issuer.includes("HostingPlatform")) return "HostingPlatform";
   return "other";
 }
 
@@ -232,18 +232,18 @@ export const authRoutes = [
           const callbackUrl = getCallbackUrl();
 
           // Scope differs by provider:
-          //   - Replit OIDC accepts (and quietly ignores when absent) the
+          //   - HostingPlatform OIDC accepts (and quietly ignores when absent) the
           //     `offline_access` scope for refresh tokens.
-          //   - Google REJECTS the bare `offline_access` scope as
+          //   - IdentityProvider REJECTS the bare `offline_access` scope as
           //     invalid_scope (Error 400). To get a refresh token from
-          //     Google you use the `access_type=offline` parameter
+          //     IdentityProvider you use the `access_type=offline` parameter
           //     instead. The QMS app doesn't currently rely on the
           //     refresh token (sessions are 7-day JWTs in HttpOnly
           //     cookies), so the simplest correct fix is to omit
-          //     `offline_access` on Google and skip `access_type` too.
+          //     `offline_access` on IdentityProvider and skip `access_type` too.
           const providerName = getAuthProviderName();
           const scope =
-            providerName === "google"
+            providerName === "IdentityProvider"
               ? "openid email profile"
               : "openid email profile offline_access";
           const params = new URLSearchParams({
@@ -257,12 +257,12 @@ export const authRoutes = [
             code_challenge_method: "S256",
             prompt: "login consent",
           });
-          // Google Workspace lock-down: hd=<REDACTED_HOST> tells Google to
+          // IdentityProvider Workspace lock-down: hd=<REDACTED_HOST> tells IdentityProvider to
           // only present accounts from this domain. Combined with the
           // OAuth consent screen's "User type: Internal" setting, this
           // makes it impossible for a personal @<REDACTED_HOST> account to
-          // even start the sign-in flow. Skipped for non-Google providers.
-          if (providerName === "google") {
+          // even start the sign-in flow. Skipped for non-IdentityProvider providers.
+          if (providerName === "IdentityProvider") {
             const allowedHd = process.env.OAUTH_HD || "<REDACTED_HOST>";
             params.set("hd", allowedHd);
           }
@@ -336,7 +336,7 @@ export const authRoutes = [
           );
 
           // Token exchange body. PKCE (code_verifier) is always sent.
-          // Google additionally requires client_secret; Replit doesn't.
+          // IdentityProvider additionally requires client_secret; HostingPlatform doesn't.
           const tokenBody: Record<string, string> = {
             grant_type: "authorization_code",
             code,
@@ -398,13 +398,13 @@ export const authRoutes = [
             return c.redirect("/login?error=no_email");
           }
 
-          // Belt + suspenders email-domain check for Google. The OAuth
+          // Belt + suspenders email-domain check for IdentityProvider. The OAuth
           // consent screen's "User type: Internal" + the hd= param on the
           // auth URL already enforce <REDACTED_HOST> membership at the IdP
           // layer, but if either is ever misconfigured this catches it
           // server-side so a stray Gmail account can't slip through.
           const authProvider = getAuthProviderName();
-          if (authProvider === "google") {
+          if (authProvider === "IdentityProvider") {
             const allowedDomain = (process.env.OAUTH_HD || "<REDACTED_HOST>").toLowerCase();
             const emailDomain = String(profile.email).split("@")[1]?.toLowerCase() || "";
             if (emailDomain !== allowedDomain) {
@@ -417,8 +417,8 @@ export const authRoutes = [
             }
           }
 
-          // Field-name fallbacks: Google uses given_name/family_name/picture,
-          // Replit uses first_name/last_name/profile_image_url. Some IdPs
+          // Field-name fallbacks: IdentityProvider uses given_name/family_name/picture,
+          // HostingPlatform uses first_name/last_name/profile_image_url. Some IdPs
           // only emit `name` — that's the final fallback.
           const firstName =
             profile.given_name || profile.first_name || "";
@@ -620,7 +620,7 @@ export const authRoutes = [
           const domain = getDomain();
           const protocol = domain.includes("localhost") ? "http" : "https";
           // buildEndSessionUrl requires the IdP to advertise an
-          // end_session_endpoint in its discovery doc. Google does NOT —
+          // end_session_endpoint in its discovery doc. IdentityProvider does NOT —
           // when omitted, openid-client throws. Catch and fall back to a
           // local-only logout so the user still gets logged out of our app
           // even if the IdP refuses to participate. The cleared cookies

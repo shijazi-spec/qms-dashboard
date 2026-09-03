@@ -417,7 +417,7 @@
 
         <h3>2.2 Out of Scope</h3>
         <ul>
-            <li>Production Zoho CRM administrative changes</li>
+            <li>Production CRMProvider CRM administrative changes</li>
             <li>Custom mobile applications</li>
             <li>Third-party ERP integrations (not specified)</li>
             <li>Historical data migration from legacy systems</li>
@@ -440,13 +440,13 @@
             +-------------------+-------------------+ | | | | | | |
             +------v------+ +-------v-------+ +------v------+ | | | QUALITY | |
             INNGEST | | POSTGRESQL | | | | AGENT | | SCHEDULER | | DATABASE | |
-            | | (GPT-4o) | | (Cron Jobs) | | (Neon) | | | +------+------+
+            | | (GPT-4o) | | (Cron Jobs) | | (DatabaseProvider) | | | +------+------+
             +---------------+ +-------------+ | | | | |
             +------------------+------------------------+ | | | | |
             +-----------------------------+------------------------+----------------------+
             | | +--------------v--------------+ +------v------+ | EXTERNAL
             SERVICES | | EMAIL | +-----------------------------+ | SERVICE | |
-            +---------+ +----------+ | +-------------+ | | ZOHO | | GOOGLE | | |
+            +---------+ +----------+ | +-------------+ | | CRMProvider | | IdentityProvider | | |
             | CRM | | CALENDAR | | | +---------+ +----------+ |
             +-----------------------------+
         </div>
@@ -490,14 +490,14 @@
             </tr>
             <tr>
                 <td>PostgreSQL Database</td>
-                <td>Neon (PostgreSQL)</td>
+                <td>DatabaseProvider (PostgreSQL)</td>
                 <td>Data persistence and storage</td>
             </tr>
         </table>
 
         <h2 class="page-break">4. Integration Points</h2>
 
-        <h3>4.1 Zoho CRM Integration</h3>
+        <h3>4.1 CRMProvider CRM Integration</h3>
         <table>
             <tr>
                 <th>Aspect</th>
@@ -517,7 +517,7 @@
             </tr>
             <tr>
                 <td>Authentication</td>
-                <td>Access Token (ZOHO_ACCESS_TOKEN)</td>
+                <td>Access Token (CRMProvider_ACCESS_TOKEN)</td>
             </tr>
             <tr>
                 <td>API Domain</td>
@@ -548,7 +548,7 @@
             </li>
         </ul>
 
-        <h3>4.2 Google Calendar Integration</h3>
+        <h3>4.2 IdentityProvider Calendar Integration</h3>
         <table>
             <tr>
                 <th>Aspect</th>
@@ -556,7 +556,7 @@
             </tr>
             <tr>
                 <td>Connection Type</td>
-                <td>Google Calendar API (OAuth 2.0)</td>
+                <td>IdentityProvider Calendar API (OAuth 2.0)</td>
             </tr>
             <tr>
                 <td>Access Level</td>
@@ -568,7 +568,7 @@
             </tr>
             <tr>
                 <td>Authentication</td>
-                <td>Replit Connector (Managed OAuth)</td>
+                <td>HostingPlatform Connector (Managed OAuth)</td>
             </tr>
             <tr>
                 <td>Scopes</td>
@@ -576,7 +576,7 @@
             </tr>
         </table>
 
-        <h3>4.3 Email Integration (Replit Mail)</h3>
+        <h3>4.3 Email Integration (HostingPlatform Mail)</h3>
         <table>
             <tr>
                 <th>Aspect</th>
@@ -584,7 +584,7 @@
             </tr>
             <tr>
                 <td>Connection Type</td>
-                <td>Replit Mail API</td>
+                <td>HostingPlatform Mail API</td>
             </tr>
             <tr>
                 <td>Access Level</td>
@@ -596,7 +596,7 @@
             </tr>
             <tr>
                 <td>Authentication</td>
-                <td>Managed by Replit</td>
+                <td>Managed by HostingPlatform</td>
             </tr>
         </table>
 
@@ -612,25 +612,25 @@
             </tr>
             <tr>
                 <td>Application Hosting</td>
-                <td>Replit</td>
+                <td>HostingPlatform</td>
                 <td>GCP US</td>
                 <td>Primary hosting environment</td>
             </tr>
             <tr>
                 <td>Database</td>
-                <td>Neon PostgreSQL</td>
+                <td>DatabaseProvider PostgreSQL</td>
                 <td>GCP US</td>
                 <td>Managed PostgreSQL service</td>
             </tr>
             <tr>
                 <td>Scheduler</td>
                 <td>Inngest</td>
-                <td>Replit</td>
+                <td>HostingPlatform</td>
                 <td>Cron job management</td>
             </tr>
             <tr>
                 <td>CDN/Edge</td>
-                <td>Replit</td>
+                <td>HostingPlatform</td>
                 <td>Global</td>
                 <td>Static asset delivery</td>
             </tr>
@@ -639,11 +639,11 @@
         <h3>5.2 Infrastructure Diagram</h3>
         <div class="diagram">
             +-------------------------------------------------------------+ |
-            REPLIT INFRASTRUCTURE | | (Google Cloud Platform) |
+            HostingPlatform INFRASTRUCTURE | | (IdentityProvider Cloud Platform) |
             +-------------------------------------------------------------+ | |
             | Region: United States (Primary) | | Alternative: India (Optional)
             | | | | +-----------------+ +-----------------+ | | | APPLICATION |
-            | DATABASE | | | | CONTAINER | | (Neon/GCP) | | | | | | | | | | -
+            | DATABASE | | | | CONTAINER | | (DatabaseProvider/GCP) | | | | | | | | | | -
             Node.js 20 | | - PostgreSQL | | | | - TypeScript | | - Auto-backup |
             | | | - Mastra | | - Encryption | | | +-----------------+
             +-----------------+ | | | |
@@ -668,13 +668,13 @@
                 <td>Yes (Auto)</td>
             </tr>
             <tr>
-                <td>ZOHO_ACCESS_TOKEN</td>
-                <td>Zoho CRM authentication</td>
+                <td>CRMProvider_ACCESS_TOKEN</td>
+                <td>CRMProvider CRM authentication</td>
                 <td>Yes (CRM)</td>
             </tr>
             <tr>
-                <td>ZOHO_API_DOMAIN</td>
-                <td>Zoho API endpoint</td>
+                <td>CRMProvider_API_DOMAIN</td>
+                <td>CRMProvider API endpoint</td>
                 <td>No</td>
             </tr>
             <tr>
@@ -693,13 +693,13 @@
 
         <h3>6.1 Data Flow Diagram</h3>
         <div class="diagram">
-            +------------+ +------------+ +------------+ | ZOHO | --API-->|
+            +------------+ +------------+ +------------+ | CRMProvider | --API-->|
             MASTRA | --SQL-->| POSTGRESQL | | CRM |<--------| SERVER |<--------|
             DATABASE | | (Read-Only)| | | | | +------------+ +-----+------+
-            +------------+ | +------------+ | +------------+ | GOOGLE |
+            +------------+ | +------------+ | +------------+ | IdentityProvider |
             --OAuth--> | <--HTTP-- | USER | | CALENDAR | | | BROWSER | |
             (Read-Only)| | | | +------------+ | +------------+ |
-            +--------v--------+ | REPLIT MAIL | | (Send Only) |
+            +--------v--------+ | HostingPlatform MAIL | | (Send Only) |
             +-----------------+
         </div>
 
@@ -731,14 +731,14 @@
                 <td>Protected routes require authentication</td>
             </tr>
             <tr>
-                <td>Zoho CRM</td>
+                <td>CRMProvider CRM</td>
                 <td>OAuth Token</td>
                 <td>Bearer token authentication</td>
             </tr>
             <tr>
-                <td>Google Calendar</td>
+                <td>IdentityProvider Calendar</td>
                 <td>OAuth 2.0</td>
-                <td>Managed by Replit Connector</td>
+                <td>Managed by HostingPlatform Connector</td>
             </tr>
         </table>
 
@@ -758,7 +758,7 @@
             </tr>
             <tr>
                 <td>Secret Management</td>
-                <td>Replit Secrets (encrypted vault)</td>
+                <td>HostingPlatform Secrets (encrypted vault)</td>
             </tr>
             <tr>
                 <td>Access Control</td>
@@ -822,7 +822,7 @@
 
         <h2>8. Compliance & Certifications</h2>
 
-        <h3>8.1 Platform Certifications (Replit Infrastructure)</h3>
+        <h3>8.1 Platform Certifications (HostingPlatform Infrastructure)</h3>
         <table>
             <tr>
                 <th>Certification</th>
@@ -884,11 +884,11 @@
             </tr>
             <tr>
                 <td>Database</td>
-                <td>PostgreSQL 15 (Neon)</td>
+                <td>PostgreSQL 15 (DatabaseProvider)</td>
             </tr>
             <tr>
                 <td>AI/ML</td>
-                <td>OpenAI GPT-4o (via Mastra Agent)</td>
+                <td>LLMProvider GPT-4o (via Mastra Agent)</td>
             </tr>
             <tr>
                 <td>Scheduler</td>
@@ -896,7 +896,7 @@
             </tr>
             <tr>
                 <td>Email</td>
-                <td>Replit Mail</td>
+                <td>HostingPlatform Mail</td>
             </tr>
         </table>
 

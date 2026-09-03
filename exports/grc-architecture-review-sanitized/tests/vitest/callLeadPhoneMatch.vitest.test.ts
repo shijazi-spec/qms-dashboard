@@ -1,7 +1,7 @@
 /**
- * Unit tests for the Zoho Lead phone matcher.
+ * Unit tests for the CRMProvider Lead phone matcher.
  *
- * ROOT-CAUSE GUARD (2026-05-29): a junk Zoho Lead with Phone="11" was
+ * ROOT-CAUSE GUARD (2026-05-29): a junk CRMProvider Lead with Phone="11" was
  * auto-linking to every call whose number merely ended in "11"
  * (e.g. <REDACTED_PHONE>→ Lead "رايد الجحدلي" phone "11"). The matcher now
  * requires a full 9-digit subscriber-number overlap, and the input
@@ -63,22 +63,22 @@ describe("phonesShareSubscriberNumber", () => {
   });
 });
 
-describe("findLeadsByPhoneMatch — input guards (no Zoho needed)", () => {
+describe("findLeadsByPhoneMatch — input guards (no CRMProvider needed)", () => {
   const saved = {
-    token: process.env.ZOHO_ACCESS_TOKEN,
-    id: process.env.ZOHO_CLIENT_ID,
-    secret: process.env.ZOHO_CLIENT_SECRET,
-    refresh: process.env.ZOHO_REFRESH_TOKEN,
+    token: process.env.CRMProvider_ACCESS_TOKEN,
+    id: process.env.CRMProvider_CLIENT_ID,
+    secret: process.env.CRMProvider_CLIENT_SECRET,
+    refresh: process.env.CRMProvider_REFRESH_TOKEN,
   };
   afterEach(() => {
-    if (saved.token === undefined) delete process.env.ZOHO_ACCESS_TOKEN;
-    else process.env.ZOHO_ACCESS_TOKEN = saved.token;
-    if (saved.id === undefined) delete process.env.ZOHO_CLIENT_ID;
-    else process.env.ZOHO_CLIENT_ID = saved.id;
-    if (saved.secret === undefined) delete process.env.ZOHO_CLIENT_SECRET;
-    else process.env.ZOHO_CLIENT_SECRET = saved.secret;
-    if (saved.refresh === undefined) delete process.env.ZOHO_REFRESH_TOKEN;
-    else process.env.ZOHO_REFRESH_TOKEN = saved.refresh;
+    if (saved.token === undefined) delete process.env.CRMProvider_ACCESS_TOKEN;
+    else process.env.CRMProvider_ACCESS_TOKEN = saved.token;
+    if (saved.id === undefined) delete process.env.CRMProvider_CLIENT_ID;
+    else process.env.CRMProvider_CLIENT_ID = saved.id;
+    if (saved.secret === undefined) delete process.env.CRMProvider_CLIENT_SECRET;
+    else process.env.CRMProvider_CLIENT_SECRET = saved.secret;
+    if (saved.refresh === undefined) delete process.env.CRMProvider_REFRESH_TOKEN;
+    else process.env.CRMProvider_REFRESH_TOKEN = saved.refresh;
   });
 
   test("a sub-9-digit query returns a clear note, not silent empty", async () => {
@@ -94,15 +94,15 @@ describe("findLeadsByPhoneMatch — input guards (no Zoho needed)", () => {
     expect(r.note).toBeTruthy();
   });
 
-  test("Zoho-not-connected is surfaced distinctly from 'no matches'", async () => {
-    delete process.env.ZOHO_ACCESS_TOKEN;
-    delete process.env.ZOHO_CLIENT_ID;
-    delete process.env.ZOHO_CLIENT_SECRET;
-    delete process.env.ZOHO_REFRESH_TOKEN;
+  test("CRMProvider-not-connected is surfaced distinctly from 'no matches'", async () => {
+    delete process.env.CRMProvider_ACCESS_TOKEN;
+    delete process.env.CRMProvider_CLIENT_ID;
+    delete process.env.CRMProvider_CLIENT_SECRET;
+    delete process.env.CRMProvider_REFRESH_TOKEN;
     const r = await findLeadsByPhoneMatch("<REDACTED_PHONE>");
     expect(r.matches).toEqual([]);
     expect(r.scanned).toBe(0);
-    expect(r.zoho_connected).toBe(false);
-    expect(r.note).toContain("Zoho");
+    expect(r.CRMProvider_connected).toBe(false);
+    expect(r.note).toContain("CRMProvider");
   });
 });

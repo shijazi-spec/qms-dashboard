@@ -21,7 +21,7 @@
  *
  * The dashboard supports Arabic via `html[dir="rtl"]` set by
  * `dashboard/js/i18n.js`. Per the "RTL Layout Convention" section of
- * `replit.md`, layout details that should mirror in RTL must be expressed
+ * `HostingPlatform.md`, layout details that should mirror in RTL must be expressed
  * with CSS logical-direction utilities (`text-start`, `border-s-4`, `ms-2`,
  * `me-2`, `gap-2`, `rounded-s-lg`, …). Physical-direction classes silently
  * pin the layout to LTR and break the Arabic experience the next time a

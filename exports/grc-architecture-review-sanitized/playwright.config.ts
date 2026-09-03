@@ -2,9 +2,9 @@ import { defineConfig, devices } from '@playwright/test';
 
 const BASE_URL = process.env.BASE_URL || '<REDACTED_URL>';
 
-// Pre-installed Chromium binary on Replit (managed by the platform). Falls
+// Pre-installed Chromium binary on HostingPlatform (managed by the platform). Falls
 // back to whatever Playwright finds in its own browser cache otherwise.
-const replitChromium = process.env.REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE;
+const HostingPlatformChromium = process.env.HostingPlatform_PLAYWRIGHT_CHROMIUM_EXECUTABLE;
 
 // Chromium writes crash dumps to ~/.config/chromium/Crash Reports on every
 // renderer/GPU crash during headless test runs. Left unchecked this grew to
@@ -49,7 +49,7 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         launchOptions: {
           args: CHROMIUM_NO_CRASH_DUMP_ARGS,
-          ...(replitChromium ? { executablePath: replitChromium } : {}),
+          ...(HostingPlatformChromium ? { executablePath: HostingPlatformChromium } : {}),
         },
       },
     },

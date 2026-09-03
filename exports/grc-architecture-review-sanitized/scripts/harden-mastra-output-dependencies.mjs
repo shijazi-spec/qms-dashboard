@@ -73,7 +73,7 @@ export function assertEnginesSupportRuntimeNode(lockfile, runtimeNodeVersion = p
 /**
  * Rewrites the generated Mastra output manifest so every dependency the root
  * package.json audits (dependencies first, then overrides) replaces whatever
- * spec the generator emitted — most importantly the `openai: "latest"` pin,
+ * spec the generator emitted — most importantly the `LLMProvider: "latest"` pin,
  * which must become the exact Node-compatible version declared at the root.
  * Dependencies without a root pin pass through untouched. Root overrides are
  * copied wholesale. Returns the same (mutated) manifest for convenience.

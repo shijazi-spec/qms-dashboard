@@ -3,8 +3,8 @@ import { Inngest } from "inngest";
 export const inngest = new Inngest(
   process.env.NODE_ENV === "production"
     ? {
-        id: "replit-agent-workflow",
-        name: "Replit Agent Workflow System",
+        id: "HostingPlatform-agent-workflow",
+        name: "HostingPlatform Agent Workflow System",
       }
     : {
         id: "mastra",

@@ -60,8 +60,8 @@
             <div class="flex items-center gap-2 flex-wrap">
                 <button data-on-click="refreshAll" class="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50">↻ Refresh</button>
                 <button data-on-click="execBrief" id="execBriefBtn" title="Generate a board-ready summary for the CEO/CCO" class="px-3 py-2 text-sm rounded-lg border border-indigo-300 bg-indigo-50 text-indigo-800 hover:bg-indigo-100">📋 Executive brief</button>
-                <button data-on-click="testSlack" id="testSlackBtn" class="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50">🔔 Send test ping</button>
-                <button data-on-click="cleanupSlackPings" id="cleanupPingsBtn" title="Delete the bot's old zero-progress 'applied 0' resolution pings from the Slack channel." class="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50">🧹 Clean zero pings</button>
+                <button data-on-click="testChatProvider" id="testChatProviderBtn" class="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50">🔔 Send test ping</button>
+                <button data-on-click="cleanupChatProviderPings" id="cleanupPingsBtn" title="Delete the bot's old zero-progress 'applied 0' resolution pings from the ChatProvider channel." class="px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50">🧹 Clean zero pings</button>
                 <button data-on-click="runNow" id="runNowBtn" class="px-3 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">▶ Run now</button>
             </div>
         </header>
@@ -72,7 +72,7 @@
             <div class="grid md:grid-cols-2 gap-4 text-sm">
                 <div class="rounded-lg border border-gray-200 p-3">
                     <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Role &amp; job description</div>
-                    <p class="text-gray-700 leading-relaxed">Adam is the GRQ Assistant. He keeps the CRM clean: detects duplicate Accounts / Contacts / Leads / Deals, proposes migrate-then-tag merges (never deletes), enforces the hygiene &amp; business rules below, and escalates anything doubtful to the AI Approvals queue for a human. He acts on behalf of Sample User queues every Zoho write for approval.</p>
+                    <p class="text-gray-700 leading-relaxed">Adam is the GRQ Assistant. He keeps the CRM clean: detects duplicate Accounts / Contacts / Leads / Deals, proposes migrate-then-tag merges (never deletes), enforces the hygiene &amp; business rules below, and escalates anything doubtful to the AI Approvals queue for a human. He acts on behalf of Sample User queues every CRMProvider write for approval.</p>
                 </div>
                 <div class="rounded-lg border border-gray-200 p-3">
                     <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Skills &amp; lessons learned</div>
@@ -107,7 +107,7 @@
                 <div class="flex items-center gap-2">
                     <button data-on-click="copyExecBrief" id="copyBriefBtn" class="px-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-white hover:bg-gray-50">⧉ Copy</button>
                     <button data-on-click="sendWeeklyBriefNow" id="sendBriefBtn" title="Post the brief now to the leadership channels (#grq-assistant + #automatic-audits)" class="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">📨 Send to leadership</button>
-                    <button data-on-click="postDigestNow" id="postDigestBtn" title="Post the operational apply-digest (per-tab status board) to the resolution Slack channel right now, instead of waiting for the 09:00 / 17:00 run." class="px-3 py-1.5 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">📨 Post digest now</button>
+                    <button data-on-click="postDigestNow" id="postDigestBtn" title="Post the operational apply-digest (per-tab status board) to the resolution ChatProvider channel right now, instead of waiting for the 09:00 / 17:00 run." class="px-3 py-1.5 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">📨 Post digest now</button>
                     <button data-on-click="hideExecBrief" class="px-2 py-1.5 text-xs text-gray-400 hover:text-gray-600">✕</button>
                 </div>
             </div>
@@ -121,7 +121,7 @@
                 <h2 class="text-lg font-semibold text-gray-900">Queued proposals</h2>
                 <div class="flex items-center gap-2">
                     <button data-on-click="loadProposalTiers" class="px-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-white hover:bg-gray-50">↻ Refresh</button>
-                    <button data-on-click="clearShadowProposals" id="clearShadowBtn" title="Bulk-reject all pending shadow proposals — they were never applied to Zoho; this only clears the review backlog." class="px-3 py-1.5 text-xs rounded-lg bg-gray-700 text-white hover:bg-gray-800">🧹 Clear shadow proposals</button>
+                    <button data-on-click="clearShadowProposals" id="clearShadowBtn" title="Bulk-reject all pending shadow proposals — they were never applied to CRMProvider; this only clears the review backlog." class="px-3 py-1.5 text-xs rounded-lg bg-gray-700 text-white hover:bg-gray-800">🧹 Clear shadow proposals</button>
                 </div>
             </div>
             <div id="proposalTiers" class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
@@ -145,7 +145,7 @@
                 <div class="flex items-center justify-between flex-wrap gap-3">
                     <div>
                         <div class="text-sm font-semibold text-gray-900">Operating mode</div>
-                        <div class="text-xs text-gray-500">shadow → assisted → autonomous. assisted/autonomous write to Zoho. Applies on the next tick — no republish.</div>
+                        <div class="text-xs text-gray-500">shadow → assisted → autonomous. assisted/autonomous write to CRMProvider. Applies on the next tick — no republish.</div>
                     </div>
                     <div class="flex items-center gap-2 flex-wrap">
                         <div id="modeButtons" class="inline-flex rounded-lg border border-gray-300 overflow-hidden"></div>
@@ -169,15 +169,15 @@
                 <h2 class="text-lg font-semibold text-gray-900">📊 Progress by tab (daily)</h2>
                 <button data-on-click="loadProgress" class="px-3 py-1.5 text-xs rounded-lg border border-gray-300 bg-white hover:bg-gray-50">↻ Refresh</button>
             </div>
-            <p class="text-xs text-gray-500 mb-3"><strong>Total</strong> = open + solved (the count from the beginning, which grows as new duplicates are detected). <strong>Solved</strong> = clusters no longer active. <strong>Merged</strong> = real Zoho merges (survives a Rebuild). Recorded daily so the trend below shows real progress over time.</p>
+            <p class="text-xs text-gray-500 mb-3"><strong>Total</strong> = open + solved (the count from the beginning, which grows as new duplicates are detected). <strong>Solved</strong> = clusters no longer active. <strong>Merged</strong> = real CRMProvider merges (survives a Rebuild). Recorded daily so the trend below shows real progress over time.</p>
             <div id="progressTable" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm mb-4"><div class="text-gray-500">Loading…</div></div>
             <div><canvas id="progressChart" height="120"></canvas></div>
         </section>
 
-        <!-- Notification schedule (Adam's Slack cadence) — reviewed monthly -->
+        <!-- Notification schedule (Adam's ChatProvider cadence) — reviewed monthly -->
         <section class="bg-white rounded-xl border border-gray-200 p-5">
             <h2 class="text-lg font-semibold text-gray-900 mb-1">🗓️ Adam — Notification Schedule (KSA)</h2>
-            <p class="text-xs text-gray-500 mb-3">What Adam posts to Slack and when. Reviewed automatically on the 1st of each month (posted to #grq-assistant) — to change a timing, edit its env var or ask me.</p>
+            <p class="text-xs text-gray-500 mb-3">What Adam posts to ChatProvider and when. Reviewed automatically on the 1st of each month (posted to #grq-assistant) — to change a timing, edit its env var or ask me.</p>
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
                     <thead><tr class="text-xs text-gray-500 text-start border-b border-gray-200">
@@ -325,8 +325,8 @@
                 ? '<span class="pill grade-g3">writes ON</span>'
                 : '<span class="pill mode-shadow">kill-switch OFF (no writes)</span>';
             var l = data.learnings || {};
-            var slackOn = data.slack && data.slack.configured;
-            var slackTxt = slackOn
+            var ChatProviderOn = data.ChatProvider && data.ChatProvider.configured;
+            var ChatProviderTxt = ChatProviderOn
                 ? '<span class="pill grade-g3">channel connected</span>'
                 : '<span class="pill mode-shadow">not set</span>';
             var grid = document.getElementById('statusGrid');
@@ -335,7 +335,7 @@
                 cell('Writes', enabledTxt) +
                 cell('Max clusters / tick', esc(cfg.maxClusters != null ? cfg.maxClusters : '—')) +
                 cell('Decisions logged (incl. shadow)', esc(l.totalEvents != null ? l.totalEvents : '—')) +
-                cell('Slack ping', slackTxt);
+                cell('ChatProvider ping', ChatProviderTxt);
             renderGradeCards(data.grades_latest || []);
             renderModeControl(cfg, !!data.can_manage);
             renderModuleBreakdown(data.module_breakdown || []);
@@ -420,7 +420,7 @@
         function setMode(mode) {
             var msg = (mode === 'shadow')
                 ? null
-                : 'Switch the agent to "' + mode + '" mode?\n\nIn this mode it will AUTO-APPLY the safe tier to Zoho on your behalf (the doubtful 1% still queues for approval). Make sure writes are enabled for it to act.';
+                : 'Switch the agent to "' + mode + '" mode?\n\nIn this mode it will AUTO-APPLY the safe tier to CRMProvider on your behalf (the doubtful 1% still queues for approval). Make sure writes are enabled for it to act.';
             postMode({ mode: mode }, msg);
         }
 
@@ -429,8 +429,8 @@
             var wt = document.getElementById('writesToggle');
             var turningOn = /enable/i.test(wt.textContent);
             var msg = turningOn
-                ? 'Enable writes? The agent will be allowed to apply merges to Zoho (per the current mode). The doubtful 1% still queues for your approval.'
-                : 'Disable writes (kill switch)? The agent will stop ALL Zoho writes immediately on the next tick.';
+                ? 'Enable writes? The agent will be allowed to apply merges to CRMProvider (per the current mode). The doubtful 1% still queues for your approval.'
+                : 'Disable writes (kill switch)? The agent will stop ALL CRMProvider writes immediately on the next tick.';
             postMode({ enabled: turningOn }, msg);
         }
 
@@ -644,11 +644,11 @@
             }).join('');
         }
 
-        async function testSlack() {
-            var btn = document.getElementById('testSlackBtn');
+        async function testChatProvider() {
+            var btn = document.getElementById('testChatProviderBtn');
             btn.disabled = true; btn.textContent = 'Sending…';
             try {
-                var r = await fetch('/api/duplicates/autonomous/slack-test', {
+                var r = await fetch('/api/duplicates/autonomous/ChatProvider-test', {
                     method: 'POST', credentials: 'same-origin'
                 });
                 var data = await r.json();
@@ -658,7 +658,7 @@
                     var hint = (data && /not_in_channel/.test(data.error || ''))
                         ? '\n\nThe bot isn\'t a member of the channel — invite ExampleOrg QMS to it.'
                         : (data && /invalid_auth|not_authed|token/.test(data.error || ''))
-                            ? '\n\nSLACK_BOT_TOKEN looks missing or invalid.'
+                            ? '\n\nChatProvider_BOT_TOKEN looks missing or invalid.'
                             : '';
                     alert('⚠️ Could not send: ' + ((data && data.error) || 'unknown error') + hint);
                 }
@@ -666,12 +666,12 @@
             finally { btn.disabled = false; btn.textContent = '🔔 Send test ping'; }
         }
 
-        async function cleanupSlackPings() {
-            if (!confirm('Delete the old zero-progress "applied 0" resolution pings from the Slack channel?\n\nOnly the bot\'s own pings are removed; nothing else is touched.')) return;
+        async function cleanupChatProviderPings() {
+            if (!confirm('Delete the old zero-progress "applied 0" resolution pings from the ChatProvider channel?\n\nOnly the bot\'s own pings are removed; nothing else is touched.')) return;
             var btn = document.getElementById('cleanupPingsBtn');
             btn.disabled = true; btn.textContent = 'Cleaning…';
             try {
-                var r = await fetch('/api/duplicates/autonomous/cleanup-slack-pings', {
+                var r = await fetch('/api/duplicates/autonomous/cleanup-ChatProvider-pings', {
                     method: 'POST', credentials: 'same-origin'
                 });
                 var data = await r.json();
@@ -679,7 +679,7 @@
                     alert('✅ Removed ' + (data.deleted || 0) + ' zero-progress ping(s) (scanned ' + (data.scanned || 0) + ').');
                 } else {
                     var hint = (data && /missing_scope|not_in_channel|cant_delete|history/.test(data.error || ''))
-                        ? '\n\nThe bot may lack channel-history / delete permission — you can delete the few remaining manually in Slack.'
+                        ? '\n\nThe bot may lack channel-history / delete permission — you can delete the few remaining manually in ChatProvider.'
                         : '';
                     alert('⚠️ Could not clean: ' + ((data && data.error) || 'unknown error') + hint);
                 }
@@ -745,9 +745,9 @@
         }
 
         // Post the operational apply-digest (per-tab status board) to the
-        // resolution Slack channel on demand, instead of waiting for 09:00/17:00.
+        // resolution ChatProvider channel on demand, instead of waiting for 09:00/17:00.
         async function postDigestNow() {
-            if (!confirm('Post the operational digest now to the resolution Slack channel (#grq-assistant)?')) return;
+            if (!confirm('Post the operational digest now to the resolution ChatProvider channel (#grq-assistant)?')) return;
             var btn = document.getElementById('postDigestBtn');
             if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
             try {
@@ -758,7 +758,7 @@
                 });
                 var data = await res.json();
                 if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
-                if (btn) { btn.textContent = '✓ Posted to Slack'; setTimeout(function () { btn.textContent = '📨 Post digest now'; btn.disabled = false; }, 2500); }
+                if (btn) { btn.textContent = '✓ Posted to ChatProvider'; setTimeout(function () { btn.textContent = '📨 Post digest now'; btn.disabled = false; }, 2500); }
             } catch (e) {
                 if (btn) { btn.textContent = 'Failed'; btn.disabled = false; }
                 alert('Could not post digest: ' + (e && e.message || e));
@@ -773,7 +773,7 @@
                 var rows = (data && data.schedule) || [];
                 if (!rows.length) { body.innerHTML = '<tr><td colspan="3" class="px-3 py-3 text-gray-500">—</td></tr>'; return; }
                 body.innerHTML = rows.map(function (e) {
-                    var ch = e.postsToSlack
+                    var ch = e.postsToChatProvider
                         ? '<span class="text-indigo-700">' + esc(e.channel) + '</span>'
                         : '<span class="text-gray-400">background (no post)</span>';
                     return '<tr class="border-t border-gray-100 align-top">' +
@@ -809,7 +809,7 @@
         }
 
         async function clearShadowProposals() {
-            if (!confirm('Clear ALL pending shadow proposals from the queue?\n\nThese were never applied to Zoho (shadow mode) — this only empties the review backlog so the queue shows real escalations. No CRM changes.')) return;
+            if (!confirm('Clear ALL pending shadow proposals from the queue?\n\nThese were never applied to CRMProvider (shadow mode) — this only empties the review backlog so the queue shows real escalations. No CRM changes.')) return;
             var btn = document.getElementById('clearShadowBtn');
             if (btn) { btn.disabled = true; btn.textContent = 'Clearing…'; }
             try {

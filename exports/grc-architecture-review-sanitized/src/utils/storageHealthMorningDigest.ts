@@ -4,7 +4,7 @@
  * Background
  * ──────────
  * Task #579 added a quiet-hours window to {@link evaluateAndAlertStorageHealth}
- * so storage-health Slack/email pushes are intentionally muted between
+ * so storage-health ChatProvider/email pushes are intentionally muted between
  * `STORAGE_HEALTH_QUIET_HOURS_START` and `STORAGE_HEALTH_QUIET_HOURS_END` (in
  * `STORAGE_HEALTH_QUIET_HOURS_TZ`). The `ai_alerts` row + in-app notification
  * are still created in real time, but the noisy channels are skipped so
@@ -25,9 +25,9 @@
  *      that just closed.
  *   3. Queries every still-unresolved `storage_health` alert created
  *      inside that window via {@link getUnresolvedAlertsCreatedBetween}.
- *   4. Builds a single Slack/email summary listing those alerts and pushes
+ *   4. Builds a single ChatProvider/email summary listing those alerts and pushes
  *      it to the same channels the breach helper uses
- *      (`SLACK_WEBHOOK_URL`, `AI_COST_ALERT_EMAIL`).
+ *      (`ChatProvider_WEBHOOK_URL`, `AI_COST_ALERT_EMAIL`).
  *
  * Opt-out
  * ───────
@@ -43,7 +43,7 @@
  * without a second cron — the task description explicitly anticipates that.
  *
  * All side-effects are injected via {@link MorningDigestDeps} so this module
- * is unit-testable without a database, Slack, or Resend.
+ * is unit-testable without a database, ChatProvider, or EmailProvider.
  */
 
 import { logger } from './logger';
@@ -67,9 +67,9 @@ export interface MorningDigestDeps {
     fromMs: number,
     toMs: number,
   ) => Promise<AIAlert[]>;
-  /** Sends a Slack message via webhook URL (returns true on success). */
-  sendSlack: (webhookUrl: string, text: string) => Promise<boolean>;
-  /** Sends an email via Resend (returns true on success). */
+  /** Sends a ChatProvider message via webhook URL (returns true on success). */
+  sendChatProvider: (webhookUrl: string, text: string) => Promise<boolean>;
+  /** Sends an email via EmailProvider (returns true on success). */
   sendEmail: (input: {
     to: string[];
     subject: string;
@@ -98,8 +98,8 @@ export interface MorningDigestResult {
   windowToMs: number | null;
   /** Number of unresolved alerts that fell inside the window. */
   alertCount: number;
-  /** True when Slack was attempted and reported success. */
-  slackSent: boolean;
+  /** True when ChatProvider was attempted and reported success. */
+  ChatProviderSent: boolean;
   /** True when email was attempted and reported success. */
   emailSent: boolean;
   /** True when the cron exited early because no alerts fell in the window. */
@@ -140,7 +140,7 @@ function formatAlertLine(a: AIAlert): string {
 }
 
 /**
- * Build the user-visible Slack / email digest copy. Pure function so the
+ * Build the user-visible ChatProvider / email digest copy. Pure function so the
  * cron and tests agree on wording.
  */
 export function buildMorningDigestMessage(
@@ -148,7 +148,7 @@ export function buildMorningDigestMessage(
   windowFromMs: number,
   windowToMs: number,
   appBaseUrl: string,
-): { slackText: string; emailSubject: string; emailHtml: string } {
+): { ChatProviderText: string; emailSubject: string; emailHtml: string } {
   const fromIso = new Date(windowFromMs).toISOString().replace('T', ' ').slice(0, 16);
   const toIso = new Date(windowToMs).toISOString().replace('T', ' ').slice(0, 16);
   const link = `${appBaseUrl || ''}/dashboard`;
@@ -158,7 +158,7 @@ export function buildMorningDigestMessage(
     `${alerts.length === 1 ? '' : 's'} fired during quiet hours* ` +
     `(${fromIso} → ${toIso} UTC)`;
   const lines = alerts.map(formatAlertLine);
-  const slackText = `${header}\n${lines.join('\n')}\n<${link}|Open AI Operations panel>`;
+  const ChatProviderText = `${header}\n${lines.join('\n')}\n<${link}|LLMProvider Operations panel>`;
 
   const emailSubject =
     `🌅 ExampleOrg AI overnight digest — ${alerts.length} unresolved alert` +
@@ -181,7 +181,7 @@ export function buildMorningDigestMessage(
     `<h2>Morning digest — alerts suppressed overnight</h2>` +
     `<p>${alerts.length} unresolved alert${alerts.length === 1 ? '' : 's'} ` +
     `fired during the quiet-hours window <strong>${fromIso} → ${toIso} UTC</strong>. ` +
-    `Slack/email pushes were intentionally suppressed at the time; this digest ` +
+    `ChatProvider/email pushes were intentionally suppressed at the time; this digest ` +
     `surfaces them now that the window has closed.</p>` +
     `<table style="border-collapse:collapse;border:1px solid #ccc;">` +
     `<thead><tr>` +
@@ -189,11 +189,11 @@ export function buildMorningDigestMessage(
     `<th style="padding:4px 8px;text-align:left;">Created (UTC)</th>` +
     `<th style="padding:4px 8px;text-align:left;">Alert</th>` +
     `</tr></thead><tbody>${rows}</tbody></table>` +
-    `<p><a href="${link}">Open AI Operations panel</a></p>` +
+    `<p><a href="${link}">LLMProvider Operations panel</a></p>` +
     `<p><em>Set <code>STORAGE_HEALTH_MORNING_DIGEST_DISABLED=1</code> to opt out ` +
     `and rely solely on the in-app feed.</em></p>`;
 
-  return { slackText, emailSubject, emailHtml };
+  return { ChatProviderText, emailSubject, emailHtml };
 }
 
 function escapeHtml(s: string): string {
@@ -229,7 +229,7 @@ export async function runStorageHealthMorningDigest(
     windowFromMs: null,
     windowToMs: null,
     alertCount: 0,
-    slackSent: false,
+    ChatProviderSent: false,
     emailSent: false,
     noAlertsInWindow: false,
   };
@@ -280,19 +280,19 @@ export async function runStorageHealthMorningDigest(
   }
 
   const appBaseUrl = env.APP_BASE_URL ?? '';
-  const { slackText, emailSubject, emailHtml } = buildMorningDigestMessage(
+  const { ChatProviderText, emailSubject, emailHtml } = buildMorningDigestMessage(
     alerts,
     fromMs,
     toMs,
     appBaseUrl,
   );
 
-  const slackWebhook = env.SLACK_WEBHOOK_URL;
-  if (slackWebhook) {
+  const ChatProviderWebhook = env.ChatProvider_WEBHOOK_URL;
+  if (ChatProviderWebhook) {
     try {
-      result.slackSent = await deps.sendSlack(slackWebhook, slackText);
+      result.ChatProviderSent = await deps.sendChatProvider(ChatProviderWebhook, ChatProviderText);
     } catch (err) {
-      logger.warn('[StorageHealthMorningDigest] Slack push failed', {
+      logger.warn('[StorageHealthMorningDigest] ChatProvider push failed', {
         error: err instanceof Error ? err.message : String(err),
       });
     }
@@ -318,7 +318,7 @@ export async function runStorageHealthMorningDigest(
 
   logger.info('[StorageHealthMorningDigest] Digest dispatched', {
     alertCount: alerts.length,
-    slackSent: result.slackSent,
+    ChatProviderSent: result.ChatProviderSent,
     emailSent: result.emailSent,
     fromMs,
     toMs,

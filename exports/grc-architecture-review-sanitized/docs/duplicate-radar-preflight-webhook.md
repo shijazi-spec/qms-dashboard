@@ -2,7 +2,7 @@
 
 **Endpoint:** `POST /api/duplicates/preflight/check`
 **Auth:** `x-admin-key` header (machine-to-machine)
-**Purpose:** Stop duplicate records from entering Zoho CRM in the first place by checking each new lead / deal / contact / account BEFORE it's created.
+**Purpose:** Stop duplicate records from entering CRMProvider CRM in the first place by checking each new lead / deal / contact / account BEFORE it's created.
 
 Industry benchmark (Plauti, 2026): tenants that enable real-time prevention at the API/import layer see a **60% drop in duplicate-creation rate within 90 days**. The Duplicate Radar already detects duplicates *after* they land — this endpoint flips the workflow to detect them *before* they land.
 
@@ -10,15 +10,15 @@ Industry benchmark (Plauti, 2026): tenants that enable real-time prevention at t
 
 ## When to use it
 
-Wire any system that creates Zoho records to call this endpoint first. Common integration points:
+Wire any system that creates CRMProvider records to call this endpoint first. Common integration points:
 
 | Integration | Where to call |
 |---|---|
-| **Zoho CRM workflow** (before-insert webhook) | On Lead / Deal / Contact / Account `before_create` |
-| **Web forms** (HubSpot, Webflow, custom) | Server-side form handler, before pushing to Zoho via API |
-| **Marketing automation** (Marketo, Pardot, etc.) | The sync job that pushes leads to Zoho |
-| **Bulk import scripts** | Before each row in your CSV→Zoho importer |
-| **Sales-enablement tools** (Salesloft, Outreach) | The Zoho create-record action |
+| **CRMProvider CRM workflow** (before-insert webhook) | On Lead / Deal / Contact / Account `before_create` |
+| **Web forms** (HubSpot, Webflow, custom) | Server-side form handler, before pushing to CRMProvider via API |
+| **Marketing automation** (Marketo, Pardot, etc.) | The sync job that pushes leads to CRMProvider |
+| **Bulk import scripts** | Before each row in your CSV→CRMProvider importer |
+| **Sales-enablement tools** (Salesloft, Outreach) | The CRMProvider create-record action |
 
 ---
 
@@ -32,7 +32,7 @@ x-admin-key: <YOUR_ADMIN_KEY>
 {
   "domain": "<REDACTED_HOST>",
   "email": "user@example.invalid",
-  "company_name": "ACME Co",
+  "company_name": "Example Organization Co",
   "phone": "<REDACTED_PHONE>",
   "ref": "web-form-submission-12345"
 }
@@ -80,7 +80,7 @@ x-admin-key: <YOUR_ADMIN_KEY>
 
 ### `should_create` shortcut
 
-The boolean is the **simple yes/no answer** your integration can wire to its create action. False means "this record should not enter Zoho right now"; true means "go ahead." You're free to override based on your own policy (e.g. a marketing tool may want to log `review` and `duplicate` rows for analyst review rather than block them).
+The boolean is the **simple yes/no answer** your integration can wire to its create action. False means "this record should not enter CRMProvider right now"; true means "go ahead." You're free to override based on your own policy (e.g. a marketing tool may want to log `review` and `duplicate` rows for analyst review rather than block them).
 
 ---
 
@@ -96,20 +96,20 @@ Treat the key as a secret — it grants write access to the radar. Rotate it via
 
 ---
 
-## Example: Zoho CRM workflow (Custom Function)
+## Example: CRMProvider CRM workflow (Custom Function)
 
-Zoho's workflow editor can fire a Custom Function on `Lead before_create`. Add the following Deluge:
+CRMProvider's workflow editor can fire a Custom Function on `Lead before_create`. Add the following Deluge:
 
 ```javascript
-// Zoho Deluge — before-create gate on Leads
-preflight_url = "https://<your-replit-deployment>.<REDACTED_HOST>/api/duplicates/preflight/check";
-admin_key = "ZOHO_KEY_PLACEHOLDER";
+// CRMProvider Deluge — before-create gate on Leads
+preflight_url = "<REDACTED_URL_SCHEME><your-HostingPlatform-deployment>.<REDACTED_HOST>/api/duplicates/preflight/check";
+admin_key = "CRMProvider_KEY_PLACEHOLDER";
 
 payload = Map();
 payload.put("domain", lead.get("Company_Domain"));
 payload.put("email",  lead.get("Email"));
 payload.put("company_name", lead.get("Company"));
-payload.put("ref",    "zoho-lead-" + lead.get("id"));
+payload.put("ref",    "CRMProvider-lead-" + lead.get("id"));
 
 response = invokeurl
 [
@@ -134,7 +134,7 @@ if (response.get("should_create") == false)
 ## Example: curl (server-to-server)
 
 ```bash
-curl -X POST https://<your-deployment>.<REDACTED_HOST>/api/duplicates/preflight/check \
+curl -X POST <REDACTED_URL_SCHEME><your-deployment>.<REDACTED_HOST>/api/duplicates/preflight/check \
   -H "Content-Type: application/json" \
   -H "x-admin-key: $ExampleOrg_ADMIN_KEY" \
   -d '{
@@ -155,7 +155,7 @@ async function shouldCreateLead(input: {
   company_name?: string;
 }): Promise<boolean> {
   const res = await fetch(
-    "https://<your-deployment>.<REDACTED_HOST>/api/duplicates/preflight/check",
+    "<REDACTED_URL_SCHEME><your-deployment>.<REDACTED_HOST>/api/duplicates/preflight/check",
     {
       method: "POST",
       headers: {

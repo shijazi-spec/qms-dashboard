@@ -94,25 +94,25 @@ async function main(): Promise<void> {
   // redactSecretLikeStrings layer added to redactToolPayloadPreview().
   console.log('\nredactToolPayloadPreview() — richer secret fixtures:');
 
-  const OPENAI_KEY = '<REDACTED_TOKEN>';
+  const LLMProvider_KEY = '<REDACTED_TOKEN>';
   const GH_PAT = '<REDACTED_TOKEN>';
   const BCRYPT_HASH = '$2b$12$abcdefghijklmnopqrstuv1234567890ABCDEFGHIJKLMNOPQRSTU';
   const JWT =
     '<REDACTED_TOKEN>';
   const AWS_KEY = '<REDACTED_TOKEN>';
 
-  // OpenAI key as a plain string
-  const openAiStr = redactToolPayloadPreview(OPENAI_KEY);
+  // LLMProvider key as a plain string
+  const LLMProviderStr = redactToolPayloadPreview(LLMProvider_KEY);
   assert(
-    !!openAiStr && !openAiStr.includes(OPENAI_KEY),
-    'OpenAI sk-… key in plain string is redacted',
+    !!LLMProviderStr && !LLMProviderStr.includes(LLMProvider_KEY),
+    'LLMProvider sk-… key in plain string is redacted',
   );
 
-  // GitHub PAT as a plain string
+  // SourceControlProvider PAT as a plain string
   const ghPatStr = redactToolPayloadPreview(GH_PAT);
   assert(
     !!ghPatStr && !ghPatStr.includes(GH_PAT),
-    'GitHub ghp_… PAT in plain string is redacted',
+    'SourceControlProvider ghp_… PAT in plain string is redacted',
   );
 
   // bcrypt hash as a plain string
@@ -136,22 +136,22 @@ async function main(): Promise<void> {
     'AWS AKIA… access key in plain string is redacted',
   );
 
-  // OpenAI key nested inside an object under a key-name-neutral field
-  const nestedOpenAi = redactToolPayloadPreview({
-    config: { api_key: OPENAI_KEY, region: 'us-east-1' },
+  // LLMProvider key nested inside an object under a key-name-neutral field
+  const nestedLLMProvider = redactToolPayloadPreview({
+    config: { api_key: LLMProvider_KEY, region: 'us-east-1' },
   });
   assert(
-    !!nestedOpenAi && !nestedOpenAi.includes(OPENAI_KEY),
-    'OpenAI sk-… key nested under api_key object field is redacted',
+    !!nestedLLMProvider && !nestedLLMProvider.includes(LLMProvider_KEY),
+    'LLMProvider sk-… key nested under api_key object field is redacted',
   );
 
-  // GitHub PAT nested inside Authorization header value
+  // SourceControlProvider PAT nested inside Authorization header value
   const nestedBearer = redactToolPayloadPreview({
     headers: { Authorization: `Bearer ${GH_PAT}`, 'Content-Type': 'application/json' },
   });
   assert(
     !!nestedBearer && !nestedBearer.includes(GH_PAT),
-    'GitHub ghp_… PAT nested under Authorization header field is redacted',
+    'SourceControlProvider ghp_… PAT nested under Authorization header field is redacted',
   );
 
   // bcrypt hash inside a nested field called password_hash
@@ -182,12 +182,12 @@ async function main(): Promise<void> {
   // Safe non-secret fields must survive
   const safeSurvives = redactToolPayloadPreview({
     action: 'rotate_key',
-    target: 'zoho_books',
+    target: 'CRMProvider_books',
     reason: 'Scheduled quarterly rotation',
   });
   assert(
     !!safeSurvives &&
-      safeSurvives.includes('zoho_books') &&
+      safeSurvives.includes('CRMProvider_books') &&
       safeSurvives.includes('Scheduled quarterly rotation'),
     'non-sensitive fields are preserved through deep redaction',
   );
@@ -199,16 +199,16 @@ async function main(): Promise<void> {
   // sink even when the tool payload pipeline is the one that's audited.
   console.log('\nredactPromptPreview() — secret deny-list parity:');
 
-  const openAiPrompt = redactPromptPreview(`Use this key: ${OPENAI_KEY} to call the API`);
+  const LLMProviderPrompt = redactPromptPreview(`Use this key: ${LLMProvider_KEY} to call the API`);
   assert(
-    !openAiPrompt.includes(OPENAI_KEY),
-    'OpenAI sk-… key in prompt text is redacted',
+    !LLMProviderPrompt.includes(LLMProvider_KEY),
+    'LLMProvider sk-… key in prompt text is redacted',
   );
 
-  const ghPatPrompt = redactPromptPreview(`Authorize with ${GH_PAT} on github`);
+  const ghPatPrompt = redactPromptPreview(`Authorize with ${GH_PAT} on SourceControlProvider`);
   assert(
     !ghPatPrompt.includes(GH_PAT),
-    'GitHub ghp_… PAT in prompt text is redacted',
+    'SourceControlProvider ghp_… PAT in prompt text is redacted',
   );
 
   const bcryptPrompt = redactPromptPreview(`Stored hash is ${BCRYPT_HASH} for the user`);
@@ -230,10 +230,10 @@ async function main(): Promise<void> {
   );
 
   const safePrompt = redactPromptPreview(
-    'Please summarize the latest CAPA rotation for zoho_books',
+    'Please summarize the latest CAPA rotation for CRMProvider_books',
   );
   assert(
-    safePrompt.includes('zoho_books') && safePrompt.includes('CAPA rotation'),
+    safePrompt.includes('CRMProvider_books') && safePrompt.includes('CAPA rotation'),
     'non-sensitive prompt text passes through unchanged',
   );
 

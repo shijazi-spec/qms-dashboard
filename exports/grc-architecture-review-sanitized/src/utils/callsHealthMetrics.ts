@@ -181,7 +181,7 @@ export async function fetchManagerReview(pool: Pool): Promise<ManagerReviewMetri
 
 /**
  * Ingest source mix over the last N days (default 7). Lets ops see the
- * Five9-vs-manual shift once Five9 ingestion ships.
+ * ContactCenterProvider-vs-manual shift once ContactCenterProvider ingestion ships.
  */
 export async function fetchIngestMix(
   pool: Pool,
@@ -228,7 +228,7 @@ export async function fetchCoachingFlow(pool: Pool): Promise<CoachingFlowMetrics
 
 /**
  * Most-recent analysis failures from the ai_insights JSON the analyze
- * handler writes when an OpenAI call throws.
+ * handler writes when an LLMProvider call throws.
  */
 export async function fetchRecentFailures(
   pool: Pool,

@@ -1,7 +1,7 @@
 # Runbook — Export endpoint p95 over budget
 
 **Alert source:** `export_timing_p95_alert` (system_events) /
-Slack `EXPORT_TIMING_SLACK_WEBHOOK_URL` / email `EXPORT_TIMING_ALERT_EMAIL`.
+ChatProvider `EXPORT_TIMING_ChatProvider_WEBHOOK_URL` / email `EXPORT_TIMING_ALERT_EMAIL`.
 **Cron:** `export-timing-p95-alert` (Inngest, default `*/5 * * * *`).
 **Code:** `src/utils/exportTimingMetrics.ts` (helper),
 `src/utils/excelExport.ts` (timing instrumentation + budget constants).
@@ -111,8 +111,8 @@ hit endpoint is not lost. To reduce noise on a noisy fleet:
 | `EXPORT_TIMING_WINDOW_MAX_AGE_MIN`   | `60`    | Drop samples older than N minutes from the rolling window.            |
 | `EXPORT_TIMING_ALERT_CRON`           | `*/5 * * * *` | How often the cron tick runs.                                   |
 | `EXPORT_TIMING_ALERT_DISABLED`       | unset   | Set to `1` to silence the alert without removing the cron.            |
-| `EXPORT_TIMING_SLACK_WEBHOOK_URL`    | unset   | Channel webhook (falls back to `SLACK_WEBHOOK_URL`).                  |
-| `EXPORT_TIMING_ALERT_EMAIL`          | unset   | Comma-separated recipient list for the Resend email.                  |
+| `EXPORT_TIMING_ChatProvider_WEBHOOK_URL`    | unset   | Channel webhook (falls back to `ChatProvider_WEBHOOK_URL`).                  |
+| `EXPORT_TIMING_ALERT_EMAIL`          | unset   | Comma-separated recipient list for the EmailProvider email.                  |
 
 A short flap window plus a moderate `MIN_SAMPLES` is the right call for
 new routes with low traffic; a longer `REPEAT_HOURS` is the right call

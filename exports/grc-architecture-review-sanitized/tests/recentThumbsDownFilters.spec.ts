@@ -76,7 +76,7 @@ async function seedFeedbackRows(): Promise<void> {
   const rows: Array<{
     messageId: string;
     promptVersion: string;
-    clientSurface: 'web' | 'mobile' | 'slack';
+    clientSurface: 'web' | 'mobile' | 'ChatProvider';
   }> = [
     { messageId: ROW_A_WEB, promptVersion: PROMPT_VERSION_A, clientSurface: 'web' },
     { messageId: ROW_A_MOBILE, promptVersion: PROMPT_VERSION_A, clientSurface: 'mobile' },

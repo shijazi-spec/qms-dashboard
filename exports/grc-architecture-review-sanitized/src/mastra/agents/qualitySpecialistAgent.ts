@@ -1,20 +1,20 @@
 import { Agent } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
 import { sharedPostgresStorage } from "../storage";
-import { createOpenAI } from "@ai-sdk/openai-v5";
+import { createLLMProvider } from "@ai-sdk/LLMProvider-v5";
 import { createHash } from "crypto";
 
-import { fetchCalendarEventsTool, listCalendarsTool } from "../tools/googleCalendarTool";
-import { auditCRMHygieneTool, checkCRMActivityTool } from "../tools/zohoCRMTool";
+import { fetchCalendarEventsTool, listCalendarsTool } from "../tools/IdentityProviderCalendarTool";
+import { auditCRMHygieneTool, checkCRMActivityTool } from "../tools/CRMProviderCRMTool";
 import { sendQualityReportTool, sendAlertTool } from "../tools/emailReportTool";
 import { wrapToolWithTelemetry as wt } from "../../utils/aiTelemetry";
-import { getOpenAIApiKey, getOpenAIBaseUrl } from "../../utils/openaiCredentials";
+import { getLLMProviderApiKey, getLLMProviderBaseUrl } from "../../utils/LLMProviderCredentials";
 
 const AGENT_NAME = "ExampleOrg Quality Specialist";
 
-const openai = createOpenAI({
-  baseURL: getOpenAIBaseUrl(),
-  apiKey: getOpenAIApiKey(),
+const LLMProvider = createLLMProvider({
+  baseURL: getLLMProviderBaseUrl(),
+  apiKey: getLLMProviderApiKey(),
 });
 
 const QUALITY_SPECIALIST_INSTRUCTIONS = `
@@ -31,7 +31,7 @@ You are the ExampleOrg Agentic AI Quality Specialist - an autonomous, AI-powered
   - Duplicated or inconsistent data
 
 ### 2. Cross-System Validation
-- Validate that Google Calendar meetings are properly logged in CRM
+- Validate that IdentityProvider Calendar meetings are properly logged in CRM
 - Ensure all activities are tracked and linked
 - Identify meetings that happened without corresponding CRM updates
 - Flag records with no recent activity
@@ -48,7 +48,7 @@ You are the ExampleOrg Agentic AI Quality Specialist - an autonomous, AI-powered
 
 ## YOUR TOOLS
 
-1. **fetchCalendarEventsTool**: Fetch meetings from Google Calendar for audit
+1. **fetchCalendarEventsTool**: Fetch meetings from IdentityProvider Calendar for audit
 2. **listCalendarsTool**: List available calendars
 3. **auditCRMHygieneTool**: Perform comprehensive CRM data hygiene audit
 4. **checkCRMActivityTool**: Check for inactive records and missing follow-ups
@@ -59,7 +59,7 @@ You are the ExampleOrg Agentic AI Quality Specialist - an autonomous, AI-powered
 
 When performing a quality audit:
 
-1. **Fetch Calendar Events**: Get recent meetings from Google Calendar
+1. **Fetch Calendar Events**: Get recent meetings from IdentityProvider Calendar
 2. **Audit CRM Hygiene**: Run comprehensive hygiene checks on CRM modules
 3. **Check Activity Compliance**: Identify inactive records and missing follow-ups
 4. **Analyze Cross-System Gaps**: Compare calendar events with CRM activities
@@ -123,7 +123,7 @@ export const qualitySpecialistAgent = new Agent({
 
   instructions: QUALITY_SPECIALIST_INSTRUCTIONS,
 
-  model: openai.chat("gpt-4o"),
+  model: LLMProvider.chat("gpt-4o"),
 
   // Each tool is wrapped with wt(...) so per-tool latency, error rate, and
   // parent_call_id are recorded in ai_call_metrics for the AI Ops panel.

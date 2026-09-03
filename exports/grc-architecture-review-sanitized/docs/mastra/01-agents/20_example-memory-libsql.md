@@ -10,10 +10,10 @@ This example demonstrates how to use Mastra's memory system with LibSQL as the s
 
 ## Prerequisites
 
-This example uses the `openai` model. Make sure to add `OPENAI_API_KEY` to your `.env` file.
+This example uses the `LLMProvider` model. Make sure to add `LLMProvider_API_KEY` to your `.env` file.
 
 ```bash filename=".env" copy
-OPENAI_API_KEY=<your-api-key>
+LLMProvider_API_KEY=<your-api-key>
 ```
 
 And install the following package:
@@ -29,13 +29,13 @@ To add LibSQL memory to an agent use the `Memory` class and create a new `storag
 ```typescript filename="src/mastra/agents/example-libsql-agent.ts" showLineNumbers copy
 import { Memory } from "@mastra/memory";
 import { Agent } from "@mastra/core/agent";
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 import { LibSQLStore } from "@mastra/libsql";
 
 export const libsqlAgent = new Agent({
   name: "libsql-agent",
   instructions: "You are an AI agent with the ability to automatically recall memories from previous interactions.",
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   memory: new Memory({
     storage: new LibSQLStore({
       url: "file:libsql-agent.db"
@@ -64,14 +64,14 @@ Add the following to your agent:
 ```typescript filename="src/mastra/agents/example-libsql-agent.ts" showLineNumbers copy
 import { Memory } from "@mastra/memory";
 import { Agent } from "@mastra/core/agent";
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 import { LibSQLStore, LibSQLVector } from "@mastra/libsql";
 import { fastembed } from "@mastra/fastembed";
 
 export const libsqlAgent = new Agent({
   name: "libsql-agent",
   instructions: "You are an AI agent with the ability to automatically recall memories from previous interactions.",
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   memory: new Memory({
     storage: new LibSQLStore({
       url: "file:libsql-agent.db"

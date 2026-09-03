@@ -5,11 +5,11 @@
  *   - GET  /api/dashboard/quality-trend           (3x pool.query)
  *   - GET  /api/dashboard/issues-category-trend   (1x pool.query)
  *   - GET  /api/agents/performance                (data/* aggregator + cache)
- *   - GET  /api/crm/data                          (utils/zohoCRM)
+ *   - GET  /api/crm/data                          (utils/CRMProviderCRM)
  *   - POST /api/crm/enrich                        (utils/duplicateRadarDatabase)
  *   - POST /api/audit/trigger                     (inngest dispatch + 60s rate-limit)
  *
- * Mocks the underlying database pool, data layer, seed-users aliases, Zoho
+ * Mocks the underlying database pool, data layer, seed-users aliases, CRMProvider
  * CRM, duplicate-radar lookups, the direct-audit runner, and the Inngest
  * client so the suite is fully hermetic.
  *
@@ -40,13 +40,13 @@ vi.mock("../../src/utils/eventLogsDatabase", () => ({
   getActionViewersBatch: vi.fn(async () => ({})),
 }));
 
-vi.mock("../../src/utils/zohoCRM", () => ({
-  fetchZohoRecords: vi.fn(),
-  getZohoConnectionStatus: vi.fn(),
+vi.mock("../../src/utils/CRMProviderCRM", () => ({
+  fetchCRMProviderRecords: vi.fn(),
+  getCRMProviderConnectionStatus: vi.fn(),
 }));
 
 vi.mock("../../src/utils/duplicateRadarDatabase", () => ({
-  lookupRecordsByZohoIds: vi.fn(),
+  lookupRecordsByCRMProviderIds: vi.fn(),
   runLiveQualityCheck: vi.fn(),
 }));
 
@@ -78,7 +78,7 @@ import { buildHandler, makeContext } from "../_helpers/fakeContext";
 const ADMIN_HEADERS = { "X-Admin-Key": TEST_ADMIN_KEY };
 
 let db: typeof import("../../src/utils/database");
-let zoho: typeof import("../../src/utils/zohoCRM");
+let CRMProvider: typeof import("../../src/utils/CRMProviderCRM");
 let radar: typeof import("../../src/utils/duplicateRadarDatabase");
 let audit: typeof import("../../src/utils/directAuditRunner");
 let inngestMod: typeof import("../../src/mastra/inngest");
@@ -87,7 +87,7 @@ let dataMod: typeof import("../../src/data");
 beforeEach(async () => {
   process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
   db = await import("../../src/utils/database");
-  zoho = await import("../../src/utils/zohoCRM");
+  CRMProvider = await import("../../src/utils/CRMProviderCRM");
   radar = await import("../../src/utils/duplicateRadarDatabase");
   audit = await import("../../src/utils/directAuditRunner");
   inngestMod = await import("../../src/mastra/inngest");
@@ -413,12 +413,12 @@ describe("GET /api/agents/performance", () => {
 });
 
 describe("GET /api/crm/data", () => {
-  test("400 when Zoho is not configured", async () => {
+  test("400 when CRMProvider is not configured", async () => {
     // rateLimited + cooldownMsRemaining were added to the
-    // getZohoConnectionStatus return type by the Zoho 429 reliability
+    // getCRMProviderConnectionStatus return type by the CRMProvider 429 reliability
     // work (commit 2adb025) — keep these mocks complete so the typecheck
     // workflow stays green.
-    vi.mocked(zoho.getZohoConnectionStatus).mockReturnValue({
+    vi.mocked(CRMProvider.getCRMProviderConnectionStatus).mockReturnValue({
       configured: false,
       autoRefresh: false,
       tokenCached: false,
@@ -434,14 +434,14 @@ describe("GET /api/crm/data", () => {
     expect(res.status).toBe(400);
     expect(res.body).toEqual({
       success: false,
-      error: "Zoho CRM not configured",
+      error: "CRMProvider CRM not configured",
       message: "CRM integration not configured.",
     });
-    expect(zoho.fetchZohoRecords).not.toHaveBeenCalled();
+    expect(CRMProvider.fetchCRMProviderRecords).not.toHaveBeenCalled();
   });
 
-  test("200 returns flattened Zoho records when configured", async () => {
-    vi.mocked(zoho.getZohoConnectionStatus).mockReturnValue({
+  test("200 returns flattened CRMProvider records when configured", async () => {
+    vi.mocked(CRMProvider.getCRMProviderConnectionStatus).mockReturnValue({
       configured: true,
       autoRefresh: true,
       tokenCached: true,
@@ -450,7 +450,7 @@ describe("GET /api/crm/data", () => {
       cooldownMsRemaining: 0,
       message: "ok",
     });
-    vi.mocked(zoho.fetchZohoRecords).mockResolvedValueOnce([
+    vi.mocked(CRMProvider.fetchCRMProviderRecords).mockResolvedValueOnce([
       {
         id: "z1",
         owner: "u1",
@@ -487,11 +487,11 @@ describe("GET /api/crm/data", () => {
         },
       ],
     });
-    expect(zoho.fetchZohoRecords).toHaveBeenCalledWith("Deals", { page: 2, perPage: 25 });
+    expect(CRMProvider.fetchCRMProviderRecords).toHaveBeenCalledWith("Deals", { page: 2, perPage: 25 });
   });
 
-  test("500 when fetchZohoRecords throws", async () => {
-    vi.mocked(zoho.getZohoConnectionStatus).mockReturnValue({
+  test("500 when fetchCRMProviderRecords throws", async () => {
+    vi.mocked(CRMProvider.getCRMProviderConnectionStatus).mockReturnValue({
       configured: true,
       autoRefresh: true,
       tokenCached: true,
@@ -500,7 +500,7 @@ describe("GET /api/crm/data", () => {
       cooldownMsRemaining: 0,
       message: "ok",
     });
-    vi.mocked(zoho.fetchZohoRecords).mockRejectedValueOnce(new Error("zoho 500"));
+    vi.mocked(CRMProvider.fetchCRMProviderRecords).mockRejectedValueOnce(new Error("CRMProvider 500"));
 
     const handler = await buildHandler(dashboardApiRoutes, "/api/crm/data", "GET");
     const res = await handler(makeContext({ method: "GET", headers: ADMIN_HEADERS }));
@@ -512,7 +512,7 @@ describe("GET /api/crm/data", () => {
 
 describe("POST /api/crm/enrich", () => {
   test("200 maps cluster + quality lookups onto the supplied record ids", async () => {
-    vi.mocked(radar.lookupRecordsByZohoIds).mockResolvedValueOnce({
+    vi.mocked(radar.lookupRecordsByCRMProviderIds).mockResolvedValueOnce({
       z1: { clusterId: 99, members: 3 },
     } as any);
     vi.mocked(radar.runLiveQualityCheck).mockResolvedValueOnce({
@@ -536,7 +536,7 @@ describe("POST /api/crm/enrich", () => {
         z2: { cluster: null, quality: { issues: ["Missing Email"] } },
       },
     });
-    expect(radar.lookupRecordsByZohoIds).toHaveBeenCalledWith(["z1", "z2"]);
+    expect(radar.lookupRecordsByCRMProviderIds).toHaveBeenCalledWith(["z1", "z2"]);
     expect(radar.runLiveQualityCheck).toHaveBeenCalledWith([
       { id: "z1" },
       { id: "z2" },
@@ -545,7 +545,7 @@ describe("POST /api/crm/enrich", () => {
   });
 
   test("500 when downstream enrichment fails", async () => {
-    vi.mocked(radar.lookupRecordsByZohoIds).mockRejectedValueOnce(new Error("nope"));
+    vi.mocked(radar.lookupRecordsByCRMProviderIds).mockRejectedValueOnce(new Error("nope"));
     vi.mocked(radar.runLiveQualityCheck).mockResolvedValueOnce({} as any);
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
@@ -584,7 +584,7 @@ describe("POST /api/audit/trigger", () => {
     expect((first.body as any).success).toBe(true);
     expect(inngestMod.inngest.send).toHaveBeenCalledTimes(1);
     const sendArg = vi.mocked(inngestMod.inngest.send).mock.calls[0][0] as any;
-    expect(sendArg.name).toBe("replit/cron.trigger");
+    expect(sendArg.name).toBe("HostingPlatform/cron.trigger");
     expect(sendArg.data.workflowId).toBe("quality-audit-workflow");
     expect(sendArg.data.manualTrigger).toBe(true);
     expect(sendArg.data.dateFilters.created).toEqual({

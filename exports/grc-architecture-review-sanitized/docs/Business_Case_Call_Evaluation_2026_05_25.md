@@ -68,7 +68,7 @@ A complete in-house Call Evaluation pipeline structured in five layers, each bui
 | Capability | Status |
 |---|---|
 | Call recordings ingested via Manual Upload (primary) + CSV Import (secondary) | ✅ Shipped |
-| Five9 ingestion — visible but suspended pending Tech Team integration | 🟡 Phase 1 (badge only) |
+| ContactCenterProvider ingestion — visible but suspended pending Tech Team integration | 🟡 Phase 1 (badge only) |
 | Audio bytes persisted in Postgres so they survive container redeploys | ✅ Shipped |
 | Metadata (agent, phone, date, time) parsed automatically from canonical filename format | ✅ Shipped |
 
@@ -208,7 +208,7 @@ trigger_window_end:    May 10 2025
 status:                pending_delivery
 ```
 
-No email, no Slack alert, no QA review queue — the plan lands silently in the database, waiting for Monday morning.
+No email, no ChatProvider alert, no QA review queue — the plan lands silently in the database, waiting for Monday morning.
 
 ### Step 5 — Monday morning, Manager opens the dashboard (8:00 AM)
 
@@ -327,7 +327,7 @@ This is the **DMAIC Control metric** that proves the platform is working. 61% lo
 | **Coaching Actions panel (Deliver / Nudge)** | Step 6 | 🟡 Phase 1 Week 2–3 |
 | **Talk-time analytics** | Step 6, expanded panel | 🟡 Phase 1 Week 4–5 |
 | **Critical Fails banner** | Step 6 | 🟡 Phase 1 Week 2–3 |
-| **Five9 suspended badge** | Step 2 (Intake) | 🟡 Phase 1 Week 2 |
+| **ContactCenterProvider suspended badge** | Step 2 (Intake) | 🟡 Phase 1 Week 2 |
 
 Today's platform delivers ~55% of this workflow end-to-end. Phase 1 closes the remaining ~45% — concentrated in the Weekly Report and talk-time analytics.
 
@@ -337,7 +337,7 @@ Today's platform delivers ~55% of this workflow end-to-end. Phase 1 closes the r
 
 ```
 Week 1   Verify + Brief
-         ├─ Pull + Republish on Replit
+         ├─ Pull + Republish on HostingPlatform
          ├─ Confirm today's 5 fixes work
          └─ Brief SDR team on consent + verification scripts
 
@@ -347,7 +347,7 @@ Week 2-3 Weekly Report (= enriched Overview tab)
          ├─ Inline drill: top failed attrs, last 5 calls, trend, active plans
          ├─ Coaching Actions panel (Deliver / Nudge buttons)
          ├─ Critical Fails banner
-         ├─ Five9 "Suspended" badge in Intake section
+         ├─ ContactCenterProvider "Suspended" badge in Intake section
          └─ CSV export
 
 Week 4-5 Diarization + Talk-time analytics
@@ -369,7 +369,7 @@ DONE.
 |---|---|
 | Engineering | ~5 weeks (~1 FTE equivalent at recent session pace) |
 | External licensing | Zero — no new vendors, no SaaS subscriptions |
-| Infrastructure | Existing Replit deployment is sufficient |
+| Infrastructure | Existing HostingPlatform deployment is sufficient |
 | AI/API spend increase | ~$50–100/month additional Whisper spend for talk-time analytics pass |
 | SDR team time | One 45-min briefing on consent + 3-point verification scripts; ~6 seconds added to every call's opening |
 | Manager time | ~10 min/week on the Weekly Report |
@@ -437,7 +437,7 @@ All committed to `ExampleOrg/docs/`:
 - `Decision_Record_Amend_Skip_Digest_Merge_Agent_View_2026_05_25.md` — 3rd amendment (skip weekly digest + merge Agent View → 7 weeks)
 - `Decision_Record_Amend_AI_Only_No_QA_Review_2026_05_25.md` — **4th amendment (AI-only, no QA review, Weekly Report core → 5 weeks)**
 - `DMAIC_Call_Details_Unification_2026_05_25.md` — UI restructure (already shipped)
-- `Zoho_OAuth_Setup_2026_05_25.md` — operational Zoho credentials playbook
+- `CRMProvider_OAuth_Setup_2026_05_25.md` — operational CRMProvider credentials playbook
 
 ---
 

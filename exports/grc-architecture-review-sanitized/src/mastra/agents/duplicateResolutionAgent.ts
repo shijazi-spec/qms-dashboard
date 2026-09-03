@@ -1,9 +1,9 @@
 import { Agent } from "@mastra/core/agent";
-import { createOpenAI } from "@ai-sdk/openai-v5";
+import { createLLMProvider } from "@ai-sdk/LLMProvider-v5";
 import {
-  getOpenAIApiKey,
-  getOpenAIBaseUrl,
-} from "../../utils/openaiCredentials";
+  getLLMProviderApiKey,
+  getLLMProviderBaseUrl,
+} from "../../utils/LLMProviderCredentials";
 
 /**
  * ExampleOrg Duplicate Resolution Agent.
@@ -22,14 +22,14 @@ import {
  * out of the LLM's hands (it only narrates) is the core safety property.
  */
 
-const openai = createOpenAI({
-  baseURL: getOpenAIBaseUrl(),
-  apiKey: getOpenAIApiKey(),
+const LLMProvider = createLLMProvider({
+  baseURL: getLLMProviderBaseUrl(),
+  apiKey: getLLMProviderApiKey(),
 });
 
 const INSTRUCTIONS = `
 You are the ExampleOrg Duplicate Resolution Agent — a senior CRM data steward who
-reviews a PROPOSED merge of duplicate Zoho **Accounts** before an operator applies it.
+reviews a PROPOSED merge of duplicate CRMProvider **Accounts** before an operator applies it.
 
 ## What you are given (in the user message)
 1. A deterministic MERGE BRIEFING: the recommended survivor and why, the field
@@ -53,17 +53,17 @@ reviews a PROPOSED merge of duplicate Zoho **Accounts** before an operator appli
   from the briefing's warnings or the org's learnings (e.g. "operators override
   the survivor 40% of the time here — double-check the master").
 - **Watch-outs:** anything the operator must verify (conflicts, custom-field
-  assumptions, records lacking a Zoho id, possible different-entity false match).
+  assumptions, records lacking a CRMProvider id, possible different-entity false match).
 
 Prefer DO-NOT-MERGE or REVIEW-FIRST when the briefing shows a mixed-signal
-cluster, hard conflicts on identity fields, or a survivor with no Zoho id.
+cluster, hard conflicts on identity fields, or a survivor with no CRMProvider id.
 `;
 
 export const duplicateResolutionAgent = new Agent({
   name: "ExampleOrg Duplicate Resolution Agent",
   instructions: INSTRUCTIONS,
-  // openai.chat(...) returns the Chat Completions adapter Mastra's route
-  // handlers drive (the bare openai("gpt-4o") returns the Responses-API model
+  // LLMProvider.chat(...) returns the Chat Completions adapter Mastra's route
+  // handlers drive (the bare LLMProvider("gpt-4o") returns the Responses-API model
   // which Mastra rejects) — same wiring as qmsConsultantAgent.
-  model: openai.chat("gpt-4o"),
+  model: LLMProvider.chat("gpt-4o"),
 });

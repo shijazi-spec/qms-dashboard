@@ -213,10 +213,10 @@ export function withApprovalGate<
     });
 
     // Task #485: when the structural credential detector flagged any
-    // payload field, page the security reviewer group (Slack channel +
+    // payload field, page the security reviewer group (ChatProvider channel +
     // email distribution list) so the highest-risk approvals are
     // triaged out-of-hours rather than waiting for someone to spot the
-    // banner on the queue page. Best-effort: a Slack/Resend outage must
+    // banner on the queue page. Best-effort: a ChatProvider/EmailProvider outage must
     // not abort the enqueue path the AI tool just completed, so we
     // swallow any error here. The notifier itself dedupes on action_code
     // and explicitly returns `{ skipped: true }` when neither channel is
@@ -259,7 +259,7 @@ export function withApprovalGate<
           `${credentialWarnings.slice(0, 5).map(w => w.path).join(', ')}). ` +
           `The reviewer will see a warning. Tell the user to use the secret ` +
           `store / a secret reference rather than pasting raw credentials into chat, ` +
-          `and to redact and resend if this was unintentional.`
+          `and to redact and EmailProvider if this was unintentional.`
         : '';
 
     return {

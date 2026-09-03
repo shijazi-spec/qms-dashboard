@@ -1,27 +1,27 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import {
-  updateZohoRecord,
-  fetchZohoRecordById,
-  searchZohoRecords,
-  zohoWritesAllowedInEnv,
-} from "../../utils/zohoCRM";
+  updateCRMProviderRecord,
+  fetchCRMProviderRecordById,
+  searchCRMProviderRecords,
+  CRMProviderWritesAllowedInEnv,
+} from "../../utils/CRMProviderCRM";
 import { withTimeout } from "../../utils/promiseTimeout";
 
 /**
- * Does the value Zoho actually stored (`got`) match what we asked it to set
+ * Does the value CRMProvider actually stored (`got`) match what we asked it to set
  * (`want`)?  Used for post-write read-back verification.
  *
- * Zoho's v2 write API returns HTTP 200 + code:SUCCESS even when a field was
+ * CRMProvider's v2 write API returns HTTP 200 + code:SUCCESS even when a field was
  * NOT persisted (field-level profile permission on the API connection, a
  * validation rule / workflow that silently reverts the value, or a no-op).
  * So a SUCCESS response is NOT proof the field changed — we must read the
- * record back and compare. The comparison is deliberately lenient so Zoho's
+ * record back and compare. The comparison is deliberately lenient so CRMProvider's
  * own normalization (casing on emails/URLs, phone re-formatting) does not
  * produce a false "did not change" report:
  *   - exact match after trim
  *   - case-insensitive match (emails, URLs)
- *   - digit-only match for phone-like values Zoho may reformat
+ *   - digit-only match for phone-like values CRMProvider may reformat
  */
 export function fieldValuesMatch(
   got: unknown,
@@ -33,7 +33,7 @@ export function fieldValuesMatch(
   const w = String(want).trim();
   if (g === w) return true;
   if (g.toLowerCase() === w.toLowerCase()) return true;
-  // Digit-only equivalence is ONLY safe for phone-like fields Zoho reformats
+  // Digit-only equivalence is ONLY safe for phone-like fields CRMProvider reformats
   // (e.g. "<REDACTED_PHONE>" vs "<REDACTED_PHONE>"). Applying it to arbitrary
   // fields would let a non-persisted numeric value (custom id, title) pass
   // verification, so it is gated on the field name.
@@ -46,11 +46,11 @@ export function fieldValuesMatch(
 }
 
 /**
- * Compare a freshly-read Zoho record against the field→value map we asked it
+ * Compare a freshly-read CRMProvider record against the field→value map we asked it
  * to write, returning a human-readable list of fields that did NOT persist.
  * An empty list means every field was confirmed. Pure (no I/O) so the
  * approval-critical "did it actually change?" logic is unit-testable without
- * hitting Zoho.
+ * hitting CRMProvider.
  */
 export function computeReadBackMismatches(
   updates: Record<string, any>,
@@ -71,10 +71,10 @@ export function computeReadBackMismatches(
 }
 
 /**
- * Update simple fields on a Zoho record — the chat-side of "change this
+ * Update simple fields on a CRMProvider record — the chat-side of "change this
  * contact's email / phone / website / name to X". Adam previously had NO tool
  * for arbitrary field edits, so he could only tell the user to do it manually
- * in Zoho. This closes that gap: it writes the given SCALAR fields via the v2
+ * in CRMProvider. This closes that gap: it writes the given SCALAR fields via the v2
  * API and is wrapped with withApprovalGate in the agent, so the change queues
  * as an AI Approval (or applies via the admin-password pop-up).
  *
@@ -86,7 +86,7 @@ export function computeReadBackMismatches(
  * etc. — but it can't reparent a record or touch system metadata.
  */
 
-const ZOHO_WRITE_TIMEOUT_MS = 15_000;
+const CRMProvider_WRITE_TIMEOUT_MS = 15_000;
 
 // Never write these — system/readonly metadata or lookup/identity fields that
 // have their own dedicated flows (merge / link).
@@ -106,7 +106,7 @@ const PROTECTED_FIELDS = new Set<string>([
   "Contact_Name",
 ]);
 
-/** Pull the trailing record id out of a pasted Zoho URL, else return as-is. */
+/** Pull the trailing record id out of a pasted CRMProvider URL, else return as-is. */
 function extractRecordId(raw: string): string {
   const s = String(raw || "").trim();
   // .../tab/Contacts/5146753000181667008  (optionally with trailing slash/query)
@@ -129,16 +129,16 @@ export const updateRecordFieldTool = createTool({
   id: "update-record-field",
 
   description:
-    'Update simple field(s) on ONE Zoho record — e.g. change a Contact\'s Email, Phone, Mobile, Website, or Title. Use when asked to "change this contact\'s email to X", "update the phone on this lead", "fix the website on this account", etc. Provide the module (Leads/Deals/Contacts/Accounts), the record id (you may pass the Zoho record URL — the tool extracts the id), and the field(s) to set: email / phone / mobile / website / title (set only the ones you are changing). For any OTHER text field, use fieldName (its Zoho API name) + fieldValue. To relink a Contact/Deal to an Account use link-records-to-account instead (Account_Name is a lookup, not a text field). You DO have this capability — do NOT tell the user to edit it manually in Zoho. It is gated: report the APR-… ticket and do not claim it was changed until approved/applied.',
+    'Update simple field(s) on ONE CRMProvider record — e.g. change a Contact\'s Email, Phone, Mobile, Website, or Title. Use when asked to "change this contact\'s email to X", "update the phone on this lead", "fix the website on this account", etc. Provide the module (Leads/Deals/Contacts/Accounts), the record id (you may pass the CRMProvider record URL — the tool extracts the id), and the field(s) to set: email / phone / mobile / website / title (set only the ones you are changing). For any OTHER text field, use fieldName (its CRMProvider API name) + fieldValue. To relink a Contact/Deal to an Account use link-records-to-account instead (Account_Name is a lookup, not a text field). You DO have this capability — do NOT tell the user to edit it manually in CRMProvider. It is gated: report the APR-… ticket and do not claim it was changed until approved/applied.',
 
   inputSchema: z.object({
     module: z
       .enum(["Leads", "Deals", "Contacts", "Accounts"])
-      .describe("Zoho module the record belongs to"),
+      .describe("CRMProvider module the record belongs to"),
     recordId: z
       .string()
       .min(1)
-      .describe("Zoho record id (or the full Zoho record URL — the id is extracted)"),
+      .describe("CRMProvider record id (or the full CRMProvider record URL — the id is extracted)"),
     // Explicit common fields (an open dictionary schema is unreliable with
     // function-calling). Set whichever apply; leave the rest empty.
     email: z.string().optional().describe("New Email address"),
@@ -146,11 +146,11 @@ export const updateRecordFieldTool = createTool({
     mobile: z.string().optional().describe("New Mobile number"),
     website: z.string().optional().describe("New Website URL"),
     title: z.string().optional().describe("New Title / job title"),
-    // Escape hatch for any other simple text field by its Zoho API name.
+    // Escape hatch for any other simple text field by its CRMProvider API name.
     fieldName: z
       .string()
       .optional()
-      .describe("Any OTHER Zoho field's API name to set (e.g. 'Description'). Use with fieldValue."),
+      .describe("Any OTHER CRMProvider field's API name to set (e.g. 'Description'). Use with fieldValue."),
     fieldValue: z
       .string()
       .optional()
@@ -175,7 +175,7 @@ export const updateRecordFieldTool = createTool({
     const recordId = extractRecordId(context.recordId);
 
     // Assemble the field→value map from the explicit inputs (maps the friendly
-    // names to Zoho API field names) plus the generic fieldName/fieldValue.
+    // names to CRMProvider API field names) plus the generic fieldName/fieldValue.
     const raw: Record<string, any> = {};
     if (context.email != null && context.email !== "") raw["Email"] = context.email;
     if (context.phone != null && context.phone !== "") raw["Phone"] = context.phone;
@@ -192,7 +192,7 @@ export const updateRecordFieldTool = createTool({
         module,
         recordId: "",
         fieldsUpdated: [],
-        message: "No record id provided (pass a Zoho id or record URL).",
+        message: "No record id provided (pass a CRMProvider id or record URL).",
         error: "missing recordId",
       };
     }
@@ -227,30 +227,30 @@ export const updateRecordFieldTool = createTool({
       };
     }
 
-    if (!zohoWritesAllowedInEnv()) {
+    if (!CRMProviderWritesAllowedInEnv()) {
       return {
         success: false,
         module,
         recordId,
         fieldsUpdated: [],
         message:
-          "Updating is blocked outside production (dev shares production's Zoho credentials). Run it from the deployed app.",
-        error: "live Zoho writes disabled outside production",
+          "Updating is blocked outside production (dev shares production's CRMProvider credentials). Run it from the deployed app.",
+        error: "live CRMProvider writes disabled outside production",
       };
     }
 
     const fields = Object.keys(updates);
     try {
       await withTimeout(
-        updateZohoRecord(module, recordId, updates),
-        ZOHO_WRITE_TIMEOUT_MS,
+        updateCRMProviderRecord(module, recordId, updates),
+        CRMProvider_WRITE_TIMEOUT_MS,
         "field update",
       );
     } catch (e: any) {
       const errMsg = e?.message || String(e);
 
       // DUPLICATE_DATA is the common "approved but nothing changed" cause for
-      // Email/Phone/Mobile edits: Zoho enforces uniqueness on these fields, so
+      // Email/Phone/Mobile edits: CRMProvider enforces uniqueness on these fields, so
       // setting a value that ANOTHER record already holds is silently rejected
       // (old code reported it as Executed). This almost always means the two
       // records are duplicates of the same entity — copying the value across is
@@ -264,12 +264,12 @@ export const updateRecordFieldTool = createTool({
 
         let conflictHint = "";
         try {
-          // Escape Zoho criteria-grammar specials so a value containing
+          // Escape CRMProvider criteria-grammar specials so a value containing
           // parens/commas/backslashes can't break the best-effort lookup.
           const escaped = String(conflictValue).replace(/([\\(),])/g, "\\$1");
           const existing = await withTimeout(
-            searchZohoRecords(module, `(${conflictField}:equals:${escaped})`),
-            ZOHO_WRITE_TIMEOUT_MS,
+            searchCRMProviderRecords(module, `(${conflictField}:equals:${escaped})`),
+            CRMProvider_WRITE_TIMEOUT_MS,
             "duplicate lookup",
           );
           const other = existing.find((r) => String(r.id) !== String(recordId));
@@ -292,7 +292,7 @@ export const updateRecordFieldTool = createTool({
           recordId,
           fieldsUpdated: [],
           message:
-            `Zoho rejected the update: the ${conflictField} "${String(conflictValue)}" ` +
+            `CRMProvider rejected the update: the ${conflictField} "${String(conflictValue)}" ` +
             `is already in use on another ${module} record (DUPLICATE_DATA).` +
             (conflictHint ||
               ` This usually means a duplicate record already holds this value — ` +
@@ -306,24 +306,24 @@ export const updateRecordFieldTool = createTool({
         module,
         recordId,
         fieldsUpdated: [],
-        message: "Failed to update the record in Zoho.",
+        message: "Failed to update the record in CRMProvider.",
         error: errMsg,
       };
     }
 
-    // ROOT-CAUSE GUARD (read-back verification): Zoho's v2 write API returns
+    // ROOT-CAUSE GUARD (read-back verification): CRMProvider's v2 write API returns
     // HTTP 200 + code:SUCCESS even when the field was NOT actually persisted
     // (field-level profile permission on the API connection, a validation
     // rule / workflow that reverts the value, or a no-op). Reporting that
-    // SUCCESS as "Executed" while nothing changed in Zoho is exactly the
+    // SUCCESS as "Executed" while nothing changed in CRMProvider is exactly the
     // "approved but nothing happened" disconnect. So we re-read the record
-    // from Zoho's REAL-TIME single-record endpoint and confirm each field
+    // from CRMProvider's REAL-TIME single-record endpoint and confirm each field
     // now holds the requested value before we claim success.
-    let fresh: Awaited<ReturnType<typeof fetchZohoRecordById>> = null;
+    let fresh: Awaited<ReturnType<typeof fetchCRMProviderRecordById>> = null;
     try {
       fresh = await withTimeout(
-        fetchZohoRecordById(module, recordId),
-        ZOHO_WRITE_TIMEOUT_MS,
+        fetchCRMProviderRecordById(module, recordId),
+        CRMProvider_WRITE_TIMEOUT_MS,
         "field update verify",
       );
     } catch (e: any) {
@@ -332,16 +332,16 @@ export const updateRecordFieldTool = createTool({
       // is the exact false-confidence the user reported. Report success:false
       // (the approval is recorded as FAILED, not Executed) so "Done" always
       // means a verified change. The write is idempotent, so re-approving once
-      // Zoho is reachable simply re-applies the same value safely.
+      // CRMProvider is reachable simply re-applies the same value safely.
       return {
         success: false,
         module,
         recordId,
         fieldsUpdated: [],
         message:
-          `Zoho accepted the update to ${module}/${recordId} (${fields.join(", ")}), ` +
+          `CRMProvider accepted the update to ${module}/${recordId} (${fields.join(", ")}), ` +
           `but the new value could NOT be verified (read-back failed: ${e?.message || String(e)}). ` +
-          `Not marking this as done — please retry, or confirm the value directly in Zoho.`,
+          `Not marking this as done — please retry, or confirm the value directly in CRMProvider.`,
         error: "verification_unavailable",
       };
     }
@@ -350,7 +350,7 @@ export const updateRecordFieldTool = createTool({
     const mismatches = computeReadBackMismatches(updates, data);
 
     if (mismatches.length > 0) {
-      // Zoho said SUCCESS but the value did not change. Surface this honestly
+      // CRMProvider said SUCCESS but the value did not change. Surface this honestly
       // so the approval is recorded as FAILED (not Executed) with the real
       // reason — almost always a field-level permission or validation rule on
       // the API connection's profile.
@@ -360,11 +360,11 @@ export const updateRecordFieldTool = createTool({
         recordId,
         fieldsUpdated: [],
         message:
-          `Zoho reported success but the change did NOT persist: ${mismatches.join("; ")}. ` +
+          `CRMProvider reported success but the change did NOT persist: ${mismatches.join("; ")}. ` +
           `This usually means the API connection's profile lacks field-level edit ` +
-          `permission, or a Zoho validation rule/workflow reverted the value. ` +
-          `Fix the field permission in Zoho and try again.`,
-        error: "zoho write not persisted (read-back mismatch)",
+          `permission, or a CRMProvider validation rule/workflow reverted the value. ` +
+          `Fix the field permission in CRMProvider and try again.`,
+        error: "CRMProvider write not persisted (read-back mismatch)",
       };
     }
 

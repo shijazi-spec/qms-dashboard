@@ -319,8 +319,8 @@ export const aiOpsRoutes = [
     // The AI Operations page (dashboard/ai-ops.html) was retired by user
     // request. The backend `/api/ai-ops/*` routes below remain — they're
     // still consumed by the tool-health / prompt-regression cron jobs,
-    // mobile routes, the consultant feedback writer, and the Slack
-    // 👍/👎 handler. To keep historical alert email and Slack links
+    // mobile routes, the consultant feedback writer, and the ChatProvider
+    // 👍/👎 handler. To keep historical alert email and ChatProvider links
     // working we 302 the old `/ai-ops` URL to the main dashboard.
     path: "/ai-ops",
     method: "GET" as const,
@@ -476,7 +476,7 @@ export const aiOpsRoutes = [
           // this endpoint don't have to remember which spelling won.
           const promptVersionRaw =
             body.promptVersion ?? body.prompt_version;
-          // Task #763: non-web rating surfaces (Slack thumbs-up/down bot,
+          // Task #763: non-web rating surfaces (ChatProvider thumbs-up/down bot,
           // mobile app, embedded widget) tag their POST with
           // `clientSurface` so the per-surface breakdown in the AI Ops
           // dashboard (`getFeedbackBreakdownByPromptVersion()
@@ -567,7 +567,7 @@ export const aiOpsRoutes = [
             );
           }
           // Mirror the prompt_version backfill for the surface marker so
-          // a Slack/mobile/embedded rating is attributed to its UI in
+          // a ChatProvider/mobile/embedded rating is attributed to its UI in
           // the per-surface dashboard breakdown. Same rationale as
           // setCallPromptVersionIfMissing: never overwrite a value the
           // server already wrote at span open — only fill when absent.
@@ -1677,7 +1677,7 @@ export const aiOpsRoutes = [
 
           const effective = await getEffectiveToolHealthConfig();
 
-          // Best-effort Slack notification so on-call sees who changed the
+          // Best-effort ChatProvider notification so on-call sees who changed the
           // alert thresholds — the DB write itself is silent and audit rows
           // tend to be checked only after something has already gone wrong
           // (Task #190). Gated by TOOL_HEALTH_CONFIG_NOTIFY=1; never blocks
@@ -1691,7 +1691,7 @@ export const aiOpsRoutes = [
               after: result.after,
               note,
               audit_id: result.audit_id,
-              // Forward the breach diff (Task #208) so the Slack message
+              // Forward the breach diff (Task #208) so the ChatProvider message
               // can render an "Impact" section showing how many alerts
               // this threshold change opened/resolved. `null` when the
               // aggregate query failed — notifier omits the section.
@@ -2764,7 +2764,7 @@ export const aiOpsRoutes = [
             await import("../../utils/aiTelemetry");
           const effective = await resolveEffectiveAiMetricsRetentionDays();
 
-          // Best-effort Slack/email notification so the rest of the AI-ops
+          // Best-effort ChatProvider/email notification so the rest of the AI-ops
           // team sees who tightened or widened the retention window — the DB
           // write itself is silent and audit rows tend to be checked only
           // after something has already gone wrong (Task #549). Gated by
@@ -2932,7 +2932,7 @@ export const aiOpsRoutes = [
             note,
           });
 
-          // Best-effort Slack/email notification so the rest of the AI-ops
+          // Best-effort ChatProvider/email notification so the rest of the AI-ops
           // team sees that someone clicked Prune now (Task #644). Audit
           // rows are checked only after something has gone wrong, so a
           // silent immediate deletion of telemetry is operationally as

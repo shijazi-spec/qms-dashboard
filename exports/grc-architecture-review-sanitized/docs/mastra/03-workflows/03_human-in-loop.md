@@ -3,7 +3,7 @@ title: "Human in the Loop | Workflows | Mastra Docs"
 description: Example of using Mastra to create workflows with multi-turn human/agent interaction points using suspend/resume and dountil methods.
 ---
 
-import { GithubLink } from "@/components/github-link";
+import { SourceControlProviderLink } from "@/components/SourceControlProvider-link";
 
 # Human-in-the-loop
 [EN] Source: <REDACTED_URL>
@@ -20,10 +20,10 @@ This example consists of three main components:
 
 ## Prerequisites
 
-This example uses the `openai` model. Make sure to add the following to your `.env` file:
+This example uses the `LLMProvider` model. Make sure to add the following to your `.env` file:
 
 ```bash filename=".env" copy
-OPENAI_API_KEY=<your-api-key>
+LLMProvider_API_KEY=<your-api-key>
 ```
 
 ## Famous person agent
@@ -31,7 +31,7 @@ OPENAI_API_KEY=<your-api-key>
 The `famousPersonAgent` generates a unique name each time the game is played, using semantic memory to avoid repeating suggestions.
 
 ```typescript filename="src/mastra/agents/example-famous-person-agent.ts" showLineNumbers copy
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 import { Agent } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
 import { LibSQLVector } from "@mastra/libsql";
@@ -51,12 +51,12 @@ IMPORTANT: Use your memory to check what famous people you've already suggested 
 Examples: Albert Einstein, Beyoncé, Leonardo da Vinci, Oprah Winfrey, Michael Jordan
 
 Return only the person's name, nothing else.`,
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   memory: new Memory({
     vector: new LibSQLVector({
       connectionUrl: "file:../mastra.db"
     }),
-    embedder: openai.embedding("text-embedding-3-small"),
+    embedder: LLMProvider.embedding("text-embedding-3-small"),
     options: {
       lastMessages: 5,
       semanticRecall: {
@@ -75,7 +75,7 @@ Return only the person's name, nothing else.`,
 The `gameAgent` handles user interactions by responding to questions and validating guesses.
 
 ```typescript filename="src/mastra/agents/example-game-agent.ts" showLineNumbers copy
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 import { Agent } from "@mastra/core/agent";
 
 export const gameAgent = new Agent({
@@ -103,7 +103,7 @@ Encourage players to make a guess when they seem to have enough information.
 You must return a JSON object with:
 - response: Your response to the user
 - gameWon: true if they guessed correctly, false otherwise`,
-  model: openai("gpt-4o")
+  model: LLMProvider("gpt-4o")
 });
 ```
 
@@ -258,7 +258,7 @@ export const mastra = new Mastra({
 });
 ```
 
-<GithubLink
+<SourceControlProviderLink
   marginTop='mt-16'
   link="<REDACTED_URL>"
 />

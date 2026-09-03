@@ -28,7 +28,7 @@
  * Wired into:
  *   - tests/noInlineTelemetryMetadata.test.ts (auto-discovered by
  *     tests/runIntegrationTests.ts → `npm test`)
- *   - .github/workflows/secret-redaction.yml — runs as a dedicated CI gate
+ *   - .SourceControlProvider/workflows/secret-redaction.yml — runs as a dedicated CI gate
  *     so a regression fails the merge with an obvious labelled summary.
  *
  * Standalone usage:

@@ -3,7 +3,7 @@
  *
  * Verifies:
  *   1. When stats.exceedsRetention is true and no open alert exists yet,
- *      a single high-severity ai_alerts row is created and Slack/email/
+ *      a single high-severity ai_alerts row is created and ChatProvider/email/
  *      in-app notifications fire (when their env vars are set).
  *   2. When stats.exceedsRetention is true but an open alert already
  *      exists, no second alert and no notifications are emitted —
@@ -11,7 +11,7 @@
  *   3. When stats.exceedsRetention flips back to false, every previously
  *      open alert is auto-resolved with a recovery note and a low-
  *      severity recovery notification fires once.
- *   4. Slack/email are skipped silently when their env vars are absent.
+ *   4. ChatProvider/email are skipped silently when their env vars are absent.
  *   5. A failing dedupe check fails closed (no alert, no page) so a
  *      transient DB hiccup cannot spam the channel.
  *
@@ -50,7 +50,7 @@ interface NotificationRecord {
   severity: string;
 }
 
-interface SlackRecord {
+interface ChatProviderRecord {
   webhookUrl: string;
   text: string;
 }
@@ -70,13 +70,13 @@ interface Harness {
   deps: StorageHealthAlertDeps;
   createdAlerts: CreatedAlertRecord[];
   notifications: NotificationRecord[];
-  slacks: SlackRecord[];
+  ChatProviders: ChatProviderRecord[];
   emails: EmailRecord[];
   resolved: ResolvedRecord[];
   setOpenAlerts: (alerts: AIAlert[]) => void;
   setOpenAlertExists: (exists: boolean) => void;
   setDedupeFailure: (err: Error | null) => void;
-  setSlackOk: (ok: boolean) => void;
+  setChatProviderOk: (ok: boolean) => void;
   setEmailOk: (ok: boolean) => void;
   setNow: (now: Date) => void;
 }
@@ -84,14 +84,14 @@ interface Harness {
 function makeHarness(env: NodeJS.ProcessEnv, initialNow?: Date): Harness {
   const createdAlerts: CreatedAlertRecord[] = [];
   const notifications: NotificationRecord[] = [];
-  const slacks: SlackRecord[] = [];
+  const ChatProviders: ChatProviderRecord[] = [];
   const emails: EmailRecord[] = [];
   const resolved: ResolvedRecord[] = [];
 
   let openAlertExists = false;
   let openAlerts: AIAlert[] = [];
   let dedupeFailure: Error | null = null;
-  let slackOk = true;
+  let ChatProviderOk = true;
   let emailOk = true;
   let now = initialNow ?? new Date('2026-04-25T12:00:00.000Z');
 
@@ -146,9 +146,9 @@ function makeHarness(env: NodeJS.ProcessEnv, initialNow?: Date): Harness {
       });
       return {};
     },
-    sendSlack: async (webhookUrl, text) => {
-      slacks.push({ webhookUrl, text });
-      return slackOk;
+    sendChatProvider: async (webhookUrl, text) => {
+      ChatProviders.push({ webhookUrl, text });
+      return ChatProviderOk;
     },
     sendEmail: async ({ to, subject, html }) => {
       emails.push({ to, subject, html });
@@ -162,7 +162,7 @@ function makeHarness(env: NodeJS.ProcessEnv, initialNow?: Date): Harness {
     deps,
     createdAlerts,
     notifications,
-    slacks,
+    ChatProviders,
     emails,
     resolved,
     setOpenAlerts: (alerts) => {
@@ -174,8 +174,8 @@ function makeHarness(env: NodeJS.ProcessEnv, initialNow?: Date): Harness {
     setDedupeFailure: (err) => {
       dedupeFailure = err;
     },
-    setSlackOk: (ok) => {
-      slackOk = ok;
+    setChatProviderOk: (ok) => {
+      ChatProviderOk = ok;
     },
     setEmailOk: (ok) => {
       emailOk = ok;
@@ -211,10 +211,10 @@ const recoveredStats: AiMetricsTableStats = {
 const suite = new TestSuite('storageHealthAlerts');
 
 await suite.test(
-  'opens a single high-severity alert + Slack/email/in-app on first breach',
+  'opens a single high-severity alert + ChatProvider/email/in-app on first breach',
   async () => {
     const harness = makeHarness({
-      SLACK_WEBHOOK_URL: '<REDACTED_URL>',
+      ChatProvider_WEBHOOK_URL: '<REDACTED_URL>',
       AI_COST_ALERT_EMAIL: 'user@example.invalid,user@example.invalid',
     });
     harness.setOpenAlertExists(false);
@@ -224,7 +224,7 @@ await suite.test(
     suite.expect(result.alertCreated, 'alertCreated should be true');
     suite.expect(!result.alertDeduped, 'alertDeduped should be false');
     suite.expectEqual(result.alertsResolved, 0, 'alertsResolved');
-    suite.expect(result.slackSent, 'slackSent should be true');
+    suite.expect(result.ChatProviderSent, 'ChatProviderSent should be true');
     suite.expect(result.emailSent, 'emailSent should be true');
     suite.expect(result.inAppCreated, 'inAppCreated should be true');
 
@@ -247,11 +247,11 @@ await suite.test(
       `description should include oldest age — got: ${alert.description}`,
     );
 
-    suite.expectEqual(harness.slacks.length, 1, 'one Slack call');
+    suite.expectEqual(harness.ChatProviders.length, 1, 'one ChatProvider call');
     suite.expectEqual(
-      harness.slacks[0].webhookUrl,
+      harness.ChatProviders[0].webhookUrl,
       '<REDACTED_URL>',
-      'slack webhook',
+      'ChatProvider webhook',
     );
 
     suite.expectEqual(harness.emails.length, 1, 'one email call');
@@ -274,7 +274,7 @@ await suite.test(
   'dedupes when an open alert already exists for the key',
   async () => {
     const harness = makeHarness({
-      SLACK_WEBHOOK_URL: '<REDACTED_URL>',
+      ChatProvider_WEBHOOK_URL: '<REDACTED_URL>',
       AI_COST_ALERT_EMAIL: 'user@example.invalid',
     });
     harness.setOpenAlertExists(true);
@@ -283,12 +283,12 @@ await suite.test(
 
     suite.expect(!result.alertCreated, 'alertCreated should be false');
     suite.expect(result.alertDeduped, 'alertDeduped should be true');
-    suite.expect(!result.slackSent, 'slackSent should be false');
+    suite.expect(!result.ChatProviderSent, 'ChatProviderSent should be false');
     suite.expect(!result.emailSent, 'emailSent should be false');
     suite.expect(!result.inAppCreated, 'inAppCreated should be false');
 
     suite.expectEqual(harness.createdAlerts.length, 0, 'no ai_alerts row created');
-    suite.expectEqual(harness.slacks.length, 0, 'no Slack calls');
+    suite.expectEqual(harness.ChatProviders.length, 0, 'no ChatProvider calls');
     suite.expectEqual(harness.emails.length, 0, 'no email calls');
     suite.expectEqual(harness.notifications.length, 0, 'no in-app notifications');
   },
@@ -298,7 +298,7 @@ await suite.test(
   'fails closed when the dedupe check throws (no alert, no page)',
   async () => {
     const harness = makeHarness({
-      SLACK_WEBHOOK_URL: '<REDACTED_URL>',
+      ChatProvider_WEBHOOK_URL: '<REDACTED_URL>',
     });
     harness.setDedupeFailure(new Error('connection refused'));
 
@@ -307,7 +307,7 @@ await suite.test(
     suite.expect(!result.alertCreated, 'alertCreated should be false');
     suite.expect(result.alertDeduped, 'alertDeduped should be true (fail-closed)');
     suite.expectEqual(harness.createdAlerts.length, 0, 'no ai_alerts row');
-    suite.expectEqual(harness.slacks.length, 0, 'no Slack calls');
+    suite.expectEqual(harness.ChatProviders.length, 0, 'no ChatProvider calls');
   },
 );
 
@@ -356,7 +356,7 @@ await suite.test(
 );
 
 await suite.test(
-  'skips Slack/email silently when env vars are unset',
+  'skips ChatProvider/email silently when env vars are unset',
   async () => {
     const harness = makeHarness({});
     harness.setOpenAlertExists(false);
@@ -364,21 +364,21 @@ await suite.test(
     const result = await evaluateAndAlertStorageHealth(breachingStats, harness.deps);
 
     suite.expect(result.alertCreated, 'alertCreated still true');
-    suite.expect(!result.slackSent, 'slackSent false (no webhook)');
+    suite.expect(!result.ChatProviderSent, 'ChatProviderSent false (no webhook)');
     suite.expect(!result.emailSent, 'emailSent false (no recipients)');
     suite.expect(result.inAppCreated, 'in-app still fires (always available)');
-    suite.expectEqual(harness.slacks.length, 0, 'no Slack calls');
+    suite.expectEqual(harness.ChatProviders.length, 0, 'no ChatProvider calls');
     suite.expectEqual(harness.emails.length, 0, 'no email calls');
   },
 );
 
 await suite.test(
-  'suppresses Slack/email during quiet hours but still creates ai_alerts row + in-app notification',
+  'suppresses ChatProvider/email during quiet hours but still creates ai_alerts row + in-app notification',
   async () => {
     // Window: 22:00–07:00 UTC. Pin clock to 03:00 UTC — squarely inside.
     const harness = makeHarness(
       {
-        SLACK_WEBHOOK_URL: '<REDACTED_URL>',
+        ChatProvider_WEBHOOK_URL: '<REDACTED_URL>',
         AI_COST_ALERT_EMAIL: 'user@example.invalid',
         STORAGE_HEALTH_QUIET_HOURS_START: '22',
         STORAGE_HEALTH_QUIET_HOURS_END: '7',
@@ -394,7 +394,7 @@ await suite.test(
       result.quietHoursSuppressed,
       'quietHoursSuppressed should be true at 03:00 UTC inside 22-07 window',
     );
-    suite.expect(!result.slackSent, 'Slack must be suppressed in quiet hours');
+    suite.expect(!result.ChatProviderSent, 'ChatProvider must be suppressed in quiet hours');
     suite.expect(!result.emailSent, 'Email must be suppressed in quiet hours');
     suite.expect(
       result.inAppCreated,
@@ -403,18 +403,18 @@ await suite.test(
 
     suite.expectEqual(harness.createdAlerts.length, 1, 'ai_alerts row still inserted');
     suite.expectEqual(harness.notifications.length, 1, 'in-app notification still created');
-    suite.expectEqual(harness.slacks.length, 0, 'no Slack call attempted');
+    suite.expectEqual(harness.ChatProviders.length, 0, 'no ChatProvider call attempted');
     suite.expectEqual(harness.emails.length, 0, 'no email call attempted');
   },
 );
 
 await suite.test(
-  'pages Slack/email normally when quiet hours are configured but the clock is outside the window',
+  'pages ChatProvider/email normally when quiet hours are configured but the clock is outside the window',
   async () => {
     // Window: 22-07 UTC. Pin clock to 12:00 UTC — squarely outside.
     const harness = makeHarness(
       {
-        SLACK_WEBHOOK_URL: '<REDACTED_URL>',
+        ChatProvider_WEBHOOK_URL: '<REDACTED_URL>',
         AI_COST_ALERT_EMAIL: 'user@example.invalid',
         STORAGE_HEALTH_QUIET_HOURS_START: '22',
         STORAGE_HEALTH_QUIET_HOURS_END: '7',
@@ -430,9 +430,9 @@ await suite.test(
       !result.quietHoursSuppressed,
       'quietHoursSuppressed should be false outside the window',
     );
-    suite.expect(result.slackSent, 'Slack should fire outside quiet hours');
+    suite.expect(result.ChatProviderSent, 'ChatProvider should fire outside quiet hours');
     suite.expect(result.emailSent, 'Email should fire outside quiet hours');
-    suite.expectEqual(harness.slacks.length, 1, 'one Slack call');
+    suite.expectEqual(harness.ChatProviders.length, 1, 'one ChatProvider call');
     suite.expectEqual(harness.emails.length, 1, 'one email call');
   },
 );
@@ -444,7 +444,7 @@ await suite.test(
     // 23:30 UTC — inside Riyadh window (02:30 local).
     const harness = makeHarness(
       {
-        SLACK_WEBHOOK_URL: '<REDACTED_URL>',
+        ChatProvider_WEBHOOK_URL: '<REDACTED_URL>',
         STORAGE_HEALTH_QUIET_HOURS_START: '0',
         STORAGE_HEALTH_QUIET_HOURS_END: '6',
         STORAGE_HEALTH_QUIET_HOURS_TZ: 'Asia/Riyadh',
@@ -459,8 +459,8 @@ await suite.test(
       result.quietHoursSuppressed,
       'quietHoursSuppressed should be true (02:30 Riyadh is inside 0-6 window)',
     );
-    suite.expect(!result.slackSent, 'Slack suppressed');
-    suite.expectEqual(harness.slacks.length, 0, 'no Slack call');
+    suite.expect(!result.ChatProviderSent, 'ChatProvider suppressed');
+    suite.expectEqual(harness.ChatProviders.length, 0, 'no ChatProvider call');
 
     // Now move the clock to 09:00 UTC (= 12:00 Riyadh) — outside the window.
     harness.setNow(new Date('2026-04-25T09:00:00.000Z'));
@@ -470,7 +470,7 @@ await suite.test(
       !result2.quietHoursSuppressed,
       'quietHoursSuppressed should be false at 12:00 Riyadh (outside 0-6)',
     );
-    suite.expect(result2.slackSent, 'Slack fires outside Riyadh quiet hours');
+    suite.expect(result2.ChatProviderSent, 'ChatProvider fires outside Riyadh quiet hours');
   },
 );
 
@@ -479,7 +479,7 @@ await suite.test(
   async () => {
     const harness = makeHarness(
       {
-        SLACK_WEBHOOK_URL: '<REDACTED_URL>',
+        ChatProvider_WEBHOOK_URL: '<REDACTED_URL>',
         STORAGE_HEALTH_QUIET_HOURS_START: 'banana',
         STORAGE_HEALTH_QUIET_HOURS_END: '24', // out of range
       },
@@ -492,7 +492,7 @@ await suite.test(
       !result.quietHoursSuppressed,
       'invalid env vars must disable the window, not suppress everything',
     );
-    suite.expect(result.slackSent, 'Slack still fires when window is disabled');
+    suite.expect(result.ChatProviderSent, 'ChatProvider still fires when window is disabled');
   },
 );
 
@@ -592,7 +592,7 @@ await suite.test(
     );
     suite.expect(
       !result.quietHoursSuppressed,
-      'quietHoursSuppressed only flips on the breach path (no Slack/email on recovery anyway)',
+      'quietHoursSuppressed only flips on the breach path (no ChatProvider/email on recovery anyway)',
     );
   },
 );
@@ -623,11 +623,11 @@ await suite.test(
 
 interface RepageHarness {
   deps: StorageHealthRepageDeps;
-  slacks: SlackRecord[];
+  ChatProviders: ChatProviderRecord[];
   emails: EmailRecord[];
   notified: Array<{ alertId: number; channel: string; whenMs: number }>;
   setOpenAlerts: (alerts: AIAlert[]) => void;
-  setSlackOk: (ok: boolean) => void;
+  setChatProviderOk: (ok: boolean) => void;
   setEmailOk: (ok: boolean) => void;
   setNow: (now: Date) => void;
   setListFailure: (err: Error | null) => void;
@@ -637,11 +637,11 @@ function makeRepageHarness(
   env: NodeJS.ProcessEnv,
   initialNow?: Date,
 ): RepageHarness {
-  const slacks: SlackRecord[] = [];
+  const ChatProviders: ChatProviderRecord[] = [];
   const emails: EmailRecord[] = [];
   const notified: Array<{ alertId: number; channel: string; whenMs: number }> = [];
   let openAlerts: AIAlert[] = [];
-  let slackOk = true;
+  let ChatProviderOk = true;
   let emailOk = true;
   let now = initialNow ?? new Date('2026-04-25T12:00:00.000Z');
   let listFailure: Error | null = null;
@@ -660,9 +660,9 @@ function makeRepageHarness(
     recordAlertNotified: async (alertId, channel, whenMs) => {
       notified.push({ alertId, channel, whenMs });
     },
-    sendSlack: async (webhookUrl, text) => {
-      slacks.push({ webhookUrl, text });
-      return slackOk;
+    sendChatProvider: async (webhookUrl, text) => {
+      ChatProviders.push({ webhookUrl, text });
+      return ChatProviderOk;
     },
     sendEmail: async ({ to, subject, html }) => {
       emails.push({ to, subject, html });
@@ -674,14 +674,14 @@ function makeRepageHarness(
 
   return {
     deps,
-    slacks,
+    ChatProviders,
     emails,
     notified,
     setOpenAlerts: (a) => {
       openAlerts = a;
     },
-    setSlackOk: (ok) => {
-      slackOk = ok;
+    setChatProviderOk: (ok) => {
+      ChatProviderOk = ok;
     },
     setEmailOk: (ok) => {
       emailOk = ok;
@@ -727,14 +727,14 @@ await suite.test(
 );
 
 await suite.test(
-  're-page sweep: alert older than threshold gets a Slack/email page and notified_at is stamped',
+  're-page sweep: alert older than threshold gets a ChatProvider/email page and notified_at is stamped',
   async () => {
     const now = new Date('2026-04-25T12:00:00.000Z');
     // 30h since last page → past 24h threshold.
     const lastPagedAt = new Date(now.getTime() - 30 * 60 * 60_000);
     const harness = makeRepageHarness(
       {
-        SLACK_WEBHOOK_URL: '<REDACTED_URL>',
+        ChatProvider_WEBHOOK_URL: '<REDACTED_URL>',
         AI_COST_ALERT_EMAIL: 'user@example.invalid',
       },
       now,
@@ -757,32 +757,32 @@ await suite.test(
     suite.expect(!result.disabled, 'sweep is enabled');
     suite.expectEqual(result.alertsConsidered, 1, 'one alert considered');
     suite.expectEqual(result.alertsRepaged, 1, 'one re-page sent');
-    suite.expectEqual(result.slackSent, 1, 'one Slack call ok');
+    suite.expectEqual(result.ChatProviderSent, 1, 'one ChatProvider call ok');
     suite.expectEqual(result.emailSent, 1, 'one email call ok');
-    suite.expectEqual(harness.slacks.length, 1, 'slack invoked once');
+    suite.expectEqual(harness.ChatProviders.length, 1, 'ChatProvider invoked once');
     suite.expectEqual(harness.emails.length, 1, 'email invoked once');
     suite.expect(
-      harness.slacks[0].text.includes('still OPEN'),
-      `slack text — got: ${harness.slacks[0].text}`,
+      harness.ChatProviders[0].text.includes('still OPEN'),
+      `ChatProvider text — got: ${harness.ChatProviders[0].text}`,
     );
     suite.expectEqual(harness.notified.length, 1, 'notified_at stamped once');
     suite.expectEqual(harness.notified[0].alertId, 42, 'stamp on alert id 42');
     suite.expectEqual(
       harness.notified[0].channel,
-      'slack+email_repage',
+      'ChatProvider+email_repage',
       'channel reflects both sent',
     );
   },
 );
 
 await suite.test(
-  're-page sweep: alert with recent notified_at is throttled (no Slack/email)',
+  're-page sweep: alert with recent notified_at is throttled (no ChatProvider/email)',
   async () => {
     const now = new Date('2026-04-25T12:00:00.000Z');
     // 2h since last page — well inside 24h throttle window.
     const lastPagedAt = new Date(now.getTime() - 2 * 60 * 60_000);
     const harness = makeRepageHarness(
-      { SLACK_WEBHOOK_URL: '<REDACTED_URL>' },
+      { ChatProvider_WEBHOOK_URL: '<REDACTED_URL>' },
       now,
     );
     harness.setOpenAlerts([
@@ -799,7 +799,7 @@ await suite.test(
     suite.expectEqual(result.alertsConsidered, 1, 'one considered');
     suite.expectEqual(result.alertsThrottled, 1, 'one throttled');
     suite.expectEqual(result.alertsRepaged, 0, 'zero re-pages');
-    suite.expectEqual(harness.slacks.length, 0, 'no Slack calls');
+    suite.expectEqual(harness.ChatProviders.length, 0, 'no ChatProvider calls');
     suite.expectEqual(harness.notified.length, 0, 'no notified_at writes');
   },
 );
@@ -811,7 +811,7 @@ await suite.test(
     // Alert created 30h ago, never paged.
     const createdAt = new Date(now.getTime() - 30 * 60 * 60_000);
     const harness = makeRepageHarness(
-      { SLACK_WEBHOOK_URL: '<REDACTED_URL>' },
+      { ChatProvider_WEBHOOK_URL: '<REDACTED_URL>' },
       now,
     );
     harness.setOpenAlerts([
@@ -826,8 +826,8 @@ await suite.test(
     const result = await repageStaleStorageHealthAlerts(harness.deps);
 
     suite.expectEqual(result.alertsRepaged, 1, 'fallback path re-pages');
-    suite.expectEqual(harness.slacks.length, 1, 'slack invoked');
-    suite.expectEqual(harness.notified[0].channel, 'slack_repage', 'slack-only label');
+    suite.expectEqual(harness.ChatProviders.length, 1, 'ChatProvider invoked');
+    suite.expectEqual(harness.notified[0].channel, 'ChatProvider_repage', 'ChatProvider-only label');
   },
 );
 
@@ -838,7 +838,7 @@ await suite.test(
     // 6h ago — well inside the 24h threshold.
     const createdAt = new Date(now.getTime() - 6 * 60 * 60_000);
     const harness = makeRepageHarness(
-      { SLACK_WEBHOOK_URL: '<REDACTED_URL>' },
+      { ChatProvider_WEBHOOK_URL: '<REDACTED_URL>' },
       now,
     );
     harness.setOpenAlerts([
@@ -853,7 +853,7 @@ await suite.test(
     const result = await repageStaleStorageHealthAlerts(harness.deps);
     suite.expectEqual(result.alertsSkippedYoung, 1, 'one skipped (young)');
     suite.expectEqual(result.alertsRepaged, 0, 'no re-page');
-    suite.expectEqual(harness.slacks.length, 0, 'no Slack');
+    suite.expectEqual(harness.ChatProviders.length, 0, 'no ChatProvider');
   },
 );
 
@@ -862,7 +862,7 @@ await suite.test(
   async () => {
     const harness = makeRepageHarness({
       STORAGE_HEALTH_REPAGE_AFTER_MIN: '0',
-      SLACK_WEBHOOK_URL: '<REDACTED_URL>',
+      ChatProvider_WEBHOOK_URL: '<REDACTED_URL>',
     });
     harness.setOpenAlerts([
       {
@@ -876,19 +876,19 @@ await suite.test(
     const result = await repageStaleStorageHealthAlerts(harness.deps);
     suite.expect(result.disabled, 'sweep is disabled');
     suite.expectEqual(result.alertsRepaged, 0, 'no re-page');
-    suite.expectEqual(harness.slacks.length, 0, 'no Slack');
+    suite.expectEqual(harness.ChatProviders.length, 0, 'no ChatProvider');
     suite.expectEqual(harness.notified.length, 0, 'no notified_at writes');
   },
 );
 
 await suite.test(
-  're-page sweep: quiet hours suppresses Slack/email but still counts as considered',
+  're-page sweep: quiet hours suppresses ChatProvider/email but still counts as considered',
   async () => {
     const now = new Date('2026-04-25T03:00:00.000Z');
     const lastPagedAt = new Date(now.getTime() - 30 * 60 * 60_000);
     const harness = makeRepageHarness(
       {
-        SLACK_WEBHOOK_URL: '<REDACTED_URL>',
+        ChatProvider_WEBHOOK_URL: '<REDACTED_URL>',
         STORAGE_HEALTH_QUIET_HOURS_START: '22',
         STORAGE_HEALTH_QUIET_HOURS_END: '7',
       },
@@ -907,22 +907,22 @@ await suite.test(
     suite.expect(result.quietHoursActive, 'quiet hours active');
     suite.expectEqual(result.alertsQuietHoursSuppressed, 1, 'one suppressed');
     suite.expectEqual(result.alertsRepaged, 0, 'no re-page during quiet hours');
-    suite.expectEqual(harness.slacks.length, 0, 'no Slack call');
+    suite.expectEqual(harness.ChatProviders.length, 0, 'no ChatProvider call');
     suite.expectEqual(harness.notified.length, 0, 'no notified_at write');
   },
 );
 
 await suite.test(
-  're-page sweep: no open alerts → no Slack, no notified_at writes',
+  're-page sweep: no open alerts → no ChatProvider, no notified_at writes',
   async () => {
     const harness = makeRepageHarness({
-      SLACK_WEBHOOK_URL: '<REDACTED_URL>',
+      ChatProvider_WEBHOOK_URL: '<REDACTED_URL>',
     });
     harness.setOpenAlerts([]);
     const result = await repageStaleStorageHealthAlerts(harness.deps);
     suite.expectEqual(result.alertsConsidered, 0, 'zero considered');
     suite.expectEqual(result.alertsRepaged, 0, 'zero re-pages');
-    suite.expectEqual(harness.slacks.length, 0, 'no Slack');
+    suite.expectEqual(harness.ChatProviders.length, 0, 'no ChatProvider');
   },
 );
 
@@ -930,13 +930,13 @@ await suite.test(
   're-page sweep: list failure is non-fatal',
   async () => {
     const harness = makeRepageHarness({
-      SLACK_WEBHOOK_URL: '<REDACTED_URL>',
+      ChatProvider_WEBHOOK_URL: '<REDACTED_URL>',
     });
     harness.setListFailure(new Error('connection refused'));
     const result = await repageStaleStorageHealthAlerts(harness.deps);
     suite.expectEqual(result.alertsConsidered, 0, 'considered=0 on failure');
     suite.expectEqual(result.alertsRepaged, 0, 'no re-page');
-    suite.expectEqual(harness.slacks.length, 0, 'no Slack');
+    suite.expectEqual(harness.ChatProviders.length, 0, 'no ChatProvider');
   },
 );
 
@@ -946,7 +946,7 @@ await suite.test(
     const now = new Date('2026-04-25T12:00:00.000Z');
     const lastPagedAt = new Date(now.getTime() - 30 * 60 * 60_000);
     const harness = makeRepageHarness(
-      { SLACK_WEBHOOK_URL: '<REDACTED_URL>' },
+      { ChatProvider_WEBHOOK_URL: '<REDACTED_URL>' },
       now,
     );
     harness.setOpenAlerts([
@@ -966,7 +966,7 @@ await suite.test(
       'acknowledged alert skipped',
     );
     suite.expectEqual(result.alertsRepaged, 0, 'no re-page');
-    suite.expectEqual(harness.slacks.length, 0, 'no Slack call');
+    suite.expectEqual(harness.ChatProviders.length, 0, 'no ChatProvider call');
     suite.expectEqual(
       harness.notified.length,
       0,
@@ -976,7 +976,7 @@ await suite.test(
 );
 
 await suite.test(
-  're-page sweep: stamps not_configured_repage when no Slack/email is wired',
+  're-page sweep: stamps not_configured_repage when no ChatProvider/email is wired',
   async () => {
     const now = new Date('2026-04-25T12:00:00.000Z');
     const lastPagedAt = new Date(now.getTime() - 30 * 60 * 60_000);
@@ -991,7 +991,7 @@ await suite.test(
     ]);
     const result = await repageStaleStorageHealthAlerts(harness.deps);
     suite.expectEqual(result.alertsRepaged, 1, 'still counts as a sweep pass');
-    suite.expectEqual(result.slackSent, 0, 'no slack sent');
+    suite.expectEqual(result.ChatProviderSent, 0, 'no ChatProvider sent');
     suite.expectEqual(result.emailSent, 0, 'no email sent');
     suite.expectEqual(harness.notified.length, 1, 'notified_at stamped');
     suite.expectEqual(

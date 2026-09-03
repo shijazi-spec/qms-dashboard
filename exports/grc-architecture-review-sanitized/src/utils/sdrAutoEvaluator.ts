@@ -21,11 +21,11 @@ import {
   saveSDREvaluation,
   updateCallStatus,
 } from "./callIntelligenceDb";
-import { getOpenAIApiKey, getOpenAIBaseUrl } from "./openaiCredentials";
+import { getLLMProviderApiKey, getLLMProviderBaseUrl } from "./LLMProviderCredentials";
 import { logger } from "./logger";
 import { logEvent } from "./eventLogsDatabase";
 
-// Retry transient OpenAI failures (429 / 5xx) with exponential backoff.
+// Retry transient LLMProvider failures (429 / 5xx) with exponential backoff.
 // Permanent errors (auth, quota, bad request, parse) throw immediately so
 // we don't spin on a doomed request.
 const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
@@ -38,12 +38,12 @@ async function generateWithRetry(
   callId: number,
 ): Promise<{ text: string }> {
   // Raw-fetch chat completions via generateChatText — bypasses the
-  // `@ai-sdk/openai` v3-spec regression that broke `aiSdk.chat(...)`
+  // `@ai-sdk/LLMProvider` v3-spec regression that broke `aiSdk.chat(...)`
   // calls in production. Same retry + backoff behaviour, same return
   // shape, zero SDK dependency. The `_unusedSdk` parameter is kept for
   // signature stability with existing callers; remove on the next
   // refactor pass.
-  const { generateChatText } = await import("./openaiChatHelper");
+  const { generateChatText } = await import("./LLMProviderChatHelper");
   let lastErr: any = null;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
@@ -55,17 +55,17 @@ async function generateWithRetry(
         // trip on fenced code blocks or stray prose — the failure mode
         // that left every attribute showing "NA" with skipReason
         // "ai_parse_failed". The SDR prompt already contains the literal
-        // word "JSON" (required by OpenAI when response_format is set).
+        // word "JSON" (required by LLMProvider when response_format is set).
         responseFormat: "json_object",
       });
     } catch (err: any) {
       lastErr = err;
       // Status may come back embedded in the error message string
-      // (helper throws `OpenAI /chat/completions <STATUS>: ...`). Pull
+      // (helper throws `LLMProvider /chat/completions <STATUS>: ...`). Pull
       // it back out for the retry decision so 429/5xx still get the
       // exponential-backoff path that kept the original implementation
-      // resilient to OpenAI hiccups.
-      const fromMsg = /OpenAI \/chat\/completions (\d+):/.exec(
+      // resilient to LLMProvider hiccups.
+      const fromMsg = /LLMProvider \/chat\/completions (\d+):/.exec(
         err?.message || "",
       );
       const status =
@@ -153,18 +153,18 @@ export async function triggerSDREvaluationForCall(
     );
 
     const { generateText } = await import("ai");
-    const { createOpenAI } = await import("@ai-sdk/openai");
+    const { createLLMProvider } = await import("@ai-sdk/LLMProvider");
 
-    const aiSdk = createOpenAI({
-      baseURL: getOpenAIBaseUrl(),
-      apiKey: getOpenAIApiKey(),
+    const aiSdk = createLLMProvider({
+      baseURL: getLLMProviderBaseUrl(),
+      apiKey: getLLMProviderApiKey(),
     });
 
     let aiResult;
     try {
       // gpt-4o-mini (via generateWithRetry) — 75% cheaper than gpt-4o with
       // comparable quality on structured JSON output. Retries on 429 / 5xx
-      // transient OpenAI failures with exponential backoff so a brief
+      // transient LLMProvider failures with exponential backoff so a brief
       // network blip never kills a scorecard evaluation.
       aiResult = await generateWithRetry(aiSdk, evaluationPrompt, callId);
     } catch (aiErr: any) {
@@ -237,7 +237,7 @@ export async function triggerSDREvaluationForCall(
     //      not applicable") before the score is final.
     //
     // Threshold is tunable via SDR_QA_REVIEW_SCORE_THRESHOLD so QA can
-    // tighten or loosen it from Replit Secrets without a redeploy.
+    // tighten or loosen it from HostingPlatform Secrets without a redeploy.
     const qaThreshold = (() => {
       const raw = process.env.SDR_QA_REVIEW_SCORE_THRESHOLD;
       const parsed = parseInt(raw ?? "60", 10);

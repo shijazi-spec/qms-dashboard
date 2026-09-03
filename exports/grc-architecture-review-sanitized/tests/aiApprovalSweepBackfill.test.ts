@@ -78,12 +78,12 @@ async function run(): Promise<void> {
   const SECRET_BCRYPT = "$2b$12$abcdefghijklmnopqrstuv1234567890ABCDEFGHIJKLMNOPQRSTU";
   const SECRET_JWT =
     "<REDACTED_TOKEN>";
-  const SAFE_PROSE = "Rotate API key for zoho_books integration";
+  const SAFE_PROSE = "Rotate API key for CRMProvider_books integration";
 
   const initial: RowState[] = [
     {
       id: 1,
-      payload: { target_integration: "zoho_books", note: SAFE_PROSE },
+      payload: { target_integration: "CRMProvider_books", note: SAFE_PROSE },
       payload_preview: `${SAFE_PROSE} — new key=${SECRET_KEY}, gh=${SECRET_GH}`,
       execution_result: null,
     },
@@ -95,13 +95,13 @@ async function run(): Promise<void> {
     },
     {
       id: 3,
-      payload: { target_integration: "stripe", note: "no secret here" },
-      payload_preview: "Rotate Stripe webhook signing key (id=we_abc123)",
+      payload: { target_integration: "PaymentProvider", note: "no secret here" },
+      payload_preview: "Rotate PaymentProvider webhook signing key (id=we_abc123)",
       execution_result: null,
     },
     {
       id: 4,
-      payload: { target_integration: "zoho_books" },
+      payload: { target_integration: "CRMProvider_books" },
       payload_preview: `Already redacted preview — key=${REDACTED_SENTINEL}`,
       execution_result: null,
     },
@@ -137,7 +137,7 @@ async function run(): Promise<void> {
   );
   assert(
     row1.payload_preview.includes("Rotate API key") &&
-      row1.payload_preview.includes("zoho_books"),
+      row1.payload_preview.includes("CRMProvider_books"),
     "row 1 preview preserves the surrounding human-readable prose",
   );
 
@@ -151,7 +151,7 @@ async function run(): Promise<void> {
 
   const row3 = stub1.rows.find(r => r.id === 3)!;
   assert(
-    row3.payload_preview === "Rotate Stripe webhook signing key (id=we_abc123)",
+    row3.payload_preview === "Rotate PaymentProvider webhook signing key (id=we_abc123)",
     "row 3 (clean control) preview is byte-identical — no UPDATE issued",
   );
 
@@ -224,7 +224,7 @@ async function run(): Promise<void> {
     {
       id: 20,
       payload: {
-        target: "zoho_books",
+        target: "CRMProvider_books",
         note: `Previous key was ${SECRET_KEY}`,
         meta: { summary: `issued to ${SECRET_GH}`, count: 5 },
       },
@@ -236,7 +236,7 @@ async function run(): Promise<void> {
     },
     {
       id: 21,
-      payload: { target: "stripe", note: "no credential here" },
+      payload: { target: "PaymentProvider", note: "no credential here" },
       payload_preview: "clean preview",
       execution_result: null,
     },
@@ -311,7 +311,7 @@ async function run(): Promise<void> {
   const innocuousGh = "<REDACTED_TOKEN>";
   const innocuousJwt =
     "<REDACTED_TOKEN>";
-  const innocuousSafe = "operation completed for tenant acme-corp";
+  const innocuousSafe = "operation completed for tenant Example Organization-corp";
 
   const innocuousRows: RowState[] = [
     {
@@ -319,7 +319,7 @@ async function run(): Promise<void> {
       // `note` and `message` are NOT in the key deny-list — only value-level
       // regex redaction can remove the credentials they contain.
       payload: {
-        target: "zoho_books",
+        target: "CRMProvider_books",
         note: `key=sk-live-${innocuousSecret.slice(3)}`,
         message: `rotated to ${innocuousSecret}`,
       },
@@ -342,8 +342,8 @@ async function run(): Promise<void> {
     {
       id: 42,
       // Clean row — no credentials anywhere; must not be touched.
-      payload: { target: "stripe", description: "webhook re-registration" },
-      payload_preview: "Register Stripe webhook (id=we_def456)",
+      payload: { target: "PaymentProvider", description: "webhook re-registration" },
+      payload_preview: "Register PaymentProvider webhook (id=we_def456)",
       execution_result: { data: { status: "ok", hook_id: "we_def456" } },
     },
   ];
@@ -376,7 +376,7 @@ async function run(): Promise<void> {
     "row 40 payload contains the redaction sentinel after value-level sweep",
   );
   assert(
-    innocuousRow40.payload.target === "zoho_books",
+    innocuousRow40.payload.target === "CRMProvider_books",
     "row 40 payload.target (non-secret) is preserved",
   );
 
@@ -401,7 +401,7 @@ async function run(): Promise<void> {
 
   const innocuousRow42 = stub8.rows.find(r => r.id === 42)!;
   assert(
-    innocuousRow42.payload.target === "stripe" &&
+    innocuousRow42.payload.target === "PaymentProvider" &&
       innocuousRow42.execution_result?.data?.status === "ok",
     "row 42 (clean control) is byte-identical — no UPDATE issued",
   );

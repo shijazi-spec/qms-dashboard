@@ -34,10 +34,10 @@ ExampleOrg Enterprise GRC & Quality Management Platform is an enterprise-grade s
 | Component | Technology |
 |-----------|------------|
 | Backend Framework | Mastra (TypeScript) |
-| AI/LLM | GPT-4o via Replit AI Integrations |
-| Database | PostgreSQL (Neon-backed) with 39+ tables |
+| AI/LLM | GPT-4o via HostingPlatform AI Integrations |
+| Database | PostgreSQL (DatabaseProvider-backed) with 39+ tables |
 | Workflow Orchestration | Inngest |
-| Email | Replit Mail |
+| Email | HostingPlatform Mail |
 | Frontend | HTML5, TailwindCSS, Chart.js |
 | Runtime | Node.js 20+ |
 
@@ -109,10 +109,10 @@ ExampleOrg Enterprise GRC & Quality Management Platform is an enterprise-grade s
 ┌─────────────────────────────┴───────────────────────────────────┐
 │                    Data & Services Layer                         │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │  PostgreSQL  │  │ Replit Mail  │  │   Inngest    │          │
+│  │  PostgreSQL  │  │ HostingPlatform Mail  │  │   Inngest    │          │
 │  └──────────────┘  └──────────────┘  └──────────────┘          │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │ Google Cal   │  │  Zoho CRM    │  │    Five9     │          │
+│  │ IdentityProvider Cal   │  │  CRMProvider CRM    │  │    ContactCenterProvider     │          │
 │  └──────────────┘  └──────────────┘  └──────────────┘          │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -154,8 +154,8 @@ ExampleOrg Enterprise GRC & Quality Management Platform is an enterprise-grade s
 
 **Data Sources:**
 - Quality audit results (PostgreSQL)
-- Google Calendar events
-- Zoho CRM data
+- IdentityProvider Calendar events
+- CRMProvider CRM data
 
 ---
 
@@ -218,7 +218,7 @@ ExampleOrg Enterprise GRC & Quality Management Platform is an enterprise-grade s
 **Purpose:** AI-powered call analysis and CRM compliance.
 
 **Features:**
-- Call record ingestion (Five9 integration)
+- Call record ingestion (ContactCenterProvider integration)
 - AI Analysis:
   - Sentiment scoring (0-100)
   - Voice of Customer extraction
@@ -1051,7 +1051,7 @@ CREATE TABLE pmp_change_requests (
 CREATE TABLE call_records (
   id SERIAL PRIMARY KEY,
   call_id VARCHAR(100) UNIQUE,
-  source VARCHAR(50) DEFAULT 'five9',
+  source VARCHAR(50) DEFAULT 'ContactCenterProvider',
   lead_id VARCHAR(100),
   deal_id VARCHAR(100),
   contact_name VARCHAR(255),
@@ -1310,9 +1310,9 @@ CREATE TABLE scorecard_attributes (
 
 ## 6. External Integrations
 
-### 6.1 Google Calendar
+### 6.1 IdentityProvider Calendar
 
-**File:** `src/utils/googleCalendar.ts`
+**File:** `src/utils/IdentityProviderCalendar.ts`
 
 **Purpose:** Fetch calendar events for scheduling analysis in quality audits.
 
@@ -1320,47 +1320,47 @@ CREATE TABLE scorecard_attributes (
 
 ---
 
-### 6.2 Zoho CRM
+### 6.2 CRMProvider CRM
 
-**File:** `src/utils/zohoCRM.ts`
+**File:** `src/utils/CRMProviderCRM.ts`
 
 **Purpose:** Fetch CRM data (Leads, Deals) for data hygiene audits.
 
 **Authentication:** OAuth 2.0 with automatic token refresh
 
 **Environment Variables:**
-- `ZOHO_CLIENT_ID`
-- `ZOHO_CLIENT_SECRET`
-- `ZOHO_REFRESH_TOKEN`
-- `ZOHO_API_DOMAIN` (optional, defaults to `<REDACTED_URL>`)
-- `ZOHO_ACCOUNTS_URL` (optional, defaults to `<REDACTED_URL>`)
+- `CRMProvider_CLIENT_ID`
+- `CRMProvider_CLIENT_SECRET`
+- `CRMProvider_REFRESH_TOKEN`
+- `CRMProvider_API_DOMAIN` (optional, defaults to `<REDACTED_URL>`)
+- `CRMProvider_ACCOUNTS_URL` (optional, defaults to `<REDACTED_URL>`)
 
 **Pagination Support (NEW in v2.1):**
 
-The system now supports full pagination to fetch ALL records from Zoho CRM:
+The system now supports full pagination to fetch ALL records from CRMProvider CRM:
 
 ```typescript
-// fetchAllZohoRecords handles pagination automatically
-const allLeads = await fetchAllZohoRecords('Leads', {
+// fetchAllCRMProviderRecords handles pagination automatically
+const allLeads = await fetchAllCRMProviderRecords('Leads', {
   maxRecords: 10000  // Optional limit (default: 10000)
 });
 ```
 
 **How it works:**
-1. Fetches 200 records per page (Zoho API limit)
+1. Fetches 200 records per page (CRMProvider API limit)
 2. Loops through all pages until no more data
 3. Logs progress: `Fetched page 1: 200 records (total: 200)`
 4. Returns complete dataset for accurate audits
 
 **Data Mode:**
 - `MOCK`: Uses local mock data from `mockdata/` directory
-- `REAL`: Fetches live data from Zoho CRM with pagination
+- `REAL`: Fetches live data from CRMProvider CRM with pagination
 
 Set via `DATA_MODE` environment variable.
 
 ---
 
-### 6.3 Five9 (Call Intelligence)
+### 6.3 ContactCenterProvider (Call Intelligence)
 
 **Purpose:** Source of call records for the Call Intelligence module.
 
@@ -1371,9 +1371,9 @@ Set via `DATA_MODE` environment variable.
 
 ---
 
-### 6.4 Replit Mail
+### 6.4 HostingPlatform Mail
 
-**File:** `src/utils/replitmail.ts`
+**File:** `src/utils/HostingPlatformmail.ts`
 
 **Purpose:** Send automated quality report emails.
 
@@ -1390,7 +1390,7 @@ Set via `DATA_MODE` environment variable.
 
 **File:** `src/mastra/agents/qualitySpecialistAgent.ts`
 
-**Model:** GPT-4o (via Replit AI Integrations)
+**Model:** GPT-4o (via HostingPlatform AI Integrations)
 
 **Capabilities:**
 - Data hygiene audits
@@ -1411,8 +1411,8 @@ Set via `DATA_MODE` environment variable.
 
 **Steps:**
 1. Environment validation
-2. Google Calendar data fetch
-3. Zoho CRM data fetch
+2. IdentityProvider Calendar data fetch
+3. CRMProvider CRM data fetch
 4. AI analysis (GPT-4o)
 5. Score calculation
 6. Result storage
@@ -1437,19 +1437,19 @@ Set via `DATA_MODE` environment variable.
 
 ### 8.1 Authentication
 
-- **Google OAuth 2.0**: Primary login method via "Sign in with Google" on `/login`
+- **IdentityProvider OAuth 2.0**: Primary login method via "Sign in with IdentityProvider" on `/login`
 - **Session Management**: HMAC-signed cookies using `SESSION_SECRET`, 7-day expiry
-- **Admin Endpoints**: Accept Google session cookies OR `X-Admin-Key` header for authorization
+- **Admin Endpoints**: Accept IdentityProvider session cookies OR `X-Admin-Key` header for authorization
 - **Route Protection**: All dashboard pages redirect to `/login` if no valid session; public pages: `/login`, `/guide`, `/accept-invite`
-- **User Storage**: Google-authenticated users are upserted into `platform_users` table with `google_id`, `picture`, and `auth_provider` columns
+- **User Storage**: IdentityProvider-authenticated users are upserted into `platform_users` table with `IdentityProvider_id`, `picture`, and `auth_provider` columns
 
 ### 8.2 Data Protection
 
 - SHA-256 checksums on event logs
 - Immutable audit trail
 - JSONB encryption for sensitive fields
-- HTTPS/TLS encryption in transit (enforced by Replit deployment)
-- Secrets managed via Replit environment secrets (never exposed in code)
+- HTTPS/TLS encryption in transit (enforced by HostingPlatform deployment)
+- Secrets managed via HostingPlatform environment secrets (never exposed in code)
 
 ### 8.3 Compliance Standards
 
@@ -1544,7 +1544,7 @@ Event logs capture:
 
 ### 10.1 Environment
 
-**Platform:** Replit
+**Platform:** HostingPlatform
 
 **Runtime:** Node.js 20+
 
@@ -1557,17 +1557,17 @@ Event logs capture:
 | Variable | Purpose |
 |----------|---------|
 | `DATABASE_URL` | PostgreSQL connection |
-| `GOOGLE_CLIENT_ID` | Google OAuth 2.0 client ID |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth 2.0 client secret |
+| `IdentityProvider_CLIENT_ID` | IdentityProvider OAuth 2.0 client ID |
+| `IdentityProvider_CLIENT_SECRET` | IdentityProvider OAuth 2.0 client secret |
 | `SESSION_SECRET` | Session cookie signing key |
 | `ADMIN_API_KEY` | Admin authentication (fallback) |
-| `AI_INTEGRATIONS_OPENAI_BASE_URL` | OpenAI endpoint |
-| `AI_INTEGRATIONS_OPENAI_API_KEY` | OpenAI key |
-| `RESEND_API_KEY` | Email sending via Resend |
-| `RESEND_FROM_EMAIL` | From address for emails |
-| `ZOHO_CLIENT_ID` | Zoho OAuth |
-| `ZOHO_CLIENT_SECRET` | Zoho OAuth |
-| `ZOHO_REFRESH_TOKEN` | Zoho OAuth |
+| `AI_INTEGRATIONS_LLMProvider_BASE_URL` | LLMProvider endpoint |
+| `AI_INTEGRATIONS_LLMProvider_API_KEY` | LLMProvider key |
+| `EmailProvider_API_KEY` | Email sending via EmailProvider |
+| `EmailProvider_FROM_EMAIL` | From address for emails |
+| `CRMProvider_CLIENT_ID` | CRMProvider OAuth |
+| `CRMProvider_CLIENT_SECRET` | CRMProvider OAuth |
+| `CRMProvider_REFRESH_TOKEN` | CRMProvider OAuth |
 
 ### 10.3 Scheduled Tasks
 
@@ -1577,7 +1577,7 @@ Event logs capture:
 
 ### 10.4 Deployment Process
 
-1. Push code to Replit
+1. Push code to HostingPlatform
 2. Workflows auto-restart
 3. Database migrations run on startup
 4. Verify via Playground tab
@@ -1899,7 +1899,7 @@ created_at TIMESTAMP
 
 #### Purpose
 
-AI-powered CRM duplicate detection for Leads and Deals using domain-based clustering. Operates in READ-ONLY mode - detects and recommends, but does not modify Zoho CRM data.
+AI-powered CRM duplicate detection for Leads and Deals using domain-based clustering. Operates in READ-ONLY mode - detects and recommends, but does not modify CRMProvider CRM data.
 
 #### Database Tables
 
@@ -1934,7 +1934,7 @@ AI-powered CRM duplicate detection for Leads and Deals using domain-based cluste
 | id | SERIAL | Primary key |
 | cluster_id | INTEGER | FK to duplicate_clusters |
 | record_type | VARCHAR(20) | lead/deal |
-| zoho_record_id | VARCHAR(255) | Zoho CRM record ID |
+| CRMProvider_record_id | VARCHAR(255) | CRMProvider CRM record ID |
 | record_name | VARCHAR(255) | Lead name or Deal name |
 | email | VARCHAR(255) | Contact email |
 | domain | VARCHAR(255) | Email domain |
@@ -2000,20 +2000,20 @@ The Testing Sandbox (`/sandbox`) includes a Duplicate Detection Testing section:
 
 | Component | Details |
 |-----------|---------|
-| **Platform** | Replit (Autoscale Deployment) |
-| **Cloud Provider** | Google Cloud Platform (GCP) |
+| **Platform** | HostingPlatform (Autoscale Deployment) |
+| **Cloud Provider** | IdentityProvider Cloud Platform (GCP) |
 | **Server Region** | United States |
-| **Database** | PostgreSQL (hosted on Replit infrastructure) |
+| **Database** | PostgreSQL (hosted on HostingPlatform infrastructure) |
 | **Domain** | `<REDACTED_HOST>` |
 | **TLS/SSL** | Enforced by default on all deployed applications |
 | **Scaling** | Autoscale — scales up under load, scales down when idle |
 
 ### 12.2 Platform Justification
 
-ExampleOrg is hosted on Replit for the following strategic reasons:
+ExampleOrg is hosted on HostingPlatform for the following strategic reasons:
 
 **Rapid Development & Iteration**
-- Replit provides an integrated development, testing, and deployment environment that enables rapid prototyping and iteration of the GRC & QMS platform
+- HostingPlatform provides an integrated development, testing, and deployment environment that enables rapid prototyping and iteration of the GRC & QMS platform
 - Changes can be deployed to production within minutes, supporting agile governance requirements
 - Built-in version control with checkpoint/rollback capabilities protects against deployment failures
 
@@ -2023,9 +2023,9 @@ ExampleOrg is hosted on Replit for the following strategic reasons:
 - Pay-for-usage model reduces overhead compared to maintaining dedicated servers
 
 **Security Controls**
-- All secrets and API keys are managed through Replit's encrypted secrets management (never exposed in code or logs)
+- All secrets and API keys are managed through HostingPlatform's encrypted secrets management (never exposed in code or logs)
 - HTTPS/TLS encryption enforced on all traffic by default
-- Google OAuth 2.0 authentication with HMAC-signed session cookies
+- IdentityProvider OAuth 2.0 authentication with HMAC-signed session cookies
 - Immutable audit trail with SHA-256 checksums on all event logs
 
 **This platform is intended as a development and operational pilot environment.** The application architecture is designed to be fully portable and can be migrated to on-premises or private cloud infrastructure at any time (see Section 12.4).
@@ -2038,7 +2038,7 @@ The ExampleOrg platform has been designed with a clear data classification polic
 
 | Data Category | Examples | Classification | Sensitivity |
 |---------------|----------|---------------|-------------|
-| Employee Profiles | Name, email, role, team, Google profile picture | Internal | Medium |
+| Employee Profiles | Name, email, role, team, IdentityProvider profile picture | Internal | Medium |
 | Quality Records | Audit results, scorecards, CAPA actions, quality trends | Internal | Low-Medium |
 | Governance Documents | Policies, procedures, governance document metadata | Internal | Low-Medium |
 | Risk Register | Risk entries, assessments, treatment plans | Internal | Medium |
@@ -2068,19 +2068,19 @@ The platform contains **operational and employee-related data only** — primari
 
 ### 12.4 Migration Plan — Moving to On-Premises or Private Cloud
 
-The ExampleOrg platform is built on standard, open-source technologies (Node.js, PostgreSQL, TypeScript) with no vendor lock-in to Replit. The organization retains full capability to migrate the application to its own servers or data center at any time.
+The ExampleOrg platform is built on standard, open-source technologies (Node.js, PostgreSQL, TypeScript) with no vendor lock-in to HostingPlatform. The organization retains full capability to migrate the application to its own servers or data center at any time.
 
 #### 12.4.1 Architecture Portability
 
-| Component | Current (Replit) | Target (On-Premises / Private DC) |
+| Component | Current (HostingPlatform) | Target (On-Premises / Private DC) |
 |-----------|-----------------|-----------------------------------|
-| Runtime | Node.js 20+ on Replit | Node.js 20+ on any Linux server |
-| Database | PostgreSQL on Replit | PostgreSQL on any server or managed service (e.g., AWS RDS, Azure Database, self-hosted) |
+| Runtime | Node.js 20+ on HostingPlatform | Node.js 20+ on any Linux server |
+| Database | PostgreSQL on HostingPlatform | PostgreSQL on any server or managed service (e.g., AWS RDS, Azure Database, self-hosted) |
 | Web Server | Hono (built-in HTTP) on port 5000 | Same — Hono serves on any port, behind Nginx/Apache reverse proxy |
-| AI/LLM | OpenAI GPT-4o API | Same — API key based, works from any server |
-| Email | Resend API | Same — API key based, works from any server |
-| CRM | Zoho CRM API | Same — OAuth token based, works from any server |
-| Auth | Google OAuth 2.0 | Same — update redirect URI to new domain |
+| AI/LLM | LLMProvider GPT-4o API | Same — API key based, works from any server |
+| Email | EmailProvider API | Same — API key based, works from any server |
+| CRM | CRMProvider CRM API | Same — OAuth token based, works from any server |
+| Auth | IdentityProvider OAuth 2.0 | Same — update redirect URI to new domain |
 
 #### 12.4.2 Migration Steps
 
@@ -2093,7 +2093,7 @@ The ExampleOrg platform is built on standard, open-source technologies (Node.js,
 
 **Phase 2: Export & Transfer Code (1 day)**
 
-1. Clone the full repository from Replit (or GitHub if synced):
+1. Clone the full repository from HostingPlatform (or SourceControlProvider if synced):
    ```bash
    git clone <repository-url> /opt/ExampleOrg
    cd /opt/ExampleOrg
@@ -2102,20 +2102,20 @@ The ExampleOrg platform is built on standard, open-source technologies (Node.js,
 2. Copy all environment secrets to the new server's environment (`.env` file or system environment):
    ```
    DATABASE_URL=postgresql://user:password@localhost:5432/ExampleOrg
-   GOOGLE_CLIENT_ID=<your-google-client-id>
-   GOOGLE_CLIENT_SECRET=<your-google-client-secret>
+   IdentityProvider_CLIENT_ID=<your-IdentityProvider-client-id>
+   IdentityProvider_CLIENT_SECRET=<your-IdentityProvider-client-secret>
    SESSION_SECRET=<your-session-secret>
    ADMIN_API_KEY=<your-admin-key>
-   RESEND_API_KEY=<your-resend-key>
-   RESEND_FROM_EMAIL=<your-from-email>
-   ZOHO_CLIENT_ID=<your-zoho-client-id>
-   ZOHO_CLIENT_SECRET=<your-zoho-client-secret>
-   ZOHO_REFRESH_TOKEN=<your-zoho-refresh-token>
+   EmailProvider_API_KEY=<your-EmailProvider-key>
+   EmailProvider_FROM_EMAIL=<your-from-email>
+   CRMProvider_CLIENT_ID=<your-CRMProvider-client-id>
+   CRMProvider_CLIENT_SECRET=<your-CRMProvider-client-secret>
+   CRMProvider_REFRESH_TOKEN=<your-CRMProvider-refresh-token>
    ```
 
 **Phase 3: Database Migration (1 day)**
 
-1. Export the database from Replit PostgreSQL:
+1. Export the database from HostingPlatform PostgreSQL:
    ```bash
    pg_dump $DATABASE_URL --no-owner --no-acl > ExampleOrg_backup.sql
    ```
@@ -2132,7 +2132,7 @@ The ExampleOrg platform is built on standard, open-source technologies (Node.js,
 **Phase 4: Configure & Launch (1 day)**
 
 1. Update the `DATABASE_URL` to point to the local/private PostgreSQL instance
-2. Update Google OAuth redirect URI in Google Cloud Console to the new domain
+2. Update IdentityProvider OAuth redirect URI in IdentityProvider Cloud Console to the new domain
 3. Configure Nginx reverse proxy:
    ```nginx
    server {
@@ -2164,11 +2164,11 @@ The ExampleOrg platform is built on standard, open-source technologies (Node.js,
 **Phase 5: Validation & Cutover (1 day)**
 
 1. Verify all 18+ dashboards load correctly
-2. Verify Google OAuth login works with new redirect URI
+2. Verify IdentityProvider OAuth login works with new redirect URI
 3. Verify all API endpoints return correct data
 4. Verify audit trail and event logging
 5. Update DNS to point the domain to the new server
-6. Monitor for 48 hours before decommissioning the Replit deployment
+6. Monitor for 48 hours before decommissioning the HostingPlatform deployment
 
 #### 12.4.3 Estimated Migration Timeline
 

@@ -505,9 +505,9 @@ async function main(): Promise<void> {
       expect403: [viewer],
     },
     {
-      label: "POST /api/infographic/quality-snapshot/share/slack — executive blocked",
+      label: "POST /api/infographic/quality-snapshot/share/ChatProvider — executive blocked",
       method: "POST",
-      path: "/api/infographic/quality-snapshot/share/slack",
+      path: "/api/infographic/quality-snapshot/share/ChatProvider",
       allowedStatuses: [200, 404],
       expect200: governanceWrite,
       expect403: [viewer, exec],

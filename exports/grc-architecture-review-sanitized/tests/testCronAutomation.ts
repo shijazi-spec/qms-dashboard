@@ -5,7 +5,7 @@
  * that use Inngest for orchestration. It simulates a cron schedule firing.
  *
  * WHAT THIS TESTS:
- * - Manual trigger of cron workflow (replit/cron.trigger event)
+ * - Manual trigger of cron workflow (HostingPlatform/cron.trigger event)
  * - Workflow execution without waiting for schedule
  * - Complete Inngest step-by-step orchestration
  * - Fast feedback loop for cron automation development
@@ -52,7 +52,7 @@ async function testCronTrigger() {
      */
     await inngest.send({
       // Event name that cron triggers listen for (see registerCronWorkflow)
-      name: "replit/cron.trigger",
+      name: "HostingPlatform/cron.trigger",
 
       // Cron workflows don't receive external input, so data is empty
       data: {},

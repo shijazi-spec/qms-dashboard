@@ -24,17 +24,17 @@ Use processors for content moderation, prompt injection prevention, response san
 Import and instantiate the relevant processor class, and pass it to your agent’s configuration using either the `inputProcessors` or `outputProcessors` option:
 
 ```typescript {3,9-17} filename="src/mastra/agents/moderated-agent.ts" showLineNumbers copy
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 import { Agent } from "@mastra/core/agent";
 import { ModerationProcessor } from "@mastra/core/processors";
 
 export const moderatedAgent = new Agent({
   name: "moderated-agent",
   instructions: "You are a helpful assistant",
-  model: openai("gpt-4o-mini"),
+  model: LLMProvider("gpt-4o-mini"),
   inputProcessors: [
     new ModerationProcessor({
-      model: openai("gpt-4.1-nano"),
+      model: LLMProvider("gpt-4.1-nano"),
       categories: ["hate", "harassment", "violence"],
       threshold: 0.7,
       strategy: "block",
@@ -79,7 +79,7 @@ export const secureAgent = new Agent({
   // ...
   inputProcessors: [
     new PromptInjectionDetector({
-      model: openai("gpt-4.1-nano"),
+      model: LLMProvider("gpt-4.1-nano"),
       threshold: 0.8,
       strategy: 'rewrite',
       detectionTypes: ['injection', 'jailbreak', 'system-override'],
@@ -101,7 +101,7 @@ export const multilingualAgent = new Agent({
   // ...
   inputProcessors: [
     new LanguageDetector({
-      model: openai("gpt-4.1-nano"),
+      model: LLMProvider("gpt-4.1-nano"),
       targetLanguages: ['English', 'en'],
       strategy: 'translate',
       threshold: 0.8,
@@ -168,7 +168,7 @@ import { SystemPromptScrubber } from "@mastra/core/processors";
 const scrubbedAgent = new Agent({
   outputProcessors: [
     new SystemPromptScrubber({
-      model: openai("gpt-4.1-nano"),
+      model: LLMProvider("gpt-4.1-nano"),
       strategy: "redact",
       customPatterns: ["system prompt", "internal instructions"],
       includeDetections: true,
@@ -197,7 +197,7 @@ export const moderatedAgent = new Agent({
   // ...
   inputProcessors: [
     new ModerationProcessor({
-      model: openai("gpt-4.1-nano"),
+      model: LLMProvider("gpt-4.1-nano"),
       threshold: 0.7,
       strategy: "block",
       categories: ["hate", "harassment", "violence"]
@@ -224,7 +224,7 @@ export const privateAgent = new Agent({
   // ...
   inputProcessors: [
     new PIIDetector({
-      model: openai("gpt-4.1-nano"),
+      model: LLMProvider("gpt-4.1-nano"),
       threshold: 0.6,
       strategy: 'redact',
       redactionMethod: 'mask',

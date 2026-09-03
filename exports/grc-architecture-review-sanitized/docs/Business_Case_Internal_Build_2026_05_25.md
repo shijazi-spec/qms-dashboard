@@ -4,7 +4,7 @@
 **Prepared by:** Sample User (Operations & Quality HOD)
 **Date:** 2026-05-25
 **Status:** Awaiting CTO approval to proceed
-**Builds on:** CTO approval of the Five9 Scorecard initiative dated Aug 31, 2025 (per WalaaPlus<>Velents email thread)
+**Builds on:** CTO approval of the ContactCenterProvider Scorecard initiative dated Aug 31, 2025 (per WalaaPlus<>Velents email thread)
 **Supersedes vendor path:** Velents engagement paused Nov 26, 2025 in favour of an internally-owned solution
 
 ---
@@ -50,7 +50,7 @@ The Nov 26, 2025 decision to pause the Velents engagement was correct. Three rea
 
 **a) Governance ownership.** PDPL compliance, COPC certification, and any future audit are easier to defend with a system whose source code, data model, and decision logic are inside our control. With Velents, every audit question would have required vendor cooperation; with the in-house build, every question is answerable from inside the company.
 
-**b) Data residency.** Velents hosts on GCP Dammam (per their Aug 29 reply); ExampleOrg already has PDPL-aligned hosting via Replit Saudi region. Eliminates a cross-vendor data-movement question that auditors typically probe.
+**b) Data residency.** Velents hosts on GCP Dammam (per their Aug 29 reply); ExampleOrg already has PDPL-aligned hosting via HostingPlatform Saudi region. Eliminates a cross-vendor data-movement question that auditors typically probe.
 
 **c) Vendor risk.** Velents engagement showed scope-creep and timeline drag (Aug → Nov with no working environment delivered). An in-house team controls its own delivery cadence and feature scope. We have already proven this — the existing platform (`<REDACTED_HOST>/calls`) was built and is being used today, while the equivalent Velents environment never came online.
 
@@ -63,7 +63,7 @@ The platform today has the **scoring engine** (Whisper transcription, COPC v2 sc
 | Week | Deliverable | Manager-visible outcome |
 |---|---|---|
 | **Week 1** | Verify existing fixes + brief SDR team on the consent + 3-point verification scripts (drafted but not yet rolled out) | Coaching tab works end-to-end; SDR team has the new opening procedure |
-| **Weeks 2-3** | **Reports surface** — weekly PDF digest emailed every Monday, Slack alerts on critical fails, CSV export of any agent's history, drill-down from digest line → call → coaching plan | SDR Manager receives "this week's report" automatically every Monday morning |
+| **Weeks 2-3** | **Reports surface** — weekly PDF digest emailed every Monday, ChatProvider alerts on critical fails, CSV export of any agent's history, drill-down from digest line → call → coaching plan | SDR Manager receives "this week's report" automatically every Monday morning |
 | **Weeks 4-5** | SDR pilot (1-2 agents adopt the new opening; manager reviews 5 calls per agent weekly) | Real-world adoption data; refined script wording |
 | **Weeks 5-6** | **Agent View + Speaker Diarization + Talk-Time Analytics** | One page per SDR with scorecard trend, all calls, coaching plans, peer benchmark, AND talk-time stats ("Sample User 65% of calls vs team median 45%"). The Gong/Chorus core insight finally available internally. |
 | **Week 7** | **Team View + QA Inbox** | Manager's home page: agent leaderboard sorted by gap-to-target, weak attributes across the team, "10 calls to review this week" with random sampling |
@@ -75,14 +75,14 @@ In scope:
 - All six week-by-week deliverables above
 - Speaker diarization (agent vs customer audio separation)
 - Talk-time analytics (silence, interruptions, pace, talk ratio)
-- Manager-reportable PDF digest + Slack alerts + CSV exports
+- Manager-reportable PDF digest + ChatProvider alerts + CSV exports
 - Per-agent and team-level dashboards
 - Cohen's κ AI-vs-manager agreement tracking for rubric tuning
 
 Out of scope (deferred with documented re-trigger conditions):
 - **PII redaction in transcripts** — defensible while platform is GRQ-internal only; re-evaluate if access widens to non-GRQ stakeholders or if audit notification arrives
 - **Deterministic compliance engine** (auto-fail on missing consent line / prohibited words) — defensible at current team size where manager spot-check is sufficient; re-evaluate if team scales beyond ~5 SDRs × 50 calls/week
-- **Five9 live webhook ingest** — Phase 2 candidate; current filename-parsed bulk upload is sufficient for historical and weekly batches
+- **ContactCenterProvider live webhook ingest** — Phase 2 candidate; current filename-parsed bulk upload is sufficient for historical and weekly batches
 - **KB/FAQ knowledge checks** — requires a knowledge-base ingestion pipeline that doesn't exist yet
 - **BI exports** (Snowflake/Power BI) — only relevant if ExampleOrg builds a corporate data warehouse
 
@@ -106,7 +106,7 @@ Net coverage: approximately **68% of the Velents proposed scope**, prioritising 
 |---|---|
 | **Engineering effort** | ~8 weeks of focused work at the pace of recent sessions (~1 FTE-equivalent) |
 | **External licensing** | Zero. No vendor contracts, no SaaS subscriptions added. |
-| **Infrastructure** | Existing Replit deployment is sufficient. No new compute or storage required. |
+| **Infrastructure** | Existing HostingPlatform deployment is sufficient. No new compute or storage required. |
 | **AI/API spend increase** | ~20% increase in monthly Whisper API spend due to talk-time analytics pass on every call. Estimated $50-100/month additional based on current call volume. |
 | **Vendor decision** (Week 7) | Choose between in-house diarization (free, more setup) or AssemblyAI/Deepgram ($0.01-0.02 per minute, instant). One-hour decision, formal trade-off written before commitment. |
 | **Team time** | SDR Manager attends one 45-min briefing on the consent + verification scripts. SDR agents adopt the new opening (~6 seconds added to every call). |
@@ -118,7 +118,7 @@ Net coverage: approximately **68% of the Velents proposed scope**, prioritising 
 | SDR team doesn't adopt the consent + verification script by Week 5 | Medium | Delays nothing engineering-wise, but Phase 2 (compliance enforcement, deferred) would have to wait | Manager-led adoption monitoring; pilot in Weeks 2-3 with 1-2 agents before full rollout |
 | Speaker diarization quality is poor on Saudi-Arabic-with-code-switching audio | Medium | Talk-time analytics become unreliable | Pilot diarization on 10 sample calls in Week 6; fallback to AssemblyAI/Deepgram if pyannote underperforms |
 | Engineering capacity drops below 1 FTE | Low-medium | Timeline extends 2-3x | Communicate cadence weekly; defer P5 (κ tracking) first if needed |
-| Zoho sync staleness (recently observed) persists | Low | Per-call data freshness is stale for users | Documented separately; will be addressed if it becomes recurring |
+| CRMProvider sync staleness (recently observed) persists | Low | Per-call data freshness is stale for users | Documented separately; will be addressed if it becomes recurring |
 | PDPL audit lands during the 8-week window | Low | Deferred P0 (PII redaction) becomes urgent | Documented re-trigger conditions in the Decision Record; emergency 1-week sprint to add PII redaction |
 
 ### 7. Success Metrics (DMAIC Control Phase)
@@ -141,7 +141,7 @@ The Aug 17 business case promised five benefits. Here is how each will be measur
 | Time to operational | Unknown (no environment delivered in 4 months) | 8 weeks from approval | Internal delivers; vendor did not |
 | Annual cost | TBD (no commercial offer received) | ~$600-1,200/year (Whisper API increase) | Significant savings |
 | Vendor lock-in | High (proprietary platform) | Zero | Internal advantage |
-| Data residency | GCP Dammam (Velents) | Replit Saudi (existing) | Equivalent |
+| Data residency | GCP Dammam (Velents) | HostingPlatform Saudi (existing) | Equivalent |
 | PDPL audit defence | Through vendor | Direct, no intermediary | Internal advantage |
 | Customisability | Limited to vendor's roadmap | Unlimited, in our codebase | Internal advantage |
 
@@ -169,7 +169,7 @@ All committed to `ExampleOrg/docs/`:
 - `SDR_Verification_Step_2026_05_25.md` — the 3-point verification step (name + work email + company)
 - `DMAIC_Call_Details_Unification_2026_05_25.md` — yesterday's UI restructure already shipped
 - `Company_Domain_Strategy_2026_05_25.md` — separate workstream on using domain as a CS primitive
-- `Zoho_OAuth_Setup_2026_05_25.md` — operational playbook for Zoho secrets
+- `CRMProvider_OAuth_Setup_2026_05_25.md` — operational playbook for CRMProvider secrets
 
 ---
 

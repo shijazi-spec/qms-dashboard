@@ -14,9 +14,9 @@ Direct access to individual AI model providers. Each provider offers unique mode
 
 <CardGrid>
     <CardGridItem
-      title="OpenAI"
+      title="LLMProvider"
       description="30 models"
-      href="./providers/openai"
+      href="./providers/LLMProvider"
       logo="<REDACTED_URL>"
     />    <CardGridItem
       title="Anthropic"
@@ -24,9 +24,9 @@ Direct access to individual AI model providers. Each provider offers unique mode
       href="./providers/anthropic"
       logo="<REDACTED_URL>"
     />    <CardGridItem
-      title="Google"
+      title="IdentityProvider"
       description="24 models"
-      href="./providers/google"
+      href="./providers/IdentityProvider"
       logo="<REDACTED_URL>"
     />    <CardGridItem
       title="DeepSeek"
@@ -94,9 +94,9 @@ Direct access to individual AI model providers. Each provider offers unique mode
       href="./providers/fireworks-ai"
       logo="<REDACTED_URL>"
     />    <CardGridItem
-      title="GitHub Models"
+      title="SourceControlProvider Models"
       description="55 models"
-      href="./providers/github-models"
+      href="./providers/SourceControlProvider-models"
       logo="<REDACTED_URL>"
     />    <CardGridItem
       title="Hugging Face"

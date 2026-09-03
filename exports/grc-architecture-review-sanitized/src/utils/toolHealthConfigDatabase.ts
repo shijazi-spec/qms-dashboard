@@ -173,7 +173,7 @@ export async function initToolHealthConfigTables(): Promise<void> {
         ADD COLUMN IF NOT EXISTS breach_diff JSONB
     `);
 
-    // Per-day Slack thread roots for repeated tool-health notifications
+    // Per-day ChatProvider thread roots for repeated tool-health notifications
     // (Task #383). Keyed on a notification kind + the UTC date so that
     // every kind (currently just "config_change") gets one root message
     // per day and all subsequent posts on the same day fold into a thread
@@ -184,7 +184,7 @@ export async function initToolHealthConfigTables(): Promise<void> {
       CREATE TABLE IF NOT EXISTS tool_health_notify_threads (
         notify_key VARCHAR(64) NOT NULL,
         day        DATE        NOT NULL,
-        slack_ts   VARCHAR(64) NOT NULL,
+        ChatProvider_ts   VARCHAR(64) NOT NULL,
         created_at TIMESTAMP   DEFAULT NOW(),
         PRIMARY KEY (notify_key, day)
       )
@@ -462,7 +462,7 @@ export interface ReapExpiredToolHealthOverridesResult {
    * The `updated_by` value that was on the override row immediately
    * before the reaper cleared it — i.e. the operator (or system actor)
    * who originally scheduled the time-boxed override. Surfaced so the
-   * Slack auto-revert notification (Task #213) can attribute the change
+   * ChatProvider auto-revert notification (Task #213) can attribute the change
    * back to the human who set it. `null` when the row didn't exist or
    * had no updated_by recorded.
    */
@@ -601,7 +601,7 @@ export const SYSTEM_REAPER_ATTRIBUTION = "system: override expired";
  * Describes an override row that is expiring within a configurable look-ahead
  * window but has not yet passed its `expires_at`.  Returned by
  * {@link getToolHealthOverrideExpiringSoon} so the cron can dispatch a
- * pre-warning Slack message (Task #219).
+ * pre-warning ChatProvider message (Task #219).
  */
 export interface ToolHealthOverrideExpiringSoon {
   /** The exact timestamp at which the override will auto-revert. */
@@ -667,7 +667,7 @@ export async function getToolHealthOverrideExpiringSoon(
 }
 
 /**
- * Look up the persisted Slack message `ts` for a notification kind on a
+ * Look up the persisted ChatProvider message `ts` for a notification kind on a
  * given UTC day, or `null` if no root has been posted yet (Task #383).
  *
  * The notifier uses this to decide whether the next post should be a new
@@ -682,12 +682,12 @@ export async function getNotifyThreadTs(
   try {
     await initToolHealthConfigTables();
     const result = await pool.query(
-      `SELECT slack_ts FROM tool_health_notify_threads
+      `SELECT ChatProvider_ts FROM tool_health_notify_threads
         WHERE notify_key = $1 AND day = $2`,
       [notifyKey, day],
     );
     const row = result.rows[0];
-    return row?.slack_ts ? String(row.slack_ts) : null;
+    return row?.ChatProvider_ts ? String(row.ChatProvider_ts) : null;
   } catch (err) {
     logger.error("[ToolHealthConfig] getNotifyThreadTs failed:", err);
     return null;
@@ -695,10 +695,10 @@ export async function getNotifyThreadTs(
 }
 
 /**
- * Persist the Slack message `ts` for the day's root notification so future
+ * Persist the ChatProvider message `ts` for the day's root notification so future
  * posts on the same UTC day can thread under it (Task #383). Idempotent:
  * a second call for the same `(notify_key, day)` overwrites the prior row,
- * which keeps the table self-healing if Slack rotated the ts (e.g. message
+ * which keeps the table self-healing if ChatProvider rotated the ts (e.g. message
  * deleted and re-posted).
  *
  * Failures are logged but never thrown — the page itself has already gone
@@ -713,10 +713,10 @@ export async function setNotifyThreadTs(
   try {
     await initToolHealthConfigTables();
     await pool.query(
-      `INSERT INTO tool_health_notify_threads (notify_key, day, slack_ts)
+      `INSERT INTO tool_health_notify_threads (notify_key, day, ChatProvider_ts)
             VALUES ($1, $2, $3)
        ON CONFLICT (notify_key, day) DO UPDATE
-         SET slack_ts = EXCLUDED.slack_ts,
+         SET ChatProvider_ts = EXCLUDED.ChatProvider_ts,
              created_at = NOW()`,
       [notifyKey, day, ts],
     );

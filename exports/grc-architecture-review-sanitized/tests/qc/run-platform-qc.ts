@@ -4,16 +4,16 @@
  *
  * Runs API checks from platform-qc-manifest.ts against the running app,
  * then writes qc-report.json and qc-report.md. Use the report to send
- * "Screen + Functionality" failure items to Replit for fixes.
+ * "Screen + Functionality" failure items to HostingPlatform for fixes.
  *
  * Usage:
- *   QC_BASE_URL=https://<REDACTED_HOST> npx tsx tests/qc/run-platform-qc.ts
+ *   QC_BASE_URL=<REDACTED_URL_SCHEME><REDACTED_HOST> npx tsx tests/qc/run-platform-qc.ts
  *   ADMIN_API_KEY=xxx npx tsx tests/qc/run-platform-qc.ts   # to test protected routes
  *   npm run qc
  *
  * Output:
  *   tests/qc/qc-report.json   - machine-readable results
- *   tests/qc/qc-report.md     - human-readable + "Send to Replit" section
+ *   tests/qc/qc-report.md     - human-readable + "Send to HostingPlatform" section
  */
 
 import { writeFileSync } from "fs";
@@ -134,7 +134,7 @@ async function checkConnectivity(baseUrl: string): Promise<void> {
     const cause = err?.cause?.message ?? err?.cause ?? "";
     console.error(`\n⚠️  Connectivity check failed for ${testUrl}`);
     console.error(`   Error: ${msg}${cause ? `\n   Cause: ${cause}` : ""}`);
-    console.error(`   If testing production (e.g. Replit), try running QC inside Replit Shell against localhost instead.\n`);
+    console.error(`   If testing production (e.g. HostingPlatform), try running QC inside HostingPlatform Shell against localhost instead.\n`);
   }
 }
 
@@ -178,14 +178,14 @@ function writeMdReport(results: QCResult[], baseUrl: string): void {
   md += `| **Total** | **${results.length}** |\n\n`;
 
   if (failed.length > 0) {
-    md += `---\n\n## Send to Replit – Fix These\n\n`;
-    md += `Copy the rows below and send to Replit. Each row = one fix request.\n\n`;
+    md += `---\n\n## Send to HostingPlatform – Fix These\n\n`;
+    md += `Copy the rows below and send to HostingPlatform. Each row = one fix request.\n\n`;
     md += `| Screen | Functionality | Detail |\n`;
     md += `|--------|---------------|--------|\n`;
     for (const r of failed) {
       md += `| ${r.screenName} (${r.screenRoute}) | ${r.functionalityName} | ${r.errorDetail || "—"} |\n`;
     }
-    md += `\n### Machine-friendly (for Replit / Cursor)\n\n`;
+    md += `\n### Machine-friendly (for HostingPlatform / Cursor)\n\n`;
     md += "```json\n";
     md += JSON.stringify(
       failed.map((r) => ({
@@ -225,7 +225,7 @@ async function main(): Promise<void> {
 
   const failed = results.filter((r) => r.status === "fail");
   if (failed.length > 0) {
-    console.log("\n❌", failed.length, "check(s) failed. See qc-report.md for 'Send to Replit' section.");
+    console.log("\n❌", failed.length, "check(s) failed. See qc-report.md for 'Send to HostingPlatform' section.");
     process.exit(1);
   }
   console.log("\n✅ All checks passed.");

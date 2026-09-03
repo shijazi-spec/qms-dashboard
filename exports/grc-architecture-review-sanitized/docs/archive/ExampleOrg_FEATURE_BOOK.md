@@ -39,7 +39,7 @@ Coverage tiers:
 **Primary users**: All users (login flow), Admin (role assignment), Compliance Officer (audit trail review).
 
 **Key surfaces**
-- `/login` — email/Google/GitHub/Apple login via Replit OIDC
+- `/login` — email/IdentityProvider/SourceControlProvider/IdentityProvider login via HostingPlatform OIDC
 - `/users` — Users & Access Control dashboard
 - `/admin` — Admin Panel (requires `ADMIN_API_KEY` or admin role)
 - `/api/auth/me`, `/api/auth/logout`
@@ -100,7 +100,7 @@ Test ID namespaces: `T-IA-*` (dashboard), `T-PROG-*` (programme), `T-INTK-*` (in
 
 ## 1.B — CRM Owner Data Quality Widget · *Tier 1 — daily-driver*
 
-**Purpose**: The owner-leaderboard card on `/` that scores each Zoho CRM record owner on data hygiene, tagged with their Department and Activity (Active/Inactive). Until v4.5.1 the activity badge always displayed `Unknown` and the department fell back to a hard-coded default — both have been fixed by wiring a real owner roster.
+**Purpose**: The owner-leaderboard card on `/` that scores each CRMProvider CRM record owner on data hygiene, tagged with their Department and Activity (Active/Inactive). Until v4.5.1 the activity badge always displayed `Unknown` and the department fell back to a hard-coded default — both have been fixed by wiring a real owner roster.
 
 **Primary user**: CRM Admin, Sales Manager, Quality Manager.
 
@@ -110,13 +110,13 @@ Test ID namespaces: `T-IA-*` (dashboard), `T-PROG-*` (programme), `T-INTK-*` (in
 
 **Data sources**
 - `src/data/seedUsers.ts` — **117-owner seed** loaded from `CRM_Users_Complete_117_Updated.xlsx` (snapshot 2026-04-18). Source of truth for `team`, `status`, `modules`.
-- `fetchZohoUsers()` in `src/utils/zohoCRM.ts` — `GET /crm/v2/users?type=AllUsers` for the live Zoho User ID → display name bridge.
-- Live Zoho `Leads` and `Deals` for the records being audited.
+- `fetchCRMProviderUsers()` in `src/utils/CRMProviderCRM.ts` — `GET /crm/v2/users?type=AllUsers` for the live CRMProvider User ID → display name bridge.
+- Live CRMProvider `Leads` and `Deals` for the records being audited.
 
 **Resolution rules**
-1. Look up owner by Zoho User ID (from CRM record `Owner`).
-2. Match Zoho user's `full_name` against the seed (case-insensitive, whitespace-collapsed).
-3. Seed wins on `team`, `status`, `modules`. Zoho fills in any owner not yet on the seed (new hire path).
+1. Look up owner by CRMProvider User ID (from CRM record `Owner`).
+2. Match CRMProvider user's `full_name` against the seed (case-insensitive, whitespace-collapsed).
+3. Seed wins on `team`, `status`, `modules`. CRMProvider fills in any owner not yet on the seed (new hire path).
 4. Owners with seed `team = ""` are surfaced as `Unassigned` — flagged in `ExampleOrg_GAPS_AND_DATA_NEEDS.md §7.A`.
 
 **Roster snapshot (2026-04-18)**: 117 owners; 11 departments; 64 Active / 53 Inactive; 7 Unassigned (gap).
@@ -126,33 +126,33 @@ Test ID namespaces: `T-IA-*` (dashboard), `T-PROG-*` (programme), `T-INTK-*` (in
 ```
 Scenario: Each agent card shows real Department and Activity
   Given the 117-owner seed roster is loaded
-  And the Zoho Users API is reachable
+  And the CRMProvider Users API is reachable
   When I GET /api/agents/performance
   Then every agent in the response has team ∈ {WP Sales, WO Sales, MP, SDR, CS, BD, MGMT, CRM Admin, Eitmad, WPE, Unassigned}
   And every agent has status ∈ {Active, Inactive, Unknown}
   And NO more than 7 agents have team='Unassigned'
 
-Scenario: Zoho Users API outage falls back gracefully
-  Given the Zoho Users API returns 401/500
+Scenario: CRMProvider Users API outage falls back gracefully
+  Given the CRMProvider Users API returns 401/500
   When I GET /api/agents/performance
   Then the response still succeeds and getUsers() returns the 117-row seed only
   And the API endpoint resolves owners via name-match against the seed (record.Owner.name → seed entry)
   And owners that match the seed by name receive the seed's stable id, team, role, and status
   And owners that do not match (e.g. former employees still on records) are returned with team='Unassigned' and status='Unknown'
-  And a warning is logged: "[Users] Zoho Users API unavailable, falling back to seed only"
+  And a warning is logged: "[Users] CRMProvider Users API unavailable, falling back to seed only"
 
-Scenario: New hire not on seed inherits Zoho profile
-  Given a CRM record is owned by a Zoho user not in the seed
+Scenario: New hire not on seed inherits CRMProvider profile
+  Given a CRM record is owned by a CRMProvider user not in the seed
   When the dashboard renders that owner's card
-  Then team falls back to the Zoho profile name (or 'Unassigned')
-  And status falls back to the Zoho user's active flag
+  Then team falls back to the CRMProvider profile name (or 'Unassigned')
+  And status falls back to the CRMProvider user's active flag
 ```
 
 **Test cases**
 - T-OWN-01 `GET /api/agents/performance` → 200, every `agent.status` ∈ {Active, Inactive, Unknown} (no `null`/missing)
 - T-OWN-02 Open `/`, status filter dropdown → "Active" filters correctly to 64 owners max
 - T-OWN-03 Team filter "Unassigned" → ≤7 cards
-- T-OWN-04 Pull Zoho offline (kill creds) → endpoint still returns 200 with seed-only owners
+- T-OWN-04 Pull CRMProvider offline (kill creds) → endpoint still returns 200 with seed-only owners
 - T-OWN-05 Roster refresh: re-import seed file → counts in `/` widget update on next page load
 
 ---
@@ -167,7 +167,7 @@ Scenario: New hire not on seed inherits Zoho profile
 - `/qms` — Audit Reports dashboard, **Quality Audits (AI)** tab (badged "AI" in nav)
 - `/api/audit/latest`, `/api/audit/history`, `/api/audit/recommendations`, `/api/audit/trigger`
 
-**Data sources**: `quality_audit_results`, `quality_metrics`, `quality_trends`, source data from Zoho CRM via `crm_data` snapshot.
+**Data sources**: `quality_audit_results`, `quality_metrics`, `quality_trends`, source data from CRMProvider CRM via `crm_data` snapshot.
 
 **Schedule**
 - Mastra workflow: `0 8 * * 1` (Mon 09:00 Riyadh)
@@ -589,7 +589,7 @@ Scenario: Executive digest is composable
 
 # Module 9 — Duplicate Radar · *Tier 1 — workhorse*
 
-**Purpose**: Multi-signal duplicate detection across Leads/Contacts/Deals/Accounts in Zoho CRM with auto-resolve, RAG owner accountability, AI recommendations.
+**Purpose**: Multi-signal duplicate detection across Leads/Contacts/Deals/Accounts in CRMProvider CRM with auto-resolve, RAG owner accountability, AI recommendations.
 
 **Primary user**: CRM Admin, Sales Ops.
 
@@ -620,10 +620,10 @@ Scenario: Owner RAG breakdown
 
 # Module 10 — Call Intelligence · *Tier 2*
 
-**Purpose**: Call recordings ingestion (Five9), transcription, AI evaluation against scorecards, agent compliance.
+**Purpose**: Call recordings ingestion (ContactCenterProvider), transcription, AI evaluation against scorecards, agent compliance.
 
 **Key surfaces**
-- `/calls`, `/api/calls`, `/api/calls/:id`, `/api/calls/:id/evaluate`, `/api/calls/analytics`, `/api/calls/five9/configure`
+- `/calls`, `/api/calls`, `/api/calls/:id`, `/api/calls/:id/evaluate`, `/api/calls/analytics`, `/api/calls/ContactCenterProvider/configure`
 
 **Data sources**: `call_records`, `call_transcripts`, `call_analysis`, `call_compliance`, `call_qa_scores`
 
@@ -671,7 +671,7 @@ Scenario: Risky action requires approval
 
 # Module 12 — Infographic Generator · *Tier 1 — newly shipped*
 
-**Purpose**: One-click visual reports of any of 6 platform sections, with PNG download + Slack/Email share.
+**Purpose**: One-click visual reports of any of 6 platform sections, with PNG download + ChatProvider/Email share.
 
 **Primary user**: CCO, CEO, anyone preparing a board pack.
 
@@ -679,8 +679,8 @@ Scenario: Risky action requires approval
 - `/infographic` — Picker UI
 - `/api/infographic/sections` — list
 - `/api/infographic/:section?format=svg|png` — render
-- `/api/infographic/:section/share/slack` — share to Slack (with graceful fallback)
-- `/api/infographic/:section/share/email` — share via Resend
+- `/api/infographic/:section/share/ChatProvider` — share to ChatProvider (with graceful fallback)
+- `/api/infographic/:section/share/email` — share via EmailProvider
 
 **Sections** (6 total): `platform-health`, `kpis`, `risks`, `audits`, `duplicates`, `consultant`
 
@@ -695,9 +695,9 @@ Scenario: PNG output is print-quality
   When I GET /api/infographic/platform-health?format=png
   Then I receive 200 with image/png and dimensions 1200×1500 and size ≥ 500 KB
 
-Scenario: Slack share gracefully falls back when files:write missing
-  Given the Slack bot lacks files:write scope
-  When I POST /api/infographic/risks/share/slack
+Scenario: ChatProvider share gracefully falls back when files:write missing
+  Given the ChatProvider bot lacks files:write scope
+  When I POST /api/infographic/risks/share/ChatProvider
   Then I receive 200 with mode: 'message' and a helpful note
 
 Scenario: Email recipient cap enforced
@@ -709,7 +709,7 @@ Scenario: Email recipient cap enforced
 **Test cases**
 - T-INFO-platform-health, T-INFO-kpis, T-INFO-risks, T-INFO-audits, T-INFO-duplicates, T-INFO-consultant → 200, valid SVG
 - T-INFO-07 `GET /api/infographic/risks?format=png` → 200, ≥ 500 KB
-- T-INFO-08 Slack share returns `mode: 'message'` (current scope state)
+- T-INFO-08 ChatProvider share returns `mode: 'message'` (current scope state)
 - T-INFO-09 Email with 21 recipients → 400
 - T-INFO-10 Email with invalid address → 400
 - T-INFO-11 Unknown section → 404
@@ -803,11 +803,11 @@ Two test layers run as part of every release:
 Script: `scripts/run-platform-tests.sh`
 Output: `ExampleOrg_TEST_REPORT.md`
 
-What it covers: every dashboard route returns the expected status, every key API returns the expected shape, all 6 infographic sections render, Slack/Email validation paths reject bad input.
+What it covers: every dashboard route returns the expected status, every key API returns the expected shape, all 6 infographic sections render, ChatProvider/Email validation paths reject bad input.
 
 ### Layer 2 — Browser end-to-end (~5 min)
 Tool: Playwright via the testing skill.
-What it covers: visit the picker, render an infographic, validate the SVG appears in the DOM, open a Slack share dialog, verify the success banner.
+What it covers: visit the picker, render an infographic, validate the SVG appears in the DOM, open a ChatProvider share dialog, verify the success banner.
 
 ### Pass/fail criteria
 - **Pass**: 100% of Tier-1 tests green, ≥95% of Tier-2 green, ≥90% of Tier-3 green

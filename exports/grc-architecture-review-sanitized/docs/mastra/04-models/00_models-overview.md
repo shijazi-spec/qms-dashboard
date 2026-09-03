@@ -27,11 +27,11 @@ Mastra provides a unified interface for working with LLMs across multiple provid
 
 ## Basic usage
 
-Whether you're using OpenAI, Anthropic, Google, or a gateway like OpenRouter, specify the model as `"provider/model-name"` and Mastra handles the rest.
+Whether you're using LLMProvider, Anthropic, IdentityProvider, or a gateway like OpenRouter, specify the model as `"provider/model-name"` and Mastra handles the rest.
 
 Mastra reads the relevant environment variable (e.g. `ANTHROPIC_API_KEY`) and routes requests to the provider. If an API key is missing, you'll get a clear runtime error showing exactly which variable to set.
 
-<Tabs items={["OpenAI", "Anthropic", "Google Gemini", "xAI", "OpenRouter"]}>
+<Tabs items={["LLMProvider", "Anthropic", "IdentityProvider Gemini", "xAI", "OpenRouter"]}>
   <Tab>
     ```typescript copy showLineNumbers
     import { Agent } from "@mastra/core";
@@ -39,7 +39,7 @@ Mastra reads the relevant environment variable (e.g. `ANTHROPIC_API_KEY`) and ro
     const agent = new Agent({
       name: "my-agent",
       instructions: "You are a helpful assistant",
-      model: "openai/gpt-5"
+      model: "LLMProvider/gpt-5"
     })
     ```
   </Tab>
@@ -61,7 +61,7 @@ Mastra reads the relevant environment variable (e.g. `ANTHROPIC_API_KEY`) and ro
     const agent = new Agent({
       name: "my-agent",
       instructions: "You are a helpful assistant",
-      model: "google/gemini-2.5-flash"
+      model: "IdentityProvider/gemini-2.5-flash"
     })
     ```
   </Tab>
@@ -124,16 +124,16 @@ Browse the directory of available models using the navigation on the left, or ex
       <div className="space-y-3">
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2 text-sm">
-            <img src="<REDACTED_URL>" alt="OpenAI" className="w-4 h-4 object-contain dark:invert dark:brightness-0 dark:contrast-200" />
-            <span>OpenAI</span>
+            <img src="<REDACTED_URL>" alt="LLMProvider" className="w-4 h-4 object-contain dark:invert dark:brightness-0 dark:contrast-200" />
+            <span>LLMProvider</span>
           </div>
           <div className="flex items-center gap-2 text-sm">
             <img src="<REDACTED_URL>" alt="Anthropic" className="w-4 h-4 object-contain dark:invert dark:brightness-0 dark:contrast-200" />
             <span>Anthropic</span>
           </div>
           <div className="flex items-center gap-2 text-sm">
-            <img src="<REDACTED_URL>" alt="Google" className="w-4 h-4 object-contain dark:invert dark:brightness-0 dark:contrast-200" />
-            <span>Google</span>
+            <img src="<REDACTED_URL>" alt="IdentityProvider" className="w-4 h-4 object-contain dark:invert dark:brightness-0 dark:contrast-200" />
+            <span>IdentityProvider</span>
           </div>
         </div>
         <div className="text-sm text-gray-600 dark:text-gray-400 mt-3">+ 41 more</div>
@@ -161,7 +161,7 @@ import { Agent } from "@mastra/core";
 const documentProcessor = new Agent({
   name: "document-processor",
   instructions: "Extract and summarize key information from documents",
-  model: "openai/gpt-4o-mini" 
+  model: "LLMProvider/gpt-4o-mini" 
 })
 
 // Use a powerful reasoning model for complex analysis
@@ -194,7 +194,7 @@ This enables powerful patterns:
 
 ## Provider-specific options
 
-Different model providers expose their own configuration options. With OpenAI, you might adjust the `reasoningEffort`. With Anthropic, you might tune `cacheControl`. Mastra lets you set these specific `providerOptions` either at the agent level or per message.
+Different model providers expose their own configuration options. With LLMProvider, you might adjust the `reasoningEffort`. With Anthropic, you might tune `cacheControl`. Mastra lets you set these specific `providerOptions` either at the agent level or per message.
 
 ```typescript showLineNumbers
 // Agent level (apply to all future messages)
@@ -203,10 +203,10 @@ const planner = new Agent({
     role: "system",
     content: "You are a helpful assistant.",
     providerOptions: {
-      openai: { reasoningEffort: "low" }
+      LLMProvider: { reasoningEffort: "low" }
     }
   },
-  model: "openai/o3-pro",
+  model: "LLMProvider/o3-pro",
 });
 
 const lowEffort = 
@@ -218,7 +218,7 @@ const highEffort = await planner.generate([
     role: "user",
     content: "Plan a simple 3 item dinner menu for a celiac",
     providerOptions: {
-      openai: { reasoningEffort: "high" }
+      LLMProvider: { reasoningEffort: "high" }
     }
   }
 ]);
@@ -233,10 +233,10 @@ If you need to specify custom headers, such as an organization ID or other provi
 const agent = new Agent({
   name: "custom-agent",
   model: {
-    id: "openai/gpt-4-turbo",
-    apiKey: process.env.OPENAI_API_KEY,
+    id: "LLMProvider/gpt-4-turbo",
+    apiKey: process.env.LLMProvider_API_KEY,
     headers: {
-      "OpenAI-Organization": "org-abc123"
+      "LLMProvider-Organization": "org-abc123"
     }
   }
 });
@@ -258,7 +258,7 @@ const agent = new Agent({
   instructions: 'You are a helpful assistant.',
   model: [
     {
-      model: "openai/gpt-5",
+      model: "LLMProvider/gpt-5",
       maxRetries: 3,
     },
     {
@@ -266,7 +266,7 @@ const agent = new Agent({
       maxRetries: 2,
     },
     {
-      model: "google/gemini-2.5-pro",
+      model: "IdentityProvider/gemini-2.5-pro",
       maxRetries: 2,
     },
   ],

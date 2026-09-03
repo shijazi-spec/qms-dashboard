@@ -11,7 +11,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildMultiActiveDealSheets,
   multiActiveDealsFilename,
-  dealZohoUrl,
+  dealCRMProviderUrl,
 } from "../../src/utils/multiActiveDealsExport";
 import type { MultiActiveDealAccount } from "../../src/utils/duplicateRadarDatabase";
 
@@ -87,15 +87,15 @@ describe("the deal sheet is one row per deal", () => {
 
   it("gives every deal a link back to the record", () => {
     const rows = build()[0].rows as any[];
-    expect(rows[0].zoho_link).toBe(dealZohoUrl("5146753000077971324"));
-    expect(rows[0].zoho_link).toContain("/tab/Deals/");
+    expect(rows[0].CRMProvider_link).toBe(dealCRMProviderUrl("5146753000077971324"));
+    expect(rows[0].CRMProvider_link).toContain("/tab/Deals/");
   });
 
   it("leaves the link blank rather than building a broken one", () => {
     const rows = build([
       account({ deals: [deal({ id: "" })] as any }),
     ])[0].rows as any[];
-    expect(rows[0].zoho_link).toBe("");
+    expect(rows[0].CRMProvider_link).toBe("");
   });
 
   it("writes dates as YYYY-MM-DD so Excel sorts them chronologically", () => {

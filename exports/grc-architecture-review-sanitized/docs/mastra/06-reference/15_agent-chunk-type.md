@@ -210,7 +210,7 @@ Signals the end of reasoning generation.
 
 ### reasoning-signature
 
-Contains the reasoning signature from models that support advanced reasoning (like OpenAI's o1 series). The signature represents metadata about the model's internal reasoning process, such as effort level or reasoning approach, but not the actual reasoning content itself.
+Contains the reasoning signature from models that support advanced reasoning (like LLMProvider's o1 series). The signature represents metadata about the model's internal reasoning process, such as effort level or reasoning approach, but not the actual reasoning content itself.
 
 <PropertiesTable
   content={[

@@ -68,18 +68,18 @@ describe("resolveLookupType", () => {
 
 describe("buildLookupSql", () => {
   test("lead_id query is exactly parameterized", () => {
-    const r = buildLookupSql("lead_id", "ZOHO_LEAD_42", 100);
+    const r = buildLookupSql("lead_id", "CRMProvider_LEAD_42", 100);
     expect(r.sql).toBeTruthy();
     if (r.sql !== null) {
       expect(r.sql).toContain("cr.lead_id = $1");
-      expect(r.values).toEqual(["ZOHO_LEAD_42"]);
+      expect(r.values).toEqual(["CRMProvider_LEAD_42"]);
     }
   });
   test("deal_id query targets deal column", () => {
-    const r = buildLookupSql("deal_id", "ZOHO_DEAL_7", 50);
+    const r = buildLookupSql("deal_id", "CRMProvider_DEAL_7", 50);
     if (r.sql !== null) {
       expect(r.sql).toContain("cr.deal_id = $1");
-      expect(r.values).toEqual(["ZOHO_DEAL_7"]);
+      expect(r.values).toEqual(["CRMProvider_DEAL_7"]);
     }
   });
   test("phone query strips digits and matches LIKE on metadata", () => {

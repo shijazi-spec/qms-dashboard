@@ -3,7 +3,7 @@
  * autonomous duplicate-resolution agent directly (Sample User's "communicate with
  * each other" requirement).
  *
- * Read + teach actions only — it NEVER writes to Zoho (the gated
+ * Read + teach actions only — it NEVER writes to CRMProvider (the gated
  * "duplicate-resolution" tool does that, behind approval). Supported actions:
  *   - status         → current mode / kill-switch / config + latest grades
  *   - list_rules     → the learned routing rules
@@ -45,7 +45,7 @@ function asModule(m: unknown): CrmModule {
 export const duplicateResolutionAssistantTool = createTool({
   id: "duplicate-resolution-assistant",
   description:
-    "Talk to the autonomous duplicate-resolution agent. Use this when Sample User duplicate resolution: its current status/mode, what it would do for a cluster, the learning rules, or to teach it a new rule (e.g. 'never auto-merge mixed-domain clusters', 'always link contacts to their account'). Read + teach only — it never writes to Zoho.",
+    "Talk to the autonomous duplicate-resolution agent. Use this when Sample User duplicate resolution: its current status/mode, what it would do for a cluster, the learning rules, or to teach it a new rule (e.g. 'never auto-merge mixed-domain clusters', 'always link contacts to their account'). Read + teach only — it never writes to CRMProvider.",
   inputSchema: z.object({
     action: z
       .enum(["status", "list_rules", "make_rule", "preview_cluster"])
@@ -90,7 +90,7 @@ export const duplicateResolutionAssistantTool = createTool({
         const breakdown = await getModuleResolutionBreakdown().catch(() => []);
         const totalSolved = breakdown.reduce((a, b) => a + (b.solved || 0), 0);
         // HONEST "merged" accounting: `applied` = clusters with a REAL merge
-        // action (duplicates actually tagged Duplicate-Delete in Zoho); a
+        // action (duplicates actually tagged Duplicate-Delete in CRMProvider); a
         // status='resolved' cluster with NO merge action was NEVER merged. Never
         // report status='resolved' as "merged data" — that conflation is the
         // exact bug the high-confidence auto-resolve caused.
@@ -116,7 +116,7 @@ export const duplicateResolutionAssistantTool = createTool({
             `writes ${cfg.enabled ? "ENABLED" : "DISABLED (kill-switch off)"}, ` +
             `up to ${cfg.maxClusters} clusters per 6h tick. ` +
             (cfg.mode === "shadow"
-              ? "In SHADOW mode the agent makes NO automatic Zoho writes, so any merges are operator-driven Applies only. "
+              ? "In SHADOW mode the agent makes NO automatic CRMProvider writes, so any merges are operator-driven Applies only. "
               : "") +
             (summaryStats
               ? `Duplicate exposure: ${summaryStats.totalClusters} clusters, ` +
@@ -227,7 +227,7 @@ export const duplicateResolutionAssistantTool = createTool({
           success: true,
           summary:
             `Plan for ${module} cluster #${clusterId}: survivor "${plan.masterName}" (${plan.masterReason}). ` +
-            `Would tag ${plan.duplicateZohoIds.length} duplicate(s), migrate ${plan.fieldDecisions.length} field(s). ` +
+            `Would tag ${plan.duplicateCRMProviderIds.length} duplicate(s), migrate ${plan.fieldDecisions.length} field(s). ` +
             (plan.warnings.length ? `Warnings: ${plan.warnings.join("; ")}.` : "No warnings."),
           data: { plan },
         };

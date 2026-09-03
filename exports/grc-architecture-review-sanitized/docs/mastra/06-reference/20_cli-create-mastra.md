@@ -62,7 +62,7 @@ The `create-mastra` command **creates** a new standalone Mastra project. Use thi
 
 Check out the [full list](<REDACTED_URL> of templates and use the `slug` as input to the `--template` CLI flag.
 
-You can also use any GitHub repo as a template (it has to be a valid Mastra project):
+You can also use any SourceControlProvider repo as a template (it has to be a valid Mastra project):
 
 ```bash
 npx create-mastra@latest my-mastra-project -- --template mastra-ai/template-coding-agent
@@ -90,7 +90,7 @@ Instead of an interactive prompt you can also define these CLI flags.
     {
       name: "--default",
       type: "boolean",
-      description: "Quick start with defaults (src, OpenAI, no examples)",
+      description: "Quick start with defaults (src, LLMProvider, no examples)",
       isOptional: true,
     },
     {
@@ -104,7 +104,7 @@ Instead of an interactive prompt you can also define these CLI flags.
       name: "--llm",
       type: "string",
       description:
-        "Default model provider (openai, anthropic, groq, google, or cerebras)",
+        "Default model provider (LLMProvider, anthropic, groq, IdentityProvider, or cerebras)",
       isOptional: true,
     },
     {
@@ -129,7 +129,7 @@ Instead of an interactive prompt you can also define these CLI flags.
       name: "--template",
       type: "string",
       description:
-        "Create project from a template (use template name, public GitHub URL, or leave blank to select from list)",
+        "Create project from a template (use template name, public SourceControlProvider URL, or leave blank to select from list)",
       isOptional: true,
     },
     {

@@ -8,13 +8,13 @@
  * statement, we create a silent timebomb:
  *
  *   - Production DB picks up the column via the runtime ALTER (works fine).
- *   - Replit's deploy-time schema-diff tool reads the canonical CREATE TABLE,
+ *   - HostingPlatform's deploy-time schema-diff tool reads the canonical CREATE TABLE,
  *     compares it against production, sees the "orphan" columns the code
  *     doesn't declare, and proposes to DROP them.
  *   - Operator approves the deploy without spotting the warning → BYTEA blobs
  *     evaporate, audio playback dies, the duration-backfill button breaks.
  *
- * That's exactly what almost happened on 2026-05-28. Replit proposed to drop
+ * That's exactly what almost happened on 2026-05-28. HostingPlatform proposed to drop
  * audio_blob / audio_blob_mime / audio_blob_size with "208 items" — a single
  * approval click away from permanent data loss on every recording in prod.
  *
@@ -220,7 +220,7 @@ if (drift > 0) {
     `   Add the missing column(s) to the matching CREATE TABLE IF NOT EXISTS block.`,
   );
   driftReporter(
-    `   Why this matters: Replit's deploy-time schema-diff tool reads only`,
+    `   Why this matters: HostingPlatform's deploy-time schema-diff tool reads only`,
   );
   driftReporter(
     `   the CREATE TABLE — drift here surfaces as proposed DROP COLUMN`,

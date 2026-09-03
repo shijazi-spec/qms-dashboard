@@ -25,7 +25,7 @@
  *   uncaughtException  — LOG AND EXIT. The stack unwound through unknown code,
  *     so process state may genuinely be inconsistent and staying up risks
  *     serving wrong data, which is worse than being down. We exit on purpose
- *     (Replit restarts us) but now leave a named log line behind, which is
+ *     (HostingPlatform restarts us) but now leave a named log line behind, which is
  *     what was missing every time this happened silently.
  */
 import { logger } from "./logger";

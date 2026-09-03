@@ -124,14 +124,14 @@ function logRateLimit429(urlPath: string, method: string, ip: string, retryAfter
 //     Only / Distribution: All platform users (internal)"; it has no business
 //     being readable without a session. The handlers in sopRoutes.ts now
 //     enforce session-or-admin-key on their own as defense-in-depth.
-//   - `/test/slack`, `/webhooks/slack`, `/api/webhooks/slack` — were removed
-//     when slackTriggers.ts was unimported. RE-ADDED 2026-06-10: the GRQ
-//     Assistant (Adam) two-way Slack chat wires registerSlackTrigger +
-//     registerGrqAssistantSlackRoutes in src/mastra/index.ts, so the webhook
-//     routes exist again and Slack needs unauthenticated access (see the
-//     Slack Events API webhook entry below). Per the per-route re-evaluation
+//   - `/test/ChatProvider`, `/webhooks/ChatProvider`, `/api/webhooks/ChatProvider` — were removed
+//     when ChatProviderTriggers.ts was unimported. RE-ADDED 2026-06-10: the GRQ
+//     Assistant (Adam) two-way ChatProvider chat wires registerChatProviderTrigger +
+//     registerGrqAssistantChatProviderRoutes in src/mastra/index.ts, so the webhook
+//     routes exist again and ChatProvider needs unauthenticated access (see the
+//     ChatProvider Events API webhook entry below). Per the per-route re-evaluation
 //     note: ONLY the POST webhook is public; the diagnostic SSE route
-//     `/test/slack` (opens DMs / posts to Slack) stays behind auth.
+//     `/test/ChatProvider` (opens DMs / posts to ChatProvider) stays behind auth.
 //   - `/api/telemetry/pageview` — no such route exists in the codebase.
 export const PUBLIC_PATHS = [
   // ---- Tech Requests: assignee response (token-gated, no login) ----
@@ -193,21 +193,21 @@ export const PUBLIC_PATHS = [
   // ---- Accessibility statement (WCAG / regulator-facing public page) ----
   '/a11y',
 
-  // ---- Slack Events API webhook (GRQ Assistant / Adam two-way chat) ----
-  // Slack POSTs here for URL-verification (challenge) and every subscribed
-  // event. Slack is unauthenticated to our session model and does NOT follow
+  // ---- ChatProvider Events API webhook (GRQ Assistant / Adam two-way chat) ----
+  // ChatProvider POSTs here for URL-verification (challenge) and every subscribed
+  // event. ChatProvider is unauthenticated to our session model and does NOT follow
   // redirects — so without this bypass the request hits checkPageAuth and
-  // gets a 302→/login, which Slack reports as "challenge_failed". The handler
-  // in src/triggers/slackTriggers.ts is self-defending: it echoes only the
+  // gets a 302→/login, which ChatProvider reports as "challenge_failed". The handler
+  // in src/triggers/ChatProviderTriggers.ts is self-defending: it echoes only the
   // challenge, dedups event_id, and ignores bot_id messages (no reply loop).
-  // EXACT entries — these are the only Slack routes that may be public. The
-  // diagnostic SSE route `/test/slack` (which opens DMs / posts to Slack) is
+  // EXACT entries — these are the only ChatProvider routes that may be public. The
+  // diagnostic SSE route `/test/ChatProvider` (which opens DMs / posts to ChatProvider) is
   // deliberately NOT listed and stays behind auth.
-  '/webhooks/slack/action',
-  '/api/webhooks/slack/action',
+  '/webhooks/ChatProvider/action',
+  '/api/webhooks/ChatProvider/action',
 
   // ---- Leadership KPI feed (server-to-server pull) ----
-  // The ExampleOrg Leadership Platform (a separate Replit app) pulls this feed
+  // The ExampleOrg Leadership Platform (a separate HostingPlatform app) pulls this feed
   // to auto-refresh its KPI "Current" values. It has no platform session, so
   // the route self-authenticates via the X-Feed-Key header (constant-time
   // compare vs LEADERSHIP_FEED_KEY) in src/mastra/routes/leadershipFeedRoutes.ts
@@ -237,7 +237,7 @@ export const PUBLIC_PATHS = [
 const MASTRA_INTERNAL_PREFIXES = ['/api/workflows/', '/api/memory/'];
 
 function getAllowedOrigins(): string[] {
-  return (process.env.REPLIT_DOMAINS || '').split(',')
+  return (process.env.HostingPlatform_DOMAINS || '').split(',')
     .map((d: string) => `<REDACTED_URL>`)
     .filter(Boolean);
 }
@@ -286,7 +286,7 @@ function applySecurityHeaders(c: any, cspNonce: string): void {
   c.header('X-XSS-Protection', '1; mode=block');
   // Sample User 2026-06-20 — CSP fixes for two recurring console-noise errors:
   //
-  // (1) Replit injects a floating "Open in Replit" pill into preview-domain
+  // (1) HostingPlatform injects a floating "Open in HostingPlatform" pill into preview-domain
   //     pages from <REDACTED_URL>
   //     Without <REDACTED_URL> in script-src the browser blocks the
   //     load and logs a CSP violation every page open. Added it under
@@ -743,7 +743,7 @@ export const globalMiddleware = [
     // with a real HTML error page (refresh + contact hint). API callers
     // and asset/script requests keep the existing JSON behaviour so
     // automation isn't broken. We also log the failed URL explicitly so
-    // it's findable in Replit deploy logs without re-deriving from the
+    // it's findable in HostingPlatform deploy logs without re-deriving from the
     // upstream `app.onError` log line.
     if (
       !isApi &&
@@ -765,7 +765,7 @@ export const globalMiddleware = [
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     *,*::before,*::after{box-sizing:border-box}
-    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1f2937;background:linear-gradient(135deg,#f8fafc 0%,#e0e7ff 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+    body{margin:0;font-family:-IdentityProvider-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1f2937;background:linear-gradient(135deg,#f8fafc 0%,#e0e7ff 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
     .card{max-width:520px;width:100%;background:#fff;border-radius:14px;box-shadow:0 20px 60px -10px rgba(15,23,42,.15);padding:36px 32px;text-align:center}
     .badge{display:inline-flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:50%;background:#fef3c7;color:#b45309;font-size:32px;margin-bottom:18px}
     h1{margin:0 0 8px;font-size:22px;font-weight:700;color:#0f172a}

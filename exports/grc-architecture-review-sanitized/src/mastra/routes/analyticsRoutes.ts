@@ -654,7 +654,7 @@ export const analyticsRoutes = [
             guidance: {
               manual_force_send_endpoint: "/api/analytics/executive-digest/send",
               manual_force_send_payload: {
-                target: "slack",
+                target: "ChatProvider",
                 period: cadence,
                 preview: false,
                 force: true,
@@ -810,7 +810,7 @@ export const analyticsRoutes = [
             );
           const {
             sendDigestEmail,
-            sendDigestSlack,
+            sendDigestChatProvider,
             runDigestFanout,
             computeDigestWindow,
           } =
@@ -832,8 +832,8 @@ export const analyticsRoutes = [
           const now = new Date();
           const window = computeDigestWindow(cadence as any, now);
           const enforceIdempotency = !force;
-          if (target === "slack") {
-            const result = await sendDigestSlack({
+          if (target === "ChatProvider") {
+            const result = await sendDigestChatProvider({
               cadence: cadence as any,
               now,
               window,

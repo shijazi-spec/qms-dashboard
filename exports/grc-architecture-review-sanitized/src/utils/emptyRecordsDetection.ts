@@ -82,7 +82,7 @@ function _vowelRatio(t: string): number {
   const m = t.match(/[aeiou]/gi);
   return t.length ? (m ? m.length : 0) / t.length : 0;
 }
-// Count upper<->lower transitions. Real names have few (Acme=1, SES=0,
+// Count upper<->lower transitions. Real names have few (Example Organization=1, SES=0,
 // even CamelCase brands like McDonald/LinkedIn=3); random machine strings
 // (jJQaBOcg=4) have more. Threshold >=4 catches the gibberish while sparing
 // genuine CamelCase brands — deliberately conservative to avoid false deletes.

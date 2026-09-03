@@ -10,7 +10,7 @@ export const CANONICAL_COPC_V2 = {
     "name": "ExampleOrg SDR QA Scorecard — COPC-aligned",
     "version": "2.0.0",
     "version_date": "2026-05-24",
-    "based_on": "Five9_SDR_QA_Scorecard_COPC_Template.xlsx",
+    "based_on": "ContactCenterProvider_SDR_QA_Scorecard_COPC_Template.xlsx",
     "supersedes": [
       "WalaaPlus Sales Quality Scorecard v1.5",
       "Legacy GA 3.x audit checklist",
@@ -37,55 +37,55 @@ export const CANONICAL_COPC_V2 = {
             "id": "login_to_call_gap",
             "name": "Login to Call Gap",
             "description": "Measures punctual start of productive calling after login.",
-            "metric": "Minutes from agent login to first outbound/answered call (Five9 login & first-call timestamps).",
+            "metric": "Minutes from agent login to first outbound/answered call (ContactCenterProvider login & first-call timestamps).",
             "target": "≤ 10 minutes",
-            "data_source": "five9",
-            "data_dependency": "five9_real_ingest"
+            "data_source": "ContactCenterProvider",
+            "data_dependency": "ContactCenterProvider_real_ingest"
           },
           {
             "id": "post_call_logout_gap",
             "name": "Post-Call Logout Gap",
             "description": "Ensures agents do not remain idle long after last call.",
-            "metric": "Minutes from last call end to agent logout (Five9 call-end & logout timestamps).",
+            "metric": "Minutes from last call end to agent logout (ContactCenterProvider call-end & logout timestamps).",
             "target": "≤ 15 minutes",
-            "data_source": "five9",
-            "data_dependency": "five9_real_ingest"
+            "data_source": "ContactCenterProvider",
+            "data_dependency": "ContactCenterProvider_real_ingest"
           },
           {
             "id": "calls_made_vs_target",
             "name": "Calls Made vs Target",
             "description": "Checks productivity against planned daily/weekly call targets.",
-            "metric": "Calls placed ÷ daily target × 100 (Five9 attempts vs target table).",
+            "metric": "Calls placed ÷ daily target × 100 (ContactCenterProvider attempts vs target table).",
             "target": "≥ 100% of target",
-            "data_source": "five9",
-            "data_dependency": "five9_real_ingest + targets_table_seeded"
+            "data_source": "ContactCenterProvider",
+            "data_dependency": "ContactCenterProvider_real_ingest + targets_table_seeded"
           },
           {
             "id": "calls_answered_pct",
             "name": "Calls Answered %",
             "description": "Assesses list quality / dialing effectiveness via answer rate.",
-            "metric": "Answered calls ÷ attempted calls × 100 (Five9 disposition summary).",
+            "metric": "Answered calls ÷ attempted calls × 100 (ContactCenterProvider disposition summary).",
             "target": "≥ campaign target (e.g. 20–30%)",
-            "data_source": "five9",
-            "data_dependency": "five9_real_ingest"
+            "data_source": "ContactCenterProvider",
+            "data_dependency": "ContactCenterProvider_real_ingest"
           },
           {
             "id": "idle_time_ratio",
             "name": "Idle Time Ratio",
             "description": "Controls non-productive time while logged in.",
-            "metric": "Total idle time ÷ login time × 100 (Five9 agent state logs).",
+            "metric": "Total idle time ÷ login time × 100 (ContactCenterProvider agent state logs).",
             "target": "≤ 15% of login time",
-            "data_source": "five9",
-            "data_dependency": "five9_real_ingest"
+            "data_source": "ContactCenterProvider",
+            "data_dependency": "ContactCenterProvider_real_ingest"
           },
           {
             "id": "calls_logged_realtime",
             "name": "Calls Logged in Real-Time",
             "description": "Validates timely CRM logging to maintain data integrity.",
-            "metric": "% calls with matching CRM activity within 15 min of call end (Five9 ↔ CRM cross-check).",
+            "metric": "% calls with matching CRM activity within 15 min of call end (ContactCenterProvider ↔ CRM cross-check).",
             "target": "≥ 95% within 15 minutes",
-            "data_source": "five9 + zoho",
-            "data_dependency": "five9_real_ingest + crm_compliance_engine"
+            "data_source": "ContactCenterProvider + CRMProvider",
+            "data_dependency": "ContactCenterProvider_real_ingest + crm_compliance_engine"
           },
           {
             "id": "sla_followup_compliance",
@@ -93,7 +93,7 @@ export const CANONICAL_COPC_V2 = {
             "description": "Ensures first-contact SLA on new/assigned leads.",
             "metric": "% new/assigned leads first-contacted within 1 business day (CRM activities vs lead-creation date).",
             "target": "≥ 95% within 1 business day",
-            "data_source": "zoho",
+            "data_source": "CRMProvider",
             "data_dependency": "lead_creation_date + first_activity_timestamp"
           },
           {
@@ -102,7 +102,7 @@ export const CANONICAL_COPC_V2 = {
             "description": "Prevents stage skipping/misuse that breaks governance.",
             "metric": "% records following allowed next-stage transitions; no skips/misuse (CRM stage audit).",
             "target": "≥ 98% valid transitions",
-            "data_source": "zoho",
+            "data_source": "CRMProvider",
             "data_dependency": "stage_transition_rules_seeded"
           }
         ]
@@ -196,28 +196,28 @@ export const CANONICAL_COPC_V2 = {
             "id": "conversion_ratio",
             "name": "Conversion Ratio",
             "description": "Measures movement of leads to the next stage / meeting.",
-            "metric": "% of leads moved to next stage / meeting (Zoho funnel).",
+            "metric": "% of leads moved to next stage / meeting (CRMProvider funnel).",
             "target": "≥ 10–20% (campaign-specific)",
-            "data_source": "zoho",
+            "data_source": "CRMProvider",
             "data_dependency": "lead_stage_history"
           },
           {
             "id": "answer_rate",
             "name": "Answer Rate",
             "description": "Measures call-list reachability and dialer effectiveness.",
-            "metric": "Answered ÷ attempted × 100 (Five9).",
+            "metric": "Answered ÷ attempted × 100 (ContactCenterProvider).",
             "target": "Campaign-specific threshold",
-            "data_source": "five9",
-            "data_dependency": "five9_real_ingest"
+            "data_source": "ContactCenterProvider",
+            "data_dependency": "ContactCenterProvider_real_ingest"
           },
           {
             "id": "utilization_ratio",
             "name": "Utilization Ratio",
             "description": "Measures % of login time spent in talk state.",
-            "metric": "Talk time ÷ login time × 100 (Five9 agent states).",
+            "metric": "Talk time ÷ login time × 100 (ContactCenterProvider agent states).",
             "target": "45–65% (campaign-specific band)",
-            "data_source": "five9",
-            "data_dependency": "five9_real_ingest"
+            "data_source": "ContactCenterProvider",
+            "data_dependency": "ContactCenterProvider_real_ingest"
           },
           {
             "id": "lead_volume_correlation",
@@ -240,7 +240,7 @@ export const CANONICAL_COPC_V2 = {
       "coaching_sessions table",
       "CEfx endpoint (Solution #5)"
     ],
-    "blocked_on_five9": [
+    "blocked_on_ContactCenterProvider": [
       "login_to_call_gap",
       "post_call_logout_gap",
       "calls_made_vs_target",

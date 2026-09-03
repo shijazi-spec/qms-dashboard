@@ -7,7 +7,7 @@
  *
  * Background
  * ----------
- * Some versions of `@mastra/core` (≥ 0.24.x on at least the Replit production
+ * Some versions of `@mastra/core` (≥ 0.24.x on at least the HostingPlatform production
  * lockfile we saw) ship an auto-generated `.d.ts` file that lists every
  * provider model name as a raw object key. A subset of those identifiers —
  * specifically the Anthropic Claude model strings like

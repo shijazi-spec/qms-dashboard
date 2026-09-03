@@ -73,7 +73,7 @@ The platform that remains is intentionally narrow and focused on the actual goal
 
 | # | Capability | Status |
 |---|---|---|
-| 1 | Intake — Manual Upload (primary) + CSV Import (secondary) + Five9 visible-but-suspended | ✅ Built; Five9 needs the suspended badge |
+| 1 | Intake — Manual Upload (primary) + CSV Import (secondary) + ContactCenterProvider visible-but-suspended | ✅ Built; ContactCenterProvider needs the suspended badge |
 | 2 | Auto-pipeline: Upload → Transcribe → Score → Done (no human gate) | ✅ Built |
 | 3 | Evaluation Table: Agent · Date · Duration · Source · Score% · Compliance% · Critical Fail Y/N · View | ✅ Mostly built; Critical Fail flag column = new |
 | 4 | Evaluation Modal: Summary + Transcript + Scorecard + Compliance + Recording (no QA review section) | ✅ Built |
@@ -138,7 +138,7 @@ That is the manager's Monday morning, end-to-end:
 
 ```
 Week 1   Verify + Brief
-         ├─ Pull + Republish on Replit
+         ├─ Pull + Republish on HostingPlatform
          ├─ Confirm today's 5 fixes work
          └─ Brief SDR team on consent + verification scripts
 
@@ -148,7 +148,7 @@ Week 2-3 Weekly Report (= enriched Overview tab)
          ├─ Inline drill: top failed attrs, last 5 calls, trend, active plans
          ├─ Coaching Actions panel (Deliver / Nudge buttons)
          ├─ Critical Fails banner
-         ├─ Five9 "Suspended" badge in Intake section
+         ├─ ContactCenterProvider "Suspended" badge in Intake section
          └─ CSV export
 
 Week 4-5 Diarization + Talk-time analytics
@@ -174,10 +174,10 @@ DONE.
 | Manual QA override workflow | Inverse of the goal | If a critical scoring failure case emerges that needs manual correction |
 | Audit Trail of overrides | No overrides → nothing to audit-trail | Same as above |
 | 8-status processing pipeline | Engineering states, not user-facing | If support tickets begin asking "where is my call right now?" |
-| Real-time Five9 webhook + scheduled pulls | Vendor integration suspended (technical team) | When Tech Team unblocks Five9 access |
+| Real-time ContactCenterProvider webhook + scheduled pulls | Vendor integration suspended (technical team) | When Tech Team unblocks ContactCenterProvider access |
 | **PII redaction in transcripts** (from 2nd amendment) | PDPL Article 18 risk accepted while internal-only | Audit notice / wider access / external export |
 | **Deterministic compliance engine** (from 2nd amendment) | Manager spot-check is sufficient at current scale | Team growth / inconsistent script adoption / audit ask |
-| **Weekly PDF digest + Slack alerts** (from 3rd amendment) | Manager opens dashboard directly Monday morning | If dashboard access cadence drops below 1× per week |
+| **Weekly PDF digest + ChatProvider alerts** (from 3rd amendment) | Manager opens dashboard directly Monday morning | If dashboard access cadence drops below 1× per week |
 | **Standalone Agent View / Team View pages** (from 3rd amendment) | Folded into Weekly Report inline drill-down | If Weekly Report becomes too crowded (50+ agents) |
 
 ---

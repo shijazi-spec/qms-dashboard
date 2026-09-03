@@ -1,14 +1,14 @@
 /**
- * CI gate: prevents `callIntelligenceRoutes` POST /api/calls/five9/configure
+ * CI gate: prevents `callIntelligenceRoutes` POST /api/calls/ContactCenterProvider/configure
  * from persisting unmasked secrets into `integration_config.config` (JSONB).
  *
  * Run:    npx tsx src/mastra/routes/callIntelligenceRoutes.test.ts
  * Wired:  scripts/post-merge.sh → `npm test` (auto-discovered).
  *
- * The Five9 configure endpoint deliberately drops the raw `password` field
+ * The ContactCenterProvider configure endpoint deliberately drops the raw `password` field
  * from the persisted blob, but `domain` and `username` are still operator-
- * controlled and could otherwise smuggle a JWT, GitHub PAT (`ghp_…`),
- * bcrypt hash, OpenAI key (`sk-…`) etc. into Postgres. The handler now
+ * controlled and could otherwise smuggle a JWT, SourceControlProvider PAT (`ghp_…`),
+ * bcrypt hash, LLMProvider key (`sk-…`) etc. into Postgres. The handler now
  * passes the persisted object through `redactSensitiveDeep()` first.
  *
  * This test:
@@ -88,9 +88,9 @@ const SECRET_LIKE_STRINGS: Array<{ label: string; value: string }> = [
     value:
       "<REDACTED_TOKEN>",
   },
-  { label: "GitHub PAT", value: "<REDACTED_TOKEN>" },
+  { label: "SourceControlProvider PAT", value: "<REDACTED_TOKEN>" },
   {
-    label: "OpenAI sk- key",
+    label: "LLMProvider sk- key",
     value: "<REDACTED_TOKEN>",
   },
 ];
@@ -108,13 +108,13 @@ function lastConfigInsertParams(): unknown[] | null {
 
 const handler = await buildHandler(
   callIntelligenceRoutes,
-  "/api/calls/five9/configure",
+  "/api/calls/ContactCenterProvider/configure",
   "POST",
   { mastra: null },
 );
 
 console.log(
-  "\n=== callIntelligenceRoutes /api/calls/five9/configure — secret-leak tests ===\n",
+  "\n=== callIntelligenceRoutes /api/calls/ContactCenterProvider/configure — secret-leak tests ===\n",
 );
 
 for (const { label, value } of SECRET_LIKE_STRINGS) {
@@ -127,7 +127,7 @@ for (const { label, value } of SECRET_LIKE_STRINGS) {
         // domain & username are persisted into JSONB; password is dropped
         // by the handler and is therefore not part of the persistence
         // contract this test guards.
-        domain: `acme.${value}.<REDACTED_HOST>`,
+        domain: `Example Organization.${value}.<REDACTED_HOST>`,
         username: `agent-${value}`,
         password: "<REDACTED_SECRET>",
       },
@@ -158,7 +158,7 @@ for (const [keyLabel, rawSecret] of Object.entries(SECRETS)) {
       method: "POST",
       headers: { "X-Admin-Key": ADMIN_KEY },
       body: {
-        domain: `acme.${rawSecret}.<REDACTED_HOST>`,
+        domain: `Example Organization.${rawSecret}.<REDACTED_HOST>`,
         username: `agent-${rawSecret}`,
         password: "<REDACTED_SECRET>",
       },

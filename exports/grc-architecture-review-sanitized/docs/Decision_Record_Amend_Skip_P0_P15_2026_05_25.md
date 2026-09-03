@@ -58,7 +58,7 @@ Week 10  P4 + P5                          Week 8   P4 + P5
 | Phase | Week | Deliverable |
 |---|---|---|
 | Verify + Brief | 1 | Today's fixes verified live + SDR team briefed on consent + verification scripts |
-| **P1** — Reports surface | 2-3 | Weekly PDF digest auto-emailed to SDR Manager. Slack alerts on critical fails. CSV exports. |
+| **P1** — Reports surface | 2-3 | Weekly PDF digest auto-emailed to SDR Manager. ChatProvider alerts on critical fails. CSV exports. |
 | **SDR Pilot** | 4-5 | 1-2 agents adopt consent + verification opening |
 | **P2** — Agent View | 5-6 | One-page-per-SDR dashboard. Replaces 4 tabs of clicking. |
 | **P2.5** — Speaker diarization + talk-time analytics | 5-6 (parallel) | Agent vs customer talk ratio, silence, interruptions. The Gong/Chorus signal. |
@@ -70,7 +70,7 @@ Week 10  P4 + P5                          Week 8   P4 + P5
 
 | Pillar (from Velents proposal) | After 8-week plan | Closes Velents gap? |
 |---|---|---|
-| 1 — Ingestion | 1.5 / 3 (no live Five9 webhook still) | No change |
+| 1 — Ingestion | 1.5 / 3 (no live ContactCenterProvider webhook still) | No change |
 | 2 — ASR | 2 / 4 (diarization added in P2.5, PII redaction skipped) | Partial — diarization closes, PII stays open |
 | 3 — Enrichment | 2.5 / 3 (talk-time added in P2.5) | Mostly — KB checks still deferred |
 | 4 — Scorecard engine | 3 / 5 (rubric polish + κ added, deterministic checks skipped) | Partial |

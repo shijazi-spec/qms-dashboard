@@ -122,7 +122,7 @@ async function run(): Promise<void> {
       id: 3,
       field_changed: "description",
       old_value: "no secret here",
-      new_value: `Pasted Stripe key ${SK_KEY} for invoice #42`,
+      new_value: `Pasted PaymentProvider key ${SK_KEY} for invoice #42`,
       change_reason: "Updated description",
     },
     // 4. Non-sensitive field, both value columns contain credentials.
@@ -245,7 +245,7 @@ async function run(): Promise<void> {
     "row 3: sentinel present in new_value",
   );
   assert(
-    r3.new_value !== null && r3.new_value.startsWith("Pasted Stripe key"),
+    r3.new_value !== null && r3.new_value.startsWith("Pasted PaymentProvider key"),
     "row 3: surrounding prose preserved in new_value",
   );
   assert(

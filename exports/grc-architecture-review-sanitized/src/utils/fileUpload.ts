@@ -215,7 +215,7 @@ export async function saveUploadedFile(
   }
 
   // Bytes go to the DATABASE, keyed by the same logical path the owner row
-  // stores. Replit rebuilds the deployment directory from the repo on every
+  // stores. HostingPlatform rebuilds the deployment directory from the repo on every
   // publish and `data/` is untracked, so a disk write is deleted at the next
   // deploy while the owning row keeps pointing at it — the Customer Success
   // SOP served "File not found on disk" that way (2026-08-19). Every module

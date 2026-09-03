@@ -27,13 +27,13 @@ import { DOAM_CLIENTS, type DoamClient } from "./doamClients";
 import { logger } from "./logger";
 
 /**
- * Marketplace / merchant Zoho layout names — the ONLY records the Duplicate
+ * Marketplace / merchant CRMProvider layout names — the ONLY records the Duplicate
  * Radar treats as OUT OF SCOPE (Sample User / Sample User 2026-06-17, confirmed against
  * the live layout distribution).
  *
  *   - Leads & Deals  → marketplace motion lives on the "Marketplace" layout.
  *   - Accounts       → merchants live on "Marketplace" OR "Partner Accounts".
- *   - Contacts       → almost all sit on Zoho's "Standard" layout, which gives
+ *   - Contacts       → almost all sit on CRMProvider's "Standard" layout, which gives
  *                      NO B2B-vs-merchant signal, so contacts are never used as
  *                      out-of-scope evidence (see has_corporate_records below).
  *
@@ -43,7 +43,7 @@ import { logger } from "./logger";
  * silently dropped Accounts ("Corporate-Accounts") and every legacy
  * marker-less record — the root cause of corporate dupes leaking through
  * Preflight as false PASSes. Keep this list as the single source of truth;
- * compare case-insensitively so a casing change in Zoho can't break it.
+ * compare case-insensitively so a casing change in CRMProvider can't break it.
  */
 export const MERCHANT_LAYOUT_NAMES = ["Marketplace", "Partner Accounts"] as const;
 /** Pre-built lowercased SQL IN-list, e.g. `'marketplace', 'partner accounts'`. */
@@ -104,7 +104,7 @@ export interface PreflightInputRow {
    *  email) is exempt. */
   contact_name?: string | null;
   /** Contact job title from the uploaded row — optional, carried through to
-   *  the Zoho Contact/Lead payload's Title field on push. */
+   *  the CRMProvider Contact/Lead payload's Title field on push. */
   title?: string | null;
   /** Free-form row identifier echoed back in the response (defaults to array index). */
   ref?: string | null;
@@ -132,10 +132,10 @@ export interface PreflightResultRow {
   title?: string | null;
   verdict: PreflightVerdict;
   cluster_id: number | null;
-  /** Zoho id of the existing Account the churn-check matched (from the CS
+  /** CRMProvider id of the existing Account the churn-check matched (from the CS
    * directory). The re-engage-churned push attaches its Deal to THIS account
    * — the exact one the check found — instead of re-looking it up. */
-  matched_account_zoho_id?: string | null;
+  matched_account_CRMProvider_id?: string | null;
   lifecycle_state:
     | "onboarding"
     | "adoption"
@@ -208,10 +208,10 @@ export interface PreflightResultRow {
    *  Renewal / Termination) for the export's CS Phase column. */
   cs_phase?: string | null;
   /**
-   * Sample User 2026-06-17 — clickable Zoho links for the EXISTING records
+   * Sample User 2026-06-17 — clickable CRMProvider links for the EXISTING records
    * the rejection points at. The Excel report exposes each one in its
    * own column so the operator clicks straight to the live Lead /
-   * Deal / Account in Zoho without re-querying the radar. Up to four
+   * Deal / Account in CRMProvider without re-querying the radar. Up to four
    * fields are populated depending on what the matched cluster
    * contains. Empty / null on PASS rows.
    */
@@ -468,7 +468,7 @@ const SUGGESTED_ACTIONS: Record<PreflightVerdict, string> = {
  * it cannot be a real domain — we fall through to the email's domain
  * instead. Without this fallback PATH 1 misses on almost every row of
  * a real marketing list, and the request gets pushed into the slower
- * PATH 2/3 paths until the Replit gateway 504s.
+ * PATH 2/3 paths until the HostingPlatform gateway 504s.
  */
 export function resolveDomain(row: PreflightInputRow): string | null {
   const explicit = (row.domain ?? "").trim().toLowerCase();
@@ -671,20 +671,20 @@ export function resolveCompany(row: PreflightInputRow): string | null {
  * (not env-tunable) so the rule travels with the code.
  */
 /**
- * Sample User 2026-06-17 — the ExampleOrg Zoho org id, used to build clickable
+ * Sample User 2026-06-17 — the ExampleOrg CRMProvider org id, used to build clickable
  * record URLs in the rejected-row briefing. Same id used across the
  * rest of the dashboard (calls.html, ai-approvals.html etc.); kept
  * hardcoded here so the helper is dependency-free.
  */
-const ZOHO_ORG_ID = "org766568398";
+const CRMProvider_ORG_ID = "org766568398";
 
 /**
- * Build a clickable Zoho CRM URL for one record. Zoho's URL tab names
+ * Build a clickable CRMProvider CRM URL for one record. CRMProvider's URL tab names
  * differ from the module names — Deals use the "Potentials" tab path.
  */
-export function buildZohoRecordUrl(
+export function buildCRMProviderRecordUrl(
   module: "Leads" | "Deals" | "Contacts" | "Accounts",
-  zohoRecordId: string,
+  CRMProviderRecordId: string,
 ): string {
   const tab =
     module === "Deals" ? "Potentials"
@@ -692,26 +692,26 @@ export function buildZohoRecordUrl(
     : module === "Contacts" ? "Contacts"
     : "Accounts";
   return `<REDACTED_URL>
-    zohoRecordId,
+    CRMProviderRecordId,
   )}`;
 }
 
 /**
  * Build the per-row crm_links payload from a matched cluster. Each
  * sub-field is null when the cluster doesn't carry a record of that
- * type (or when the record has no Zoho id). The Excel export reads
+ * type (or when the record has no CRMProvider id). The Excel export reads
  * this directly to populate hyperlink cells.
  */
 function _buildCrmLinks(c: any): PreflightResultRow["crm_links"] {
   const mk = (mod: "Leads" | "Deals" | "Accounts", zid?: string | null, name?: string | null) =>
     zid
-      ? { url: buildZohoRecordUrl(mod, zid), label: (name || "").trim() || zid }
+      ? { url: buildCRMProviderRecordUrl(mod, zid), label: (name || "").trim() || zid }
       : null;
   return {
-    active_lead:  mk("Leads",    c?.active_lead_zoho_id,  c?.active_lead_name),
-    active_deal:  mk("Deals",    c?.active_deal_zoho_id,  c?.active_deal_name),
-    client_deal:  mk("Deals",    c?.client_deal_zoho_id,  c?.client_deal_name),
-    account:      mk("Accounts", c?.account_zoho_id_link, c?.account_name_link),
+    active_lead:  mk("Leads",    c?.active_lead_CRMProvider_id,  c?.active_lead_name),
+    active_deal:  mk("Deals",    c?.active_deal_CRMProvider_id,  c?.active_deal_name),
+    client_deal:  mk("Deals",    c?.client_deal_CRMProvider_id,  c?.client_deal_name),
+    account:      mk("Accounts", c?.account_CRMProvider_id_link, c?.account_name_link),
   };
 }
 
@@ -936,22 +936,22 @@ export interface PreflightClusterRow {
   corporate_contacts?: number;
   corporate_accounts?: number;
   /**
-   * Sample User 2026-06-17 — representative Zoho record per type so the
+   * Sample User 2026-06-17 — representative CRMProvider record per type so the
    * briefing artifacts (Excel report rows, copy-email body) can carry
    * a CLICKABLE link straight to the existing Lead / Deal / Account
    * on every rejected row. Pick rule per type: prefer ACTIVE over
    * closed/lost; for the "client deal" link use a Paid / Agreement
    * Signed / Closed Won / Awaiting PO / Client Activated / Transferred
-   * to CS / Agreement Sent deal. Used by buildZohoRecordUrl + the
+   * to CS / Agreement Sent deal. Used by buildCRMProviderRecordUrl + the
    * Excel export's hyperlink columns.
    */
-  active_lead_zoho_id?: string | null;
+  active_lead_CRMProvider_id?: string | null;
   active_lead_name?: string | null;
-  active_deal_zoho_id?: string | null;
+  active_deal_CRMProvider_id?: string | null;
   active_deal_name?: string | null;
-  client_deal_zoho_id?: string | null;
+  client_deal_CRMProvider_id?: string | null;
   client_deal_name?: string | null;
-  account_zoho_id_link?: string | null;
+  account_CRMProvider_id_link?: string | null;
   account_name_link?: string | null;
   /**
    * The latest Churn_Date observed across the cluster's Deal records
@@ -1005,7 +1005,7 @@ export interface PreflightRecordRow {
   owner_name: string | null;
   record_name: string | null;
   company_name: string | null;
-  zoho_record_id: string | null;
+  CRMProvider_record_id: string | null;
   layout_name: string | null;
   account_type: string | null;
   lead_type: string | null;
@@ -1101,7 +1101,7 @@ export function buildClusterFromRecords(
 
   const pick = (
     rs: PreflightRecordRow[],
-    field: "zoho_record_id" | "record_name",
+    field: "CRMProvider_record_id" | "record_name",
   ) => rs.map((r) => r[field]).find((v) => v != null && v !== "") ?? null;
   const owners = Array.from(
     new Set(corp.map((r) => (r.owner_name || "").trim()).filter(Boolean)),
@@ -1130,16 +1130,16 @@ export function buildClusterFromRecords(
     corporate_deals: deals.length,
     corporate_contacts: ofType("contact").length,
     corporate_accounts: ofType("account").length,
-    active_lead_zoho_id: pick(
+    active_lead_CRMProvider_id: pick(
       leads.filter((l) => !PF_DEAD_LEAD_STATUS.has((l.lead_status || l.status || "").toLowerCase())),
-      "zoho_record_id",
+      "CRMProvider_record_id",
     ),
     active_lead_name: pick(leads, "record_name"),
-    active_deal_zoho_id: pick(activeDeals, "zoho_record_id"),
+    active_deal_CRMProvider_id: pick(activeDeals, "CRMProvider_record_id"),
     active_deal_name: pick(activeDeals, "record_name"),
-    client_deal_zoho_id: pick(customerDeals, "zoho_record_id"),
+    client_deal_CRMProvider_id: pick(customerDeals, "CRMProvider_record_id"),
     client_deal_name: pick(customerDeals, "record_name"),
-    account_zoho_id_link: pick(ofType("account"), "zoho_record_id"),
+    account_CRMProvider_id_link: pick(ofType("account"), "CRMProvider_record_id"),
     account_name_link: pick(ofType("account"), "record_name"),
     churn_date: churnDate,
     churn_days: churnDays,
@@ -1586,7 +1586,7 @@ export function classifyPreflightRows(input: {
  * R5 — Decision policy for the inbound preflight webhook.
  *
  * Verdict → `should_create` mapping used by external integrations
- * (Zoho workflows, web forms, marketing tools) that want a simple
+ * (CRMProvider workflows, web forms, marketing tools) that want a simple
  * yes/no answer for "should I create this record in CRM?":
  *
  *   BLOCK     → false  (domain is an active Customer Success customer)
@@ -1619,7 +1619,7 @@ const CLUSTER_SELECT_COLS = `id, domain,
  * Per-query statement timeout (ms). Each preflight DB call runs inside a
  * dedicated pooled connection with this timeout set — if any one path
  * hangs (missing index, stale stats, table lock), it errors out fast and
- * the next path still runs. Total request stays well inside the Replit
+ * the next path still runs. Total request stays well inside the HostingPlatform
  * ~60s gateway window even in the worst case.
  *
  * 12s is generous for the indexed PATH 1/2 calls (sub-second on healthy
@@ -1912,7 +1912,7 @@ export function csClientPreflightVerdict(input: {
   };
 }
 
-/** Map a raw Zoho Phase value onto the CS lifecycle vocabulary. */
+/** Map a raw CRMProvider Phase value onto the CS lifecycle vocabulary. */
 function _csPhaseToActiveState(
   phase: string | null | undefined,
 ): "onboarding" | "adoption" | "renewal" | null {
@@ -1988,10 +1988,10 @@ export interface CsClientStatus {
   companyName: string | null;
   phase: string | null;
   lifecycleState: PreflightResultRow["lifecycle_state"];
-  /** Zoho id of the client's Account (from the matched CS deal's Account_Name).
+  /** CRMProvider id of the client's Account (from the matched CS deal's Account_Name).
    * Lets the re-engage-churned push attach a Deal to the EXACT Account the
    * check matched — no second, stricter lookup that could miss it. */
-  accountZohoId: string | null;
+  accountCRMProviderId: string | null;
 }
 
 interface CsClientDirectory {
@@ -2091,7 +2091,7 @@ function _csStatusFromDeal(input: {
   govType: string | null;
   owner: string | null;
   companyName: string | null;
-  accountZohoId?: string | null;
+  accountCRMProviderId?: string | null;
   todayMs: number;
 }): CsClientStatus {
   const isGov = (input.govType || "").trim() !== "";
@@ -2118,7 +2118,7 @@ function _csStatusFromDeal(input: {
     companyName: (input.companyName || "").trim() || null,
     phase: (input.phase || "").trim() || null,
     lifecycleState,
-    accountZohoId: (input.accountZohoId || "").trim() || null,
+    accountCRMProviderId: (input.accountCRMProviderId || "").trim() || null,
   };
 }
 
@@ -2139,8 +2139,8 @@ function _csMergeStatus(prev: CsClientStatus | undefined, next: CsClientStatus):
   }
   // Preserve a matched Account id from EITHER status — the winning status may
   // have been built from a deal that lacked the Account_Name link.
-  const accountZohoId = winner.accountZohoId || prev.accountZohoId || next.accountZohoId || null;
-  return accountZohoId === winner.accountZohoId ? winner : { ...winner, accountZohoId };
+  const accountCRMProviderId = winner.accountCRMProviderId || prev.accountCRMProviderId || next.accountCRMProviderId || null;
+  return accountCRMProviderId === winner.accountCRMProviderId ? winner : { ...winner, accountCRMProviderId };
 }
 
 let _csDirCache: CsClientDirectory | null = null;
@@ -2167,7 +2167,7 @@ const CS_DIR_TTL_MS = 60_000;
  * name still resolves. Cached with the same TTL as the CS directory.
  */
 interface OpenDealMatch {
-  zohoId: string;
+  CRMProviderId: string;
   dealName: string;
   owner: string | null;
   stage: string;
@@ -2194,7 +2194,7 @@ export async function getOpenDealDirectory(): Promise<OpenDealDirectory> {
     const acct =
       (
         await queryWithTimeout<any>(
-          `SELECT zoho_record_id, LOWER(domain) AS domain, record_name, company_name
+          `SELECT CRMProvider_record_id, LOWER(domain) AS domain, record_name, company_name
              FROM duplicate_records
             WHERE record_type = 'account'
             LIMIT 200000`,
@@ -2204,7 +2204,7 @@ export async function getOpenDealDirectory(): Promise<OpenDealDirectory> {
         )
       )?.rows ?? [];
     for (const a of acct) {
-      const zid = (a.zoho_record_id || "").toString().trim();
+      const zid = (a.CRMProvider_record_id || "").toString().trim();
       if (!zid) continue;
       const raw = (a.company_name || a.record_name || "").toString();
       accountById.set(zid, {
@@ -2233,9 +2233,9 @@ export async function getOpenDealDirectory(): Promise<OpenDealDirectory> {
         // layout_name column is blank — the same two traps fixed in the radar's
         // segment predicate.
         `WITH d AS (
-           SELECT zoho_record_id, record_name, account_name, company_name, owner_name,
+           SELECT CRMProvider_record_id, record_name, account_name, company_name, owner_name,
                   LOWER(domain) AS domain,
-                  raw_data->'Account_Name'->>'id' AS account_zoho_id,
+                  raw_data->'Account_Name'->>'id' AS account_CRMProvider_id,
                   LOWER(COALESCE(NULLIF(stage,''), raw_data->>'Stage','')) AS stage,
                   regexp_replace(
                     LOWER(COALESCE(NULLIF(layout_name,''),
@@ -2248,8 +2248,8 @@ export async function getOpenDealDirectory(): Promise<OpenDealDirectory> {
               AND cleanup_class IS NULL
               AND COALESCE(NULLIF(stage,''), raw_data->>'Stage','') <> ''
          )
-         SELECT zoho_record_id, record_name, account_name, company_name, owner_name,
-                domain, account_zoho_id, stage
+         SELECT CRMProvider_record_id, record_name, account_name, company_name, owner_name,
+                domain, account_CRMProvider_id, stage
            FROM d
           WHERE layout_norm NOT LIKE '%marketplace%'
             AND layout_norm NOT LIKE '%partneraccount%'
@@ -2266,16 +2266,16 @@ export async function getOpenDealDirectory(): Promise<OpenDealDirectory> {
     const stage = (d.stage || "").toString().trim();
     // OPEN = has a stage, and is neither a customer stage nor a dead one.
     if (!stage || PF_CUSTOMER_STAGES.has(stage) || PF_DEAD_STAGE_RE.test(stage)) continue;
-    const zohoId = (d.zoho_record_id || "").toString().trim();
-    if (!zohoId) continue;
+    const CRMProviderId = (d.CRMProvider_record_id || "").toString().trim();
+    if (!CRMProviderId) continue;
     const match: OpenDealMatch = {
-      zohoId,
-      dealName: (d.record_name || "").toString().trim() || zohoId,
+      CRMProviderId,
+      dealName: (d.record_name || "").toString().trim() || CRMProviderId,
       owner: (d.owner_name || "").toString().trim() || null,
       stage,
     };
     count++;
-    const parent = accountById.get((d.account_zoho_id || "").toString().trim());
+    const parent = accountById.get((d.account_CRMProvider_id || "").toString().trim());
     // Domains: the deal's own, then its Account's.
     for (const dm of [d.domain, parent?.domain]) {
       const dom = (dm || "").toString().trim().toLowerCase();
@@ -2307,7 +2307,7 @@ export async function getOpenDealDirectory(): Promise<OpenDealDirectory> {
  * Drop the cached CS-client directory so the very next preflight rebuilds it
  * from fresh duplicate_records. Called after a targeted CRM re-sync (the
  * per-row "↻ Re-check from CRM" button / resyncCorrectedDeals script) so a
- * company the operator just corrected in Zoho stops blocking immediately
+ * company the operator just corrected in CRMProvider stops blocking immediately
  * instead of waiting out the 60s TTL.
  */
 export function invalidateCsDirectoryCache(): void {
@@ -2395,7 +2395,7 @@ export async function getCsClientDirectory(todayMs: number): Promise<CsClientDir
     if (d) byDomain.set(d, _csMergeStatus(byDomain.get(d), status));
   };
 
-  // Accounts indexed by Zoho id (+ kept for name-based linkage). A CS deal can
+  // Accounts indexed by CRMProvider id (+ kept for name-based linkage). A CS deal can
   // then inherit its Account's DOMAIN and (often English) NAME even when the
   // deal itself carries an Arabic-only company name and no Company_Domain — the
   // exact Riyad Bank / Bank Albilad case the CS Lifecycle tab warns about.
@@ -2403,7 +2403,7 @@ export async function getCsClientDirectory(todayMs: number): Promise<CsClientDir
   const acctRows =
     (
       await queryWithTimeout<any>(
-        `SELECT zoho_record_id, LOWER(domain) AS domain, record_name, company_name
+        `SELECT CRMProvider_record_id, LOWER(domain) AS domain, record_name, company_name
            FROM duplicate_records
           WHERE record_type = 'account'
           LIMIT 200000`,
@@ -2413,7 +2413,7 @@ export async function getCsClientDirectory(todayMs: number): Promise<CsClientDir
       )
     )?.rows ?? [];
   for (const a of acctRows) {
-    const zid = (a.zoho_record_id || "").toString().trim();
+    const zid = (a.CRMProvider_record_id || "").toString().trim();
     if (!zid) continue;
     const norm = normalizeCompanyName(a.record_name || a.company_name || "");
     const dom = (a.domain || "").toString().trim().toLowerCase() || null;
@@ -2423,7 +2423,7 @@ export async function getCsClientDirectory(todayMs: number): Promise<CsClientDir
   // 1) Every CLIENT deal — a deal with a CS phase OR a customer Stage. Extract
   //    everything in SQL (FAST — filtered set, no full raw_data per row, which
   //    timed out and collapsed the directory). The phase / company-domain
-  //    COALESCE includes the env-override field name(s) so a custom Zoho API
+  //    COALESCE includes the env-override field name(s) so a custom CRMProvider API
   //    name (e.g. the one the CS Lifecycle resolves for Riyad Bank) is caught.
   const customerStages = new Set(Array.from(PF_CUSTOMER_STAGES));
   const _ident = (s: string) => (/^[A-Za-z0-9_ ]+$/.test(s) ? s.trim() : null);
@@ -2539,7 +2539,7 @@ export async function getCsClientDirectory(todayMs: number): Promise<CsClientDir
         (d.owner_name || "").toString().trim() ||
         null,
       companyName: (d.account_name || d.company_name || "").toString().trim(),
-      accountZohoId: (d.account_id || "").toString().trim() || null,
+      accountCRMProviderId: (d.account_id || "").toString().trim() || null,
       todayMs,
     });
     // Index by the deal's company-name variants (Account_Name, Deal company),
@@ -2553,7 +2553,7 @@ export async function getCsClientDirectory(todayMs: number): Promise<CsClientDir
     }
     // Index by domain — the Deal's own domain + the CS Company_Domain field.
     for (const dm of [d.domain, d.cs_domain]) addClient("", dm, status);
-    // Inherit the linked ACCOUNT's domain + (English) name by Zoho id — closes
+    // Inherit the linked ACCOUNT's domain + (English) name by CRMProvider id — closes
     // the gap when the deal has an Arabic-only name and no Company_Domain but
     // its Account has <REDACTED_HOST> / "Riyad Bank".
     const acctId = (d.account_id || "").toString().trim();
@@ -2666,7 +2666,7 @@ export async function getCsClientDirectory(todayMs: number): Promise<CsClientDir
         companyName: d.en || d.ar || null,
         phase: d.active ? "DOAM (auto-renew)" : "DOAM (inactive)",
         lifecycleState: d.active ? "renewal" : "termination_recent",
-        accountZohoId: null,
+        accountCRMProviderId: null,
       };
       const dom = normalizeDomain(d.domain || "");
       if (dom && !byDomain.has(dom)) byDomain.set(dom, status);
@@ -3034,7 +3034,7 @@ const CLIENT_DOMAIN_CORRECTIONS: Record<string, string> = (() => {
 // Consumer free-mail providers — never a corporate client's own domain. Matched
 // on the second-level label so <REDACTED_HOST> AND a corrupted gmail.comhh both drop.
 const CLIENT_DOMAIN_FREEMAIL_SLD = new Set([
-  "gmail", "googlemail", "hotmail", "outlook", "live", "msn", "yahoo", "ymail",
+  "gmail", "IdentityProvidermail", "hotmail", "outlook", "live", "msn", "yahoo", "ymail",
   "rocketmail", "icloud", "aol", "proton", "protonmail", "gmx", "yandex",
 ]);
 // Multi-label public suffixes (Saudi + Gulf + common international + the
@@ -3137,7 +3137,7 @@ export function cleanClientDomain(raw: string | null | undefined): string | null
  * are merged in as a separate overlay (`includeDoam`, default true).
  *
  * Field names are env-overridable (DUPLICATE_RADAR_FIELD_PHASE /
- * _COMPANY_DOMAIN / _CHURN_DATE / _RENEWAL_DATE) to match the tenant's Zoho API
+ * _COMPANY_DOMAIN / _CHURN_DATE / _RENEWAL_DATE) to match the tenant's CRMProvider API
  * names. `fresh` is accepted for signature compatibility (always queries live).
  */
 export async function listActiveClientDomains(opts?: {
@@ -3400,7 +3400,7 @@ export async function checkDomainsForClientDeals(
 
   // 2) Accounts on those domains → catch deals whose domain lives on the Account.
   const acctQ = await queryWithTimeout<any>(
-    `SELECT zoho_record_id, LOWER(domain) AS domain
+    `SELECT CRMProvider_record_id, LOWER(domain) AS domain
        FROM duplicate_records
       WHERE record_type = 'account' AND LOWER(domain) = ANY($1::text[])
       LIMIT 20000`,
@@ -3410,7 +3410,7 @@ export async function checkDomainsForClientDeals(
   );
   const acctDomainById = new Map<string, string>();
   for (const a of acctQ?.rows ?? []) {
-    const id = (a.zoho_record_id || "").toString().trim();
+    const id = (a.CRMProvider_record_id || "").toString().trim();
     if (id) acctDomainById.set(id, (a.domain || "").toString().trim().toLowerCase());
   }
   let acctDealRows: any[] = [];
@@ -3705,7 +3705,7 @@ async function runPreflightBasic(input: {
   if (emailSet.size > 0 || phoneSet.size > 0) {
     const q = await queryWithTimeout<any>(
       `SELECT LOWER(email) AS email, phone_normalized, mobile_normalized,
-              record_type, owner_name, record_name, company_name, zoho_record_id
+              record_type, owner_name, record_name, company_name, CRMProvider_record_id
          FROM duplicate_records
         WHERE ${CORPORATE_SQL}
           AND (
@@ -4016,7 +4016,7 @@ async function runPreflightBasic(input: {
     let crmLinks: PreflightResultRow["crm_links"] = null;
     let matchedViaOut: PreflightResultRow["matched_via"] = null;
     let clusterIdOut: number | null = null;
-    let matchedAccountZohoIdOut: string | null = null;
+    let matchedAccountCRMProviderIdOut: string | null = null;
     let sectorOut: PreflightResultRow["sector"] = null;
     let csOwnerOut: string | null = null;
     let churnDateOut: string | null = null;
@@ -4030,10 +4030,10 @@ async function runPreflightBasic(input: {
       if (contactRec.owner_name) owners.push(contactRec.owner_name);
       matchedViaOut = contactVia;
       const mod = moduleOf(contactRec.record_type);
-      if (contactRec.zoho_record_id && mod !== "Contacts") {
+      if (contactRec.CRMProvider_record_id && mod !== "Contacts") {
         const link = {
-          url: buildZohoRecordUrl(mod, contactRec.zoho_record_id),
-          label: (contactRec.record_name || "").trim() || contactRec.zoho_record_id,
+          url: buildCRMProviderRecordUrl(mod, contactRec.CRMProvider_record_id),
+          label: (contactRec.record_name || "").trim() || contactRec.CRMProvider_record_id,
         };
         crmLinks = {
           active_lead: mod === "Leads" ? link : null,
@@ -4052,7 +4052,7 @@ async function runPreflightBasic(input: {
       churnDateOut = csStatus.churnDate;
       churnDaysOut = csStatus.churnDays;
       csPhaseOut = csStatus.phase;
-      matchedAccountZohoIdOut = csStatus.accountZohoId;
+      matchedAccountCRMProviderIdOut = csStatus.accountCRMProviderId;
       if (csStatus.lifecycleState) lifecycleOut = csStatus.lifecycleState;
     }
 
@@ -4063,7 +4063,7 @@ async function runPreflightBasic(input: {
     if (openDeal) {
       if (openDeal.owner && !owners.includes(openDeal.owner)) owners.push(openDeal.owner);
       const dealLink = {
-        url: buildZohoRecordUrl("Deals", openDeal.zohoId),
+        url: buildCRMProviderRecordUrl("Deals", openDeal.CRMProviderId),
         label: openDeal.dealName,
       };
       crmLinks = {
@@ -4101,7 +4101,7 @@ async function runPreflightBasic(input: {
       title: r.title ?? null,
       verdict: v.verdict,
       cluster_id: clusterIdOut,
-      matched_account_zoho_id: matchedAccountZohoIdOut,
+      matched_account_CRMProvider_id: matchedAccountCRMProviderIdOut,
       lifecycle_state: lifecycleOut,
       sector: sectorOut,
       arr_exposure: null,
@@ -4177,13 +4177,13 @@ async function runPreflightBasic(input: {
   }
 
   // ── RULE 3B — LIVE-CRM verification, both directions (Sample User 2026-08-03/04/30)
-  // Verifies every would-be PASS row against Zoho, AND re-checks rows the
-  // mirror-based Rule 3 flagged, so a deal closed in Zoho since the last sync
+  // Verifies every would-be PASS row against CRMProvider, AND re-checks rows the
+  // mirror-based Rule 3 flagged, so a deal closed in CRMProvider since the last sync
   // self-heals to PASS instead of waiting for the next sync.
   // A PASS verdict is derived from the LOCAL mirror, which goes stale: a churned
   // client that RE-SIGNED (Riyadh Air), a Termination mis-tag that never joined
   // (PwC Academy), or simply a deal the mirror hasn't caught yet. So EVERY row
-  // that would pass is verified LIVE against Zoho: the company must have NO
+  // that would pass is verified LIVE against CRMProvider: the company must have NO
   // active deal — a deal in any OPEN pipeline stage (New Deal / Contacted / Not
   // Attend Meeting / Meeting / Proposal / On Hold / Agreement Sent …) OR a
   // current CUSTOMER deal (Agreement Signed / Paid / Closed Won / Client
@@ -4193,10 +4193,10 @@ async function runPreflightBasic(input: {
   // globally, best-effort, env-gated (PREFLIGHT_VERIFY_PASS_LIVE=false).
   if (process.env.PREFLIGHT_VERIFY_PASS_LIVE !== "false") {
     // SELF-HEALING RE-CHECK (Sample User 2026-08-30). Rule 3 flags "active_deal" from
-    // the LOCAL mirror, which goes stale the moment Sales closes a deal in Zoho
+    // the LOCAL mirror, which goes stale the moment Sales closes a deal in CRMProvider
     // — the row then keeps flagging until the next sync, and nothing re-checked
     // it because this pass only ever looked at PASS rows. So flagged Rule-3 rows
-    // are verified live TOO: if Zoho shows no active ExampleOrg deal any more the
+    // are verified live TOO: if CRMProvider shows no active ExampleOrg deal any more the
     // row CLEARS to pass; if it still has one the flag is refreshed with the
     // live owner / stage (and becomes a block when the deal is a live customer).
     // Only mirror-derived active_deal flags are eligible — duplicate / DOAM /
@@ -4209,14 +4209,14 @@ async function runPreflightBasic(input: {
     );
     if (toVerify.length > 0) {
       try {
-        const { findActiveDealForAccount, findActiveDealByCompany, searchZohoRecordsByWord } =
-          await import("./zohoCRM");
+        const { findActiveDealForAccount, findActiveDealByCompany, searchCRMProviderRecordsByWord } =
+          await import("./CRMProviderCRM");
         // Discover EVERY candidate Account for a company from the local mirror —
         // by domain AND by company name — because a row may match by NAME (no
         // domain), and a company's live deal can sit under a different Account
         // than the one the mirror keyed on. The mirror has broad record coverage
         // (only its STAGE data is stale), so it is the right place to discover
-        // WHICH accounts exist; Zoho is then the source of truth for whether any
+        // WHICH accounts exist; CRMProvider is then the source of truth for whether any
         // of them carries a live active deal.
         const mirrorAccountIds = async (
           domain: string,
@@ -4244,7 +4244,7 @@ async function runPreflightBasic(input: {
           if (!conds.length) return [];
           try {
             const q = await queryWithTimeout<any>(
-              `SELECT zoho_record_id, record_type,
+              `SELECT CRMProvider_record_id, record_type,
                       raw_data->'Account_Name'->>'id' AS deal_account_id
                  FROM duplicate_records
                 WHERE record_type IN ('account','deal')
@@ -4253,8 +4253,8 @@ async function runPreflightBasic(input: {
               params,
             );
             for (const r of q?.rows ?? []) {
-              if (r.record_type === "account" && r.zoho_record_id)
-                ids.add(String(r.zoho_record_id).trim());
+              if (r.record_type === "account" && r.CRMProvider_record_id)
+                ids.add(String(r.CRMProvider_record_id).trim());
               if (r.record_type === "deal" && r.deal_account_id)
                 ids.add(String(r.deal_account_id).trim());
             }
@@ -4265,7 +4265,7 @@ async function runPreflightBasic(input: {
         };
 
         // Segment of ONE live-found deal, resolved from the local mirror by its
-        // Zoho id. Used only when the live record carried no layout / pipeline /
+        // CRMProvider id. Used only when the live record carried no layout / pipeline /
         // marketplace-stage signal of its own. null = still unknown (the caller
         // then treats it as in-scope, i.e. the pre-existing behaviour).
         const mirrorDealSegment = async (
@@ -4276,7 +4276,7 @@ async function runPreflightBasic(input: {
               `SELECT COALESCE(NULLIF(layout_name,''), raw_data#>>'{Layout,name}',
                                raw_data#>>'{$layout,name}', raw_data->>'Layout', '') AS layout
                  FROM duplicate_records
-                WHERE record_type = 'deal' AND zoho_record_id = $1
+                WHERE record_type = 'deal' AND CRMProvider_record_id = $1
                 LIMIT 1`,
               [dealId],
             );
@@ -4288,7 +4288,7 @@ async function runPreflightBasic(input: {
         };
 
         // GLOBAL per-Account cache so an Account shared by several PASS rows is
-        // fetched from Zoho ONCE. Value = the active deal on it (or null when
+        // fetched from CRMProvider ONCE. Value = the active deal on it (or null when
         // checked-and-clean); accountErr = accounts whose live fetch errored.
         const accountDealCache = new Map<string, any>();
         const accountErr = new Set<string>();
@@ -4311,7 +4311,7 @@ async function runPreflightBasic(input: {
         // Dedupe by the company we'd query (domain, else account id, else name)
         // so N sibling contacts of the same firm cost ONE live verification.
         const companyKey = (row: PreflightResultRow) => {
-          const accId = (row.matched_account_zoho_id || "").trim();
+          const accId = (row.matched_account_CRMProvider_id || "").trim();
           const dom = (row.input?.domain || "").trim().toLowerCase();
           const nm = (row.input?.company_name || "").trim();
           const key = dom ? "d:" + dom : accId ? "a:" + accId : nm ? "n:" + nm.toLowerCase() : "";
@@ -4339,7 +4339,7 @@ async function runPreflightBasic(input: {
         const cache = new Map<string, { hit: any; checked: boolean }>();
 
         // Resolve ONE company: mirror-discover its accounts, live-check each
-        // (globally cached), with a Zoho domain-search fallback only when the
+        // (globally cached), with a CRMProvider domain-search fallback only when the
         // mirror knows no account for it.
         const resolveCompany = async (key: string): Promise<void> => {
           const e = companies.get(key)!;
@@ -4351,7 +4351,7 @@ async function runPreflightBasic(input: {
           );
           if (ids.length === 0 && e.dom) {
             try {
-              const accts = await searchZohoRecordsByWord("Accounts", e.dom);
+              const accts = await searchCRMProviderRecordsByWord("Accounts", e.dom);
               ids = accts
                 .slice(0, 5)
                 .map((a: any) => String(a.id || "").trim())
@@ -4373,7 +4373,7 @@ async function runPreflightBasic(input: {
           // Backstop: the account-related-list check misses when a deal's Account
           // carries no matching domain and its name is punctuated differently from
           // the inbound one (the Riyadh Air case — Account "… - …" vs inbound
-          // "… | …"). Search Zoho Deals directly by the company name, which finds
+          // "… | …"). Search CRMProvider Deals directly by the company name, which finds
           // the live deal regardless of account linkage. Only when accounts found
           // nothing, so we don't add a search for a company already flagged.
           if (!hit && (e.nm || e.dom)) {
@@ -4412,7 +4412,7 @@ async function runPreflightBasic(input: {
           }
         };
 
-        // Resolve companies concurrently (bounded) so a large batch of live Zoho
+        // Resolve companies concurrently (bounded) so a large batch of live CRMProvider
         // calls doesn't run for minutes and time the request out.
         const CONC = Math.max(1, Number(process.env.PREFLIGHT_VERIFY_CONCURRENCY || 6));
         let next = 0;
@@ -4437,7 +4437,7 @@ async function runPreflightBasic(input: {
           const wasStaleFlag =
             row.verdict === "review" && row.reason === STALE_FLAG_REASON;
           if (!hit && wasStaleFlag) {
-            // Only clear on a SUCCESSFUL live check — a Zoho hiccup must never
+            // Only clear on a SUCCESSFUL live check — a CRMProvider hiccup must never
             // un-flag a row (that would hide a real conflict). Unverified rows
             // keep the mirror's flag untouched.
             if (wasChecked) {
@@ -4446,7 +4446,7 @@ async function runPreflightBasic(input: {
               row.verdict = "pass";
               row.reason = "active_deal_cleared_live";
               row.suggested_action =
-                "The open deal this was flagged on is no longer active in Zoho (closed / re-staged). Verified live against the CRM — safe to import.";
+                "The open deal this was flagged on is no longer active in CRMProvider (closed / re-staged). Verified live against the CRM — safe to import.";
               row.executive_action =
                 "Safe to import — the previously-flagged deal is no longer active; verified against the CRM.";
               row.executive_severity = "info";
@@ -4461,7 +4461,7 @@ async function runPreflightBasic(input: {
             // client that is the detailed "past client, cool-off elapsed, CS
             // owner…" narrative the operator asked to preserve; for a plain
             // safe-to-import row it stays "Safe to import."). Only record, in the
-            // engineer reason, whether we actually verified it against Zoho.
+            // engineer reason, whether we actually verified it against CRMProvider.
             if (wasPastClient) {
               row.reason = wasChecked
                 ? "past_client_verified_no_active_deal"
@@ -4518,7 +4518,7 @@ async function runPreflightBasic(input: {
           row.crm_links = {
             active_lead: row.crm_links?.active_lead ?? null,
             active_deal: {
-              url: buildZohoRecordUrl("Deals", hit.dealId),
+              url: buildCRMProviderRecordUrl("Deals", hit.dealId),
               label: hit.dealName,
             },
             client_deal: row.crm_links?.client_deal ?? null,
@@ -4596,8 +4596,8 @@ export async function runPreflight(input: {
   /**
    * When true, re-run the cluster-level CS overlap scan on every matched
    * cluster BEFORE classifying — guarantees the verdict reflects the
-   * latest Zoho CS section (Phase / Churn_Date / Renewal_Date) instead
-   * of yesterday's cron. Adds one DB write + Zoho-free recompute per
+   * latest CRMProvider CS section (Phase / Churn_Date / Renewal_Date) instead
+   * of yesterday's cron. Adds one DB write + CRMProvider-free recompute per
    * unique cluster; only opt into this when staleness matters (e.g. an
    * intake form that runs minutes after the CS team flipped a phase).
    */
@@ -4928,13 +4928,13 @@ export async function runPreflight(input: {
         corporate_accounts: string;
         churn_date: string | null;
         cs_owner: string | null;
-        active_lead_zoho_id: string | null;
+        active_lead_CRMProvider_id: string | null;
         active_lead_name: string | null;
-        active_deal_zoho_id: string | null;
+        active_deal_CRMProvider_id: string | null;
         active_deal_name: string | null;
-        client_deal_zoho_id: string | null;
+        client_deal_CRMProvider_id: string | null;
         client_deal_name: string | null;
-        account_zoho_id_link: string | null;
+        account_CRMProvider_id_link: string | null;
         account_name_link: string | null;
       }>(
         // Sample User 2026-06-17 — three things this query does:
@@ -4992,7 +4992,7 @@ export async function runPreflight(input: {
                             AND owner_name IS NOT NULL
                             AND owner_name <> '')
                 )[1] AS cs_owner,
-                -- Sample User 2026-06-17 — representative Zoho ids for the
+                -- Sample User 2026-06-17 — representative CRMProvider ids for the
                 -- briefing's clickable CRM links. Prefer ACTIVE Lead
                 -- and ACTIVE Deal over closed/lost; the "client_deal"
                 -- pick covers Paid / Agreement Signed / Closed Won /
@@ -5001,8 +5001,8 @@ export async function runPreflight(input: {
                 MAX(CASE WHEN _is_corporate AND record_type = 'lead'
                           AND COALESCE(LOWER(raw_data->>'Lead_Status'), LOWER(status), '')
                               NOT IN ('junk lead','bogus lead','lost lead','not qualified','disqualified','converted','new','attempted to contact')
-                          AND zoho_record_id IS NOT NULL
-                         THEN zoho_record_id END) AS active_lead_zoho_id,
+                          AND CRMProvider_record_id IS NOT NULL
+                         THEN CRMProvider_record_id END) AS active_lead_CRMProvider_id,
                 MAX(CASE WHEN _is_corporate AND record_type = 'lead'
                           AND COALESCE(LOWER(raw_data->>'Lead_Status'), LOWER(status), '')
                               NOT IN ('junk lead','bogus lead','lost lead','not qualified','disqualified','converted','new','attempted to contact')
@@ -5016,8 +5016,8 @@ export async function runPreflight(input: {
                           AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT LIKE '%cancel%'
                           AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT IN
                               ('paid','agreement signed','client activated','transferred to cs','awaiting po')
-                          AND zoho_record_id IS NOT NULL
-                         THEN zoho_record_id END) AS active_deal_zoho_id,
+                          AND CRMProvider_record_id IS NOT NULL
+                         THEN CRMProvider_record_id END) AS active_deal_CRMProvider_id,
                 MAX(CASE WHEN _is_corporate AND record_type = 'deal'
                           AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT LIKE '%lost%'
                           AND COALESCE(LOWER(raw_data->>'Stage'), '') NOT LIKE '%won%'
@@ -5032,8 +5032,8 @@ export async function runPreflight(input: {
                           AND LOWER(COALESCE(raw_data->>'Stage','')) IN
                               ('paid','agreement signed','closed won','agreement sent',
                                'awaiting po','client activated','transferred to cs')
-                          AND zoho_record_id IS NOT NULL
-                         THEN zoho_record_id END) AS client_deal_zoho_id,
+                          AND CRMProvider_record_id IS NOT NULL
+                         THEN CRMProvider_record_id END) AS client_deal_CRMProvider_id,
                 MAX(CASE WHEN _is_corporate AND record_type = 'deal'
                           AND LOWER(COALESCE(raw_data->>'Stage','')) IN
                               ('paid','agreement signed','closed won','agreement sent',
@@ -5041,8 +5041,8 @@ export async function runPreflight(input: {
                           AND record_name IS NOT NULL
                          THEN record_name END) AS client_deal_name,
                 MAX(CASE WHEN _is_corporate AND record_type = 'account'
-                          AND zoho_record_id IS NOT NULL
-                         THEN zoho_record_id END) AS account_zoho_id_link,
+                          AND CRMProvider_record_id IS NOT NULL
+                         THEN CRMProvider_record_id END) AS account_CRMProvider_id_link,
                 MAX(CASE WHEN _is_corporate AND record_type = 'account'
                           AND record_name IS NOT NULL
                          THEN record_name END) AS account_name_link
@@ -5058,7 +5058,7 @@ export async function runPreflight(input: {
                       -- Contacts, and every legacy marker-less record —
                       -- the root cause of corporate dupes leaking
                       -- through Preflight as false PASSes.
-                      --   • Contacts sit on Zoho "Standard" (no signal)
+                      --   • Contacts sit on CRMProvider "Standard" (no signal)
                       --     → always corporate for counting; excluded
                       --     from has_corporate_records (see below).
                       --   • An explicit Customer account/lead type still
@@ -5084,13 +5084,13 @@ export async function runPreflight(input: {
         corporate_accounts: number;
         churn_date: string | null;
         cs_owner: string | null;
-        active_lead_zoho_id: string | null;
+        active_lead_CRMProvider_id: string | null;
         active_lead_name: string | null;
-        active_deal_zoho_id: string | null;
+        active_deal_CRMProvider_id: string | null;
         active_deal_name: string | null;
-        client_deal_zoho_id: string | null;
+        client_deal_CRMProvider_id: string | null;
         client_deal_name: string | null;
-        account_zoho_id_link: string | null;
+        account_CRMProvider_id_link: string | null;
         account_name_link: string | null;
       }>();
       if (flagsQ && Array.isArray(flagsQ.rows)) {
@@ -5105,13 +5105,13 @@ export async function runPreflight(input: {
             corporate_accounts: Number(r.corporate_accounts ?? 0),
             churn_date: r.churn_date || null,
             cs_owner: r.cs_owner || null,
-            active_lead_zoho_id:  r.active_lead_zoho_id  || null,
+            active_lead_CRMProvider_id:  r.active_lead_CRMProvider_id  || null,
             active_lead_name:     r.active_lead_name     || null,
-            active_deal_zoho_id:  r.active_deal_zoho_id  || null,
+            active_deal_CRMProvider_id:  r.active_deal_CRMProvider_id  || null,
             active_deal_name:     r.active_deal_name     || null,
-            client_deal_zoho_id:  r.client_deal_zoho_id  || null,
+            client_deal_CRMProvider_id:  r.client_deal_CRMProvider_id  || null,
             client_deal_name:     r.client_deal_name     || null,
-            account_zoho_id_link: r.account_zoho_id_link || null,
+            account_CRMProvider_id_link: r.account_CRMProvider_id_link || null,
             account_name_link:    r.account_name_link    || null,
           });
         }
@@ -5126,15 +5126,15 @@ export async function runPreflight(input: {
         c.corporate_deals    = v?.corporate_deals    ?? 0;
         c.corporate_contacts = v?.corporate_contacts ?? 0;
         c.corporate_accounts = v?.corporate_accounts ?? 0;
-        c.active_lead_zoho_id  = v?.active_lead_zoho_id  ?? null;
+        c.active_lead_CRMProvider_id  = v?.active_lead_CRMProvider_id  ?? null;
         c.active_lead_name     = v?.active_lead_name     ?? null;
-        c.active_deal_zoho_id  = v?.active_deal_zoho_id  ?? null;
+        c.active_deal_CRMProvider_id  = v?.active_deal_CRMProvider_id  ?? null;
         c.active_deal_name     = v?.active_deal_name     ?? null;
-        c.client_deal_zoho_id  = v?.client_deal_zoho_id  ?? null;
+        c.client_deal_CRMProvider_id  = v?.client_deal_CRMProvider_id  ?? null;
         c.client_deal_name     = v?.client_deal_name     ?? null;
-        c.account_zoho_id_link = v?.account_zoho_id_link ?? null;
+        c.account_CRMProvider_id_link = v?.account_CRMProvider_id_link ?? null;
         c.account_name_link    = v?.account_name_link    ?? null;
-        // Normalise the churn date to yyyy-mm-dd (Zoho can return
+        // Normalise the churn date to yyyy-mm-dd (CRMProvider can return
         // datetimes). Compute churn_days off whatever parses.
         const raw = v?.churn_date ?? null;
         const iso = raw ? String(raw).slice(0, 10) : null;
@@ -5232,7 +5232,7 @@ export async function runPreflight(input: {
                   status,
                   raw_data->>'Lead_Status'  AS lead_status,
                   NULLIF(raw_data->>'Churn_Date','') AS churn_date,
-                  gov_type, owner_name, record_name, company_name, zoho_record_id,
+                  gov_type, owner_name, record_name, company_name, CRMProvider_record_id,
                   layout_name, account_type, lead_type,
                   LOWER(email) AS email, phone_normalized, mobile_normalized
              FROM duplicate_records

@@ -303,7 +303,7 @@ export async function getTrendData(periods: number = 12, interval: 'week' | 'mon
     // is database work, not round-trip latency, so issuing the queries
     // concurrently against the same Postgres does not reduce the total work.
     // Contrast /api/agents/performance, where parallelising DID help, because
-    // that one waits on Zoho's NETWORK and concurrency collapses network waits.
+    // that one waits on CRMProvider's NETWORK and concurrency collapses network waits.
     //
     // Kept because it is harmless and the right shape; do not expect a speedup
     // from it. Making this endpoint genuinely fast needs query-level work

@@ -33,7 +33,7 @@ const agent = new AgentNetwork({
   name: 'agent-network',
   agents: [agent1, agent2],
   tools: { tool1, tool2 },
-  model: openai('gpt-4o'),
+  model: LLMProvider('gpt-4o'),
   instructions: 'You are a network agent that can help users with a variety of tasks.',
 });
 
@@ -52,7 +52,7 @@ const agent = new Agent({
   name: 'agent-network',
   agents: { agent1, agent2 },
   tools: { tool1, tool2 },
-  model: openai('gpt-4o'),
+  model: LLMProvider('gpt-4o'),
   instructions: 'You are a network agent that can help users with a variety of tasks.',
   memory,
 });
@@ -72,7 +72,7 @@ const agent = new NewAgentNetwork({
   agents: { agent1, agent2 },
   workflows: { workflow1 },
   tools: { tool1, tool2 },
-  model: openai('gpt-4o'),
+  model: LLMProvider('gpt-4o'),
   instructions: 'You are a network agent that can help users with a variety of tasks.',
 });
 
@@ -92,7 +92,7 @@ const agent = new Agent({
   agents: { agent1, agent2 },
   workflows: { workflow1 },
   tools: { tool1, tool2 },
-  model: openai('gpt-4o'),
+  model: LLMProvider('gpt-4o'),
   instructions: 'You are a network agent that can help users with a variety of tasks.',
   memory,
 });

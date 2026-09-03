@@ -13,12 +13,12 @@
  * verdict.
  *
  * The prompt builder + parser are exported separately so they can be
- * unit-tested without hitting OpenAI.
+ * unit-tested without hitting LLMProvider.
  */
 
 import { sharedPool as pool } from "./sharedPool";
 import { logger } from "./logger";
-import { getOpenAIApiKey, getOpenAIBaseUrl } from "./openaiCredentials";
+import { getLLMProviderApiKey, getLLMProviderBaseUrl } from "./LLMProviderCredentials";
 import {
   upsertEvidenceQuality,
   type EvidenceQualityStatus,
@@ -297,14 +297,14 @@ export async function judgeEvidence(
   let llmError: string | null = null;
   try {
     // Raw-fetch /chat/completions via the helper introduced in PR #67.
-    // The previous bare `openai(JUDGE_MODEL)` call produced exactly the
-    // "Unsupported model version v3 for provider openai.chat and model
+    // The previous bare `LLMProvider(JUDGE_MODEL)` call produced exactly the
+    // "Unsupported model version v3 for provider LLMProvider.chat and model
     // gpt-4o-mini" error that took down the bulk-analyze flow tonight
-    // — same @ai-sdk/openai v3-spec regression that broke the rest of
+    // — same @ai-sdk/LLMProvider v3-spec regression that broke the rest of
     // the analysis paths in PR #67. Compliance judge sits inside the
     // post-analysis hot path, so one bare call here breaks every call's
     // full pipeline.
-    const { generateChatText } = await import("./openaiChatHelper");
+    const { generateChatText } = await import("./LLMProviderChatHelper");
     // Self-consistency: run the judge `votes` times concurrently and take a
     // conservative majority (see aggregateVerdicts) to damp the documented
     // prompt-sensitivity of LLM judges.

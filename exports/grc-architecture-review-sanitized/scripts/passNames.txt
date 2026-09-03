@@ -781,7 +781,7 @@ TotalEnergies
 EPAM Systems
 Riyadh Municipality
 D360 Bank
-Microsoft
+EnterpriseProvider
 صندوق الشهداء والمصابين والأسرى والمفقودين
 Saudi Xerox
 DigiTrends

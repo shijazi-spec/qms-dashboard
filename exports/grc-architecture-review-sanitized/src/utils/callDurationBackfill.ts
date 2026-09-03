@@ -112,7 +112,7 @@ export async function runCallDurationBackfill(
 
     // music-metadata is ESM-only in v11+. Dynamic import sidesteps the
     // CJS/ESM impedance the codebase resolves the same way elsewhere
-    // (e.g. dynamic imports of `ai`, `@ai-sdk/openai`).
+    // (e.g. dynamic imports of `ai`, `@ai-sdk/LLMProvider`).
     const mm = await import("music-metadata");
 
     for (const row of recoverable.rows) {

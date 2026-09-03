@@ -287,7 +287,7 @@ export async function runSemanticAutoMap(
 
     let resultText = "";
     try {
-      const { generateChatText } = await import("./openaiChatHelper");
+      const { generateChatText } = await import("./LLMProviderChatHelper");
       const r = await generateChatText({
         model: "gpt-4o-mini",
         prompt,

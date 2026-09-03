@@ -5,7 +5,7 @@
  *   - /api/analytics/*     (cycle-times, agent-compliance, capa-recurrence, trends, executive-digest)
  *   - /api/scorecard/*     (Sample User, kpi/:n, history, snapshot)
  *   - /api/health/pulse*   (admin only)
- *   - /api/infographic/*   (sections, render, share/slack, share/email)
+ *   - /api/infographic/*   (sections, render, share/ChatProvider, share/email)
  *
  * Uses the pure `canAccessRoute` helper (no DB calls, no live server) to assert
  * that ROUTE_PERMISSION_MAP is correctly configured.
@@ -307,8 +307,8 @@ const CASES: Case[] = [
     block: LOW_PRIV,
   },
   {
-    label: "POST /api/infographic/quality-snapshot/share/slack",
-    path: "/api/infographic/quality-snapshot/share/slack",
+    label: "POST /api/infographic/quality-snapshot/share/ChatProvider",
+    path: "/api/infographic/quality-snapshot/share/ChatProvider",
     method: "POST",
     allow: GOVERNANCE_WRITE,
     block: [...LOW_PRIV, "executive"],

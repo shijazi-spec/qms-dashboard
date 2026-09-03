@@ -1,7 +1,7 @@
 import type { UserRole } from "../../utils/rbacDatabase";
 
 import { logger as safeLogger } from "../../utils/logger";
-import { getOpenAIApiKey, getOpenAIBaseUrl } from "../../utils/openaiCredentials";
+import { getLLMProviderApiKey, getLLMProviderBaseUrl } from "../../utils/LLMProviderCredentials";
 const TEAM_MGMT_ROLES: UserRole[] = [
   "admin",
   "head_of_operations_quality",
@@ -913,15 +913,15 @@ export const teamRoutes = [
             projectName: body.project_name,
           });
 
-          const { createOpenAI } = await import("@ai-sdk/openai");
+          const { createLLMProvider } = await import("@ai-sdk/LLMProvider");
           const { generateText } = await import("ai");
           const { initTeamTables, logAuditEntry } =
             await import("../../utils/teamDatabase");
           await initTeamTables();
 
-          const openai = createOpenAI({
-            baseURL: getOpenAIBaseUrl(),
-            apiKey: getOpenAIApiKey(),
+          const LLMProvider = createLLMProvider({
+            baseURL: getLLMProviderBaseUrl(),
+            apiKey: getLLMProviderApiKey(),
           });
 
           const prompt = `You are a Quality Management expert. Based on the following project information, generate a comprehensive project scope document.
@@ -949,10 +949,10 @@ Generate a JSON response with the following structure:
 Respond ONLY with valid JSON, no additional text.`;
 
           // Raw-fetch /chat/completions — `.chat()` adapter now also
-          // emits v3 spec under @ai-sdk/openai 3.x, breaking ai@5
+          // emits v3 spec under @ai-sdk/LLMProvider 3.x, breaking ai@5
           // (needs v2). Helper avoids the SDK entirely.
           const { generateChatText } = await import(
-            "../../utils/openaiChatHelper"
+            "../../utils/LLMProviderChatHelper"
           );
           const { text } = await generateChatText({
             model: "gpt-4o",

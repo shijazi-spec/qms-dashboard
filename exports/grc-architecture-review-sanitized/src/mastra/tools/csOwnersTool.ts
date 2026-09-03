@@ -7,7 +7,7 @@ import { z } from "zod";
  * Sample User "who are the CS owners in the platform?" and Adam could not
  * answer — its only CS tool (cs-lifecycle-status) returns COUNTS, and no tool
  * exposed the owner NAMES. The platform stores no CS team list either: the
- * owner lives per-deal in Zoho's "CS Owner Name" field.
+ * owner lives per-deal in CRMProvider's "CS Owner Name" field.
  *
  * This tool derives the roster from the data via getCsOwners() — the distinct
  * CS Owner Name values across Deal records with how many deals/accounts each
@@ -19,13 +19,13 @@ export const csOwnersTool = createTool({
   id: "cs-owners",
 
   description:
-    "List the Customer Success (CS) team — the maintained roster of CS members (name + ExampleOrg email) cross-referenced with live Zoho data: how many deals and accounts each one owns, which roster members carry NO deals, which owner names on deals are NOT on the roster (typo / ex-employee / non-CS person), and how many CS deals have no owner at all. Use whenever the user asks who the CS owners or CS team are, who owns a CS book, who has the most CS deals, who is unassigned, or whether a CS Owner name in the CRM is valid.",
+    "List the Customer Success (CS) team — the maintained roster of CS members (name + ExampleOrg email) cross-referenced with live CRMProvider data: how many deals and accounts each one owns, which roster members carry NO deals, which owner names on deals are NOT on the roster (typo / ex-employee / non-CS person), and how many CS deals have no owner at all. Use whenever the user asks who the CS owners or CS team are, who owns a CS book, who has the most CS deals, who is unassigned, or whether a CS Owner name in the CRM is valid.",
 
   inputSchema: z.object({
     segment: z
       .enum(["all", "marketplace", "ExampleOrg", "walaone"])
       .optional()
-      .describe("Filter by Zoho Layout segment. Defaults to all."),
+      .describe("Filter by CRMProvider Layout segment. Defaults to all."),
     limit: z.number().optional().describe("Max owners to return (default 200)."),
   }),
 

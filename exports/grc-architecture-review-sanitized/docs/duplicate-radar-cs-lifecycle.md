@@ -25,13 +25,13 @@ DUPLICATE_RADAR_FIELD_CUSTOMER_SINCE=Customer_Since
 DUPLICATE_RADAR_FIELD_TRIAL_END=Trial_End_Date
 ```
 
-Deferred for a follow-up phase (need Zoho Stage History API):
+Deferred for a follow-up phase (need CRMProvider Stage History API):
 - Full stage-history audit (deal walked through every required prior phase)
 
 ## How it scans
 
-The detector reads `duplicate_records` rows where `zoho_module = 'Deals'` (the
-records the radar already syncs from Zoho), pulls the Customer Success section
+The detector reads `duplicate_records` rows where `CRMProvider_module = 'Deals'` (the
+records the radar already syncs from CRMProvider), pulls the Customer Success section
 out of `raw_data` via the same field-resolution as the CS-Overlap layer, and
 applies the rules. Pure functions live in
 [`src/utils/csLifecycleCompliance.ts`](../src/utils/csLifecycleCompliance.ts);

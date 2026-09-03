@@ -12,7 +12,7 @@
  *        - above threshold + no recent emissions (writes event, fans out)
  *        - above threshold + recent emission (suppressed as repeat)
  *        - fetchSpikeAggregate throws (DB error path)
- *        - emitSystemEvent throws but Slack/email still attempted
+ *        - emitSystemEvent throws but ChatProvider/email still attempted
  *
  * Pure / no DB needed — every dep is stubbed, so the suite runs in CI even
  * without DATABASE_URL, matching the convention used by aiToolPolicyBuildPreview
@@ -59,7 +59,7 @@ interface StubInvocations {
   emitEventCalls: number;
   emittedDescriptions: string[];
   emittedMetadata: CapturedAlertMetadata[];
-  slackCalls: string[];
+  ChatProviderCalls: string[];
   emailCalls: Array<{ subject: string }>;
 }
 
@@ -70,7 +70,7 @@ function makeStubs(overrides: Partial<{
   recentEmissions: number;
   fetchThrows: boolean;
   emitThrows: boolean;
-  slackReturns: boolean;
+  ChatProviderReturns: boolean;
   emailReturns: boolean;
 }> = {}): { deps: SpikeAlertCheckDeps; invocations: StubInvocations } {
   const invocations: StubInvocations = {
@@ -80,7 +80,7 @@ function makeStubs(overrides: Partial<{
     emitEventCalls: 0,
     emittedDescriptions: [],
     emittedMetadata: [],
-    slackCalls: [],
+    ChatProviderCalls: [],
     emailCalls: [],
   };
   const deps: SpikeAlertCheckDeps = {
@@ -104,9 +104,9 @@ function makeStubs(overrides: Partial<{
       invocations.emittedMetadata.push(metadata as CapturedAlertMetadata);
       if (overrides.emitThrows) throw new Error('synthetic-emit-failure');
     },
-    postSlack: async (text) => {
-      invocations.slackCalls.push(text);
-      return overrides.slackReturns ?? false;
+    postChatProvider: async (text) => {
+      invocations.ChatProviderCalls.push(text);
+      return overrides.ChatProviderReturns ?? false;
     },
     sendEmail: async (subject) => {
       invocations.emailCalls.push({ subject });
@@ -188,7 +188,7 @@ async function main(): Promise<void> {
     check('disabled threshold → reason=disabled', r.reason === 'disabled' && r.active === false, r);
     check('disabled threshold → no DB fetch', invocations.fetchAggregateCalls === 0);
     check('disabled threshold → no system_event written', invocations.emitEventCalls === 0);
-    check('disabled threshold → no Slack', invocations.slackCalls.length === 0);
+    check('disabled threshold → no ChatProvider', invocations.ChatProviderCalls.length === 0);
     check('disabled threshold → no email', invocations.emailCalls.length === 0);
   }
 
@@ -200,7 +200,7 @@ async function main(): Promise<void> {
     check('below threshold → DB fetch still happened', invocations.fetchAggregateCalls === 1);
     check('below threshold → no recent-emission count needed', invocations.countRecentCalls === 0);
     check('below threshold → no system_event written', invocations.emitEventCalls === 0);
-    check('below threshold → no Slack', invocations.slackCalls.length === 0);
+    check('below threshold → no ChatProvider', invocations.ChatProviderCalls.length === 0);
     check('below threshold → no email', invocations.emailCalls.length === 0);
     check('below threshold → echoes total429', r.total429 === 100);
   }
@@ -215,7 +215,7 @@ async function main(): Promise<void> {
         { ip: '<REDACTED_IP>', events: 250, suppressed: 10 },
       ],
       recentEmissions: 0,
-      slackReturns: true,
+      ChatProviderReturns: true,
       emailReturns: true,
     });
     const r = await runRateLimit429SpikeAlertCheck({
@@ -239,11 +239,11 @@ async function main(): Promise<void> {
     check('metadata.threshold = 500', md.threshold === 500, md);
     check('metadata.totalSuppressed = 30', md.totalSuppressed === 30, md);
     check('metadata.topIps preserved (length 2)', Array.isArray(md.topIps) && md.topIps.length === 2, md);
-    check('Slack POSTed once', invocations.slackCalls.length === 1);
+    check('ChatProvider POSTed once', invocations.ChatProviderCalls.length === 1);
     check(
-      'Slack text mentions IPs',
-      invocations.slackCalls[0].includes('<REDACTED_IP>') && invocations.slackCalls[0].includes('<REDACTED_IP>'),
-      invocations.slackCalls[0],
+      'ChatProvider text mentions IPs',
+      invocations.ChatProviderCalls[0].includes('<REDACTED_IP>') && invocations.ChatProviderCalls[0].includes('<REDACTED_IP>'),
+      invocations.ChatProviderCalls[0],
     );
     check('Email sent once', invocations.emailCalls.length === 1);
     check(
@@ -251,7 +251,7 @@ async function main(): Promise<void> {
       invocations.emailCalls[0].subject.includes('750'),
       invocations.emailCalls[0].subject,
     );
-    check('result.slackSent reflects stub return', r.slackSent === true);
+    check('result.ChatProviderSent reflects stub return', r.ChatProviderSent === true);
     check('result.emailSent reflects stub return', r.emailSent === true);
   }
 
@@ -270,7 +270,7 @@ async function main(): Promise<void> {
     check('alertEmitted = false (suppressed)', r.alertEmitted === false);
     check('alertSuppressedAsRepeat = true', r.alertSuppressedAsRepeat === true);
     check('no system_event written', invocations.emitEventCalls === 0);
-    check('no Slack call', invocations.slackCalls.length === 0);
+    check('no ChatProvider call', invocations.ChatProviderCalls.length === 0);
     check('no email call', invocations.emailCalls.length === 0);
   }
 
@@ -281,16 +281,16 @@ async function main(): Promise<void> {
     check('reason=db_error', r.reason === 'db_error');
     check('active=false on db_error', r.active === false);
     check('no emit on db_error', invocations.emitEventCalls === 0);
-    check('no slack on db_error', invocations.slackCalls.length === 0);
+    check('no ChatProvider on db_error', invocations.ChatProviderCalls.length === 0);
     check('no email on db_error', invocations.emailCalls.length === 0);
   }
 
-  console.log('=== runRateLimit429SpikeAlertCheck() — emitSystemEvent throws → Slack/email still attempted ===');
+  console.log('=== runRateLimit429SpikeAlertCheck() — emitSystemEvent throws → ChatProvider/email still attempted ===');
   {
     const { deps, invocations } = makeStubs({
       total429: 600,
       emitThrows: true,
-      slackReturns: true,
+      ChatProviderReturns: true,
       emailReturns: false,
     });
     const r = await runRateLimit429SpikeAlertCheck({
@@ -300,15 +300,15 @@ async function main(): Promise<void> {
     });
     check('active=true (above threshold)', r.active === true);
     check('alertEmitted=false because emit threw', r.alertEmitted === false);
-    check('Slack still attempted (was called)', invocations.slackCalls.length === 1);
+    check('ChatProvider still attempted (was called)', invocations.ChatProviderCalls.length === 1);
     check('Email still attempted (was called)', invocations.emailCalls.length === 1);
-    check('result.slackSent reflects stub return (true)', r.slackSent === true);
+    check('result.ChatProviderSent reflects stub return (true)', r.ChatProviderSent === true);
     check('result.emailSent reflects stub return (false)', r.emailSent === false);
   }
 
   console.log('=== runRateLimit429SpikeAlertCheck() — countRecent throws → still alerts (better over-page than miss) ===');
   {
-    const { deps, invocations } = makeStubs({ total429: 600, slackReturns: true });
+    const { deps, invocations } = makeStubs({ total429: 600, ChatProviderReturns: true });
     const customDeps: SpikeAlertCheckDeps = {
       ...deps,
       countRecentAlertEmissions: async () => {
@@ -322,7 +322,7 @@ async function main(): Promise<void> {
     });
     check('active=true', r.active === true);
     check('alertEmitted=true even though countRecent threw', r.alertEmitted === true);
-    check('Slack was called', invocations.slackCalls.length === 1);
+    check('ChatProvider was called', invocations.ChatProviderCalls.length === 1);
   }
 
   console.log(`\nResults: ${passed} passed, ${failed} failed`);

@@ -16,13 +16,13 @@
  *   4. Parse JSON response → top-N suggestions with confidence + rationale
  *
  * The prompt builder + parser are exported separately so they can be
- * unit-tested without hitting OpenAI.
+ * unit-tested without hitting LLMProvider.
  */
 
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { sharedPool as pool } from "../../utils/sharedPool";
-import { getOpenAIApiKey, getOpenAIBaseUrl } from "../../utils/openaiCredentials";
+import { getLLMProviderApiKey, getLLMProviderBaseUrl } from "../../utils/LLMProviderCredentials";
 
 export const SUGGEST_MAX_DOC_CHARS = 4000;
 export const SUGGEST_MAX_OBLIGATIONS = 200;
@@ -299,16 +299,16 @@ export const suggestObligationMappingTool = createTool({
         topN,
       );
 
-      const { createOpenAI } = await import("@ai-sdk/openai");
+      const { createLLMProvider } = await import("@ai-sdk/LLMProvider");
       const { generateText } = await import("ai");
-      const openai = createOpenAI({
-        baseURL: getOpenAIBaseUrl(),
-        apiKey: getOpenAIApiKey(),
+      const LLMProvider = createLLMProvider({
+        baseURL: getLLMProviderBaseUrl(),
+        apiKey: getLLMProviderApiKey(),
       });
 
       // Raw-fetch /chat/completions — `.chat()` adapter emits v3 spec
-      // under @ai-sdk/openai 3.x, incompatible with ai@5 (needs v2).
-      const { generateChatText } = await import("../../utils/openaiChatHelper");
+      // under @ai-sdk/LLMProvider 3.x, incompatible with ai@5 (needs v2).
+      const { generateChatText } = await import("../../utils/LLMProviderChatHelper");
       const result = await generateChatText({
         model: "gpt-4o-mini",
         prompt,

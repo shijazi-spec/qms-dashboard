@@ -8,7 +8,7 @@
  * are caught in CI rather than production.
  *
  * Opt-in via `RUN_AI_METRICS_SWEEP_E2E=1`. CI wires it via
- * `.github/workflows/ai-metrics-sweep.yml`. Cleanup runs in `finally`;
+ * `.SourceControlProvider/workflows/ai-metrics-sweep.yml`. Cleanup runs in `finally`;
  * orphan rows can be found via `agent_name LIKE 'ai-metrics-sweep-test-%'`.
  *
  * Run locally:
@@ -65,7 +65,7 @@ const SECRET_JWT =
   "<REDACTED_TOKEN>";
 const SECRET_AKIA   = "<REDACTED_TOKEN>";
 
-const SAFE_PROMPT      = "Summarise the latest non-conformance for tenant acme-corp";
+const SAFE_PROMPT      = "Summarise the latest non-conformance for tenant Example Organization-corp";
 const SAFE_TOOL_INPUT  = '{"action":"list","limit":10}';
 const SAFE_TOOL_OUTPUT = '{"status":"ok","count":3}';
 

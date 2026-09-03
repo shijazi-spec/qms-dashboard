@@ -46,11 +46,11 @@ const SENSITIVE_EXACT_FIELDS = new Set([
   "signing_key",
   "session_secret",
   "encryption_key",
-  "zoho_refresh_token",
-  "zoho_access_token",
-  "slack_bot_token",
-  "resend_api_key",
-  "openai_api_key",
+  "CRMProvider_refresh_token",
+  "CRMProvider_access_token",
+  "ChatProvider_bot_token",
+  "EmailProvider_api_key",
+  "LLMProvider_api_key",
 ]);
 
 const SENSITIVE_SUFFIXES = [
@@ -102,25 +102,25 @@ const SECRET_LIKE_PATTERNS: SecretPattern[] = [
     name: "jwt",
     regex: /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_.+/=-]{8,}/g,
   },
-  // Stripe / OpenAI / Anthropic style:  sk-…, sk_live_…, sk_test_…
-  // Also covers `sk-ant-…` (Anthropic) and `sk-proj-…` (OpenAI project keys).
+  // PaymentProvider / LLMProvider / Anthropic style:  sk-…, sk_live_…, sk_test_…
+  // Also covers `sk-ant-…` (Anthropic) and `sk-proj-…` (LLMProvider project keys).
   {
     name: "sk-key",
     regex: /\bsk[-_](?:live|test|proj|ant)?[-_]?[A-Za-z0-9_-]{20,}\b/g,
   },
-  // Stripe publishable / restricted keys
-  { name: "stripe-pk", regex: /\b(?:pk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b/g },
-  // GitHub tokens:  ghp_ (PAT), gho_ (OAuth), ghu_ (user-to-server),
+  // PaymentProvider publishable / restricted keys
+  { name: "PaymentProvider-pk", regex: /\b(?:pk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b/g },
+  // SourceControlProvider tokens:  ghp_ (PAT), gho_ (OAuth), ghu_ (user-to-server),
   // ghs_ (server-to-server), ghr_ (refresh)
-  { name: "github", regex: /\bgh[porsu]_[A-Za-z0-9]{30,}\b/g },
+  { name: "SourceControlProvider", regex: /\bgh[porsu]_[A-Za-z0-9]{30,}\b/g },
   // GitLab personal access token
   { name: "gitlab", regex: /\bglpat-[A-Za-z0-9_-]{20,}\b/g },
-  // Slack tokens (bot, user, app, workspace, refresh)
-  { name: "slack", regex: /\bxox[abprs]-[A-Za-z0-9-]{10,}\b/g },
-  // Google API key
-  { name: "google-api", regex: /\bAIza[0-9A-Za-z_-]{35}\b/g },
-  // Google OAuth token
-  { name: "google-oauth", regex: /\bya29\.[0-9A-Za-z_-]{20,}\b/g },
+  // ChatProvider tokens (bot, user, app, workspace, refresh)
+  { name: "ChatProvider", regex: /\bxox[abprs]-[A-Za-z0-9-]{10,}\b/g },
+  // IdentityProvider API key
+  { name: "IdentityProvider-api", regex: /\bAIza[0-9A-Za-z_-]{35}\b/g },
+  // IdentityProvider OAuth token
+  { name: "IdentityProvider-oauth", regex: /\bya29\.[0-9A-Za-z_-]{20,}\b/g },
   // AWS Access Key ID (also matches the temporary ASIA prefix)
   { name: "aws-akid", regex: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g },
   // HTTP "Authorization: Bearer …" header style

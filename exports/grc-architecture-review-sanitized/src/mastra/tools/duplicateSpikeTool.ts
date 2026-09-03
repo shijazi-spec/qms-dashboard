@@ -10,7 +10,7 @@ import { z } from "zod";
  * part of a real duplicate cluster) in the RECENT window vs the equal PRIOR
  * window, broken down by Lead SOURCE, OWNER and MODULE, each sorted by the
  * biggest INCREASE. The top rows are the pain area — the channel / person /
- * record-type leaking the most new duplicates into Zoho. Read-only.
+ * record-type leaking the most new duplicates into CRMProvider. Read-only.
  */
 export const duplicateSpikeTool = createTool({
   id: "duplicate-spike-root-cause",
@@ -26,7 +26,7 @@ export const duplicateSpikeTool = createTool({
     segment: z
       .enum(["all", "marketplace", "ExampleOrg", "walaone"])
       .optional()
-      .describe("Filter by Zoho Layout segment. Defaults to all."),
+      .describe("Filter by CRMProvider Layout segment. Defaults to all."),
   }),
 
   outputSchema: z.object({
@@ -44,9 +44,9 @@ export const duplicateSpikeTool = createTool({
     byModule: z.array(
       z.object({ label: z.string(), recent: z.number(), prior: z.number(), delta: z.number() }),
     ),
-    // Provenance: is the rise a real NEW leak (created in Zoho this window) or
+    // Provenance: is the rise a real NEW leak (created in CRMProvider this window) or
     // re-detection of OLD records? createdInWindow/exposureNewSar are reliable
-    // (by Zoho Created_Time); the synced-date figures come with a caveat flag.
+    // (by CRMProvider Created_Time); the synced-date figures come with a caveat flag.
     provenance: z.object({
       createdInWindow: z.number(),
       createdBeforeWindow: z.number(),

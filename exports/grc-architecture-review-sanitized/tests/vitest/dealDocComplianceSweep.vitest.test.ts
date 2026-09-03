@@ -4,7 +4,7 @@
  * Sample User, 2026-08-25: "this page is a disaster really!! it stopped the whole PC
  * when it works". The tab only learned a deal's document status when someone
  * opened it and pressed "Check all documents", which walked the loaded rows
- * making live Zoho attachment calls from the browser. It capped at 200 of 976
+ * making live CRMProvider attachment calls from the browser. It capped at 200 of 976
  * in-scope deals, so it could never finish — "Not yet checked" sat at 326
  * permanently — and it pinned the machine while running.
  *
@@ -19,7 +19,7 @@ describe("which deals the sweep picks up", () => {
   const sql = dueDealsSql();
 
   it("scopes to the deal-compliance stages, matched case-insensitively", () => {
-    // Zoho returns "Agreement Signed"; the mirror is not guaranteed to agree on
+    // CRMProvider returns "Agreement Signed"; the mirror is not guaranteed to agree on
     // case, and a case-sensitive IN would silently check nothing.
     for (const stage of DEAL_COMPLIANCE_STAGES) {
       expect(sql).toContain(`'${stage.toLowerCase()}'`);

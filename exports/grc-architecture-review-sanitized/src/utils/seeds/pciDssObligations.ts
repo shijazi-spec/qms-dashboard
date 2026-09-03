@@ -72,7 +72,7 @@ export const PCIDSS_OBLIGATION_DEFINITIONS: ObligationDef[] = [
   ]),
   ...build("Req. 3 — Protect Stored Account Data", 300, [
     ["3.2.1", "Account data retention policy", "Account data retention/disposal policy keeps data only as long as required and securely deletes when no longer needed.", "preventive", "annual", "critical"],
-    ["3.3.1", "Sensitive auth data not stored after authorization", "Do not retain sensitive authentication data (CVV, PIN, magnetic stripe) after authorisation."],
+    ["3.3.1", "Sensitive auth data not stored after authorization", "Do not retain sensitive authentication data (CVV, PIN, magnetic PaymentProvider) after authorisation."],
     ["3.4.1", "PAN masked when displayed", "PAN is masked when displayed; full PAN visible only to those with legitimate business need.", "preventive", "continuous", "critical"],
     ["3.5.1", "PAN rendered unreadable when stored", "PAN is rendered unreadable wherever stored (truncation, hashing, tokenisation, strong cryptography)."],
     ["3.6.1", "Cryptographic keys protected", "Cryptographic keys used to protect stored account data are protected against disclosure and misuse."],

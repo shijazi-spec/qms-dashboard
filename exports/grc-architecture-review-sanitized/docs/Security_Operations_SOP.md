@@ -5,8 +5,8 @@
 **Effective Date:** April 26, 2026
 **Classification:** CONFIDENTIAL
 **Prepared by:** ExampleOrg Platform Engineering & Security Team
-**Application:** ExampleOrg QMS Platform (https://<REDACTED_HOST>)
-**Technology Stack:** Mastra (TypeScript), Hono HTTP Server, PostgreSQL (Neon), Node.js 20+
+**Application:** ExampleOrg QMS Platform (<REDACTED_URL_SCHEME><REDACTED_HOST>)
+**Technology Stack:** Mastra (TypeScript), Hono HTTP Server, PostgreSQL (DatabaseProvider), Node.js 20+
 
 ---
 
@@ -116,8 +116,8 @@ This document serves as:
 
 #### QMS-009 — Full User PII Exposure via /api/users
 - **Severity:** HIGH (CVSS 8.6)
-- **Issue:** GET /api/users returned all user fields including `password_hash`, `mfa_secret`, `google_id`.
-- **Remediation:** Response fields filtered by role. Admin sees operational fields (no password_hash/mfa_secret). Non-admin users see only `id`, `email`, `full_name`, `role`, `status`. Sensitive fields (`password_hash`, `mfa_secret`, `google_id`) never returned.
+- **Issue:** GET /api/users returned all user fields including `password_hash`, `mfa_secret`, `IdentityProvider_id`.
+- **Remediation:** Response fields filtered by role. Admin sees operational fields (no password_hash/mfa_secret). Non-admin users see only `id`, `email`, `full_name`, `role`, `status`. Sensitive fields (`password_hash`, `mfa_secret`, `IdentityProvider_id`) never returned.
 - **Files Modified:** `src/mastra/routes/userAccessRoutes.ts`
 - **Control:** Role-based field filtering on user list/detail endpoints.
 
@@ -305,7 +305,7 @@ This document serves as:
 #### QMS-025 — CORS Wildcard on OPTIONS Preflight and Error Responses
 - **Severity:** MEDIUM (CVSS 5.3)
 - **Issue:** CORS headers reflected wildcard origin on OPTIONS preflight and error responses (Not Fixed VULN-05 from v1.0).
-- **Remediation:** CORS origin restricted to application domain derived from `REPLIT_DOMAINS`. No wildcard reflection. Error responses do not include CORS headers for unauthorized origins.
+- **Remediation:** CORS origin restricted to application domain derived from `HostingPlatform_DOMAINS`. No wildcard reflection. Error responses do not include CORS headers for unauthorized origins.
 - **Files Modified:** `src/mastra/index.ts`
 - **Control:** Strict origin allowlist; no wildcard CORS.
 
@@ -339,10 +339,10 @@ This document serves as:
 - **Remediation:** Accepted low risk. All endpoints require authentication and role-based authorization. Resource access is controlled by RBAC, not by ID secrecy (defense in depth, not security through obscurity).
 - **Control:** RBAC-based access control independent of ID predictability.
 
-#### QMS-033 — Google OAuth Client ID Exposed
+#### QMS-033 — IdentityProvider OAuth Client ID Exposed
 - **Severity:** LOW (CVSS 3.7)
-- **Issue:** Google OAuth Client ID visible in browser URL during OAuth flow (Not Fixed VULN-17 from v1.0).
-- **Remediation:** Accepted risk — OAuth Client IDs are semi-public by design per RFC 6749. The Client ID alone cannot be used to impersonate the application without the Client Secret. Google Cloud Console restricts authorized redirect URIs and JavaScript origins.
+- **Issue:** IdentityProvider OAuth Client ID visible in browser URL during OAuth flow (Not Fixed VULN-17 from v1.0).
+- **Remediation:** Accepted risk — OAuth Client IDs are semi-public by design per RFC 6749. The Client ID alone cannot be used to impersonate the application without the Client Secret. IdentityProvider Cloud Console restricts authorized redirect URIs and JavaScript origins.
 - **Files Modified:** N/A (accepted risk)
 - **Control:** OAuth specification compliance; Client Secret protected.
 
@@ -381,7 +381,7 @@ This document serves as:
 
 #### Background
 
-Prior to this enhancement, the `event_logs` and `change_history` tables stored `old_value` / `new_value` columns as raw JSON snapshots of the changed entity. No deny list existed, so any update to `platform_users`, API key tables, integration credentials (Zoho refresh token, Slack bot token, Resend API key, OpenAI key), MFA secrets, or password hashes would write the secret material into the audit table. Because the audit log is readable by `admin` and `auditor` roles and is routinely shared during external assessments, sensitive material was on a credible path to disclosure.
+Prior to this enhancement, the `event_logs` and `change_history` tables stored `old_value` / `new_value` columns as raw JSON snapshots of the changed entity. No deny list existed, so any update to `platform_users`, API key tables, integration credentials (CRMProvider refresh token, ChatProvider bot token, EmailProvider API key, LLMProvider key), MFA secrets, or password hashes would write the secret material into the audit table. Because the audit log is readable by `admin` and `auditor` roles and is routinely shared during external assessments, sensitive material was on a credible path to disclosure.
 
 #### Remediation
 
@@ -407,9 +407,9 @@ A central `redactSensitiveFields(payload, fieldName?)` helper was implemented in
 | `access_token`, `refresh_token`, `id_token`, `bot_token` | OAuth / API tokens |
 | `api_key`, `apikey`, `client_secret`, `private_key` | API credentials |
 | `signing_key`, `session_secret`, `encryption_key` | Cryptographic keys |
-| `zoho_refresh_token`, `zoho_access_token` | Zoho CRM integration |
-| `slack_bot_token` | Slack integration |
-| `resend_api_key`, `openai_api_key` | Email / AI integration keys |
+| `CRMProvider_refresh_token`, `CRMProvider_access_token` | CRMProvider CRM integration |
+| `ChatProvider_bot_token` | ChatProvider integration |
+| `EmailProvider_api_key`, `LLMProvider_api_key` | Email / AI integration keys |
 
 **Tier 2 — Suffix patterns (any key ending with):**
 
@@ -437,13 +437,13 @@ A second helper, `redactSecretLikeStrings(input)` in `src/utils/eventLogsDatabas
 |---------|---------------|
 | `bcrypt` | `$2a$…` / `$2b$…` / `$2y$…` 60-char hash |
 | `JWT` | three base64url segments separated by dots, header begins `eyJ` |
-| `sk-key` | OpenAI / Anthropic / Stripe `sk-…`, `sk_live_…`, `sk-ant-…`, `sk-proj-…` |
-| `stripe-pk` | Stripe publishable / restricted `pk_live_…`, `pk_test_…`, `rk_live_…` |
-| `github` | GitHub `ghp_…`, `gho_…`, `ghu_…`, `ghs_…`, `ghr_…` |
+| `sk-key` | LLMProvider / Anthropic / PaymentProvider `sk-…`, `sk_live_…`, `sk-ant-…`, `sk-proj-…` |
+| `PaymentProvider-pk` | PaymentProvider publishable / restricted `pk_live_…`, `pk_test_…`, `rk_live_…` |
+| `SourceControlProvider` | SourceControlProvider `ghp_…`, `gho_…`, `ghu_…`, `ghs_…`, `ghr_…` |
 | `gitlab` | GitLab `glpat-…` |
-| `slack` | Slack `xoxb-…`, `xoxa-…`, `xoxp-…`, `xoxr-…`, `xoxs-…` |
-| `google-api` | Google API key `AIza…` |
-| `google-oauth` | Google OAuth `ya29.…` |
+| `ChatProvider` | ChatProvider `xoxb-…`, `xoxa-…`, `xoxp-…`, `xoxr-…`, `xoxs-…` |
+| `IdentityProvider-api` | IdentityProvider API key `AIza…` |
+| `IdentityProvider-oauth` | IdentityProvider OAuth `ya29.…` |
 | `aws-akid` | AWS Access Key ID `AKIA…` / `ASIA…` |
 | `bearer` | HTTP `Authorization: Bearer …` header value |
 
@@ -485,7 +485,7 @@ npx tsx src/utils/redactHistoricalLogs.ts
 Run tests with: `npx jest src/utils/redactSensitiveFields.test.ts`
 
 `tests/redactHistoricalPreview.test.ts` covers the historical sweep backfill for `ai_pending_actions.payload_preview`:
-- Row containing a `ghp_…` GitHub token is rewritten and UPDATE is issued with the sentinel in place of the token
+- Row containing a `ghp_…` SourceControlProvider token is rewritten and UPDATE is issued with the sentinel in place of the token
 - Row with clean prose is not updated (idempotent — no spurious UPDATEs)
 - Row whose preview already contains the sentinel is not re-updated (safe to re-run)
 - Multiple rows: only dirty rows trigger UPDATEs; clean rows are skipped
@@ -632,8 +632,8 @@ Any role not listed in the "Allowed Roles" column receives **HTTP 403** from the
 |-----------|-------|
 | default-src | 'self' |
 | script-src | 'self' 'nonce-${cspNonce}' <REDACTED_URL> <REDACTED_URL> | Restricts scripts to same origin + specific nonce (Tailwind CDN allowed) |
-| style-src | 'self' 'nonce-${cspNonce}' <REDACTED_URL> <REDACTED_URL> | Restricts styles to same origin + nonce-tagged `<style>` blocks (no inline `style="..."` attributes) + Tailwind CDN + Google Fonts |
-| font-src | 'self' <REDACTED_URL> | Restricts fonts to same origin + Google Fonts |
+| style-src | 'self' 'nonce-${cspNonce}' <REDACTED_URL> <REDACTED_URL> | Restricts styles to same origin + nonce-tagged `<style>` blocks (no inline `style="..."` attributes) + Tailwind CDN + IdentityProvider Fonts |
+| font-src | 'self' <REDACTED_URL> | Restricts fonts to same origin + IdentityProvider Fonts |
 | img-src | 'self' data: https: | Allows local images + data URIs + https images |
 | frame-ancestors | 'none' | Equivalent to X-Frame-Options: DENY; prevents clickjacking |
 | base-uri | 'self' | Prevents base tag hijacking |
@@ -675,7 +675,7 @@ When a developer needs to add a genuinely safe inline handler (e.g. HTML deliver
 
 | Property | Value |
 |----------|-------|
-| Allowed origins | Application domain from REPLIT_DOMAINS only |
+| Allowed origins | Application domain from HostingPlatform_DOMAINS only |
 | Wildcard | Not permitted |
 | Credentials | Enabled (cookie-based auth) |
 | Error responses | No CORS headers for unauthorized origins |
@@ -767,7 +767,7 @@ env exports the flag with a truthy value.
 
 | Property | Value |
 |----------|-------|
-| Primary method | Google OAuth 2.0 |
+| Primary method | IdentityProvider OAuth 2.0 |
 | Secondary method | Admin API Key (X-Admin-Key header or admin_key HttpOnly cookie) |
 | Session token | HMAC-SHA256 signed, 7-day expiry |
 | Cookie flags | HttpOnly, Secure (production), SameSite=Strict, Path=/ |
@@ -778,7 +778,7 @@ env exports the flag with a truthy value.
 
 #### Public Paths (No Auth Required)
 - `/login`, `/guide`, `/accept-invite`
-- `/api/auth/google`, `/api/auth/google/callback`
+- `/api/auth/IdentityProvider`, `/api/auth/IdentityProvider/callback`
 - `/api/auth/me`, `/api/auth/logout`
 - `/api/invitations/validate/:token`, `/api/invitations/accept`
 - `/api/admin/auth`, `/api/admin/auth/logout`
@@ -842,7 +842,7 @@ every authentication request).
 
 Rotation procedure:
 1. Generate a new high-entropy value (e.g. `openssl rand -hex 32` — 64 hex chars / 256 bits of entropy).
-2. Replace the `ADMIN_API_KEY` secret in the platform environment store (Replit Secrets). Do **not** commit it to source control or write it to disk.
+2. Replace the `ADMIN_API_KEY` secret in the platform environment store (HostingPlatform Secrets). Do **not** commit it to source control or write it to disk.
 3. Restart the application workflow so the new value is loaded into `process.env`.
 4. Verify: `POST /api/admin/auth` with the **old** key returns HTTP 401; the **new** key returns HTTP 200 and sets the `admin_key` HttpOnly/Secure/SameSite=Strict cookie.
 5. Append a new row to the table above with the date, reason, operator, and verification notes.
@@ -948,7 +948,7 @@ When reviewing any PR that touches dashboard JavaScript:
 ### 5.10 Storage Health Monitoring & Quiet Hours
 
 The storage-health monitor (`src/utils/storageHealthMonitor.ts`) periodically
-samples Postgres usage and emits Slack/email alerts when free-space or growth
+samples Postgres usage and emits ChatProvider/email alerts when free-space or growth
 thresholds are crossed. To prevent alert fatigue during scheduled maintenance
 or off-hours, alert delivery (not measurement) can be muted via a configurable
 quiet-hours window:
@@ -963,7 +963,7 @@ Behavioural guarantees:
 
 - **Measurements are never skipped.** The monitor still polls Postgres and
   records every sample to `storage_health_samples`; only outbound
-  Slack/email notifications are suppressed during the window.
+  ChatProvider/email notifications are suppressed during the window.
 - **Critical alerts override the mute.** Samples flagged `severity=critical`
   (e.g. < 5% free space) bypass quiet hours so on-call is always paged.
 - **Cross-midnight windows are supported.** A window like `22:00`–`06:00`
@@ -993,7 +993,7 @@ have an audit trail outside the database.
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `AI_METRICS_RETENTION_PRUNE_NOTIFY` | When `1`/`true`, manual prunes post a Slack/email summary (rows deleted per table, retention window, operator). | `0` (off) |
+| `AI_METRICS_RETENTION_PRUNE_NOTIFY` | When `1`/`true`, manual prunes post a ChatProvider/email summary (rows deleted per table, retention window, operator). | `0` (off) |
 | `AI_METRICS_RETENTION_DAYS` | Existing retention window used by both scheduled and manual prunes. | `90` |
 
 Notifier guarantees:
@@ -1003,7 +1003,7 @@ Notifier guarantees:
 - **Operator identity is preserved.** The notifier captures the admin user
   email (or `cli:<hostname>` for CLI invocations) and the request ID so the
   message can be cross-referenced with the audit log.
-- **Failure is non-fatal.** If the notifier transport (Slack webhook, SMTP)
+- **Failure is non-fatal.** If the notifier transport (ChatProvider webhook, SMTP)
   fails, the prune itself still commits and the failure is logged at WARN
   with the redacted notifier payload — pruning correctness never depends on
   the notifier.
@@ -1182,7 +1182,7 @@ Pick whichever is simpler in your environment:
 | 31 | QMS-030 | PostgreSQL Type Disclosure via Error Messages | Low | 3.7 | Error Handling | Fixed | All route files, inputSanitizer.ts |
 | 32 | QMS-031 | Endpoint Enumeration via Response Code Differentiation | Low | 3.7 | Low-Risk | Fixed | index.ts |
 | 33 | QMS-032 | Sequential Resource IDs Enable Enumeration | Low | 3.7 | Low-Risk | Accepted | N/A (mitigated by RBAC) |
-| 34 | QMS-033 | Google OAuth Client ID Exposed | Low | 3.7 | Low-Risk | Accepted | N/A (by design per RFC 6749) |
+| 34 | QMS-033 | IdentityProvider OAuth Client ID Exposed | Low | 3.7 | Low-Risk | Accepted | N/A (by design per RFC 6749) |
 | 35 | QMS-034 | Mastra Framework Disclosure in CORS Headers | Low | 3.7 | Low-Risk | Fixed | index.ts |
 | 36 | QMS-035 | Mode:MOCK Disclosure via Agent Performance API | Low | 3.7 | Error Handling | Fixed | index.ts |
 | 37 | QMS-036 | Broken Export Endpoints (500 Errors) | Low | 3.5 | Low-Risk | Fixed | Various route files |
@@ -1234,7 +1234,7 @@ Pick whichever is simpler in your environment:
 | 3.0 | March 24, 2026 | ExampleOrg Security Team | Pentest v3.0 full remediation (39 findings), comprehensive SOP |
 | 3.1 | April 24, 2026 | ExampleOrg Platform Engineering | RBAC lock-down of /api/reports/* routes; Added section 4.8: Audit Log Sensitive Field Masking. Implemented `redactSensitiveFields()` deny-list helper, wired into all event_logs and change_history write paths, retroactive sweep script, regression tests. In-handler requireRole() defense-in-depth; updated §5.1 Report Route Access Control table. |
 | 4.0 | April 24, 2026 | ExampleOrg Security Team | Stored XSS remediation: shared safe-render helper, innerHTML escaping fixes (navigation.js, duplicates.html), CSP nonce enforcement (removed unsafe-inline from script-src), Safe Rendering Rules (§5.9) |
-| 4.1 | April 24, 2026 | ExampleOrg Platform Engineering | Extended §4.8: added `redactSecretLikeStrings()` regex deny-list (sk-*, ghp_*, JWT, bcrypt, AWS, Google, Slack, GitLab, Bearer) and wired it into `enqueuePendingAction()` so the `ai_pending_actions.payload_preview` TEXT column is sanitised in addition to the JSONB columns; added preview-string assertions to `tests/aiApprovalRedaction.test.ts`. |
+| 4.1 | April 24, 2026 | ExampleOrg Platform Engineering | Extended §4.8: added `redactSecretLikeStrings()` regex deny-list (sk-*, ghp_*, JWT, bcrypt, AWS, IdentityProvider, ChatProvider, GitLab, Bearer) and wired it into `enqueuePendingAction()` so the `ai_pending_actions.payload_preview` TEXT column is sanitised in addition to the JSONB columns; added preview-string assertions to `tests/aiApprovalRedaction.test.ts`. |
 | 4.2 | April 24, 2026 | ExampleOrg Platform Engineering | §4.8 Historical Data Sweep extended to cover `ai_pending_actions.payload_preview` (TEXT): `redactHistoricalLogs.ts` now runs `redactSecretLikeStrings()` over each existing preview string and UPDATEs only rows whose sanitised value differs (idempotent). Added `tests/redactHistoricalPreview.test.ts` (27 assertions) verifying ghp_… tokens in historical previews are rewritten, clean rows are skipped, and NULL values are handled gracefully. |
 | 4.3 | April 25, 2026 | ExampleOrg Platform Engineering | §5.7 Authentication Policy: added **Secrets Rotation Log** subsection with rotation procedure and table; recorded the April 25, 2026 precautionary rotation of `ADMIN_API_KEY` following the `admin_key` cookie tightening from `SameSite=Lax` to `SameSite=Strict`. New high-entropy value (≥ 256 bits) installed in the platform secrets store; prior key no longer accepted by `/api/admin/auth`. |
 | 4.5 | April 26, 2026 | ExampleOrg Platform Engineering | §5.7 Secrets Rotation Log: recorded the April 26, 2026 operator-usability rotation of `ADMIN_API_KEY` from the April 25 high-entropy 64-hex value to a memorable mnemonic passphrase (38 chars / 25 distinct — clears the startup strength gate). Workflow restarted; prior value verified rejected, new value verified accepted. |

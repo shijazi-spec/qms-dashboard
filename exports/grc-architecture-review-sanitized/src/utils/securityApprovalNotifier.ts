@@ -11,7 +11,7 @@
  *   - `withApprovalGate.ts` calls `notifyCredentialFlaggedApproval()` once
  *     immediately after `enqueuePendingAction()` returns, but ONLY when
  *     `pending.credential_warnings.length > 0`. The wrapper does this
- *     best-effort (swallows errors) so a Slack/Resend outage cannot
+ *     best-effort (swallows errors) so a ChatProvider/EmailProvider outage cannot
  *     prevent the AI tool from queuing the request.
  *
  * Dedupe / spam control:
@@ -27,13 +27,13 @@
  *     accidental spam.
  *
  * Configuration (env-only, both channels optional):
- *   - `SECURITY_REVIEWER_SLACK_CHANNEL`         — channel id/name to page.
+ *   - `SECURITY_REVIEWER_ChatProvider_CHANNEL`         — channel id/name to page.
  *                                                 No fallback to a generic
- *                                                 SLACK_CHANNEL_ID, mirroring
+ *                                                 ChatProvider_CHANNEL_ID, mirroring
  *                                                 the tool-health notifier's
  *                                                 stance: explicit opt-in.
  *   - `SECURITY_REVIEWER_EMAIL`                 — comma-separated recipient
- *                                                 list for the Resend email.
+ *                                                 list for the EmailProvider email.
  *   - `SECURITY_REVIEWER_APP_URL`               — public origin used to
  *                                                 build the deep link to
  *                                                 the approval card.
@@ -45,12 +45,12 @@
  *                                                 this process. Default 60.
  *
  * The module exposes a small dep-injection surface so unit tests can stub
- * Slack/Resend without touching the real APIs and can reset the throttle
+ * ChatProvider/EmailProvider without touching the real APIs and can reset the throttle
  * map between cases.
  */
 
-import { sendSlackNotification } from "./slackNotifications";
-import { sendResendEmail, type ResendEmailOptions } from "./resendMail";
+import { sendChatProviderNotification } from "./ChatProviderNotifications";
+import { sendEmailProviderEmail, type EmailProviderEmailOptions } from "./EmailProviderMail";
 import type { CredentialWarning } from "./eventLogsDatabase";
 import type { RiskLevel } from "./aiApprovalDatabase";
 import { logger } from "./logger";
@@ -74,26 +74,26 @@ export interface CredentialFlaggedApprovalNotification {
    * Structured warnings emitted by `detectCredentialLikeFields()` at
    * submission time. We surface ONLY the field paths (and pattern labels)
    * to the notification — the raw secret values are already redacted in
-   * the persisted row and must NOT be re-leaked into Slack/email.
+   * the persisted row and must NOT be re-leaked into ChatProvider/email.
    */
   credential_warnings: CredentialWarning[];
 }
 
 export interface NotifyCredentialFlaggedApprovalResult {
-  slackSent: boolean;
+  ChatProviderSent: boolean;
   emailSent: boolean;
   /** True when the throttle map blocked the page entirely. */
   throttled: boolean;
-  /** True when neither Slack nor email is configured. */
+  /** True when neither ChatProvider nor email is configured. */
   skipped: boolean;
 }
 
 export interface SecurityApprovalNotifierDeps {
-  /** Defaults to `sendSlackNotification`. */
-  sendSlack?: typeof sendSlackNotification;
-  /** Defaults to `sendResendEmail`. */
+  /** Defaults to `sendChatProviderNotification`. */
+  sendChatProvider?: typeof sendChatProviderNotification;
+  /** Defaults to `sendEmailProviderEmail`. */
   sendEmail?: (
-    opts: ResendEmailOptions,
+    opts: EmailProviderEmailOptions,
   ) => Promise<{ success: boolean; id?: string; error?: string }>;
   /** Defaults to `Date.now`. Tests inject a deterministic clock. */
   now?: () => number;
@@ -111,15 +111,15 @@ function envInt(name: string, fallback: number): number {
 }
 
 interface NotifierConfig {
-  slackChannel: string | null;
+  ChatProviderChannel: string | null;
   emailRecipients: string[];
   appUrl: string;
   throttleMs: number;
 }
 
 function readConfig(): NotifierConfig {
-  const slackChannel =
-    (process.env.SECURITY_REVIEWER_SLACK_CHANNEL || "").trim() || null;
+  const ChatProviderChannel =
+    (process.env.SECURITY_REVIEWER_ChatProvider_CHANNEL || "").trim() || null;
   const emailRaw = (process.env.SECURITY_REVIEWER_EMAIL || "").trim();
   const emailRecipients = emailRaw
     ? emailRaw
@@ -131,7 +131,7 @@ function readConfig(): NotifierConfig {
     .trim()
     .replace(/\/+$/, "");
   return {
-    slackChannel,
+    ChatProviderChannel,
     emailRecipients,
     appUrl,
     throttleMs: envInt("SECURITY_REVIEWER_NOTIFY_THROTTLE_MIN", 60) * 60_000,
@@ -141,7 +141,7 @@ function readConfig(): NotifierConfig {
 /**
  * Build the deep link to the specific approval card. When
  * SECURITY_REVIEWER_APP_URL is unset we still emit a relative path so the
- * email/Slack body shows ops which page to open, even if it is not
+ * email/ChatProvider body shows ops which page to open, even if it is not
  * directly clickable. The `code` query string parameter is consumed by
  * the dashboard JS to auto-open the detail modal for that row.
  */
@@ -203,7 +203,7 @@ function summariseWarningPaths(warnings: CredentialWarning[]): string {
   return paths.length > 0 ? `${paths.join(", ")}${more}` : `(${warnings.length})`;
 }
 
-function buildSlackBlocks(
+function buildChatProviderBlocks(
   n: CredentialFlaggedApprovalNotification,
   link: string,
   linkAbsolute: boolean,
@@ -245,7 +245,7 @@ function buildSlackBlocks(
     },
   ];
 
-  // Slack rejects actions.button blocks with relative URLs — degrade to a
+  // ChatProvider rejects actions.button blocks with relative URLs — degrade to a
   // plain mrkdwn link in dev/test environments where the public origin
   // env var is unset.
   if (linkAbsolute) {
@@ -351,12 +351,12 @@ function buildEmailText(
  * Page security reviewers about a freshly-enqueued approval whose payload
  * tripped the structural credential detector.
  *
- * Safe to call unconditionally: when neither Slack nor email is configured
+ * Safe to call unconditionally: when neither ChatProvider nor email is configured
  * the function returns `{ skipped: true }` without throwing, so the
  * approval gate does not need to special-case dev/test environments.
  *
  * Best-effort: callers should also `.catch()` the returned promise so a
- * Slack/Resend outage cannot abort the enqueue path. The internal Slack
+ * ChatProvider/EmailProvider outage cannot abort the enqueue path. The internal ChatProvider
  * and email send sites already swallow exceptions and set the
  * corresponding flag to `false`; this guarantee is part of the contract.
  */
@@ -365,12 +365,12 @@ export async function notifyCredentialFlaggedApproval(
   depsOverride: SecurityApprovalNotifierDeps = {},
 ): Promise<NotifyCredentialFlaggedApprovalResult> {
   const cfg = readConfig();
-  const sendSlack = depsOverride.sendSlack ?? sendSlackNotification;
-  const sendEmail = depsOverride.sendEmail ?? sendResendEmail;
+  const sendChatProvider = depsOverride.sendChatProvider ?? sendChatProviderNotification;
+  const sendEmail = depsOverride.sendEmail ?? sendEmailProviderEmail;
   const nowFn = depsOverride.now ?? Date.now;
 
   const result: NotifyCredentialFlaggedApprovalResult = {
-    slackSent: false,
+    ChatProviderSent: false,
     emailSent: false,
     throttled: false,
     skipped: false,
@@ -387,7 +387,7 @@ export async function notifyCredentialFlaggedApproval(
     return result;
   }
 
-  if (!cfg.slackChannel && cfg.emailRecipients.length === 0) {
+  if (!cfg.ChatProviderChannel && cfg.emailRecipients.length === 0) {
     // Nothing configured — explicit skip so callers can log/count.
     result.skipped = true;
     return result;
@@ -411,22 +411,22 @@ export async function notifyCredentialFlaggedApproval(
   const link = buildDeepLink(notification.action_code, cfg.appUrl);
   const linkAbsolute = isAbsoluteUrl(link);
 
-  if (cfg.slackChannel) {
+  if (cfg.ChatProviderChannel) {
     const fallback =
       `:warning: Credential-shaped value in approval ${notification.action_code} ` +
       `(tool: ${notification.tool_id}, risk: ${notification.risk_level.toUpperCase()})`;
     try {
-      result.slackSent = await sendSlack(
-        cfg.slackChannel,
+      result.ChatProviderSent = await sendChatProvider(
+        cfg.ChatProviderChannel,
         fallback,
-        buildSlackBlocks(notification, link, linkAbsolute),
+        buildChatProviderBlocks(notification, link, linkAbsolute),
       );
     } catch (err) {
       logger.error(
-        `[SecurityApprovalNotifier] Slack send threw for ${notification.action_code}:`,
+        `[SecurityApprovalNotifier] ChatProvider send threw for ${notification.action_code}:`,
         err,
       );
-      result.slackSent = false;
+      result.ChatProviderSent = false;
     }
   }
 

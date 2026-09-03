@@ -66,7 +66,7 @@ Several commits from today's session (`e78bb5d`, `bf98a02`, `adc305f`, `7d738bf`
 - [ ] Coaching tab loads without "Failed to load HTTP 401"
 - [ ] Performance vs Team agent picker renders
 - [ ] Backfill Dates + Backfill CRM Compliance buttons execute successfully
-- [ ] Open/Closed Activities panel inside Call Details populates from Zoho
+- [ ] Open/Closed Activities panel inside Call Details populates from CRMProvider
 - [ ] "Run compliance now" no longer hits RBAC error
 
 These need to be confirmed before adding more scope. If any are still broken, fix them before P0.
@@ -85,7 +85,7 @@ P1.5 (deterministic compliance engine) ENFORCES these scripts. Building the engi
 
 This puts P1.5 ~3-4 weeks out from today, not "next week."
 
-### Pre-condition 3 — Five9 / Zoho data freshness loop verified
+### Pre-condition 3 — ContactCenterProvider / CRMProvider data freshness loop verified
 
 If sync lag remains the issue we saw today (Duplicate Radar showing 25-day-stale data), P2.5 talk-time analytics will compute against stale recordings. Worth verifying the sync cadence before adding compute-heavy diarization.
 
@@ -118,7 +118,7 @@ The above timeline assumes ~1 full-time engineer (me, via this session's pace). 
 Other resourcing considerations:
 - **Whisper API costs** increase with P0 (PII redaction may require a second pass) and P2.5 (diarization, depending on whether we use pyannote in-house or AssemblyAI/Deepgram).
 - **AssemblyAI/Deepgram vs Whisper** — switching the ASR provider for diarization is a decision in P2.5. Worth a separate spike before committing.
-- **Compute** — current Replit deployment is probably sufficient. If Whisper batch jobs become heavy, may need a dedicated worker.
+- **Compute** — current HostingPlatform deployment is probably sufficient. If Whisper batch jobs become heavy, may need a dedicated worker.
 
 ---
 

@@ -77,7 +77,7 @@ The consent line slots in **after that fuller introduction**, before
 
 ```
 أنا [الاسم] من شركة ولاء بلس... وصلنا طلب اهتمامك ببرامج ولاء بلس...
-بعد ما اطلعت على إعلاننا عبر LinkedIn/Google/Webinar.
+بعد ما اطلعت على إعلاننا عبر LinkedIn/IdentityProvider/Webinar.
        │
        ▼  ← INSERT THE CONSENT LINE HERE TOO
 قبل ما نبدأ، أنوّه أن المكالمة مسجّلة لأغراض الجودة والتدريب فقط.

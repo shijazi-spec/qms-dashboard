@@ -294,7 +294,7 @@ export async function autoOpenCapasForCsLifecycle(opts: {
           source: "cs_lifecycle_auto",
           duplicate_record_id: row.record_id,
           cluster_id: row.cluster_id,
-          zoho_record_id: row.zoho_record_id,
+          CRMProvider_record_id: row.CRMProvider_record_id,
           violation_code: row.violation.code,
           violation_severity: row.violation.severity,
           current_phase: row.current_phase,

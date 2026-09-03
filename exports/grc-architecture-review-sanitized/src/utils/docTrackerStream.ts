@@ -10,7 +10,7 @@
  *
  * Structure copied from duplicateRadarRoutes: filter-on-enqueue to drop dead
  * controllers, a 15s comment keepalive (unref'd so tests can still exit), and
- * `X-Accel-Buffering: no` because the Replit proxy will otherwise buffer the
+ * `X-Accel-Buffering: no` because the HostingPlatform proxy will otherwise buffer the
  * stream and nothing is delivered until it closes.
  */
 

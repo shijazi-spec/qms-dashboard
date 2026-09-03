@@ -1,0 +1,75 @@
+name: Digest Notification Smoke
+
+on:
+  # Manual-only — required secrets (DATABASE_URL) aren't configured in this
+  # repo and the platform deploys via HostingPlatform, not SourceControlProvider Actions. Re-enable
+  # the push / pull_request triggers below once secrets are in place if
+  # you want this to gate merges.
+  workflow_dispatch:
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - ".SourceControlProvider/workflows/digest-notification-smoke.yml"
+  #     - "src/utils/executiveDigest.ts"
+  #     - "src/utils/directAuditRunner.ts"
+  #     - "src/mastra/routes/analyticsRoutes.ts"
+  #     - "src/mastra/inngest/index.ts"
+  #     - "src/utils/ChatProviderNotifications.ts"
+  #     - "tests/executiveDigestCadence.test.ts"
+  #     - "tests/analyticsRoutes.test.ts"
+  # pull_request:
+  #   paths:
+  #     - ".SourceControlProvider/workflows/digest-notification-smoke.yml"
+  #     - "src/utils/executiveDigest.ts"
+  #     - "src/utils/directAuditRunner.ts"
+  #     - "src/mastra/routes/analyticsRoutes.ts"
+  #     - "src/mastra/inngest/index.ts"
+  #     - "src/utils/ChatProviderNotifications.ts"
+  #     - "tests/executiveDigestCadence.test.ts"
+  #     - "tests/analyticsRoutes.test.ts"
+
+concurrency:
+  group: digest-notification-smoke-${{ SourceControlProvider.ref }}
+  cancel-in-progress: true
+
+jobs:
+  digest-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Gate by required secrets
+        id: gate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "${DATABASE_URL}" ]; then
+            echo "run_smoke=false" >> "$SourceControlProvider_OUTPUT"
+            echo "::notice::Skipping digest smoke (DATABASE_URL not configured in repository secrets)."
+          else
+            echo "run_smoke=true" >> "$SourceControlProvider_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.gate.outputs.run_smoke == 'true'
+        run: npm ci
+
+      - name: Run analytics route auth smoke
+        if: steps.gate.outputs.run_smoke == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx tsx tests/analyticsRoutes.test.ts
+
+      - name: Run executive digest cadence smoke
+        if: steps.gate.outputs.run_smoke == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx tsx tests/executiveDigestCadence.test.ts

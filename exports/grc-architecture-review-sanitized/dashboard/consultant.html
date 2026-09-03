@@ -1211,7 +1211,7 @@
                         var respText = (data && (data.response || data.message)) || '';
                         if (!respText) {
                             // Prefer `details` (the underlying error message
-                            // from the catch — e.g. "OpenAIError: 401
+                            // from the catch — e.g. "LLMProviderError: 401
                             // Incorrect API key", "RateLimitError",
                             // "AbortError: aborted") over `error` (the
                             // generic envelope label like "Failed to process

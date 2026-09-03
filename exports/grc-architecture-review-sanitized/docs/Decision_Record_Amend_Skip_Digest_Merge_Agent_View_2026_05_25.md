@@ -11,13 +11,13 @@
 
 Two further scope reductions to the 8-week plan, dropping it to **~7 weeks** with a simpler information architecture:
 
-### 1. Skip the weekly PDF digest + Slack alerts
+### 1. Skip the weekly PDF digest + ChatProvider alerts
 
 | Aspect | Position |
 |---|---|
-| What's dropped | Weekly PDF digest auto-emailed to SDR Manager every Monday. Slack alerts on critical compliance fails. |
+| What's dropped | Weekly PDF digest auto-emailed to SDR Manager every Monday. ChatProvider alerts on critical compliance fails. |
 | What stays | CSV export functionality (small piece) |
-| Why it's defensible | Manager will open the dashboard directly on Monday morning. Adding PDF generation, email delivery, and Slack alert routing adds operational complexity (cron, email infrastructure, Slack token) without unique value over a fresh dashboard view. |
+| Why it's defensible | Manager will open the dashboard directly on Monday morning. Adding PDF generation, email delivery, and ChatProvider alert routing adds operational complexity (cron, email infrastructure, ChatProvider token) without unique value over a fresh dashboard view. |
 | When to revisit | If manager review cadence slips (e.g. dashboard not opened weekly) — the digest becomes the proactive push mechanism. Tracked via dashboard access logs. |
 
 ### 2. Merge Agent View into the Overview tab
@@ -34,7 +34,7 @@ Two further scope reductions to the 8-week plan, dropping it to **~7 weeks** wit
 
 ```
 Week 1   Verify + Brief
-         ├─ Pull + Republish on Replit
+         ├─ Pull + Republish on HostingPlatform
          ├─ Confirm today's 5 fixes work
          └─ Brief SDR team on consent + verification scripts
 
@@ -100,7 +100,7 @@ To make the deferrals explicit (for audit trail):
 | Deferred | Why | Re-trigger |
 |---|---|---|
 | Weekly PDF digest emailed Monday | Manager will open dashboard directly; PDF generation adds complexity without unique value | If dashboard access cadence drops below 1× per week per manager |
-| Slack real-time alerts on critical fails | Same — proactive notifications can be added later if needed | If a critical breach goes unnoticed for >24h (e.g. SDR caught making non-compliant calls without flag) |
+| ChatProvider real-time alerts on critical fails | Same — proactive notifications can be added later if needed | If a critical breach goes unnoticed for >24h (e.g. SDR caught making non-compliant calls without flag) |
 | Standalone Agent View page | Folded into Overview drill-down | If Overview becomes too cluttered (e.g. 50+ agents, page > 2 screen scrolls) |
 | Standalone Team View page | Folded into Overview leaderboard | Same |
 | **PII redaction in transcripts** (from prior amendment) | PDPL Article 18 risk accepted while internal-only | Audit notice / wider access / external export |

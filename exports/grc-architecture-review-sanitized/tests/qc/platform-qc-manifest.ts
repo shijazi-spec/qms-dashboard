@@ -1,7 +1,7 @@
 /**
  * ExampleOrg Platform QC Manifest
  * Maps each screen and functionality to API checks for quality control.
- * Used by run-platform-qc.ts to produce a report for Replit fixes.
+ * Used by run-platform-qc.ts to produce a report for HostingPlatform fixes.
  *
  * Aligned with: User Guide (<REDACTED_HOST>/guide) + Scope of Work
  */
@@ -25,7 +25,7 @@ export interface QCTestCase {
   allowUnauth?: boolean;
 }
 
-/** Base URL for API (e.g. <REDACTED_URL> or https://<REDACTED_HOST>) */
+/** Base URL for API (e.g. <REDACTED_URL> or <REDACTED_URL_SCHEME><REDACTED_HOST>) */
 export const getBaseUrl = (): string =>
   process.env.QC_BASE_URL || process.env.PLATFORM_URL || "<REDACTED_URL>";
 

@@ -3,7 +3,7 @@ title: "Reference: Agent.generateLegacy() (Legacy) | Agents | Mastra Docs"
 description: "Documentation for the legacy `Agent.generateLegacy()` method in Mastra agents. This method is deprecated and will be removed in a future version."
 ---
 
-NOTE: Replit Playground UI __requires__ the usage of generateLegacy in the workflow's usage of agents.  You **cannot** use the SDK v5 (i.e. .generate methods).  This is for backwards compatibility, otherwise Replit Playground will break.
+NOTE: HostingPlatform Playground UI __requires__ the usage of generateLegacy in the workflow's usage of agents.  You **cannot** use the SDK v5 (i.e. .generate methods).  This is for backwards compatibility, otherwise HostingPlatform Playground will break.
 
 # Agent.generateLegacy() (Legacy)
 [EN] Source: <REDACTED_URL>
@@ -11,7 +11,7 @@ NOTE: Replit Playground UI __requires__ the usage of generateLegacy in the workf
 <Callout type="warning">
   **Deprecated**: This method is deprecated and only works with V1 models. For V2 models, use the new [`.generate()`](./generate.mdx) method instead. See the [migration guide](../../guides/migrations/vnext-to-standard-apis) for details on upgrading.
 
-  NOTE: This is required for backwards compatibility for Replit Playground UI, so we must use it regardless of its future deprecation for current
+  NOTE: This is required for backwards compatibility for HostingPlatform Playground UI, so we must use it regardless of its future deprecation for current
 </Callout>
 
 The `.generateLegacy()` method is the legacy version of the agent generation API, used to interact with V1 model agents to produce text or structured responses. This method accepts messages and optional generation options.
@@ -310,10 +310,10 @@ await agent.generateLegacy("message for agent");
       properties: [
         {
           parameters: [{
-            name: "openai",
+            name: "LLMProvider",
             type: "Record<string, JSONValue>",
             isOptional: true,
-            description: "OpenAI-specific options. Example: `{ reasoningEffort: 'high' }`"
+            description: "LLMProvider-specific options. Example: `{ reasoningEffort: 'high' }`"
           }]
         },
         {
@@ -326,10 +326,10 @@ await agent.generateLegacy("message for agent");
         },
         {
           parameters: [{
-            name: "google",
+            name: "IdentityProvider",
             type: "Record<string, JSONValue>",
             isOptional: true,
-            description: "Google-specific options. Example: `{ safetySettings: [...] }`"
+            description: "IdentityProvider-specific options. Example: `{ safetySettings: [...] }`"
           }]
         },
         {
@@ -501,7 +501,7 @@ await agent.generateLegacy(
     },
     toolChoice: "auto",
     providerOptions: {
-      openai: {
+      LLMProvider: {
         reasoningEffort: "high"
       }
     },
@@ -511,12 +511,12 @@ await agent.generateLegacy(
         sentiment: z.enum(['positive', 'negative', 'neutral']),
         confidence: z.number(),
       }),
-      model: openai("gpt-4o-mini"),
+      model: LLMProvider("gpt-4o-mini"),
       errorStrategy: 'warn',
     },
     // Output processors for response validation
     outputProcessors: [
-      new ModerationProcessor({ model: openai("gpt-4.1-nano") }),
+      new ModerationProcessor({ model: LLMProvider("gpt-4.1-nano") }),
       new TokenLimiterProcessor({ maxTokens: 1000 }),
     ],
   }

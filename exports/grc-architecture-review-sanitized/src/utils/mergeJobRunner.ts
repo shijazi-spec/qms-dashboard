@@ -1,5 +1,5 @@
 /**
- * In-process background worker for the Agentic Resolution "Apply in Zoho"
+ * In-process background worker for the Agentic Resolution "Apply in CRMProvider"
  * merge. The `/clusters/:id/execute` endpoint (real run only — dry-run stays
  * synchronous) inserts a `merge_jobs` row and launches `runMergeJob(jobId)`
  * WITHOUT awaiting it, so the HTTP request returns immediately (avoids the
@@ -9,7 +9,7 @@
  * cluster id / module / operator overrides, never a stale client-side plan.
  * Merge LOGIC is unchanged: same `buildMergePlan` + `executeMergePlan`, same
  * tagging/reparenting/audit/learning-capture. This file only decides WHERE
- * that work runs (single-flight in-process) and reports progress + a Slack
+ * that work runs (single-flight in-process) and reports progress + a ChatProvider
  * ping on completion.
  */
 import {
@@ -76,10 +76,10 @@ export async function runMergeJob(jobId: number): Promise<void> {
       tagName: "Duplicate-Delete",
       generatedBy: job.created_by || "duplicate-radar",
       generatedAt: new Date().toISOString(),
-      masterZohoId: job.master_zoho_id,
+      masterCRMProviderId: job.master_CRMProvider_id,
       taggedAccountDbIds,
-      includeZohoIds: job.include_zoho_ids ? JSON.parse(job.include_zoho_ids) : null,
-      linkAccountZohoId: job.link_account_zoho_id === null ? undefined : job.link_account_zoho_id,
+      includeCRMProviderIds: job.include_CRMProvider_ids ? JSON.parse(job.include_CRMProvider_ids) : null,
+      linkAccountCRMProviderId: job.link_account_CRMProvider_id === null ? undefined : job.link_account_CRMProvider_id,
       forceMergeContacts: job.force_merge,
     });
 
@@ -121,8 +121,8 @@ export async function runMergeJob(jobId: number): Promise<void> {
       await recordResolutionEvent({
         clusterId: job.cluster_id,
         eventType: "applied",
-        proposedMasterZohoId: plan.masterZohoId,
-        chosenMasterZohoId: plan.masterZohoId,
+        proposedMasterCRMProviderId: plan.masterCRMProviderId,
+        chosenMasterCRMProviderId: plan.masterCRMProviderId,
         fieldsMigrated: report.fieldsMigrated.length,
         duplicatesTagged: report.taggedRecordIds.length,
         reparented,
@@ -135,7 +135,7 @@ export async function runMergeJob(jobId: number): Promise<void> {
       /* learning capture is non-fatal */
     }
 
-    // Best-effort Slack ping on completion — never let a Slack failure
+    // Best-effort ChatProvider ping on completion — never let a ChatProvider failure
     // affect the job outcome (already recorded above).
     try {
       const icon = report.errors.length > 0 ? "⚠️" : "✅";
@@ -143,11 +143,11 @@ export async function runMergeJob(jobId: number): Promise<void> {
         `${icon} Merge applied — cluster ${job.cluster_id} (${module}): ` +
         `tagged ${report.taggedRecordIds.length}/${job.total}, ` +
         `reparented ${reparented}, ${report.errors.length} error(s). ` +
-        `Survivor: ${report.master.name || report.master.zohoId || "?"}.`;
+        `Survivor: ${report.master.name || report.master.CRMProviderId || "?"}.`;
       await postResolutionMessage(text);
-    } catch (slackErr) {
-      logger.warn("[merge-job] Slack completion ping failed (non-fatal)", {
-        error: slackErr instanceof Error ? slackErr.message : String(slackErr),
+    } catch (ChatProviderErr) {
+      logger.warn("[merge-job] ChatProvider completion ping failed (non-fatal)", {
+        error: ChatProviderErr instanceof Error ? ChatProviderErr.message : String(ChatProviderErr),
       });
     }
   } catch (e: any) {

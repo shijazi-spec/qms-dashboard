@@ -5,15 +5,15 @@ import { runPreflight } from "../../utils/duplicateRadarPreflight";
 /**
  * Batch domain check — "do we have CRM data for these <many> domains?"
  *
- * The single-record lookupEntityTool hits live Zoho per entity, so checking a
- * pasted list of 50–500 domains one-by-one is painfully slow (hundreds of Zoho
+ * The single-record lookupEntityTool hits live CRMProvider per entity, so checking a
+ * pasted list of 50–500 domains one-by-one is painfully slow (hundreds of CRMProvider
  * calls → blank-then-late replies). This wraps runPreflight, which answers the
  * SAME question for the whole list in ONE batched SQL query against the synced
  * Duplicate Radar data — fast and reliable. Read-only.
  *
  * Use this whenever the user pastes MANY domains / URLs and asks whether the CRM
  * has data on them (or which are new). For a single company/domain, use
- * lookupEntityTool instead (it hits live Zoho and returns the actual records).
+ * lookupEntityTool instead (it hits live CRMProvider and returns the actual records).
  */
 
 function cleanDomain(s: string): string {
@@ -31,7 +31,7 @@ export const checkDomainsBatchTool = createTool({
   id: "check-domains-batch",
 
   description:
-    "Check MANY domains at once — 'do we have CRM data for these domains?' Pass an array of domains/URLs (the tool strips https:// and paths). It answers the whole list in one fast batched query against the synced CRM data and returns, per domain, whether we have records and the per-module counts (leads/deals/contacts/accounts). Use this for a pasted LIST of domains; for a single company/domain use lookup-entity instead. Read-only.",
+    "Check MANY domains at once — 'do we have CRM data for these domains?' Pass an array of domains/URLs (the tool strips <REDACTED_URL_SCHEME> and paths). It answers the whole list in one fast batched query against the synced CRM data and returns, per domain, whether we have records and the per-module counts (leads/deals/contacts/accounts). Use this for a pasted LIST of domains; for a single company/domain use lookup-entity instead. Read-only.",
 
   inputSchema: z.object({
     domains: z

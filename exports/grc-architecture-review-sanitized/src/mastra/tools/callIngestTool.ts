@@ -4,23 +4,23 @@ import { z } from "zod";
 export const callIngestTool = createTool({
   id: "call-ingest-tool",
   description:
-    "Ingests call recordings from Five9, Twilio, mobile, Google Meet/Drive, or bulk-upload flows. Creates a call record and prepares it for analysis.",
+    "Ingests call recordings from ContactCenterProvider, TelephonyProvider, mobile, IdentityProvider Meet/Drive, or bulk-upload flows. Creates a call record and prepares it for analysis.",
   inputSchema: z.object({
     call_id: z.string().describe("Unique identifier for the call from the source system"),
     source: z
       .enum([
-        "five9",
-        "twilio",
+        "ContactCenterProvider",
+        "TelephonyProvider",
         "mobile",
-        "google_meet",
-        "google_drive",
+        "IdentityProvider_meet",
+        "IdentityProvider_drive",
         "bulk_upload",
         "manual",
       ])
       .describe("Source of the call recording"),
     recording_url: z.string().optional().describe("URL to the call recording audio file"),
-    lead_id: z.string().optional().describe("Zoho Lead ID if known"),
-    deal_id: z.string().optional().describe("Zoho Deal ID if known"),
+    lead_id: z.string().optional().describe("CRMProvider Lead ID if known"),
+    deal_id: z.string().optional().describe("CRMProvider Deal ID if known"),
     contact_name: z.string().optional().describe("Name of the contact on the call"),
     agent_email: z.string().describe("Email of the agent who made/received the call"),
     agent_name: z.string().optional().describe("Name of the agent"),

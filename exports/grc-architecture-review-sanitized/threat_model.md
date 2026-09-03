@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-ExampleOrg is an enterprise quality, governance, risk, and compliance platform built with TypeScript on Mastra/Hono, PostgreSQL, and static dashboard pages under `dashboard/`. Users authenticate through Replit OIDC or an invitation flow, then interact with many `/api/*` routes that expose operational, compliance, audit, risk, and AI-assistant features. The application also integrates with third-party services including Zoho CRM, Slack, Resend, OpenAI/OpenRouter, and Google Calendar.
+ExampleOrg is an enterprise quality, governance, risk, and compliance platform built with TypeScript on Mastra/Hono, PostgreSQL, and static dashboard pages under `dashboard/`. Users authenticate through HostingPlatform OIDC or an invitation flow, then interact with many `/api/*` routes that expose operational, compliance, audit, risk, and AI-assistant features. The application also integrates with third-party services including CRMProvider CRM, ChatProvider, EmailProvider, LLMProvider/OpenRouter, and IdentityProvider Calendar.
 
 Production assumptions for this scan: only production-reachable code is in scope; `NODE_ENV` is `production`; mockup/sandbox code is out of scope unless proven reachable; TLS is provided by the deployment platform.
 
@@ -10,9 +10,9 @@ Production assumptions for this scan: only production-reachable code is in scope
 
 - **User accounts and sessions** — signed `ExampleOrg_session` cookies, user identities, roles, approval state, and any alternate privileged access material such as `ADMIN_API_KEY`. Compromise allows impersonation and potentially broad administrative access.
 - **Governance, audit, and compliance data** — policies, findings, CAPAs, risk records, management reviews, PDPL artifacts, and evidence documents. These are business-sensitive and often compliance-relevant.
-- **Operational and CRM data** — Zoho-derived records, call intelligence, dashboards, KPI data, and exports. Exposure could reveal internal business performance and personal data.
+- **Operational and CRM data** — CRMProvider-derived records, call intelligence, dashboards, KPI data, and exports. Exposure could reveal internal business performance and personal data.
 - **AI-assisted actions and alerts** — consultant conversations, AI alerts, approval workflows, and any agent-triggered write operations. Misuse could alter regulated records or leak sensitive context.
-- **Application secrets and service credentials** — database connection strings, session signing secret, admin API key, Slack/Zoho/OpenAI/Resend credentials. Compromise would expand an attacker’s reach beyond the app itself.
+- **Application secrets and service credentials** — database connection strings, session signing secret, admin API key, ChatProvider/CRMProvider/LLMProvider/EmailProvider credentials. Compromise would expand an attacker’s reach beyond the app itself.
 - **Uploaded files and generated exports** — policy attachments, evidence references, SVG/PNG infographic outputs, CSV/XLSX exports. These cross trust boundaries and can become active content if mishandled.
 
 ## Trust Boundaries
@@ -20,7 +20,7 @@ Production assumptions for this scan: only production-reachable code is in scope
 - **Browser to application API** — all dashboard and client traffic crosses from an untrusted browser into `/api/*`. Every request must be authenticated and authorized server-side; client gating is not trusted.
 - **Session cookies and admin-key headers to server authorization** — the server derives identity and privilege from the signed `ExampleOrg_session` cookie and, for selected server-to-server/admin routes, the `X-Admin-Key` header. Any mistake here directly affects access control.
 - **Application to PostgreSQL** — application code has broad database access. Injection or over-broad queries at this boundary can expose large portions of enterprise data.
-- **Application to external services** — server-side calls to Zoho, Slack, Resend, OpenAI/OpenRouter, Google Calendar, and webhook endpoints carry secrets and can expose data if abused.
+- **Application to external services** — server-side calls to CRMProvider, ChatProvider, EmailProvider, LLMProvider/OpenRouter, IdentityProvider Calendar, and webhook endpoints carry secrets and can expose data if abused.
 - **Public vs authenticated vs privileged surfaces** — login, invitation acceptance, some webhooks, and selected health/smoke routes are public; most APIs are authenticated; admin and RBAC functions are privileged and must not be reachable via weaker trust paths.
 - **User-generated content to browser DOM** — database-backed records and AI output are rendered into dashboard pages. Unsafely injecting that content into HTML would convert stored data into active script.
 

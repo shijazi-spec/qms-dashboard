@@ -8,7 +8,7 @@ import type { UserRole } from "../../utils/rbacDatabase";
 import { getSessionFromCookie } from "./authRoutes";
 
 import { logger as safeLogger } from "../../utils/logger";
-import { getOpenAIApiKey, getOpenAIBaseUrl } from "../../utils/openaiCredentials";
+import { getLLMProviderApiKey, getLLMProviderBaseUrl } from "../../utils/LLMProviderCredentials";
 const PMP_READ_ROLES: UserRole[] = [
   "admin",
   "head_of_operations_quality",
@@ -965,12 +965,12 @@ const _pmpRoutesRaw = [
             projectName: body.project_name,
           });
 
-          const { createOpenAI } = await import("@ai-sdk/openai");
+          const { createLLMProvider } = await import("@ai-sdk/LLMProvider");
           const { generateText } = await import("ai");
 
-          const openai = createOpenAI({
-            baseURL: getOpenAIBaseUrl(),
-            apiKey: getOpenAIApiKey(),
+          const LLMProvider = createLLMProvider({
+            baseURL: getLLMProviderBaseUrl(),
+            apiKey: getLLMProviderApiKey(),
           });
 
           const prompt = `Generate a comprehensive PMP-compliant Project Charter for the following project:
@@ -1003,11 +1003,11 @@ Please generate a complete project charter in JSON format with the following sec
 
 Ensure all content is practical, actionable, and follows PMP best practices.`;
 
-          // Raw-fetch /chat/completions — `@ai-sdk/openai` 3.x `.chat()`
+          // Raw-fetch /chat/completions — `@ai-sdk/LLMProvider` 3.x `.chat()`
           // emits v3 spec, rejected by ai@5 (needs v2). Helper avoids
           // the version trap entirely.
           const { generateChatText } = await import(
-            "../../utils/openaiChatHelper"
+            "../../utils/LLMProviderChatHelper"
           );
           const { text } = await generateChatText({
             model: "gpt-4o",

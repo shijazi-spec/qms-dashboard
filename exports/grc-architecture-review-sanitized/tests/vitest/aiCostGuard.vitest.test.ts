@@ -15,7 +15,7 @@ import {
 } from "../../src/utils/aiCostGuard";
 
 const FLAG_KEY = "COST_CIRCUIT_BREAKER";
-const CAP_KEY = "OPENAI_DAILY_CAP_USD";
+const CAP_KEY = "LLMProvider_DAILY_CAP_USD";
 
 beforeEach(() => {
   _resetCostGuardForTests();

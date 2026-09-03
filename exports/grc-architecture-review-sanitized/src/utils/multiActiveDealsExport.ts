@@ -5,7 +5,7 @@
  * PURE. Takes the rows the tab already renders and returns SheetSpecs; it
  * queries nothing and sends nothing, so the workbook can never disagree with
  * what the operator saw on screen, and the shape is testable without a
- * database or a live Zoho.
+ * database or a live CRMProvider.
  *
  * Two sheets, deliberately:
  *
@@ -27,7 +27,7 @@ import type { SheetSpec } from "./excelExport";
 import type { MultiActiveDealAccount } from "./duplicateRadarDatabase";
 
 /** Deep link to the deal record, so every row can be checked before acting. */
-export function dealZohoUrl(id: string): string {
+export function dealCRMProviderUrl(id: string): string {
   return `<REDACTED_URL>`;
 }
 
@@ -78,7 +78,7 @@ export function buildMultiActiveDealSheets(
         // Excel turns a bare URL in a cell into a link on click, and the raw
         // text survives copy/paste into an email — both matter more here than
         // a styled hyperlink object.
-        zoho_link: d.id ? dealZohoUrl(String(d.id)) : "",
+        CRMProvider_link: d.id ? dealCRMProviderUrl(String(d.id)) : "",
       });
     }
   }
@@ -103,7 +103,7 @@ export function buildMultiActiveDealSheets(
         { header: "Last activity", key: "last_activity", width: 13 },
         { header: "Why", key: "why", width: 46 },
         { header: "Deal ID", key: "deal_id", width: 22 },
-        { header: "Open in Zoho", key: "zoho_link", width: 58 },
+        { header: "Open in CRMProvider", key: "CRMProvider_link", width: 58 },
       ],
       rows: dealRows,
     },
@@ -133,7 +133,7 @@ export function buildMultiActiveDealSheets(
         },
         {
           note:
-            "Deals are grouped by domain first, then by Zoho Account id, then by company name — " +
+            "Deals are grouped by domain first, then by CRMProvider Account id, then by company name — " +
             "so two duplicate Account records for the same company count as one conflict.",
         },
         {
@@ -147,7 +147,7 @@ export function buildMultiActiveDealSheets(
         },
         {
           note:
-            "Where a company shows no domain, Zoho holds no Website/Domain on that Account — " +
+            "Where a company shows no domain, CRMProvider holds no Website/Domain on that Account — " +
             "the deals were grouped by Account id instead.",
         },
       ],

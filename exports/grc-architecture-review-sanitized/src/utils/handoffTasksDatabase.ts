@@ -104,7 +104,7 @@ export async function getTask(id: number): Promise<HandoffTask | null> {
  */
 export async function transitionTask(
   id: number,
-  action: "accept" | "reject" | "done" | "resend",
+  action: "accept" | "reject" | "done" | "EmailProvider",
   opts: { reason?: string } = {},
 ): Promise<HandoffTask | null> {
   const cur = await getTask(id);
@@ -120,7 +120,7 @@ export async function transitionTask(
     vals.push(opts.reason?.trim() || null);
   } else if (action === "done" && (st === "accepted" || st === "sent")) {
     sql = `UPDATE handoff_tasks SET status='done', completed_at=NOW(), updated_at=NOW() WHERE id=$1 RETURNING *`;
-  } else if (action === "resend" && st === "rejected") {
+  } else if (action === "EmailProvider" && st === "rejected") {
     // Re-sending after a rejection is rework — that's exactly what the KPI penalises.
     sql = `UPDATE handoff_tasks
               SET status='sent', rework_count = COALESCE(rework_count,0) + 1,

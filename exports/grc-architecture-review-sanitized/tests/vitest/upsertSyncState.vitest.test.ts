@@ -62,12 +62,12 @@ describe("the watermark itself", () => {
     await upsertSyncState("Accounts", 0, "error");
     expect(params()[3]).toBe(false);
     // The point of the original fix: a failed run must not look fresh.
-    expect(sql()).toMatch(/ELSE zoho_sync_state\.last_sync_at END/);
+    expect(sql()).toMatch(/ELSE CRMProvider_sync_state\.last_sync_at END/);
   });
 
   it("does not zero total_synced on a failed run", async () => {
     await upsertSyncState("Accounts", 0, "error");
-    expect(sql()).toMatch(/ELSE zoho_sync_state\.total_synced END/);
+    expect(sql()).toMatch(/ELSE CRMProvider_sync_state\.total_synced END/);
   });
 
   it("stamps sync_started_at when a run begins", async () => {

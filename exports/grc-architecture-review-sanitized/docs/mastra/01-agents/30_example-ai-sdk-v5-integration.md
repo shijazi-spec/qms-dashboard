@@ -4,7 +4,7 @@ description: Example of integrating Mastra agents with AI SDK v5 for streaming c
 ---
 
 import { Callout } from "nextra/components";
-import { GithubLink } from "@/components/github-link";
+import { SourceControlProviderLink } from "@/components/SourceControlProvider-link";
 
 # Example: AI SDK v5 Integration
 [EN] Source: <REDACTED_URL>
@@ -14,7 +14,7 @@ This example demonstrates how to integrate Mastra agents with [AI SDK v5](<REDAC
 ## Key Features
 
 - **Streaming Chat Interface**: Uses AI SDK v5's `useChat` hook for real-time conversations
-- **Mastra Agent Integration**: Weather agent with custom tools and OpenAI GPT-4o
+- **Mastra Agent Integration**: Weather agent with custom tools and LLMProvider GPT-4o
 - **Persistent Memory**: Conversation history stored with LibSQL
 - **Compatibility Layer**: Seamless integration between Mastra and AI SDK v5 streams
 - **Tool Integration**: Custom weather tool for real-time data fetching
@@ -37,7 +37,7 @@ export const mastra = new Mastra({
 
 ```typescript showLineNumbers copy filename="src/mastra/agents/index.ts"
 import { Agent } from "@mastra/core/agent";
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 import { Memory } from "@mastra/memory";
 import { LibSQLStore } from "@mastra/libsql";
 import { weatherTool } from "../tools";
@@ -67,7 +67,7 @@ export const weatherAgent = new Agent({
 
     Use the weatherTool to fetch current weather data.
   `,
-  model: openai("gpt-4o-mini"),
+  model: LLMProvider("gpt-4o-mini"),
   tools: {
     weatherTool,
   },
@@ -247,7 +247,7 @@ NOTE: ai-sdk v5 is still in beta, while it is in beta you'll have to install the
 ```json showLineNumbers copy filename="package.json"
 {
   "dependencies": {
-    "@ai-sdk/openai": "2.0.0-beta.1",
+    "@ai-sdk/LLMProvider": "2.0.0-beta.1",
     "@ai-sdk/react": "2.0.0-beta.1",
     "@mastra/core": "0.0.0-ai-v5-<REDACTED_PHONE>",
     "@mastra/libsql": "0.0.0-ai-v5-<REDACTED_PHONE>",
@@ -295,9 +295,9 @@ The weather tool is seamlessly integrated:
 
 ## Running the Example
 
-1. Set your OpenAI API key:
+1. Set your LLMProvider API key:
 ```bash
-echo "OPENAI_API_KEY=your_key_here" > .<REDACTED_HOST>
+echo "LLMProvider_API_KEY=your_key_here" > .<REDACTED_HOST>
 ```
 
 2. Start the development server:
@@ -313,7 +313,7 @@ pnpm dev
 <br />
 <br />
 
-<GithubLink
+<SourceControlProviderLink
   link={
     "<REDACTED_URL>"
   }

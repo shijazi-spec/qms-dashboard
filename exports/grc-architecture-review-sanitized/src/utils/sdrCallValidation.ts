@@ -4,7 +4,7 @@
  * Given a call_record_id, runs the full validation flow:
  *   1. Fetch call + transcript + analysis + QA score
  *   2. Reconcile transcript vs evaluation (heuristics + SDR Governance 2.1 JSON rules)
- *   3. If no lead is linked, attempt Zoho Leads phone match (best-effort)
+ *   3. If no lead is linked, attempt CRMProvider Leads phone match (best-effort)
  *   4. Roll issues up by severity and emit suggested CRM updates
  *
  * This module is the pure-function counterpart to the upgraded sdrQualityAgent's
@@ -76,7 +76,7 @@ function summarizeVerdict(issues: ReconciliationIssue[]): SdrCallValidationVerdi
  * for MCP evals; the upgraded sdrQualityAgent layers AI reasoning on the same tools.
  *
  * Options:
- *   skipLeadMatch — when true, do not call Zoho Leads (which can scan up to 2500
+ *   skipLeadMatch — when true, do not call CRMProvider Leads (which can scan up to 2500
  *   records and take 10-30s). Use this from auto-trigger paths where transcription
  *   latency matters; the on-demand /validate/:id endpoint omits this flag so it
  *   gets the full lead-match output.
@@ -123,7 +123,7 @@ export async function runSdrCallValidation(
         normalized_query: "",
         scanned: 0,
         matches: [],
-        note: "Lead match skipped (auto-trigger path) — run /validate/:id to query Zoho.",
+        note: "Lead match skipped (auto-trigger path) — run /validate/:id to query CRMProvider.",
       };
     } else {
       try {
@@ -135,7 +135,7 @@ export async function runSdrCallValidation(
           matches: match.matches,
           note:
             match.scanned === 0
-              ? "Zoho credentials missing or no Leads fetched."
+              ? "CRMProvider credentials missing or no Leads fetched."
               : match.matches.length === 0
                 ? "No Lead phone match found in scanned Leads."
                 : undefined,
@@ -156,7 +156,7 @@ export async function runSdrCallValidation(
     report.issues.push({
       code: "lead_match_candidate",
       severity: "info",
-      message: `Single phone match found in Zoho Leads (id=${lead_match.matches[0]!.id}). Consider linking.`,
+      message: `Single phone match found in CRMProvider Leads (id=${lead_match.matches[0]!.id}). Consider linking.`,
       suggestion: "PATCH call_record.lead_id with the suggested Lead id after manual confirmation.",
     });
   } else if (lead_match && !bundle.record.lead_id && lead_match.matches.length > 1) {
@@ -198,7 +198,7 @@ export async function evaluateAndPersistGovernance(
   ruleset_version: string | null;
 } | null> {
   // skipLeadMatch=true: auto-trigger runs inside saveTranscript; don't block
-  // transcription on a 10-30s Zoho fetch. Operators can re-run via /validate/:id
+  // transcription on a 10-30s CRMProvider fetch. Operators can re-run via /validate/:id
   // to get the full lead-match output.
   const validation = await runSdrCallValidation(callRecordId, { skipLeadMatch: true });
   if (!validation.found || !validation.verdict || !validation.report) {

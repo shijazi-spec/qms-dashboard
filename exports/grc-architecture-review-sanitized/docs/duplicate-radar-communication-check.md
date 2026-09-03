@@ -55,7 +55,7 @@ Response shape:
   "matched_deals": [
     {
       "duplicate_record_id": 12345,
-      "zoho_record_id": "5146753000137944925",
+      "CRMProvider_record_id": "5146753000137944925",
       "account_name": "شركة سحاب الوطنية",
       "domain": "<REDACTED_HOST>",
       "company_domain": "<REDACTED_HOST>",
@@ -123,7 +123,7 @@ CS_PAID_FIELD_TRUTHY=yes,true,1,paid,active
 CS_STAGE_FIELD_KEYS=Stage,stage,Deal_Stage
 ```
 
-Defaults reflect ExampleOrg's Zoho field layout: `Stage = "Agreement
+Defaults reflect ExampleOrg's CRMProvider field layout: `Stage = "Agreement
 Signed"` for the signed signal and `Invoiced = "Yes"` for the paid signal.
 
 ## Tests

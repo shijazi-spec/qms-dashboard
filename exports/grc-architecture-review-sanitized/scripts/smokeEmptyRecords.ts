@@ -23,7 +23,7 @@ async function main() {
     for (const r of rows) by[r.reason] = (by[r.reason] || 0) + 1;
     console.log(`\n===== ${label}: ${rows.length} (${JSON.stringify(by)}) =====`);
     for (const r of rows.slice(0, 15)) {
-      console.log(`  [${r.reason}] ${r.zohoId} "${(r.name || "").slice(0, 40)}" deleteEligible=${r.deleteEligible}`);
+      console.log(`  [${r.reason}] ${r.CRMProviderId} "${(r.name || "").slice(0, 40)}" deleteEligible=${r.deleteEligible}`);
     }
   }
   console.log("\n(done — read-only, nothing written)");

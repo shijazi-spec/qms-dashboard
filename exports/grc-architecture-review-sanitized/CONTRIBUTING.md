@@ -1,6 +1,6 @@
 # Contributing — Branching & Workflow
 
-This repo deploys to Replit on every push to `QMS`. That makes the branching
+This repo deploys to HostingPlatform on every push to `QMS`. That makes the branching
 model your only safety net between "I typed it" and "it's live." Pick the
 right pattern per change.
 
@@ -33,7 +33,7 @@ flags instead.
 ## Pattern A — Direct to `QMS`
 
 **When:** Single-file cosmetic / copy / typo fix that you'd be happy typing
-straight into Replit Shell.
+straight into HostingPlatform Shell.
 
 **Examples from this repo:**
 - `fix(branding): PMP Project Portfolio H1 in green`
@@ -50,8 +50,8 @@ git push origin QMS
 ```
 
 **Don't use Pattern A for:** anything touching auth, RBAC, payments, AI
-prompts, database migrations, cost-sensitive code paths (OpenAI calls,
-Zoho writes), or anything that touches more than 2 files.
+prompts, database migrations, cost-sensitive code paths (LLMProvider calls,
+CRMProvider writes), or anything that touches more than 2 files.
 
 ---
 
@@ -85,7 +85,7 @@ bash scripts/ship-feature.sh "feat(duplicate-radar): sort clusters by confidence
 - Squash-merge into `QMS`. One feature = one commit on `QMS` = `git revert`
   is one command.
 - Delete the branch immediately after merge. Both locally and on remote.
-- Push to GitHub even if you're not opening a PR (the dangling commits we
+- Push to SourceControlProvider even if you're not opening a PR (the dangling commits we
   cleaned up on 2026-05-24 were lost because they only existed locally).
 
 ---
@@ -97,7 +97,7 @@ would ship half-done features to prod.
 
 **Examples that would fit:**
 - `epic/iso-27001-seed` (100+ clause inserts + docs mapping + dashboard wiring)
-- `epic/five9-real-ingest` (stub → real, webhook handler, retries, secrets)
+- `epic/ContactCenterProvider-real-ingest` (stub → real, webhook handler, retries, secrets)
 - `epic/rbac-v2` (any platform-wide auth refactor)
 
 **Flow:**
@@ -195,11 +195,11 @@ These ALWAYS go through Pattern B (or C):
 - Schema changes (any `CREATE TABLE`, `ALTER TABLE`, `DROP COLUMN`)
 - AI agent prompts (`src/mastra/agents/*`)
 - AI tool implementations (`src/mastra/tools/*`)
-- Anything calling OpenAI/Anthropic in a new code path
-- Anything touching Zoho CRM writes
+- Anything calling LLMProvider/Anthropic in a new code path
+- Anything touching CRMProvider CRM writes
 - `package.json` dependency changes
 - Anything in `scripts/` that's wired into a hook or CI
-- Anything in `.replit`, `.husky/`, `.githooks/`
+- Anything in `.HostingPlatform`, `.husky/`, `.githooks/`
 
 If you're not sure, branch it.
 
@@ -224,7 +224,7 @@ The flag helper lives at `src/utils/featureFlags.ts`. Use it when you
 want to:
 
 - Push code to `QMS` (deployed) hidden behind `if (isFlagEnabled('x', user.email))`
-- Test by enabling for your own user only (set `<FLAG>_USERS=user@example.invalid` in Replit Secrets)
+- Test by enabling for your own user only (set `<FLAG>_USERS=user@example.invalid` in HostingPlatform Secrets)
 - Flip on globally when ready (`<FLAG>=true`)
 - Flip off instantly if it breaks — no revert, no redeploy (`<FLAG>=false`)
 
@@ -241,7 +241,7 @@ want to:
      // old path
    }
    ```
-3. Set the env var in **Replit Secrets** (NOT in `.replit` or committed env files)
+3. Set the env var in **HostingPlatform Secrets** (NOT in `.HostingPlatform` or committed env files)
 4. Test with `<FLAG>_USERS=your_email` first, then flip global when confident
 
 For a platform with auto-deploy and no staging, the flag helper is the

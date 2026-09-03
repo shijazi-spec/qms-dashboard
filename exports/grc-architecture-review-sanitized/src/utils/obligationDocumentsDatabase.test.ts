@@ -12,7 +12,7 @@
  *   - the five required deny-list keys (password_hash, mfa_secret,
  *     access_token, refresh_token, api_key) embedded as substrings inside
  *     the free-text `linked_by` field,
- *   - credential-shaped strings (bcrypt hash, JWT, OpenAI sk-, GitHub PAT)
+ *   - credential-shaped strings (bcrypt hash, JWT, LLMProvider sk-, SourceControlProvider PAT)
  *     embedded under the same innocuous string field,
  * and asserts those raw values never reach the captured INSERT params vector
  * while the ***REDACTED*** sentinel does.
@@ -153,11 +153,11 @@ const SECRET_LIKE_STRINGS: Array<{ label: string; value: string }> = [
       "<REDACTED_TOKEN>",
   },
   {
-    label: "OpenAI sk- key",
+    label: "LLMProvider sk- key",
     value: "<REDACTED_TOKEN>",
   },
   {
-    label: "GitHub PAT",
+    label: "SourceControlProvider PAT",
     value: "<REDACTED_TOKEN>",
   },
 ];

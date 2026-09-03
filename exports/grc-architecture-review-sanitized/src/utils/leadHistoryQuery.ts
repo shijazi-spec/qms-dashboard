@@ -4,18 +4,18 @@
  * Backs the new GET /api/calls/lead-history endpoint and the
  * dashboard/lead-history.html page. Per DMAIC Improve phase Solution #2
  * (scope item #4 in the strategic report): SDRs and managers need a
- * single view that shows EVERY call for a given phone number or Zoho
+ * single view that shows EVERY call for a given phone number or CRMProvider
  * Lead/Deal — currently the dashboard only filters call_records by one
  * dimension at a time.
  *
  * Lookup modes:
- *   - lead_id  → match call_records.lead_id (Zoho ID, opaque string)
+ *   - lead_id  → match call_records.lead_id (CRMProvider ID, opaque string)
  *   - deal_id  → match call_records.deal_id
  *   - phone    → match digits-only suffix in metadata->>'from_number'
  *                or metadata->>'to_number' (normalized via regexp_replace)
  *
  * Phone matching uses the last 7 digits to avoid country-code mismatches
- * (Five9 sends +966..., Zoho often holds 05...; both end with the same
+ * (ContactCenterProvider sends +966..., CRMProvider often holds 05...; both end with the same
  * 7-digit subscriber number). 7-digit suffix is what
  * extractCallPhoneCandidates uses for its own matching, so the two stay
  * consistent — if auto-link found a match, lead-history will find it too.

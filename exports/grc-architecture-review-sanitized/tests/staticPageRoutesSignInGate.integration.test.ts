@@ -58,7 +58,7 @@ const TEST_SESSION_SECRET = "test-session-secret-static-page-signin-gate";
 process.env.ADMIN_API_KEY = TEST_ADMIN_KEY;
 process.env.SESSION_SECRET = TEST_SESSION_SECRET;
 process.env.RATE_LIMIT_DISABLED = "true";
-process.env.REPLIT_DOMAINS = process.env.REPLIT_DOMAINS || "localhost:5000";
+process.env.HostingPlatform_DOMAINS = process.env.HostingPlatform_DOMAINS || "localhost:5000";
 process.env.DATABASE_URL =
   process.env.DATABASE_URL || "postgres://test:test@localhost:5432/test";
 

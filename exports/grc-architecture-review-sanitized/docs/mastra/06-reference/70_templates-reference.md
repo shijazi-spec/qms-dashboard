@@ -128,9 +128,9 @@ Include a `.env.example` file with all required environment variables:
 
 ```bash filename=".env.example"
 # LLM provider API keys (choose one or more)
-OPENAI_API_KEY=your_openai_api_key_here
+LLMProvider_API_KEY=your_LLMProvider_api_key_here
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
-GOOGLE_GENERATIVE_AI_API_KEY=your_google_api_key_here
+IdentityProvider_GENERATIVE_AI_API_KEY=your_IdentityProvider_api_key_here
 
 # Other service API keys as needed
 OTHER_SERVICE_API_KEY=your_api_key_here
@@ -140,17 +140,17 @@ OTHER_SERVICE_API_KEY=your_api_key_here
 
 #### LLM Provider
 
-We recommend using OpenAI, Anthropic, or Google model providers for templates. Choose the provider that best fits your use case:
+We recommend using LLMProvider, Anthropic, or IdentityProvider model providers for templates. Choose the provider that best fits your use case:
 
 ```typescript filename="src/mastra/agents/example-agent.ts"
 import { Agent } from '@mastra/core/agent';
-import { openai } from '@ai-sdk/openai';
+import { LLMProvider } from '@ai-sdk/LLMProvider';
 // Or use: import { anthropic } from '@ai-sdk/anthropic';
-// Or use: import { google } from '@ai-sdk/google';
+// Or use: import { IdentityProvider } from '@ai-sdk/IdentityProvider';
 
 const agent = new Agent({
   name: 'example-agent',
-  model: openai('gpt-4'), // or anthropic('') or google('')
+  model: LLMProvider('gpt-4'), // or anthropic('') or IdentityProvider('')
   instructions: 'Your agent instructions here',
   // ... other configuration
 });
@@ -190,9 +190,9 @@ Detailed explanation of the template's functionality and use case.
 
 ## Environment Variables
 
-- `OPENAI_API_KEY`: Your OpenAI API key. Get one at [OpenAI Platform](<REDACTED_URL>
+- `LLMProvider_API_KEY`: Your LLMProvider API key. Get one at [LLMProvider Platform](<REDACTED_URL>
 - `ANTHROPIC_API_KEY`: Your Anthropic API key. Get one at [Anthropic Console](<REDACTED_URL>
-- `GOOGLE_GENERATIVE_AI_API_KEY`: Your Google AI API key. Get one at [Google AI Studio](<REDACTED_URL>
+- `IdentityProvider_GENERATIVE_AI_API_KEY`: Your IdentityProvider AI API key. Get one at [IdentityProvider AI Studio](<REDACTED_URL>
 - `OTHER_API_KEY`: Description of what this key is for
 
 ## Usage

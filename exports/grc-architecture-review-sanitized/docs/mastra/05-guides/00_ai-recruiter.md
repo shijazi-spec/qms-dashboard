@@ -56,12 +56,12 @@ To the existing `src/mastra/workflows/candidate-workflow.ts` file add the follow
 
 ```ts copy filename="src/mastra/workflows/candidate-workflow.ts"
 import { Agent } from "@mastra/core/agent";
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 
 const recruiter = new Agent({
   name: "Recruiter Agent",
   instructions: `You are a recruiter.`,
-  model: openai("gpt-4o-mini"),
+  model: LLMProvider("gpt-4o-mini"),
 });
 
 const gatherCandidateInfo = createStep({

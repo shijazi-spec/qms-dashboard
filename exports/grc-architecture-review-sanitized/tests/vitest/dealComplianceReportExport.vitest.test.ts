@@ -32,7 +32,7 @@ const deal = (o: Partial<DealComplianceReportRow> = {}): DealComplianceReportRow
   name: "Deal",
   stage: "Proposal",
   owner: "Owner A",
-  account: "Acme",
+  account: "Example Organization",
   amount: 1000,
   created: "2026-01-05T00:00:00.000Z",
   compliant: true,
@@ -58,7 +58,7 @@ describe("percentages", () => {
 });
 
 describe("stage matching", () => {
-  it("ignores case and surrounding space, as Zoho stages vary", () => {
+  it("ignores case and surrounding space, as CRMProvider stages vary", () => {
     expect(sameStage("agreement signed", "Agreement Signed")).toBe(true);
     expect(sameStage("  Paid ", "Paid")).toBe(true);
     expect(sameStage("Proposal", "Paid")).toBe(false);

@@ -954,9 +954,9 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
   {
-    // OpenAI credential health check — read-only diagnostics; masked key tail
+    // LLMProvider credential health check — read-only diagnostics; masked key tail
     // only, never the value. Same allowlist as the consultant memory routes.
-    pattern: /^\/api\/consultant\/openai-health$/,
+    pattern: /^\/api\/consultant\/LLMProvider-health$/,
     methods: ["GET"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
@@ -1055,7 +1055,7 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     // Data Cleaning Progress report — same read set as the sibling
     // /api/duplicates GET rule immediately above (already covers this path
     // via prefix match; listed explicitly per the route's own allowlist
-    // entry, same pattern as openai-health at a2191f02).
+    // entry, same pattern as LLMProvider-health at a2191f02).
     pattern: /^\/api\/duplicates\/cleaning-progress$/,
     methods: ["GET"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
@@ -1116,7 +1116,7 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"],
   },
   {
-    pattern: /^\/api\/handoff-tasks\/\d+\/(accept|reject|done|resend)$/,
+    pattern: /^\/api\/handoff-tasks\/\d+\/(accept|reject|done|EmailProvider)$/,
     methods: ["PUT"],
     roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"],
   },
@@ -1291,10 +1291,10 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
 
-  // Infographics — governance-only renders.  Share-out (Slack / email) distributes
+  // Infographics — governance-only renders.  Share-out (ChatProvider / email) distributes
   // sensitive aggregated data externally and is restricted to governance write roles.
   {
-    pattern: /^\/api\/infographic\/[^/]+\/share\/(slack|email)$/,
+    pattern: /^\/api\/infographic\/[^/]+\/share\/(ChatProvider|email)$/,
     methods: ["POST"],
     roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"],
   },
@@ -1569,17 +1569,17 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
 
   // Call Intelligence writes — admin-only via `verifyAdminKey`
   // (calls/ingest, /analyze, /compliance POST, /upload, /upload-audio,
-  // /bulk-upload, /five9/*, /:id/evaluate, /:id/sdr-evaluate, /:id/sync-zoho,
+  // /bulk-upload, /ContactCenterProvider/*, /:id/evaluate, /:id/sdr-evaluate, /:id/sync-CRMProvider,
   // meetings/mom POST, quality-scorecards POST/PUT).
   {
     pattern: /^\/api\/calls\/(ingest|upload|upload-audio|bulk-upload)$/,
     methods: ["POST"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
-  { pattern: /^\/api\/calls\/five9\//, methods: ["POST"], roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"] },
+  { pattern: /^\/api\/calls\/ContactCenterProvider\//, methods: ["POST"], roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"] },
   {
     pattern:
-      /^\/api\/calls\/[^/]+\/(analyze|compliance|sync-zoho|evaluate|sdr-evaluate|auto-link|link|status)$/,
+      /^\/api\/calls\/[^/]+\/(analyze|compliance|sync-CRMProvider|evaluate|sdr-evaluate|auto-link|link|status)$/,
     methods: ["POST"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
@@ -1605,8 +1605,8 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["GET", "POST"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
-  // Phase 4d — auto-link diagnostic + Zoho connection probe. Admin-only:
-  // both endpoints expose Zoho connection state and per-call phone
+  // Phase 4d — auto-link diagnostic + CRMProvider connection probe. Admin-only:
+  // both endpoints expose CRMProvider connection state and per-call phone
   // candidates which we don't want broadly visible.
   //
   // Trimmed 2026-05-29: duration-backfill + cleanup-no-audio routes were
@@ -1614,7 +1614,7 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   // re-introduced, add them back to this regex.
   {
     pattern:
-      /^\/api\/calls\/(diagnostic\/auto-link|diagnostic\/zoho)$/,
+      /^\/api\/calls\/(diagnostic\/auto-link|diagnostic\/CRMProvider)$/,
     methods: ["GET", "POST"],
     roles: ["admin"],
   },
@@ -1626,7 +1626,7 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   // ─────────────────────────────────────────────────────────────────────────
   // Call Intelligence enhancements shipped 2026-05-25 — coaching plans,
   // peer benchmark, topic clusters, backfills, per-call duration, and the
-  // read-only Zoho activities reader. Each needs an explicit RBAC entry
+  // read-only CRMProvider activities reader. Each needs an explicit RBAC entry
   // because of the deny-by-default rule at the bottom of checkAccess.
   // Without these, every new feature returns
   // "Route not authorised by RBAC policy" at the gateway BEFORE the
@@ -1710,22 +1710,22 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
   {
-    // Read-only Zoho activities reader (Replit's contribution) — Lead/Deal scoped
-    pattern: /^\/api\/zoho\/activities\/(Leads|Deals|leads|deals)\/\d+$/,
+    // Read-only CRMProvider activities reader (HostingPlatform's contribution) — Lead/Deal scoped
+    pattern: /^\/api\/CRMProvider\/activities\/(Leads|Deals|leads|deals)\/\d+$/,
     methods: ["GET"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
   },
   {
-    // Zoho Tasks bulk sync — WRITES to our zoho_tasks mirror and calls Zoho,
-    // so it is held to the same set that may run other Zoho-touching jobs.
-    pattern: /^\/api\/zoho\/tasks\/sync$/,
+    // CRMProvider Tasks bulk sync — WRITES to our CRMProvider_tasks mirror and calls CRMProvider,
+    // so it is held to the same set that may run other CRMProvider-touching jobs.
+    pattern: /^\/api\/CRMProvider\/tasks\/sync$/,
     methods: ["POST"],
     roles: ["admin", "grc_manager", "head_of_operations_quality", "quality_manager"],
   },
   {
     // Task census (counts + linkage only, no task content) — the read audience
     // that already sees the activities reader above.
-    pattern: /^\/api\/zoho\/tasks\/stats$/,
+    pattern: /^\/api\/CRMProvider\/tasks\/stats$/,
     methods: ["GET"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
   },
@@ -1742,12 +1742,12 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   // ─────────────────────────────────────────────────────────────────────────
   // Admin-only backfill of routes that shipped without ROUTE_PERMISSION_MAP
   // entries (P1 coaching loop + call-intelligence enhancements + read-only
-  // Zoho activities reader). The rbacRouteCoverage test caught these via
-  // synthetic concrete paths (e.g. `/api/zoho/activities/1/1` — a numeric
+  // CRMProvider activities reader). The rbacRouteCoverage test caught these via
+  // synthetic concrete paths (e.g. `/api/CRMProvider/activities/1/1` — a numeric
   // module that the narrower production rule above does not match). Routes
   // are intentionally locked to admin-only as a conservative default until a
   // follow-up task designs the right per-route allowlist per feature area
-  // (coaching managers vs call reviewers vs ops). See replit.md / agent
+  // (coaching managers vs call reviewers vs ops). See HostingPlatform.md / agent
   // memory for the follow-up backlog.
   //
   // Coaching Sessions API (callIntelligenceRoutes.ts)
@@ -1756,7 +1756,7 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["GET", "POST", "PATCH"],
     roles: ["admin"],
   },
-  // Call batch + Zoho import + evaluation + per-call mutations
+  // Call batch + CRMProvider import + evaluation + per-call mutations
   // (callIntelligenceRoutes.ts + mcpCallEvaluationRoutes.ts)
   {
     pattern: /^\/api\/calls\/batch\/(submit-pending|jobs\/\d+\/sync)$/,
@@ -1764,7 +1764,7 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin"],
   },
   {
-    pattern: /^\/api\/calls\/import-from-zoho$/,
+    pattern: /^\/api\/calls\/import-from-CRMProvider$/,
     methods: ["POST"],
     roles: ["admin"],
   },
@@ -1778,12 +1778,12 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["DELETE", "POST"],
     roles: ["admin"],
   },
-  // Catch-all Zoho activities reader for module patterns that the narrower
+  // Catch-all CRMProvider activities reader for module patterns that the narrower
   // Leads/Deals-only rule above doesn't cover (e.g. test-synthetic numeric
   // modules). Order matters: the specific Leads|Deals rule above wins for
   // real production traffic; this rule only catches the long-tail.
   {
-    pattern: /^\/api\/zoho\/activities\/[^/]+\/[^/]+$/,
+    pattern: /^\/api\/CRMProvider\/activities\/[^/]+\/[^/]+$/,
     methods: ["GET"],
     roles: ["admin"],
   },
@@ -1855,17 +1855,17 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   // Pipeline Aging (Task #825) — mirrors Duplicate Radar read set; handlers
   // also enforce the same allowlist via `requirePipelineAgingAccess`.
   {
-    pattern: /^\/api\/zoho\/(deals|leads)\/[^/]+\/(stage|status)-aging$/,
+    pattern: /^\/api\/CRMProvider\/(deals|leads)\/[^/]+\/(stage|status)-aging$/,
     methods: ["GET"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
   },
   {
-    pattern: /^\/api\/zoho\/(deals|leads)\/aging$/,
+    pattern: /^\/api\/CRMProvider\/(deals|leads)\/aging$/,
     methods: ["GET"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
   },
   {
-    pattern: /^\/api\/zoho\/aging\/config$/,
+    pattern: /^\/api\/CRMProvider\/aging\/config$/,
     methods: ["GET"],
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
   },

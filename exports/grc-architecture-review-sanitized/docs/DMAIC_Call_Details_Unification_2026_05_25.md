@@ -12,7 +12,7 @@ Managers reviewing SDR calls had to bounce between three places to evaluate a si
 
 1. **Row "View"** → Call Details modal (scorecard + analysis, no transcript, no recording, no CRM link inside).
 2. **Row "Activity"** → a *separate* SDR Activity Timeline modal.
-3. **Row "CRM"** → out to Zoho in a new tab.
+3. **Row "CRM"** → out to CRMProvider in a new tab.
 
 Two more friction points compounded the cost:
 
@@ -24,7 +24,7 @@ Two more friction points compounded the cost:
 | Metric | Baseline |
 |---|---|
 | Records with `duration_seconds IS NULL` | **199 of 199** (100%) — Duration column entirely `--` |
-| Modals to evaluate one call | **3** (Details + Activity + Zoho tab) |
+| Modals to evaluate one call | **3** (Details + Activity + CRMProvider tab) |
 | Phone-search support | **None** (only Source/Status dropdowns) |
 | Transcript visibility inside Details | **None** — endpoint returned it but UI never rendered it |
 | CRM link inside Details | **None** — only a small "CRM" pill on the row |

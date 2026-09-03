@@ -4,7 +4,7 @@
  * already masks at write time.
  *
  * Run:    npx tsx tests/aiApprovalRoutesRedaction.test.ts
- * Wired:  scripts/post-merge.sh + .replit `secret-redaction` workflow
+ * Wired:  scripts/post-merge.sh + .HostingPlatform `secret-redaction` workflow
  */
 
 process.env.SESSION_SECRET =
@@ -747,17 +747,17 @@ async function run(): Promise<void> {
     toolId: 'rotate_api_key',
     toolLabel: 'Rotate API Key',
     payload: {
-      target_integration: 'zoho_books',
+      target_integration: 'CRMProvider_books',
       api_key: PAYLOAD_API_KEY,
       refresh_token: PAYLOAD_REFRESH,
       nested: {
         password_hash: PAYLOAD_BCRYPT,
         username: 'user@example.invalid',
       },
-      reason: 'rotate-zoho-books-key',
+      reason: 'rotate-CRMProvider-books-key',
     },
     payloadPreview:
-      `Rotate API key for zoho_books — new=${PREVIEW_SK_KEY}, ` +
+      `Rotate API key for CRMProvider_books — new=${PREVIEW_SK_KEY}, ` +
       `gh=${PREVIEW_GH_TOKEN}, jwt=${PREVIEW_JWT}, ` +
       `legacy_hash=${PREVIEW_BCRYPT}`,
     riskLevel: 'high',
@@ -786,7 +786,7 @@ async function run(): Promise<void> {
   );
   assert(
     enqueued.payload_preview.includes(REDACTED_SENTINEL) &&
-      enqueued.payload_preview.includes('zoho_books'),
+      enqueued.payload_preview.includes('CRMProvider_books'),
     'baseline: payload_preview retains human-readable prose around the sentinel',
   );
 
@@ -817,7 +817,7 @@ async function run(): Promise<void> {
     }>;
   };
   assert(
-    listBody.rows[0]?.payload?.target_integration === 'zoho_books',
+    listBody.rows[0]?.payload?.target_integration === 'CRMProvider_books',
     'GET /api/ai/approvals preserves non-sensitive payload fields',
   );
 
@@ -1000,7 +1000,7 @@ async function run(): Promise<void> {
   await recordExecutionResult(enqueued.action_code, {
     success: true,
     entityType: 'integration',
-    entityId: 'zoho_books',
+    entityId: 'CRMProvider_books',
     data: {
       rotated: true,
       new_api_key: RESULT_API_KEY,

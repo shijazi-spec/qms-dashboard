@@ -1,14 +1,14 @@
 /**
- * The daily KPI job must sync Zoho Tasks BEFORE it runs the KPI engine.
+ * The daily KPI job must sync CRMProvider Tasks BEFORE it runs the KPI engine.
  *
  * WHY THIS IS A TEST AND NOT JUST A COMMENT: SDR-KPI-11, SALES-KPI-07 and
- * SALES-KPI-08 read the local `zoho_tasks` mirror. If the engine runs first,
+ * SALES-KPI-08 read the local `CRMProvider_tasks` mirror. If the engine runs first,
  * all three are scored against YESTERDAY's tasks and every value silently
  * trails the data by a day — nothing errors, nothing looks broken, the numbers
  * are just quietly wrong. Reordering these two blocks is an easy, innocent-
  * looking edit, so the order is pinned here.
  *
- * Also pins that a Zoho outage during the sync must NOT stop the engine: the
+ * Also pins that a CRMProvider outage during the sync must NOT stop the engine: the
  * task KPIs degrade to "--" on an empty mirror, but everything that does not
  * depend on tasks must still record.
  */
@@ -22,14 +22,14 @@ const { calls, tasksSync, callsImport, kpiAutoCalc, kpiQuery } = vi.hoisted(() =
   kpiQuery: vi.fn(),
 }));
 
-vi.mock("../../src/utils/zohoTasksSync", () => ({
-  runZohoTasksSync: (...a: any[]) => {
+vi.mock("../../src/utils/CRMProviderTasksSync", () => ({
+  runCRMProviderTasksSync: (...a: any[]) => {
     calls.push("tasks-sync");
     return tasksSync(...a);
   },
 }));
-vi.mock("../../src/utils/zohoCallsImport", () => ({
-  runZohoCallsImport: (...a: any[]) => {
+vi.mock("../../src/utils/CRMProviderCallsImport", () => ({
+  runCRMProviderCallsImport: (...a: any[]) => {
     calls.push("calls-import");
     return callsImport(...a);
   },
@@ -72,7 +72,7 @@ beforeEach(() => {
   kpiAutoCalc.mockReset().mockResolvedValue({ recorded: 0, skipped: 0, details: [] });
 });
 
-describe("daily KPI job — Zoho tasks sync ordering", () => {
+describe("daily KPI job — CRMProvider tasks sync ordering", () => {
   it("syncs tasks BEFORE running the KPI engine", async () => {
     await runKPIAutoCalc();
     expect(calls).toContain("tasks-sync");
@@ -82,9 +82,9 @@ describe("daily KPI job — Zoho tasks sync ordering", () => {
   });
 
   it("still runs the KPI engine when the tasks sync throws", async () => {
-    tasksSync.mockRejectedValue(new Error("Zoho unreachable"));
+    tasksSync.mockRejectedValue(new Error("CRMProvider unreachable"));
     await runKPIAutoCalc();
-    // A Zoho outage must not cost us every non-task KPI for the day.
+    // A CRMProvider outage must not cost us every non-task KPI for the day.
     expect(calls).toContain("kpi-engine");
   });
 
@@ -102,7 +102,7 @@ describe("daily KPI job — Zoho tasks sync ordering", () => {
   });
 });
 
-describe("daily KPI job — Zoho calls import ordering", () => {
+describe("daily KPI job — CRMProvider calls import ordering", () => {
   it("imports calls BEFORE running the KPI engine", async () => {
     await runKPIAutoCalc();
     expect(calls).toContain("calls-import");
@@ -120,7 +120,7 @@ describe("daily KPI job — Zoho calls import ordering", () => {
     expect(days).toBeLessThan(31);
   });
 
-  it("requests more than one Zoho page", async () => {
+  it("requests more than one CRMProvider page", async () => {
     await runKPIAutoCalc();
     const arg = callsImport.mock.calls[0]?.[0] ?? {};
     // The import was capped at 200 (one page) for its whole life.
@@ -128,7 +128,7 @@ describe("daily KPI job — Zoho calls import ordering", () => {
   });
 
   it("still runs the KPI engine when the calls import throws", async () => {
-    callsImport.mockRejectedValue(new Error("Zoho unreachable"));
+    callsImport.mockRejectedValue(new Error("CRMProvider unreachable"));
     await runKPIAutoCalc();
     expect(calls).toContain("kpi-engine");
   });

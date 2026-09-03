@@ -47,7 +47,7 @@ await suite.test("GET /api/smoke — 200 with checks object (shape only)", async
   suite.expect(res.body?.checks && typeof res.body.checks === "object", "body.checks is object");
   suite.expect(typeof res.body?.checks?.database?.status === "string", "checks.database.status present");
   suite.expect(typeof res.body?.checks?.environment?.status === "string", "checks.environment.status present");
-  suite.expect(typeof res.body?.checks?.zoho?.status === "string", "checks.zoho.status present");
+  suite.expect(typeof res.body?.checks?.CRMProvider?.status === "string", "checks.CRMProvider.status present");
   suite.expect(typeof res.body?.timestamp === "string", "body.timestamp is string");
 });
 

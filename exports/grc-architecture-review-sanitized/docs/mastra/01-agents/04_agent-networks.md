@@ -25,7 +25,7 @@ Mastra agent networks operate using these principles:
 An agent network is built around a top-level routing agent that delegates tasks to agents, workflows, and tools defined in its configuration. Memory is configured on the routing agent using the `memory` option, and `instructions` define the agent's routing behavior.
 
 ```typescript {22-23,26,29} filename="src/mastra/agents/routing-agent.ts" showLineNumbers copy
-  import { openai } from "@ai-sdk/openai";
+  import { LLMProvider } from "@ai-sdk/LLMProvider";
   import { Agent } from "@mastra/core/agent";
   import { Memory } from "@mastra/memory";
   import { LibSQLStore } from "@mastra/libsql";
@@ -44,7 +44,7 @@ An agent network is built around a top-level routing agent that delegates tasks 
       Always respond with a complete report—no bullet points.
       Write in full paragraphs, like a blog post.
       Do not answer with incomplete or uncertain information.`,
-    model: openai("gpt-4o-mini"),
+    model: LLMProvider("gpt-4o-mini"),
     agents: {
       researchAgent,
       writingAgent

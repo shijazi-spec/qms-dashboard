@@ -29,7 +29,7 @@
  * Agreement Signed per the existing GRQ business rule (see Deal Compliance
  * memory: Paid == Agreement Signed by business rule).
  *
- * Pure functions only — no DB, no Zoho. Tests exercise edge cases.
+ * Pure functions only — no DB, no CRMProvider. Tests exercise edge cases.
  */
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -148,7 +148,7 @@ export function getStageSlaSpec(stage: string | null | undefined): StageSlaSpec 
 /**
  * Business-day count between two dates (Mon–Fri, weekends skipped).
  *
- * Uses UTC day boundaries — matches zohoAging.ts conventions and avoids
+ * Uses UTC day boundaries — matches CRMProviderAging.ts conventions and avoids
  * timezone drift when the deploy runs in UTC and operators read in KSA
  * (UTC+3). A deal entering a stage on Friday 23:30 KSA and read on
  * Monday 09:00 KSA reads as 1 business day (Friday → Monday).

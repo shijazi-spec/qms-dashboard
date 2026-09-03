@@ -56,7 +56,7 @@ async function ensureOidcAuthTables(): Promise<void> {
   oidcAuthTablesReady = pool
     .query(
       `
-    ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS google_id VARCHAR(255);
+    ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS IdentityProvider_id VARCHAR(255);
     ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS picture TEXT;
     ALTER TABLE platform_users ADD COLUMN IF NOT EXISTS auth_provider VARCHAR(50) DEFAULT 'local';
   `,
@@ -83,7 +83,7 @@ async function ensureOidcAuthTables(): Promise<void> {
         denial_reason TEXT,
         last_login_at TIMESTAMP,
         login_count INTEGER DEFAULT 0,
-        google_id VARCHAR(255),
+        IdentityProvider_id VARCHAR(255),
         picture TEXT,
         auth_provider VARCHAR(50) DEFAULT 'local',
         ui_language VARCHAR(10) DEFAULT 'en',
@@ -121,7 +121,7 @@ export function getAdminBootstrapEmails(): Set<string> {
  *
  * Free-text fields are scrubbed via `redactSensitiveDeep()` BEFORE any
  * SELECT/INSERT/UPDATE so a hostile or misconfigured upstream IdP cannot
- * smuggle a `password_hash`, `access_token`, JWT, GitHub PAT (`ghp_…`) or
+ * smuggle a `password_hash`, `access_token`, JWT, SourceControlProvider PAT (`ghp_…`) or
  * `sk-…` token into `full_name` / `picture`.
  *
  * Admin bootstrap: if the caller's email is listed in the
@@ -140,10 +140,10 @@ export async function upsertOidcUser(profile: {
   /**
    * Which IdP the login came from — drives the audit trail
    * (platform_users.auth_provider). Optional for back-compat with older
-   * callers that only ever ran on Replit; defaults to 'replit' when
+   * callers that only ever ran on HostingPlatform; defaults to 'HostingPlatform' when
    * omitted.
    */
-  authProvider?: "google" | "replit" | "other";
+  authProvider?: "IdentityProvider" | "HostingPlatform" | "other";
 }) {
   await ensureOidcAuthTables();
 
@@ -152,11 +152,11 @@ export async function upsertOidcUser(profile: {
   const isBootstrapAdmin = bootstrapEmails.has(
     safeProfile.email.toLowerCase(),
   );
-  // Default to 'replit' for back-compat: existing callers that don't
+  // Default to 'HostingPlatform' for back-compat: existing callers that don't
   // pass authProvider keep their historic behaviour. New auth routes pass
   // the inferred IdP name so post-migration logins are correctly
   // attributed in the platform_users.auth_provider column.
-  const provider = profile.authProvider || "replit";
+  const provider = profile.authProvider || "HostingPlatform";
 
   const existing = await pool.query(
     "SELECT * FROM platform_users WHERE email = $1",
@@ -169,7 +169,7 @@ export async function upsertOidcUser(profile: {
     if (isBootstrapAdmin) {
       const result = await pool.query(
         `UPDATE platform_users
-         SET google_id = $1, full_name = $2, picture = $3, auth_provider = $4,
+         SET IdentityProvider_id = $1, full_name = $2, picture = $3, auth_provider = $4,
              role = 'admin', status = 'active',
              last_login_at = NOW(), login_count = login_count + 1, updated_at = NOW()
          WHERE email = $5
@@ -190,7 +190,7 @@ export async function upsertOidcUser(profile: {
     }
     const result = await pool.query(
       `UPDATE platform_users
-       SET google_id = $1, full_name = $2, picture = $3, auth_provider = $4,
+       SET IdentityProvider_id = $1, full_name = $2, picture = $3, auth_provider = $4,
            last_login_at = NOW(), login_count = login_count + 1, updated_at = NOW()
        WHERE email = $5 AND status = 'active'
        RETURNING *`,
@@ -207,7 +207,7 @@ export async function upsertOidcUser(profile: {
     const role = isBootstrapAdmin ? "admin" : "department_viewer";
     const status = isBootstrapAdmin ? "active" : "pending_approval";
     const result = await pool.query(
-      `INSERT INTO platform_users (email, full_name, google_id, picture, auth_provider, team, role, status, mfa_enabled, login_count, last_login_at)
+      `INSERT INTO platform_users (email, full_name, IdentityProvider_id, picture, auth_provider, team, role, status, mfa_enabled, login_count, last_login_at)
        VALUES ($1, $2, $3, $4, $5, 'Other', $6, $7, false, 0, NOW())
        RETURNING *`,
       [

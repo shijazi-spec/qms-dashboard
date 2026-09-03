@@ -31,7 +31,7 @@ import { logger as safeLogger } from "./logger";
 
 // Local copy of the SDREvaluationResult shape used here. Kept narrow
 // so we don't pull the full call-intelligence DB module just for a
-// type — that module is heavy and loads OpenAI clients at import.
+// type — that module is heavy and loads LLMProvider clients at import.
 interface AttributeEvaluation {
   attribute_id: string;
   attribute_name?: string;

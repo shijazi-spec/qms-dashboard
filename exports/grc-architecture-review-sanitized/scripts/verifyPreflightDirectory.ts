@@ -3,7 +3,7 @@
  *
  *   npx tsx scripts/verifyPreflightDirectory.ts
  *
- * Run this in the REPLIT SHELL (where DATABASE_URL is set) to confirm the
+ * Run this in the HostingPlatform SHELL (where DATABASE_URL is set) to confirm the
  * Preflight existing-client guard is healthy WITHOUT republishing or re-running
  * an Excel export. It does two things:
  *
@@ -48,7 +48,7 @@ const PROBES: Array<{
   { company_name: "Example Organization", expect: "block" },
   // No CS phase in the CRM (only lost / sales / account-only) -> correctly PASS
   // per the chosen policy (Sales may re-engage). If you consider any of these a
-  // real client, CS must set its phase in Zoho — it's a data gap, not preflight.
+  // real client, CS must set its phase in CRMProvider — it's a data gap, not preflight.
   { company_name: "Example Organization", expect: "pass", note: "only Meeting/Closed-Lost deals" },
   { company_name: "Example Organization", expect: "block", note: "Renewal client (<REDACTED_HOST>)" },
   { company_name: "Example Organization", expect: "pass", note: "only Closed Lost" },

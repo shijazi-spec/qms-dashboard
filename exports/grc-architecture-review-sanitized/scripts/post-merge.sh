@@ -106,7 +106,7 @@ npx tsx tests/safeLoggerRedaction.test.ts
 # experience served via `html[dir="rtl"]` set by `dashboard/js/i18n.js`.
 # Equivalent behaviour MUST use logical-direction utilities: `text-start`,
 # `border-s-4`, `ms-<n>`, `me-<n>`, `gap-<n>`, `rounded-s-*` (see
-# replit.md → "RTL Layout Convention").
+# HostingPlatform.md → "RTL Layout Convention").
 #
 # Task #743 extends the gate with a SECOND PASS that parses every inline
 # `<script>` body with acorn and re-applies the forbidden-class rules to

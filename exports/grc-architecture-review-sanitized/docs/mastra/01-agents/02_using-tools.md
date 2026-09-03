@@ -45,7 +45,7 @@ export const weatherTool = createTool({
 To make a tool available to an agent, add it to the `tools` option and reference it by name in the agent’s instructions.
 
 ```typescript {9,11} filename="src/mastra/agents/weather-agent.ts" showLineNumbers copy
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 import { Agent } from "@mastra/core/agent";
 import { weatherTool } from "../tools/weather-tool";
 
@@ -54,7 +54,7 @@ export const weatherAgent = new Agent({
   instructions: `
       You are a helpful weather assistant.
       Use the weatherTool to fetch current weather data.`,
-  model: openai("gpt-4o-mini"),
+  model: LLMProvider("gpt-4o-mini"),
   tools: { weatherTool }
 });
 ```

@@ -310,7 +310,7 @@ export const staticPageRoutes = [
   {
     // Access semantics: serve the admin dashboard shell when EITHER the
     // caller has a valid admin API key (cookie/header — for service and
-    // automation use) OR the caller has a Replit-OIDC session whose role
+    // automation use) OR the caller has a HostingPlatform-OIDC session whose role
     // is 'admin' (for normal browser navigation, which cannot send custom
     // headers). The backing `/api/admin/*` routes perform their own
     // per-route RBAC via `requireAdminOrKey` / `enforceRoutePermission`,

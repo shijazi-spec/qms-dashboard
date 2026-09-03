@@ -1,7 +1,7 @@
 /**
  * SDR-KPI-04 (Meetings Booked Per Week) and SDR-KPI-05 (Show Rate).
  *
- * Zoho's Events/Meetings module is NOT synced into this platform, so both are
+ * CRMProvider's Events/Meetings module is NOT synced into this platform, so both are
  * derived from the two Deal stages the Sales SOP defines for the meeting step:
  * "Meeting" (§7.3) and "Not Attend Meeting" (§7.2.8).
  *
@@ -69,7 +69,7 @@ describe("calcSdrShowRate (SDR-KPI-05)", () => {
     expect((await calcSdrShowRate()).dataAvailable).toBe(false);
   });
 
-  it("reads a Stage given as a Zoho lookup object", async () => {
+  it("reads a Stage given as a CRMProvider lookup object", async () => {
     deals({ Stage: { name: "Not Attend Meeting" } }, { Stage: { name: "Meeting" } });
     const r = await calcSdrShowRate();
     expect(r.details).toMatchObject({ attended: 1, no_show: 1 });

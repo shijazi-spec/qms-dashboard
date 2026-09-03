@@ -125,14 +125,14 @@ async function run(): Promise<void> {
   const SECRET_JWT =
     "<REDACTED_TOKEN>";
   const SAFE_TOOL = "rotate_api_key";
-  const SAFE_DESCRIPTION = "Rotate Zoho API key for the books integration";
-  const PREVIEW_PROSE_PREFIX = "Rotate API key for zoho_books — new key=";
+  const SAFE_DESCRIPTION = "Rotate CRMProvider API key for the books integration";
+  const PREVIEW_PROSE_PREFIX = "Rotate API key for CRMProvider_books — new key=";
 
   const enqueued = await enqueuePendingAction({
     toolId: SAFE_TOOL,
     toolLabel: "Rotate API Key",
     payload: {
-      target_integration: "zoho_books",
+      target_integration: "CRMProvider_books",
       api_key: SECRET_KEY,
       refresh_token: SECRET_TOKEN,
       nested: {
@@ -181,7 +181,7 @@ async function run(): Promise<void> {
     "INSERT payload column contains the redaction sentinel",
   );
   assert(
-    insertedPayloadJson.includes("zoho_books") &&
+    insertedPayloadJson.includes("CRMProvider_books") &&
       insertedPayloadJson.includes(SAFE_DESCRIPTION),
     "INSERT payload column preserves non-sensitive fields",
   );
@@ -225,7 +225,7 @@ async function run(): Promise<void> {
   );
   assert(
     !insertedPreview.includes(SECRET_TOKEN),
-    "INSERT payload_preview does not contain the ghp_… GitHub token",
+    "INSERT payload_preview does not contain the ghp_… SourceControlProvider token",
   );
   assert(
     !insertedPreview.includes(SECRET_BCRYPT) && !insertedPreview.includes("$2b$12$"),
@@ -241,7 +241,7 @@ async function run(): Promise<void> {
   );
   assert(
     insertedPreview.includes(PREVIEW_PROSE_PREFIX.trim().split(" ")[0]) &&
-      insertedPreview.includes("zoho_books"),
+      insertedPreview.includes("CRMProvider_books"),
     "INSERT payload_preview preserves the surrounding human-readable prose",
   );
 
@@ -263,7 +263,7 @@ async function run(): Promise<void> {
     "Returned PendingAction.payload exposes redacted secrets only",
   );
   assert(
-    returnedPayload.target_integration === "zoho_books" &&
+    returnedPayload.target_integration === "CRMProvider_books" &&
       returnedPayload.nested.username === "user@example.invalid",
     "Returned PendingAction.payload preserves safe fields",
   );
@@ -271,7 +271,7 @@ async function run(): Promise<void> {
   const recorded = await recordExecutionResult(enqueued.action_code, {
     success: true,
     entityType: "integration",
-    entityId: "zoho_books",
+    entityId: "CRMProvider_books",
     data: {
       rotated: true,
       new_api_key: "<REDACTED_TOKEN>",
@@ -515,7 +515,7 @@ async function run(): Promise<void> {
   // entropy well below the 4.5 bits/char floor.
   const ISO_TIMESTAMP = "2024-12-31T23:59:59.999Z";
 
-  // MUST NOT redact — vendor-prefixed customer ID (e.g. Stripe-style
+  // MUST NOT redact — vendor-prefixed customer ID (e.g. PaymentProvider-style
   // identifier). Only lowercase + digit (2 classes) → fails the
   // entropy heuristic's `classes >= 3` filter even though length is 28.
   const VENDOR_ID = "cust_abc123def456ghi789jkl012";

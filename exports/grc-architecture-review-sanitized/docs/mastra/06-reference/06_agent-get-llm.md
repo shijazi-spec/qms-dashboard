@@ -45,7 +45,7 @@ await agent.getLLM();
 ```typescript copy
 await agent.getLLM({
   runtimeContext: new RuntimeContext(),
-  model: openai('gpt-4')
+  model: LLMProvider('gpt-4')
 });
 ```
 

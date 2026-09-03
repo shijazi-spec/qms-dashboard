@@ -1,7 +1,7 @@
 /**
  * Shared post-ingest pipeline for call records.
  *
- * Both /api/calls/ingest (Five9-style metadata push) and
+ * Both /api/calls/ingest (ContactCenterProvider-style metadata push) and
  * /api/calls/upload (manual UI audio upload) need the same auto-link
  * + compliance behavior after the call_records row is created.
  * Until this consolidation, the block was duplicated in both routes
@@ -37,9 +37,9 @@ import { logger as safeLogger } from "./logger";
 // =====================================================================
 
 /**
- * Run the Zoho-backed CRM compliance check for a call that was just
+ * Run the CRMProvider-backed CRM compliance check for a call that was just
  * linked to a Lead/Deal, and persist the result via saveCompliance.
- * Best-effort: any failure (Zoho unreachable, missing fields, etc.)
+ * Best-effort: any failure (CRMProvider unreachable, missing fields, etc.)
  * is swallowed so the originating auto-link call still returns
  * success. Mirrors the body of /api/calls/:callId/compliance but
  * without the HTTP wrapper so it can be called from other handlers.
@@ -135,7 +135,7 @@ export interface AutoLinkAndComplianceOptions {
 
 export interface AutoLinkAndComplianceResult {
   /**
-   * True only when a Zoho Lead or Deal was actually linked to this call
+   * True only when a CRMProvider Lead or Deal was actually linked to this call
    * record. False when the record already had a manual link (skipped),
    * when phone-matching drew a blank, or when the linker threw.
    */
@@ -150,7 +150,7 @@ export interface AutoLinkAndComplianceResult {
 }
 
 /**
- * Auto-link a freshly-created call record to a Zoho Lead/Deal, then
+ * Auto-link a freshly-created call record to a CRMProvider Lead/Deal, then
  * run the CRM compliance check. Best-effort throughout — never throws.
  *
  * Skip semantics: if the callRecord already has a `lead_id` or `deal_id`,
@@ -209,7 +209,7 @@ export async function autoLinkCallAndCompliance(
     );
 
     if (linkResult.linked) {
-      logger?.info(`🔗 [${logTag}] Auto-linked call to Zoho`, {
+      logger?.info(`🔗 [${logTag}] Auto-linked call to CRMProvider`, {
         callId: callRecord.id,
         module: linkResult.picked_module,
         recordId: linkResult.lead_id || linkResult.deal_id,
@@ -249,7 +249,7 @@ export async function autoLinkCallAndCompliance(
       }
 
       // Auto-trigger the CRM compliance check now that the call has
-      // a Zoho Lead/Deal to score against, so the top-level Compliance
+      // a CRMProvider Lead/Deal to score against, so the top-level Compliance
       // Rate KPI populates without manual action.
       await runComplianceAfterLink(
         callRecord.id!,

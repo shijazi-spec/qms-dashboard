@@ -13,7 +13,7 @@
 import { pool } from "./kpiDatabase";
 import { logger } from "./logger";
 
-const APP_URL = process.env.APP_BASE_URL || "https://<REDACTED_HOST>";
+const APP_URL = process.env.APP_BASE_URL || "<REDACTED_URL_SCHEME><REDACTED_HOST>";
 const REMIND_EVERY_HOURS = 20;
 
 function esc(s: any): string {
@@ -24,8 +24,8 @@ function esc(s: any): string {
 async function mail(to: string, subject: string, html: string): Promise<boolean> {
   try {
     if (!to) return false;
-    const { sendResendEmail } = await import("./resendMail");
-    const r = await sendResendEmail({
+    const { sendEmailProviderEmail } = await import("./EmailProviderMail");
+    const r = await sendEmailProviderEmail({
       to,
       subject,
       html: `<div style="font-family:Arial,sans-serif;font-size:14px;color:#0f172a">${html}</div>`,

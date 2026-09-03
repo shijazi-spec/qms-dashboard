@@ -17,7 +17,7 @@
  *      'mobile', regardless of any `clientSurface` field in the body.
  *
  * Anti-tautology: the request body in each case explicitly sets a
- * different surface ('web', 'slack') and the assertions verify the
+ * different surface ('web', 'ChatProvider') and the assertions verify the
  * caller's value was IGNORED and 'mobile' was used instead.
  *
  * Run via:  npx vitest run tests/vitest/mobileRoutes.vitest.test.ts
@@ -25,7 +25,7 @@
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-vi.mock("../../src/triggers/slackRatingHandler", () => ({
+vi.mock("../../src/triggers/ChatProviderRatingHandler", () => ({
   recordConsultantRatingFromSurface: vi.fn(),
 }));
 
@@ -55,14 +55,14 @@ vi.mock("../../src/utils/rbacMiddleware", () => ({
 import { mobileRoutes } from "../../src/mastra/routes/mobileRoutes";
 import { buildHandler, makeContext } from "../_helpers/fakeContext";
 
-let slack: typeof import("../../src/triggers/slackRatingHandler");
+let ChatProvider: typeof import("../../src/triggers/ChatProviderRatingHandler");
 let feedbackDb: typeof import("../../src/utils/aiFeedbackDatabase");
 
 beforeEach(async () => {
-  slack = await import("../../src/triggers/slackRatingHandler");
+  ChatProvider = await import("../../src/triggers/ChatProviderRatingHandler");
   feedbackDb = await import("../../src/utils/aiFeedbackDatabase");
   vi.clearAllMocks();
-  vi.mocked(slack.recordConsultantRatingFromSurface).mockResolvedValue({
+  vi.mocked(ChatProvider.recordConsultantRatingFromSurface).mockResolvedValue({
     success: true,
     promptVersion: "qms-consultant-vTEST",
   });
@@ -90,8 +90,8 @@ describe("POST /api/mobile/consultant/feedback (call-id path)", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(slack.recordConsultantRatingFromSurface).toHaveBeenCalledTimes(1);
-    const arg = vi.mocked(slack.recordConsultantRatingFromSurface).mock
+    expect(ChatProvider.recordConsultantRatingFromSurface).toHaveBeenCalledTimes(1);
+    const arg = vi.mocked(ChatProvider.recordConsultantRatingFromSurface).mock
       .calls[0][0];
     expect(arg.surface).toBe("mobile");
     expect(arg.callId).toBe(42);
@@ -114,7 +114,7 @@ describe("POST /api/mobile/consultant/feedback (call-id path)", () => {
       makeContext({ method: "POST", body: { callId: -1, rating: "thumbs_up" } }),
     );
     expect(res.status).toBe(400);
-    expect(slack.recordConsultantRatingFromSurface).not.toHaveBeenCalled();
+    expect(ChatProvider.recordConsultantRatingFromSurface).not.toHaveBeenCalled();
   });
 
   test("rejects unknown rating with 400", async () => {
@@ -130,7 +130,7 @@ describe("POST /api/mobile/consultant/feedback (call-id path)", () => {
       }),
     );
     expect(res.status).toBe(400);
-    expect(slack.recordConsultantRatingFromSurface).not.toHaveBeenCalled();
+    expect(ChatProvider.recordConsultantRatingFromSurface).not.toHaveBeenCalled();
   });
 });
 
@@ -149,7 +149,7 @@ describe("POST /api/mobile/consultant/message-feedback (message-id path)", () =>
           rating: "down",
           promptVersion: "qms-consultant-vCLIENT",
           // Anti-tautology: caller LIES about its surface — must be ignored.
-          clientSurface: "slack",
+          clientSurface: "ChatProvider",
         },
       }),
     );

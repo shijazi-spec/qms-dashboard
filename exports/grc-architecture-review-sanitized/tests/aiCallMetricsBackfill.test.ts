@@ -139,11 +139,11 @@ async function run(): Promise<void> {
       // acquire a `previews_redacted_at` breadcrumb because the AI Ops
       // call-detail badge specifically signals preview provenance.
       error_message: `Upstream API rejected key ${SK_KEY}`,
-      prompt_preview: "Rotate API key for zoho_books integration",
+      prompt_preview: "Rotate API key for CRMProvider_books integration",
       tool_input_preview: null,
       tool_output_preview: null,
       // Clean metadata — must round-trip byte-identical.
-      metadata: { prompt_version: "v3.2", tenant: "acme" },
+      metadata: { prompt_version: "v3.2", tenant: "Example Organization" },
       previews_redacted_at: null,
     },
     {
@@ -152,7 +152,7 @@ async function run(): Promise<void> {
       // path → breadcrumb stamped.
       error_message: `JWT verify failed for token=${JWT}`,
       prompt_preview: null,
-      tool_input_preview: `{"authorization":"Bearer ${GH_PAT}","tenant":"acme"}`,
+      tool_input_preview: `{"authorization":"Bearer ${GH_PAT}","tenant":"Example Organization"}`,
       tool_output_preview: null,
       metadata: null,
       previews_redacted_at: null,
@@ -173,7 +173,7 @@ async function run(): Promise<void> {
       // Fully clean control — no credential-shaped content anywhere.
       error_message: SAFE_PROSE,
       prompt_preview: "Summarise audit findings for Q2",
-      tool_input_preview: '{"vendor":"acme-corp","status":"open"}',
+      tool_input_preview: '{"vendor":"Example Organization-corp","status":"open"}',
       tool_output_preview: '{"count":17,"ok":true}',
       metadata: { prompt_version: "v2.1", source: "scheduler" },
       previews_redacted_at: null,
@@ -208,7 +208,7 @@ async function run(): Promise<void> {
           // be scrubbed. Mirrors the `deepRedactSecretLikeStrings` path
           // that already covers `ai_pending_actions.execution_result`.
           note: `Caller passed key ${SK_KEY} in error context`,
-          tenant: "acme",
+          tenant: "Example Organization",
         },
       },
       previews_redacted_at: null,
@@ -264,7 +264,7 @@ async function run(): Promise<void> {
     "row 1 error_message preserves the surrounding non-secret prose",
   );
   assert(
-    row1.prompt_preview === "Rotate API key for zoho_books integration",
+    row1.prompt_preview === "Rotate API key for CRMProvider_books integration",
     "row 1 prompt_preview (clean) is byte-identical",
   );
 
@@ -300,7 +300,7 @@ async function run(): Promise<void> {
   assert(
     row4.error_message === SAFE_PROSE &&
       row4.prompt_preview === "Summarise audit findings for Q2" &&
-      row4.tool_input_preview === '{"vendor":"acme-corp","status":"open"}' &&
+      row4.tool_input_preview === '{"vendor":"Example Organization-corp","status":"open"}' &&
       row4.tool_output_preview === '{"count":17,"ok":true}',
     "row 4 (clean control) — every TEXT column byte-identical, no UPDATE issued",
   );
@@ -336,7 +336,7 @@ async function run(): Promise<void> {
     "row 6 metadata.request_context.note preserves the surrounding non-secret prose",
   );
   assert(
-    row6Meta.request_context.tenant === "acme" &&
+    row6Meta.request_context.tenant === "Example Organization" &&
       row6Meta.prompt_version === "v5.0",
     "row 6 metadata: untouched leaves (tenant, prompt_version) round-trip byte-identical",
   );

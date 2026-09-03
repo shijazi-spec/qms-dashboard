@@ -160,13 +160,13 @@ function makeToolHealthDeps(opts: {
       } as AIAlert;
     },
     notifyToolHealthBreach: async () => ({
-      slackSent: true,
+      ChatProviderSent: true,
       emailSent: false,
       throttled: false,
       skipped: false,
     }),
     notifyToolHealthRecovery: async (_n, _d) => ({
-      slackSent: true,
+      ChatProviderSent: true,
       emailSent: false,
       skipped: false,
       disabled: false,

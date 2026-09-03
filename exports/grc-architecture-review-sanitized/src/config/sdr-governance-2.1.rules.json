@@ -4,7 +4,7 @@
     "ExampleOrg_SDR_2.1_04.12.2025_EN.pdf",
     "SDR Call Script_AR [Updated].pdf",
     "ExampleOrg_SDR_Stages Reasons_2.1_04.12.2025.xlsx",
-    "Five9_SDR_QA_Scorecard_COPC_Template.xlsx"
+    "ContactCenterProvider_SDR_QA_Scorecard_COPC_Template.xlsx"
   ],
   "notes": "Placeholder phrases — replace with exact script lines and COPC rows when Quality exports from governance PDFs/XLSX.",
   "rules": [
@@ -71,7 +71,7 @@
       "code": "sdr_gov_next_step",
       "severity": "info",
       "message": "No explicit next-step or meeting language detected.",
-      "suggestion": "Align with COPC scorecard closure / commitment items from Five9_SDR_QA_Scorecard template.",
+      "suggestion": "Align with COPC scorecard closure / commitment items from ContactCenterProvider_SDR_QA_Scorecard template.",
       "match": {
         "type": "contains_any",
         "min_transcript_chars": 300,

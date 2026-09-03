@@ -1,21 +1,21 @@
 /**
- * CRM Compliance Check — evidence-based audit of post-call Zoho hygiene.
+ * CRM Compliance Check — evidence-based audit of post-call CRMProvider hygiene.
  *
  * Replaces the simulated/random implementation in callIntelligenceRoutes
  * that fired Math.random() for every check. That mock made the calls
  * dashboard actively misleading (the Compliance KPIs were just noise),
  * which is why the dashboard felt "dormant".
  *
- * For each linked Zoho record (Lead or Deal), we query four related
+ * For each linked CRMProvider record (Lead or Deal), we query four related
  * modules and compare timestamps to the call_date to decide whether
  * the post-call hygiene actions were actually performed.
  *
- * Failure mode: if Zoho is unreachable or the linkage is missing, we
+ * Failure mode: if CRMProvider is unreachable or the linkage is missing, we
  * return `{ success: false, reason }` and let the caller decide whether
  * to persist anything. We never fabricate booleans.
  */
 
-import { fetchZohoRecords, getZohoConnectionStatus } from "./zohoCRM";
+import { fetchCRMProviderRecords, getCRMProviderConnectionStatus } from "./CRMProviderCRM";
 import {
   ownerMatchesAgent,
   activityFallsOnDay,
@@ -31,7 +31,7 @@ export interface CrmComplianceCheckInput {
   expectedActions?: string[];
   /**
    * Agent who actually made the recorded call. Used to verify that the
-   * matching Zoho Call activity was logged BY THAT SAME AGENT and on the
+   * matching CRMProvider Call activity was logged BY THAT SAME AGENT and on the
    * SAME DATE. A Call logged by a different rep, or stamped with a
    * different date, does not count as the caller's own post-call hygiene
    * and is treated as non-compliant.
@@ -49,7 +49,7 @@ export interface CrmComplianceCheckResult {
   overall_compliance: boolean;
   compliance_score: number;
   missing_actions: string[];
-  /** Per-check evidence — number of matching Zoho records found, errors, etc. */
+  /** Per-check evidence — number of matching CRMProvider records found, errors, etc. */
   evidence: Record<string, unknown>;
 }
 
@@ -67,10 +67,10 @@ const DEFAULT_EXPECTED_ACTIONS = [
 ];
 
 /**
- * Run the real-Zoho compliance check. Returns success=false (without
+ * Run the real-CRMProvider compliance check. Returns success=false (without
  * fabricating booleans) when:
  *  - the call has no lead/deal linkage
- *  - Zoho credentials aren't configured
+ *  - CRMProvider credentials aren't configured
  *  - the lookup itself fails (network / 4xx / 5xx)
  *
  * Callers should persist the result ONLY when success=true. When
@@ -88,16 +88,16 @@ export async function runCrmComplianceCheck(
     };
   }
 
-  const conn = getZohoConnectionStatus();
+  const conn = getCRMProviderConnectionStatus();
   if (!conn.connected) {
     return {
       success: false,
-      reason: "zoho_not_connected",
+      reason: "CRMProvider_not_connected",
     };
   }
 
   const module = input.leadId ? "Leads" : "Deals";
-  // Zoho uses Who_Id for Leads/Contacts and What_Id for Deals/Accounts in
+  // CRMProvider uses Who_Id for Leads/Contacts and What_Id for Deals/Accounts in
   // related modules (Calls, Tasks, Events). Pick the right key.
   const linkField = module === "Leads" ? "Who_Id" : "What_Id";
 
@@ -110,21 +110,21 @@ export async function runCrmComplianceCheck(
       reason: "invalid_call_date",
     };
   }
-  // Zoho criteria comparisons are tighter when we compare on the date-only
+  // CRMProvider criteria comparisons are tighter when we compare on the date-only
   // form (YYYY-MM-DD) for "greater_than" since some modules don't accept
   // full ISO timestamps. We fall back to a 1-second-before form which
   // captures items created during or after the call.
   const cutoffIso = new Date(callDate.getTime() - 1000).toISOString();
 
   // Run the four related-record queries in parallel. Each query is a
-  // single Zoho API call. If any throws we trap it locally so a partial
+  // single CRMProvider API call. If any throws we trap it locally so a partial
   // result is still useful.
   const safeCount = async (
     moduleName: string,
     criteria: string,
   ): Promise<{ count: number; error?: string }> => {
     try {
-      const rows = await fetchZohoRecords(moduleName, {
+      const rows = await fetchCRMProviderRecords(moduleName, {
         criteria,
         perPage: 5,
       });
@@ -142,14 +142,14 @@ export async function runCrmComplianceCheck(
   // the logged Call was made BY THE SAME AGENT and ON THE SAME DATE as
   // the recorded call. A Call logged by another rep or with a mismatched
   // date is the exact non-compliance pattern ops flagged (e.g. a call by
-  // r.alsammak whose Zoho Call was logged by "هاجر الجبري" on a later day
+  // r.alsammak whose CRMProvider Call was logged by "هاجر الجبري" on a later day
   // with an "Invalid number" result).
   const safeFetchRows = async (
     moduleName: string,
     criteria: string,
   ): Promise<{ rows: any[]; error?: string }> => {
     try {
-      const rows = await fetchZohoRecords(moduleName, {
+      const rows = await fetchCRMProviderRecords(moduleName, {
         criteria,
         perPage: 20,
       });
@@ -185,7 +185,7 @@ export async function runCrmComplianceCheck(
     // call, something on it changed (status/stage/owner/notes/etc).
     safeCount(module, `id:equals:${recordId}`).then(async () => {
       try {
-        const rows = await fetchZohoRecords(module, {
+        const rows = await fetchCRMProviderRecords(module, {
           criteria: `id:equals:${recordId}`,
           perPage: 1,
         });
@@ -212,7 +212,7 @@ export async function runCrmComplianceCheck(
     }
   }
 
-  // Verify the matching Zoho Call activity belongs to the same agent and
+  // Verify the matching CRMProvider Call activity belongs to the same agent and
   // the same calendar day as the recorded call. A Call logged by another
   // rep, or stamped with a different date, is NOT valid post-call hygiene
   // for this caller and must not satisfy the "call logged" check.
@@ -301,7 +301,7 @@ export async function runCrmComplianceCheck(
       compliance_score: complianceScore,
       missing_actions: missingActions,
       evidence: {
-        mode: "zoho_live",
+        mode: "CRMProvider_live",
         module,
         record_id: recordId,
         cutoff: cutoffIso,

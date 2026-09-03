@@ -1,6 +1,6 @@
 import { createRedactedPool } from "./redactedPool";
 import { logger } from "./logger";
-import { sendSlackNotification } from "./slackNotifications";
+import { sendChatProviderNotification } from "./ChatProviderNotifications";
 
 const outboxPool = createRedactedPool({
   connectionString: process.env.DATABASE_URL,
@@ -9,7 +9,7 @@ const outboxPool = createRedactedPool({
 export interface OutboxEntry {
   id: number;
   source: string;
-  channel: "slack";
+  channel: "ChatProvider";
   destination: string;
   payload: {
     text: string;
@@ -46,7 +46,7 @@ async function initNotificationOutboxTable(): Promise<void> {
       CREATE TABLE IF NOT EXISTS notification_outbox (
         id SERIAL PRIMARY KEY,
         source VARCHAR(120) NOT NULL,
-        channel VARCHAR(20) NOT NULL DEFAULT 'slack',
+        channel VARCHAR(20) NOT NULL DEFAULT 'ChatProvider',
         destination VARCHAR(255) NOT NULL,
         payload JSONB NOT NULL,
         dedupe_key VARCHAR(255),
@@ -84,7 +84,7 @@ function retryDelaySeconds(attemptNumber: number): number {
   return safeBase * Math.pow(2, cappedAttempt - 1);
 }
 
-export async function enqueueSlackOutboxMessage(
+export async function enqueueChatProviderOutboxMessage(
   input: OutboxEnqueueInput,
 ): Promise<OutboxEntry> {
   await initNotificationOutboxTable();
@@ -98,7 +98,7 @@ export async function enqueueSlackOutboxMessage(
     `INSERT INTO notification_outbox
        (source, channel, destination, payload, dedupe_key, status, attempts, max_attempts, next_attempt_at, metadata)
      VALUES
-       ($1, 'slack', $2, $3::jsonb, $4, 'pending', 0, $5, NOW(), $6::jsonb)
+       ($1, 'ChatProvider', $2, $3::jsonb, $4, 'pending', 0, $5, NOW(), $6::jsonb)
      ON CONFLICT (dedupe_key) WHERE dedupe_key IS NOT NULL
      DO UPDATE SET
        destination = EXCLUDED.destination,
@@ -185,7 +185,7 @@ export async function processOutboxMessageById(id: number): Promise<OutboxEntry 
 
   const payload = row.payload || { text: "" };
   try {
-    const sent = await sendSlackNotification(
+    const sent = await sendChatProviderNotification(
       row.destination,
       payload.text || "(empty message)",
       payload.blocks,
@@ -197,7 +197,7 @@ export async function processOutboxMessageById(id: number): Promise<OutboxEntry 
       row.id,
       row.attempts + 1,
       row.max_attempts,
-      "Slack helper returned false",
+      "ChatProvider helper returned false",
     );
   } catch (err) {
     const errorText = err instanceof Error ? err.message : String(err);

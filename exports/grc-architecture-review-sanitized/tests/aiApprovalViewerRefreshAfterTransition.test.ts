@@ -525,8 +525,8 @@ async function runApproveScenario(): Promise<void> {
   const action = await enqueuePendingAction({
     toolId: 'rotate_api_key',
     toolLabel: 'Rotate API Key',
-    payload: { target_integration: 'zoho_books', reason: 'rotate-test' },
-    payloadPreview: 'rotate zoho_books key',
+    payload: { target_integration: 'CRMProvider_books', reason: 'rotate-test' },
+    payloadPreview: 'rotate CRMProvider_books key',
     riskLevel: 'high',
     complianceRefs: ['ISO 27001:2022 A.5.34'],
     requestedByUserId: 99,
@@ -555,7 +555,7 @@ async function runApproveScenario(): Promise<void> {
   await recordExecutionResult(action.action_code, {
     success: true,
     entityType: 'integration',
-    entityId: 'zoho_books',
+    entityId: 'CRMProvider_books',
     data: { rotated: true, audit_note: 'ok' },
   });
   const stored = storedRows.get(action.action_code);
@@ -625,8 +625,8 @@ async function runRejectScenario(): Promise<void> {
   const action = await enqueuePendingAction({
     toolId: 'rotate_api_key',
     toolLabel: 'Rotate API Key',
-    payload: { target_integration: 'zoho_books', reason: 'reject-test' },
-    payloadPreview: 'rotate zoho_books key (reject path)',
+    payload: { target_integration: 'CRMProvider_books', reason: 'reject-test' },
+    payloadPreview: 'rotate CRMProvider_books key (reject path)',
     riskLevel: 'high',
     complianceRefs: ['ISO 27001:2022 A.5.34'],
     requestedByUserId: 99,

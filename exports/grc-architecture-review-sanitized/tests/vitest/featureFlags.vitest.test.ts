@@ -13,8 +13,8 @@ import {
 
 // Pick one real flag from the registry as the subject under test.
 // Using a real one (not a fake) ensures we'd catch a registry typo.
-const FLAG: FlagName = "five9_real_ingest";
-const ENV_KEY = FLAGS[FLAG]; // "FIVE9_REAL_INGEST"
+const FLAG: FlagName = "ContactCenterProvider_real_ingest";
+const ENV_KEY = FLAGS[FLAG]; // "ContactCenterProvider_REAL_INGEST"
 const USERS_KEY = `${ENV_KEY}_USERS`;
 
 afterEach(() => {

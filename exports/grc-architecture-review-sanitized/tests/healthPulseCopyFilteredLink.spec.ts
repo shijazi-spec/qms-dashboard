@@ -7,7 +7,7 @@
  *   category and status filters via `?category=` / `?status=` query
  *   params, but until this task there was no obvious way for an admin
  *   in an incident channel to grab the exact filtered URL they were
- *   staring at and paste it into Slack/Teams. The new copy-link button
+ *   staring at and paste it into ChatProvider/Teams. The new copy-link button
  *   appears next to the filter chips ONLY when at least one filter is
  *   active, copies `window.location.href` via the Clipboard API, and
  *   surfaces a brief inline confirmation.

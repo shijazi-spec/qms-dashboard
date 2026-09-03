@@ -124,7 +124,7 @@ export interface EffectivePromptRegressionConfig {
   dropPctPoints: number;
   notifyThrottleMin: number;
   /**
-   * Deep-link rendered into Slack/email alerts (e.g. /ai-ops?tab=regression).
+   * Deep-link rendered into ChatProvider/email alerts (e.g. /ai-ops?tab=regression).
    * Optional — falls back to a sensible default at render time.
    */
   link?: string;
@@ -257,7 +257,7 @@ export interface PromptRegressionDeps {
    * threshold (or no longer has enough samples to evaluate). Mirrors the
    * `notifyToolHealthRecovery` dep on the tool-health cron — keeping the
    * notifier behind a dep means unit tests can stub it to a no-op without
-   * touching Slack/email or env vars.
+   * touching ChatProvider/email or env vars.
    */
   notifyRecovery?: (recoveries: RegressionRecovery[]) => Promise<void>;
   /**
@@ -265,7 +265,7 @@ export interface PromptRegressionDeps {
    * alerts. Mirrors `notifyRecovery` but for the breach side of the
    * cron — keeping the notifier behind a dep means unit tests can stub
    * it to a no-op (and verify it is *not* called when every alert was
-   * skipped as a duplicate) without touching Slack/email or env vars.
+   * skipped as a duplicate) without touching ChatProvider/email or env vars.
    * Default impl forwards to `sendPromptRegressionNotifications`.
    */
   notifyBreaches?: (
@@ -290,10 +290,10 @@ export interface PromptRegressionDeps {
 
 /**
  * Per-channel injection points used by `sendPromptRegressionNotifications`
- * so the test for task #247 can stub `fetch` (Slack) and `sendResendEmail`
- * (email) without monkey-patching the dynamically-imported `resendMail`
+ * so the test for task #247 can stub `fetch` (ChatProvider) and `sendEmailProviderEmail`
+ * (email) without monkey-patching the dynamically-imported `EmailProviderMail`
  * module. Defaults are the real `globalThis.fetch` and a thin closure
- * over the dynamic `sendResendEmail` import — i.e. the production
+ * over the dynamic `sendEmailProviderEmail` import — i.e. the production
  * behaviour is unchanged when no overrides are passed.
  */
 export interface PromptRegressionNotifyDeps {
@@ -306,7 +306,7 @@ export interface PromptRegressionNotifyDeps {
   }) => Promise<unknown>;
   /**
    * Atomically claim the per-(agent:version) "notify slot" so a flapping
-   * regression cannot re-page Slack/email twice within
+   * regression cannot re-page ChatProvider/email twice within
    * `notifyThrottleMin`. Defaults to {@link claimToolHealthNotifySlot} —
    * the same persistent throttle store the tool-health notifier uses
    * (Task #754). Tests inject a stub to avoid touching Postgres.
@@ -320,7 +320,7 @@ export interface PromptRegressionNotifyDeps {
    * Effective config the notifier should use for window/threshold copy AND
    * the throttle window. Defaults to the env baseline so existing call-sites
    * (and tests that don't care about DB overrides) continue to work. The
-   * cron passes the merged effective config so Slack/email copy reflects
+   * cron passes the merged effective config so ChatProvider/email copy reflects
    * whatever the admin tuned in the UI.
    */
   effectiveConfig?: EffectivePromptRegressionConfig;
@@ -640,7 +640,7 @@ export async function runPromptRegressionCheck(
   }
 
   // Page on-call once per cron tick when ≥1 recovery happened. Best-effort:
-  // a Slack/email outage must not propagate back into the cron's return
+  // a ChatProvider/email outage must not propagate back into the cron's return
   // value (the alert is already resolved in the DB by this point).
   if (out.recoveries.length > 0) {
     try {
@@ -673,7 +673,7 @@ export async function runPromptRegressionCheck(
 
     // Page on-call only when at least one *new* alert row was created.
     // Skipped-duplicate ticks (`alertsCreated === 0`) intentionally fall
-    // through here so a still-open regression doesn't re-page Slack/email
+    // through here so a still-open regression doesn't re-page ChatProvider/email
     // every cron run while the breach is being investigated. The
     // recovery-only path (alertsAutoResolved > 0, alertsCreated === 0)
     // also falls through — the recovery notifier above already paged.
@@ -699,10 +699,10 @@ export async function runPromptRegressionCheck(
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// External notification fan-out (Slack + email)
-// Called only when at least one new alert row was created so Slack/email
+// External notification fan-out (ChatProvider + email)
+// Called only when at least one new alert row was created so ChatProvider/email
 // never fire on the duplicate-skip path. Each channel is caught independently
-// so a Slack outage cannot silence the email and vice-versa.
+// so a ChatProvider outage cannot silence the email and vice-versa.
 // ──────────────────────────────────────────────────────────────────────────────
 export async function sendPromptRegressionNotifications(
   breaches: RegressionBreach[],
@@ -756,8 +756,8 @@ export async function sendPromptRegressionNotifications(
   const count = sendable.length;
   const plural = count === 1 ? "regression" : "regressions";
 
-  // ── Slack ──────────────────────────────────────────────────────────────────
-  if (process.env.SLACK_WEBHOOK_URL) {
+  // ── ChatProvider ──────────────────────────────────────────────────────────────────
+  if (process.env.ChatProvider_WEBHOOK_URL) {
     try {
       const lines = sendable.map(
         (b) =>
@@ -766,18 +766,18 @@ export async function sendPromptRegressionNotifications(
           `at ${b.best_rate_pct.toFixed(0)}% (↓${Math.round(b.drop_pp)}pp, ` +
           `severity: ${b.severity})`,
       );
-      const slackMsg =
+      const ChatProviderMsg =
         `⚠️ *Prompt Regression Alert* — ${count} new ${plural} detected.\n` +
         lines.join("\n") +
         `\n_Window: ${cfg.windowDays} days | <${cfg.link}|View in AI Ops>_`;
 
-      await fetchFn(process.env.SLACK_WEBHOOK_URL, {
+      await fetchFn(process.env.ChatProvider_WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: slackMsg }),
+        body: JSON.stringify({ text: ChatProviderMsg }),
       });
-    } catch (slackErr) {
-      logger.warn("[PromptRegression] Slack notification failed:", slackErr);
+    } catch (ChatProviderErr) {
+      logger.warn("[PromptRegression] ChatProvider notification failed:", ChatProviderErr);
     }
   }
 
@@ -792,8 +792,8 @@ export async function sendPromptRegressionNotifications(
       const sendEmail =
         notifyDeps.sendEmail ??
         (async (opts) => {
-          const { sendResendEmail } = await import("../../utils/resendMail");
-          return sendResendEmail(opts);
+          const { sendEmailProviderEmail } = await import("../../utils/EmailProviderMail");
+          return sendEmailProviderEmail(opts);
         });
       const rows = sendable
         .map(
@@ -844,12 +844,12 @@ export async function sendPromptRegressionNotifications(
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Recovery notification fan-out (Slack + email)
+// Recovery notification fan-out (ChatProvider + email)
 // Called from the recovery-sweep path when ≥1 prompt-regression alerts
 // auto-resolved in this tick. Mirrors `sendPromptRegressionNotifications`
-// (the breach-side fan-out) so admins on Slack/email see the recovery
+// (the breach-side fan-out) so admins on ChatProvider/email see the recovery
 // summary without polling the dashboard. Each channel is caught
-// independently — a Slack outage cannot silence the email and vice-versa.
+// independently — a ChatProvider outage cannot silence the email and vice-versa.
 // Default impl is wired through `PromptRegressionDeps.notifyRecovery` so
 // unit tests stub it to a no-op.
 // ──────────────────────────────────────────────────────────────────────────────
@@ -863,28 +863,28 @@ export async function sendPromptRegressionRecoveryNotifications(
   const plural = count === 1 ? "regression" : "regressions";
   const fetchFn = notifyDeps.fetchFn ?? globalThis.fetch;
 
-  // ── Slack ──────────────────────────────────────────────────────────────────
-  if (process.env.SLACK_WEBHOOK_URL) {
+  // ── ChatProvider ──────────────────────────────────────────────────────────────────
+  if (process.env.ChatProvider_WEBHOOK_URL) {
     try {
       const lines = recoveries.map(
         (r) =>
           `• *${r.agent_name}* — version \`${r.prompt_version || "(unknown)"}\` ` +
           `(alert #${r.alert_id})`,
       );
-      const slackMsg =
+      const ChatProviderMsg =
         `✅ *Prompt Regression Recovered* — ${count} ${plural} auto-resolved.\n` +
         lines.join("\n") +
         `\n_Window: ${cfg.windowDays} days | <${cfg.link}|View in AI Ops>_`;
 
-      await fetchFn(process.env.SLACK_WEBHOOK_URL, {
+      await fetchFn(process.env.ChatProvider_WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: slackMsg }),
+        body: JSON.stringify({ text: ChatProviderMsg }),
       });
-    } catch (slackErr) {
+    } catch (ChatProviderErr) {
       logger.warn(
-        "[PromptRegression] Slack recovery notification failed:",
-        slackErr,
+        "[PromptRegression] ChatProvider recovery notification failed:",
+        ChatProviderErr,
       );
     }
   }
@@ -900,8 +900,8 @@ export async function sendPromptRegressionRecoveryNotifications(
       const sendEmail =
         notifyDeps.sendEmail ??
         (async (opts) => {
-          const { sendResendEmail } = await import("../../utils/resendMail");
-          return sendResendEmail(opts);
+          const { sendEmailProviderEmail } = await import("../../utils/EmailProviderMail");
+          return sendEmailProviderEmail(opts);
         });
       const rows = recoveries
         .map(

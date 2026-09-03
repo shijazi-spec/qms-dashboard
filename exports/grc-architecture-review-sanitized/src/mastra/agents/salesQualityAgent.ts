@@ -1,24 +1,24 @@
 import { Agent } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
 import { sharedPostgresStorage } from "../storage";
-import { createOpenAI } from "@ai-sdk/openai-v5";
+import { createLLMProvider } from "@ai-sdk/LLMProvider-v5";
 import { createHash } from "crypto";
 
-import { fetchCalendarEventsTool, listCalendarsTool } from "../tools/googleCalendarTool";
-import { auditCRMHygieneTool, checkCRMActivityTool } from "../tools/zohoCRMTool";
+import { fetchCalendarEventsTool, listCalendarsTool } from "../tools/IdentityProviderCalendarTool";
+import { auditCRMHygieneTool, checkCRMActivityTool } from "../tools/CRMProviderCRMTool";
 import { sendQualityReportTool, sendAlertTool } from "../tools/emailReportTool";
 import { wrapToolWithTelemetry as wt } from "../../utils/aiTelemetry";
-import { getOpenAIApiKey, getOpenAIBaseUrl } from "../../utils/openaiCredentials";
+import { getLLMProviderApiKey, getLLMProviderBaseUrl } from "../../utils/LLMProviderCredentials";
 
 const AGENT_NAME = "ExampleOrg Sales Quality Specialist";
 
-const openai = createOpenAI({
-  baseURL: getOpenAIBaseUrl(),
-  apiKey: getOpenAIApiKey(),
+const LLMProvider = createLLMProvider({
+  baseURL: getLLMProviderBaseUrl(),
+  apiKey: getLLMProviderApiKey(),
 });
 
 const SALES_QUALITY_INSTRUCTIONS = `
-You are the ExampleOrg Sales Quality Specialist - an AI-powered quality auditor specialized in evaluating the Sales team's performance on DEALS data in Zoho CRM.
+You are the ExampleOrg Sales Quality Specialist - an AI-powered quality auditor specialized in evaluating the Sales team's performance on DEALS data in CRMProvider CRM.
 
 ## YOUR DEPARTMENT SCOPE
 - **Department**: Sales (Inside Sales / Account Executives)
@@ -103,7 +103,7 @@ export const salesQualityAgent = new Agent({
 
   instructions: SALES_QUALITY_INSTRUCTIONS,
 
-  model: openai.chat("gpt-4o"),
+  model: LLMProvider.chat("gpt-4o"),
 
   // Each tool is wrapped with wt(...) so per-tool latency, error rate, and
   // parent_call_id are recorded in ai_call_metrics for the AI Ops panel.

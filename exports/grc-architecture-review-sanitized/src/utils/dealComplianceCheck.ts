@@ -1,7 +1,7 @@
 /**
  * Deal-stage document compliance (Sales SOP 7.5.10 / 7.5.11 / 7.6.3).
  *
- * Verifies that deals in the closing stages carry the REQUIRED Zoho attachments
+ * Verifies that deals in the closing stages carry the REQUIRED CRMProvider attachments
  * — the financial offer at Proposal, and the full document set once Paid /
  * Agreement Signed — by keyword-matching attachment file names (EN + AR). Field
  * compliance (Amount, Industry, Bundle_Type, Discount, Onboarding_Method,
@@ -12,7 +12,7 @@
  * The doc-matching is pure (given an attachment list) so it is unit-testable.
  */
 
-export interface ZohoAttachmentLike {
+export interface CRMProviderAttachmentLike {
   fileName?: string | null;
 }
 
@@ -32,7 +32,7 @@ export interface RequiredDoc {
 export const DEAL_COMPLIANCE_STAGES = ["Proposal", "Agreement Signed", "Paid"] as const;
 
 /** Closing/won stages that require the FULL document set (7.5.10). Covers the
- *  common Zoho variants so a selected closing stage still gets doc requirements.
+ *  common CRMProvider variants so a selected closing stage still gets doc requirements.
  *  "paid" == "agreement signed" here by business rule (backdated deals). */
 const FULL_DOC_STAGES = [
   "paid",
@@ -166,11 +166,11 @@ export interface DocComplianceResult {
  */
 export function evaluateDocCompliance(
   stage: string,
-  attachments: ZohoAttachmentLike[],
-  accountAttachments?: ZohoAttachmentLike[],
+  attachments: CRMProviderAttachmentLike[],
+  accountAttachments?: CRMProviderAttachmentLike[],
 ): DocComplianceResult {
   const required = requiredDocsForStage(stage);
-  const nameList = (list?: ZohoAttachmentLike[]) =>
+  const nameList = (list?: CRMProviderAttachmentLike[]) =>
     (list || [])
       .map((a) => (a && a.fileName ? String(a.fileName) : ""))
       .filter(Boolean);

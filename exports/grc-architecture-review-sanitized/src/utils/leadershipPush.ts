@@ -6,7 +6,7 @@
  * click "Push now" and send the current values on demand.
  *
  * SECURITY: the destination URL and shared secret are NEVER hardcoded — they come
- * from Replit Secrets (PLATFORM_WEBHOOK_URL, WEBHOOK_SECRET). Without them the push
+ * from HostingPlatform Secrets (PLATFORM_WEBHOOK_URL, WEBHOOK_SECRET). Without them the push
  * refuses to run. The KPI-id map defaults to the documented Leadership UUIDs but is
  * overridable via LEADERSHIP_KPI_MAP (JSON) if their ids differ.
  */
@@ -15,7 +15,7 @@ import { logger } from "./logger";
 /**
  * QMS KPI code → Leadership Platform strategyItem UUID (PRODUCTION database).
  *
- * IMPORTANT dev/prod split: the leadership Replit WORKSPACE Shell and the DEPLOYED
+ * IMPORTANT dev/prod split: the leadership HostingPlatform WORKSPACE Shell and the DEPLOYED
  * app use DIFFERENT databases. A prisma query in the workspace Shell returns the
  * DEV ids (e7de0477…), but the deployed webhook the push hits runs on PROD, whose
  * ids are the ones below — proven empirically: pushing with these returned "3 ok",
@@ -75,7 +75,7 @@ export async function pushToLeadership(): Promise<PushResult> {
     return {
       configured: false,
       error:
-        "Set PLATFORM_WEBHOOK_URL and WEBHOOK_SECRET in Replit Secrets first, then republish.",
+        "Set PLATFORM_WEBHOOK_URL and WEBHOOK_SECRET in HostingPlatform Secrets first, then republish.",
       pushed: [],
       ok_count: 0,
     };

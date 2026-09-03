@@ -10,10 +10,10 @@ This example demonstrates how to use Mastra's memory system with Upstash as the 
 
 ## Prerequisites
 
-This example uses the `openai` model and requires both Upstash Redis and Upstash Vector services. Make sure to add the following to your `.env` file:
+This example uses the `LLMProvider` model and requires both Upstash Redis and Upstash Vector services. Make sure to add the following to your `.env` file:
 
 ```bash filename=".env" copy
-OPENAI_API_KEY=<your-api-key>
+LLMProvider_API_KEY=<your-api-key>
 UPSTASH_REDIS_REST_URL=<your-redis-url>
 UPSTASH_REDIS_REST_TOKEN=<your-redis-token>
 UPSTASH_VECTOR_REST_URL=<your-vector-index-url>
@@ -35,13 +35,13 @@ To add Upstash memory to an agent use the `Memory` class and create a new `stora
 ```typescript filename="src/mastra/agents/example-upstash-agent.ts" showLineNumbers copy
 import { Memory } from "@mastra/memory";
 import { Agent } from "@mastra/core/agent";
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 import { UpstashStore } from "@mastra/upstash";
 
 export const upstashAgent = new Agent({
   name: "upstash-agent",
   instructions: "You are an AI agent with the ability to automatically recall memories from previous interactions.",
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   memory: new Memory({
     storage: new UpstashStore({
       url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -72,14 +72,14 @@ Add the following to your agent:
 ```typescript filename="src/mastra/agents/example-upstash-agent.ts" showLineNumbers copy
 import { Memory } from "@mastra/memory";
 import { Agent } from "@mastra/core/agent";
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 import { UpstashStore, UpstashVector } from "@mastra/upstash";
 import { fastembed } from "@mastra/fastembed";
 
 export const upstashAgent = new Agent({
   name: "upstash-agent",
   instructions: "You are an AI agent with the ability to automatically recall memories from previous interactions.",
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   memory: new Memory({
     storage: new UpstashStore({
       url: process.env.UPSTASH_REDIS_REST_URL!,

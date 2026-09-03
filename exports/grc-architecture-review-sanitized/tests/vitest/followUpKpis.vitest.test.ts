@@ -1,5 +1,5 @@
 /**
- * The three follow-up KPIs, all reading the local `zoho_tasks` mirror:
+ * The three follow-up KPIs, all reading the local `CRMProvider_tasks` mirror:
  *   SDR-KPI-11  Follow-Up Compliance (SDR)
  *   SALES-KPI-07 Follow-Up Effectiveness
  *   SALES-KPI-08 First-Contact SLA
@@ -43,8 +43,8 @@ describe("SDR-KPI-11 Follow-Up Compliance", () => {
     expect(r.details).toMatchObject({ on_time: 6, completed: 8 });
     const sql = lastSql();
     // Joined to Leads specifically — a Contact-linked task must not count.
-    expect(sql).toMatch(/zoho_module = 'Leads'/);
-    expect(sql).toMatch(/r\.zoho_record_id = t\.who_id/);
+    expect(sql).toMatch(/CRMProvider_module = 'Leads'/);
+    expect(sql).toMatch(/r\.CRMProvider_record_id = t\.who_id/);
   });
 
   it("counts only COMPLETED tasks that carried a due date", async () => {

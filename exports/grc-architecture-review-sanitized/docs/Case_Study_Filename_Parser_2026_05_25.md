@@ -3,7 +3,7 @@
 **Date**: 2026-05-25
 **Owner**: user@example.invalid
 **Module**: Call Evaluation → Bulk Upload (`/calls` Data Sources tab)
-**Status**: Implemented in commit `<HEAD>` — pending verification on Replit
+**Status**: Implemented in commit `<HEAD>` — pending verification on HostingPlatform
 
 ---
 
@@ -30,7 +30,7 @@
 
 | # | Field | Source |
 |---|---|---|
-| 8 | Lead/Deal ID | Auto-link → Zoho phone match (or activity fallback) at `/api/calls/:id/auto-link` |
+| 8 | Lead/Deal ID | Auto-link → CRMProvider phone match (or activity fallback) at `/api/calls/:id/auto-link` |
 | 9 | Lead URL | `<REDACTED_URL><id>` |
 | 10 | Deal URL | `<REDACTED_URL><id>` |
 | 11 | Transcript (Arabic) | Whisper `verbose_json` at upload, persisted in `call_transcripts` |
@@ -61,20 +61,20 @@ I checked the public-facing flow of four conversation-intelligence vendors and t
 
 | Vendor / Standard | Source of call metadata | Phone matching | Auto-link to CRM | Section 2 (Quality) | Coaching loop |
 |---|---|---|---|---|---|
-| **<REDACTED_HOST>** | Dialler webhook (Outreach, Salesloft, dialler API). Filename never used. | Native — every call event carries the contact ID. | Built-in for Salesforce / HubSpot. | "Deal-level moments" + custom scorecards. | Yes — Coaching Plans, manager-reviewer workflow, follow-up tracking. |
+| **<REDACTED_HOST>** | Dialler webhook (Outreach, Salesloft, dialler API). Filename never used. | Native — every call event carries the contact ID. | Built-in for CRMProvider / HubSpot. | "Deal-level moments" + custom scorecards. | Yes — Coaching Plans, manager-reviewer workflow, follow-up tracking. |
 | **<REDACTED_HOST> (ZoomInfo Sales)** | Same — dialler integration. | Native. | Built-in for SFDC. | "Snippets" / scorecards. | Same. |
-| **Five9 IVA Studio** | Five9 call event has phone + agent + timestamp built in. Recording URL is supplied by Five9. | Native. | Limited; via Salesforce connector. | Quality Management module (separate license). | Manual. |
-| **Salesforce Einstein Conversation Insights** | SFDC dialler events. | Native — works off Contact/Lead lookup. | Native. | "Call Mentions" + custom scorecards. | Yes — coaching cards on activity timeline. |
+| **ContactCenterProvider IVA Studio** | ContactCenterProvider call event has phone + agent + timestamp built in. Recording URL is supplied by ContactCenterProvider. | Native. | Limited; via CRMProvider connector. | Quality Management module (separate license). | Manual. |
+| **CRMProvider Einstein Conversation Insights** | SFDC dialler events. | Native — works off Contact/Lead lookup. | Native. | "Call Mentions" + custom scorecards. | Yes — coaching cards on activity timeline. |
 | **COPC CX Standard** (Customer Service / SDR programs) | N/A — process standard, not a product. | Mandates "every transaction linked to a customer record." | Requires a documented procedure with a known accuracy %. | Mandates People / Process / Governance dimensions (this dashboard already follows COPC v2). | Mandates a documented coaching cycle: observation → feedback → action plan → verification call. |
-| **ExampleOrg (you, today)** | Filename for bulk uploads. Webhook ingest for Five9-style integrations. | Last-9-digit suffix + activity fallback. | Built-in (`autoLinkCallToCrm`). | COPC v2 scorecard (Section 2 = People). | **Not yet built — next phase.** |
+| **ExampleOrg (you, today)** | Filename for bulk uploads. Webhook ingest for ContactCenterProvider-style integrations. | Last-9-digit suffix + activity fallback. | Built-in (`autoLinkCallToCrm`). | COPC v2 scorecard (Section 2 = People). | **Not yet built — next phase.** |
 
 ### Where ExampleOrg is ahead of the pack
 - **COPC alignment**: most vendors use proprietary frameworks; ExampleOrg's scorecard is already COPC v2 (sections labelled People / Process / Governance match COPC clauses).
-- **Activity fallback**: most CI tools fail to link if the phone isn't in CRM. ExampleOrg's `linked_via='activity'` path matches by same-agent + same-day Zoho note/task, recovering ~10-20% of otherwise unlinked calls.
+- **Activity fallback**: most CI tools fail to link if the phone isn't in CRM. ExampleOrg's `linked_via='activity'` path matches by same-agent + same-day CRMProvider note/task, recovering ~10-20% of otherwise unlinked calls.
 - **Lazy duration self-heal**: the audio-element trick avoids re-running Whisper on a backlog.
 
 ### Where ExampleOrg lags
-1. **Filename as source of truth is fragile.** Industry standard is dialler metadata. *Mitigation:* the new strict parser closes ~90% of the gap because filenames are now enforced; long-term move recording ingest to direct Five9/Twilio webhooks (`/api/calls/ingest` already exists; just needs the dialler to push events).
+1. **Filename as source of truth is fragile.** Industry standard is dialler metadata. *Mitigation:* the new strict parser closes ~90% of the gap because filenames are now enforced; long-term move recording ingest to direct ContactCenterProvider/TelephonyProvider webhooks (`/api/calls/ingest` already exists; just needs the dialler to push events).
 2. **No coaching cycle yet.** This is the biggest functional gap vs. Gong/Chorus. Section 2 scores accumulate, but there's no per-agent "Coaching Plan → delivered → follow-up" loop. The DB already has `coaching_sessions` table — only the UI/workflow is missing.
 3. **No consent banner / PDPL evidence on each call.** COPC Governance clause requires a verifiable consent record. Current call_records has no `consent_captured` boolean.
 
@@ -94,7 +94,7 @@ I checked the public-facing flow of four conversation-intelligence vendors and t
 4. **Verification call.** When a new call from the coached agent gets scored, surface a "Coaching outcome" widget showing whether the previously-failed attribute now passes.
 
 ### P2 — next month (close benchmark gaps)
-5. **Direct Five9 ingest.** Webhook on call-end → POST `/api/calls/ingest` with phone/agent/timestamp/recording URL. Eliminates filename dependency for live calls (keeps it only for historical bulk imports).
+5. **Direct ContactCenterProvider ingest.** Webhook on call-end → POST `/api/calls/ingest` with phone/agent/timestamp/recording URL. Eliminates filename dependency for live calls (keeps it only for historical bulk imports).
 6. **Consent capture.** Add `consent_captured` (bool) + `consent_quote` (text) to `call_records`. Whisper analyses the opening 30s for the consent phrase and sets the booleans. Surfaces in CRM Compliance card as a 6th metric. Required for PDPL clause 24.
 7. **Auto-link confidence band.** Today the UI shows ⭐ on activity-matched links. Promote to a percentage confidence score using: phone match strength, agent-day overlap, contact-name fuzzy match. Lets quality leads sort by "low confidence" links to spot-check.
 8. **Anonymised peer benchmarking.** Show an agent their score vs. the team median (anonymised) on each Section 2 attribute. Industry standard, drives self-correction without naming peers.
@@ -105,12 +105,12 @@ I checked the public-facing flow of four conversation-intelligence vendors and t
 
 ---
 
-## 5. Verification checklist (after Replit republish)
+## 5. Verification checklist (after HostingPlatform republish)
 
 - [ ] Drag-and-drop a file named `<REDACTED_PHONE> by user@example.invalid on 8_10_2025 @ 11_53_28 AM.wav` — five chips appear: phone, `…<REDACTED_PHONE>`, agent, `Aug 10, 2025`, `<REDACTED_IP> AM`.
 - [ ] Drag-and-drop a file named `random_garbage.wav` — chip strip is red, upload button disabled with hover tooltip explaining why.
 - [ ] Upload a valid file → record appears in Call Records with the date column showing the FILENAME date (e.g. `Aug 10, 2025`), not today's date.
-- [ ] Open the record → Phone field shows `<REDACTED_PHONE>`. Lead/Deal link appears if Zoho has that number; otherwise "Re-run auto-link" button visible.
+- [ ] Open the record → Phone field shows `<REDACTED_PHONE>`. Lead/Deal link appears if CRMProvider has that number; otherwise "Re-run auto-link" button visible.
 - [ ] CRM Compliance Breakdown coverage banner reflects the new record after the backfill runs.
 
 ---

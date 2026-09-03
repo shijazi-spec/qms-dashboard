@@ -113,17 +113,17 @@ To learn how to integrate voice capabilities into your agents, check out the [Ad
 
 ```typescript
 import { Agent } from "@mastra/core/agent";
-import { openai } from "@ai-sdk/openai";
-import { OpenAIVoice } from "@mastra/voice-openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
+import { LLMProviderVoice } from "@mastra/voice-LLMProvider";
 
-// Initialize OpenAI voice for TTS
+// Initialize LLMProvider voice for TTS
 
 const voiceAgent = new Agent({
   name: "Voice Agent",
   instructions:
     "You are a voice assistant that can help users with their tasks.",
-  model: openai("gpt-4o"),
-  voice: new OpenAIVoice(),
+  model: LLMProvider("gpt-4o"),
+  voice: new LLMProviderVoice(),
 });
 ```
 
@@ -132,31 +132,31 @@ You can then use the following voice capabilities:
 ### Text to Speech (TTS)
 
 Turn your agent's responses into natural-sounding speech using Mastra's TTS capabilities.
-Choose from multiple providers like OpenAI, ElevenLabs, and more.
+Choose from multiple providers like LLMProvider, ElevenLabs, and more.
 
 For detailed configuration options and advanced features, check out our [Text-to-Speech guide](./text-to-speech).
 
 {/*
 LLM CONTEXT: This Tabs component demonstrates Text-to-Speech (TTS) implementation across different voice providers.
-Each tab shows how to set up and use a specific TTS provider (OpenAI, Azure, ElevenLabs, etc.) with Mastra agents.
+Each tab shows how to set up and use a specific TTS provider (LLMProvider, Azure, ElevenLabs, etc.) with Mastra agents.
 The tabs help users compare different TTS providers and choose the one that best fits their needs.
 Each tab includes complete code examples showing agent setup, text generation, and audio playback.
-The providers include OpenAI, Azure, ElevenLabs, PlayAI, Google, Cloudflare, Deepgram, Speechify, Sarvam, and Murf.
+The providers include LLMProvider, Azure, ElevenLabs, PlayAI, IdentityProvider, Cloudflare, Deepgram, Speechify, Sarvam, and Murf.
 */}
 
-<Tabs items={["OpenAI", "Azure", "ElevenLabs", "PlayAI", "Google", "Cloudflare", "Deepgram", "Speechify", "Sarvam", "Murf"]}>
+<Tabs items={["LLMProvider", "Azure", "ElevenLabs", "PlayAI", "IdentityProvider", "Cloudflare", "Deepgram", "Speechify", "Sarvam", "Murf"]}>
   <Tabs.Tab>
 ```typescript
 import { Agent } from '@mastra/core/agent';
-import { openai } from '@ai-sdk/openai';
-import { OpenAIVoice } from "@mastra/voice-openai";
+import { LLMProvider } from '@ai-sdk/LLMProvider';
+import { LLMProviderVoice } from "@mastra/voice-LLMProvider";
 import { playAudio } from "@mastra/node-audio";
 
 const voiceAgent = new Agent({
 name: "Voice Agent",
 instructions: "You are a voice assistant that can help users with their tasks.",
-model: openai("gpt-4o"),
-voice: new OpenAIVoice(),
+model: LLMProvider("gpt-4o"),
+voice: new LLMProviderVoice(),
 });
 
 const { text } = await voiceAgent.generate('What color is the sky?');
@@ -171,19 +171,19 @@ playAudio(audioStream);
 
 ````
 
-Visit the [OpenAI Voice Reference](/reference/voice/openai) for more information on the OpenAI voice provider.
+Visit the [LLMProvider Voice Reference](/reference/voice/LLMProvider) for more information on the LLMProvider voice provider.
   </Tabs.Tab>
   <Tabs.Tab>
 ```typescript
 import { Agent } from '@mastra/core/agent';
-import { openai } from '@ai-sdk/openai';
+import { LLMProvider } from '@ai-sdk/LLMProvider';
 import { AzureVoice } from "@mastra/voice-azure";
 import { playAudio } from "@mastra/node-audio";
 
 const voiceAgent = new Agent({
   name: "Voice Agent",
   instructions: "You are a voice assistant that can help users with their tasks.",
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   voice: new AzureVoice(),
 });
 
@@ -203,14 +203,14 @@ Visit the [Azure Voice Reference](/reference/voice/azure) for more information o
   <Tabs.Tab>
 ```typescript
 import { Agent } from '@mastra/core/agent';
-import { openai } from '@ai-sdk/openai';
+import { LLMProvider } from '@ai-sdk/LLMProvider';
 import { ElevenLabsVoice } from "@mastra/voice-elevenlabs";
 import { playAudio } from "@mastra/node-audio";
 
 const voiceAgent = new Agent({
 name: "Voice Agent",
 instructions: "You are a voice assistant that can help users with their tasks.",
-model: openai("gpt-4o"),
+model: LLMProvider("gpt-4o"),
 voice: new ElevenLabsVoice(),
 });
 
@@ -230,14 +230,14 @@ Visit the [ElevenLabs Voice Reference](/reference/voice/elevenlabs) for more inf
   <Tabs.Tab>
 ```typescript
 import { Agent } from '@mastra/core/agent';
-import { openai } from '@ai-sdk/openai';
+import { LLMProvider } from '@ai-sdk/LLMProvider';
 import { PlayAIVoice } from "@mastra/voice-playai";
 import { playAudio } from "@mastra/node-audio";
 
 const voiceAgent = new Agent({
   name: "Voice Agent",
   instructions: "You are a voice assistant that can help users with their tasks.",
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   voice: new PlayAIVoice(),
 });
 
@@ -257,15 +257,15 @@ Visit the [PlayAI Voice Reference](/reference/voice/playai) for more information
   <Tabs.Tab>
 ```typescript
 import { Agent } from '@mastra/core/agent';
-import { openai } from '@ai-sdk/openai';
-import { GoogleVoice } from "@mastra/voice-google";
+import { LLMProvider } from '@ai-sdk/LLMProvider';
+import { IdentityProviderVoice } from "@mastra/voice-IdentityProvider";
 import { playAudio } from "@mastra/node-audio";
 
 const voiceAgent = new Agent({
 name: "Voice Agent",
 instructions: "You are a voice assistant that can help users with their tasks.",
-model: openai("gpt-4o"),
-voice: new GoogleVoice(),
+model: LLMProvider("gpt-4o"),
+voice: new IdentityProviderVoice(),
 });
 
 const { text } = await voiceAgent.generate('What color is the sky?');
@@ -279,19 +279,19 @@ playAudio(audioStream);
 
 ````
 
-Visit the [Google Voice Reference](/reference/voice/google) for more information on the Google voice provider.
+Visit the [IdentityProvider Voice Reference](/reference/voice/IdentityProvider) for more information on the IdentityProvider voice provider.
   </Tabs.Tab>
   <Tabs.Tab>
 ```typescript
 import { Agent } from '@mastra/core/agent';
-import { openai } from '@ai-sdk/openai';
+import { LLMProvider } from '@ai-sdk/LLMProvider';
 import { CloudflareVoice } from "@mastra/voice-cloudflare";
 import { playAudio } from "@mastra/node-audio";
 
 const voiceAgent = new Agent({
   name: "Voice Agent",
   instructions: "You are a voice assistant that can help users with their tasks.",
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   voice: new CloudflareVoice(),
 });
 
@@ -311,14 +311,14 @@ Visit the [Cloudflare Voice Reference](/reference/voice/cloudflare) for more inf
   <Tabs.Tab>
 ```typescript
 import { Agent } from '@mastra/core/agent';
-import { openai } from '@ai-sdk/openai';
+import { LLMProvider } from '@ai-sdk/LLMProvider';
 import { DeepgramVoice } from "@mastra/voice-deepgram";
 import { playAudio } from "@mastra/node-audio";
 
 const voiceAgent = new Agent({
 name: "Voice Agent",
 instructions: "You are a voice assistant that can help users with their tasks.",
-model: openai("gpt-4o"),
+model: LLMProvider("gpt-4o"),
 voice: new DeepgramVoice(),
 });
 
@@ -338,14 +338,14 @@ Visit the [Deepgram Voice Reference](/reference/voice/deepgram) for more informa
   <Tabs.Tab>
 ```typescript
 import { Agent } from '@mastra/core/agent';
-import { openai } from '@ai-sdk/openai';
+import { LLMProvider } from '@ai-sdk/LLMProvider';
 import { SpeechifyVoice } from "@mastra/voice-speechify";
 import { playAudio } from "@mastra/node-audio";
 
 const voiceAgent = new Agent({
   name: "Voice Agent",
   instructions: "You are a voice assistant that can help users with their tasks.",
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   voice: new SpeechifyVoice(),
 });
 
@@ -365,14 +365,14 @@ Visit the [Speechify Voice Reference](/reference/voice/speechify) for more infor
   <Tabs.Tab>
 ```typescript
 import { Agent } from '@mastra/core/agent';
-import { openai } from '@ai-sdk/openai';
+import { LLMProvider } from '@ai-sdk/LLMProvider';
 import { SarvamVoice } from "@mastra/voice-sarvam";
 import { playAudio } from "@mastra/node-audio";
 
 const voiceAgent = new Agent({
 name: "Voice Agent",
 instructions: "You are a voice assistant that can help users with their tasks.",
-model: openai("gpt-4o"),
+model: LLMProvider("gpt-4o"),
 voice: new SarvamVoice(),
 });
 
@@ -392,14 +392,14 @@ Visit the [Sarvam Voice Reference](/reference/voice/sarvam) for more information
   <Tabs.Tab>
 ```typescript
 import { Agent } from '@mastra/core/agent';
-import { openai } from '@ai-sdk/openai';
+import { LLMProvider } from '@ai-sdk/LLMProvider';
 import { MurfVoice } from "@mastra/voice-murf";
 import { playAudio } from "@mastra/node-audio";
 
 const voiceAgent = new Agent({
   name: "Voice Agent",
   instructions: "You are a voice assistant that can help users with their tasks.",
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   voice: new MurfVoice(),
 });
 
@@ -420,7 +420,7 @@ Visit the [Murf Voice Reference](/reference/voice/murf) for more information on 
 
 ### Speech to Text (STT)
 
-Transcribe spoken content using various providers like OpenAI, ElevenLabs, and more. For detailed configuration options and more, check out [Speech to Text](./speech-to-text).
+Transcribe spoken content using various providers like LLMProvider, ElevenLabs, and more. For detailed configuration options and more, check out [Speech to Text](./speech-to-text).
 
 You can download a sample audio file from [here](<REDACTED_URL>
 
@@ -434,19 +434,19 @@ The tabs help users understand how to implement speech recognition with differen
 Each tab includes code examples showing audio file handling, transcription, and response generation.
 */}
 
-<Tabs items={["OpenAI", "Azure", "ElevenLabs", "Google", "Cloudflare", "Deepgram", "Sarvam"]}>
+<Tabs items={["LLMProvider", "Azure", "ElevenLabs", "IdentityProvider", "Cloudflare", "Deepgram", "Sarvam"]}>
   <Tabs.Tab>
 ```typescript
 import { Agent } from '@mastra/core/agent';
-import { openai } from '@ai-sdk/openai';
-import { OpenAIVoice } from "@mastra/voice-openai";
+import { LLMProvider } from '@ai-sdk/LLMProvider';
+import { LLMProviderVoice } from "@mastra/voice-LLMProvider";
 import { createReadStream } from 'fs';
 
 const voiceAgent = new Agent({
 name: "Voice Agent",
 instructions: "You are a voice assistant that can help users with their tasks.",
-model: openai("gpt-4o"),
-voice: new OpenAIVoice(),
+model: LLMProvider("gpt-4o"),
+voice: new LLMProviderVoice(),
 });
 
 // Use an audio file from a URL
@@ -461,20 +461,20 @@ const { text } = await voiceAgent.generate(transcript);
 
 ````
 
-Visit the [OpenAI Voice Reference](/reference/voice/openai) for more information on the OpenAI voice provider.
+Visit the [LLMProvider Voice Reference](/reference/voice/LLMProvider) for more information on the LLMProvider voice provider.
   </Tabs.Tab>
   <Tabs.Tab>
 ```typescript
 import { createReadStream } from 'fs';
 import { Agent } from '@mastra/core/agent';
-import { openai } from '@ai-sdk/openai';
+import { LLMProvider } from '@ai-sdk/LLMProvider';
 import { AzureVoice } from "@mastra/voice-azure";
 import { createReadStream } from 'fs';
 
 const voiceAgent = new Agent({
   name: "Voice Agent",
   instructions: "You are a voice assistant that can help users with their tasks.",
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   voice: new AzureVoice(),
 });
 
@@ -495,14 +495,14 @@ Visit the [Azure Voice Reference](/reference/voice/azure) for more information o
   <Tabs.Tab>
 ```typescript
 import { Agent } from '@mastra/core/agent';
-import { openai } from '@ai-sdk/openai';
+import { LLMProvider } from '@ai-sdk/LLMProvider';
 import { ElevenLabsVoice } from "@mastra/voice-elevenlabs";
 import { createReadStream } from 'fs';
 
 const voiceAgent = new Agent({
 name: "Voice Agent",
 instructions: "You are a voice assistant that can help users with their tasks.",
-model: openai("gpt-4o"),
+model: LLMProvider("gpt-4o"),
 voice: new ElevenLabsVoice(),
 });
 
@@ -523,15 +523,15 @@ Visit the [ElevenLabs Voice Reference](/reference/voice/elevenlabs) for more inf
   <Tabs.Tab>
 ```typescript
 import { Agent } from '@mastra/core/agent';
-import { openai } from '@ai-sdk/openai';
-import { GoogleVoice } from "@mastra/voice-google";
+import { LLMProvider } from '@ai-sdk/LLMProvider';
+import { IdentityProviderVoice } from "@mastra/voice-IdentityProvider";
 import { createReadStream } from 'fs';
 
 const voiceAgent = new Agent({
   name: "Voice Agent",
   instructions: "You are a voice assistant that can help users with their tasks.",
-  model: openai("gpt-4o"),
-  voice: new GoogleVoice(),
+  model: LLMProvider("gpt-4o"),
+  voice: new IdentityProviderVoice(),
 });
 
 // Use an audio file from a URL
@@ -545,20 +545,20 @@ console.log(`User said: ${transcript}`);
 const { text } = await voiceAgent.generate(transcript);
 ````
 
-Visit the [Google Voice Reference](/reference/voice/google) for more information on the Google voice provider.
+Visit the [IdentityProvider Voice Reference](/reference/voice/IdentityProvider) for more information on the IdentityProvider voice provider.
 
   </Tabs.Tab>
   <Tabs.Tab>
 ```typescript
 import { Agent } from '@mastra/core/agent';
-import { openai } from '@ai-sdk/openai';
+import { LLMProvider } from '@ai-sdk/LLMProvider';
 import { CloudflareVoice } from "@mastra/voice-cloudflare";
 import { createReadStream } from 'fs';
 
 const voiceAgent = new Agent({
 name: "Voice Agent",
 instructions: "You are a voice assistant that can help users with their tasks.",
-model: openai("gpt-4o"),
+model: LLMProvider("gpt-4o"),
 voice: new CloudflareVoice(),
 });
 
@@ -579,14 +579,14 @@ Visit the [Cloudflare Voice Reference](/reference/voice/cloudflare) for more inf
   <Tabs.Tab>
 ```typescript
 import { Agent } from '@mastra/core/agent';
-import { openai } from '@ai-sdk/openai';
+import { LLMProvider } from '@ai-sdk/LLMProvider';
 import { DeepgramVoice } from "@mastra/voice-deepgram";
 import { createReadStream } from 'fs';
 
 const voiceAgent = new Agent({
   name: "Voice Agent",
   instructions: "You are a voice assistant that can help users with their tasks.",
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   voice: new DeepgramVoice(),
 });
 
@@ -607,14 +607,14 @@ Visit the [Deepgram Voice Reference](/reference/voice/deepgram) for more informa
   <Tabs.Tab>
 ```typescript
 import { Agent } from '@mastra/core/agent';
-import { openai } from '@ai-sdk/openai';
+import { LLMProvider } from '@ai-sdk/LLMProvider';
 import { SarvamVoice } from "@mastra/voice-sarvam";
 import { createReadStream } from 'fs';
 
 const voiceAgent = new Agent({
 name: "Voice Agent",
 instructions: "You are a voice assistant that can help users with their tasks.",
-model: openai("gpt-4o"),
+model: LLMProvider("gpt-4o"),
 voice: new SarvamVoice(),
 });
 
@@ -641,23 +641,23 @@ For detailed configuration options and advanced features, check out [Speech to S
 
 {/*
   LLM CONTEXT: This Tabs component demonstrates Speech-to-Speech (STS) implementation for real-time voice interactions.
-  Currently only shows OpenAI's realtime voice implementation for bidirectional voice conversations.
+  Currently only shows LLMProvider's realtime voice implementation for bidirectional voice conversations.
   The tab shows how to set up real-time voice communication with event handling for audio responses.
   This enables conversational AI experiences with continuous audio streaming.
 */}
-<Tabs items={["OpenAI", "Google Gemini Live"]}>
+<Tabs items={["LLMProvider", "IdentityProvider Gemini Live"]}>
   <Tabs.Tab>
 ```typescript
 import { Agent } from '@mastra/core/agent';
-import { openai } from '@ai-sdk/openai';
+import { LLMProvider } from '@ai-sdk/LLMProvider';
 import { playAudio, getMicrophoneStream } from '@mastra/node-audio';
-import { OpenAIRealtimeVoice } from "@mastra/voice-openai-realtime";
+import { LLMProviderRealtimeVoice } from "@mastra/voice-LLMProvider-realtime";
 
 const voiceAgent = new Agent({
   name: "Voice Agent",
   instructions: "You are a voice assistant that can help users with their tasks.",
-  model: openai("gpt-4o"),
-  voice: new OpenAIRealtimeVoice(),
+  model: LLMProvider("gpt-4o"),
+  voice: new LLMProviderRealtimeVoice(),
 });
 
 // Listen for agent audio responses
@@ -673,23 +673,23 @@ const micStream = getMicrophoneStream();
 await voiceAgent.voice.send(micStream);
 ````
 
-Visit the [OpenAI Voice Reference](/reference/voice/openai-realtime) for more information on the OpenAI voice provider.
+Visit the [LLMProvider Voice Reference](/reference/voice/LLMProvider-realtime) for more information on the LLMProvider voice provider.
 
   </Tabs.Tab>
   <Tabs.Tab>
 ```typescript
 import { Agent } from '@mastra/core/agent';
-import { openai } from '@ai-sdk/openai';
+import { LLMProvider } from '@ai-sdk/LLMProvider';
 import { playAudio, getMicrophoneStream } from '@mastra/node-audio';
-import { GeminiLiveVoice } from "@mastra/voice-google-gemini-live";
+import { GeminiLiveVoice } from "@mastra/voice-IdentityProvider-gemini-live";
 
 const voiceAgent = new Agent({
   name: "Voice Agent",
   instructions: "You are a voice assistant that can help users with their tasks.",
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   voice: new GeminiLiveVoice({
     // Live API mode
-    apiKey: process.env.GOOGLE_API_KEY,
+    apiKey: process.env.IdentityProvider_API_KEY,
     model: 'gemini-2.0-flash-exp',
     speaker: 'Puck',
     debug: true,
@@ -722,7 +722,7 @@ const micStream = getMicrophoneStream();
 await voiceAgent.voice.send(micStream);
 ```
 
-Visit the [Google Gemini Live Reference](/reference/voice/google-gemini-live) for more information on the Google Gemini Live voice provider.
+Visit the [IdentityProvider Gemini Live Reference](/reference/voice/IdentityProvider-gemini-live) for more information on the IdentityProvider Gemini Live voice provider.
 
   </Tabs.Tab>
 </Tabs>
@@ -738,20 +738,20 @@ The tabs help users understand the full configuration capabilities of each provi
 Each tab shows both speech and listening model configurations where applicable.
 */}
 
-<Tabs items={["OpenAI", "Azure", "ElevenLabs", "PlayAI", "Google", "Cloudflare", "Deepgram", "Speechify", "Sarvam", "Murf", "OpenAI Realtime", "Google Gemini Live"]}>
+<Tabs items={["LLMProvider", "Azure", "ElevenLabs", "PlayAI", "IdentityProvider", "Cloudflare", "Deepgram", "Speechify", "Sarvam", "Murf", "LLMProvider Realtime", "IdentityProvider Gemini Live"]}>
   <Tabs.Tab>
 ```typescript
-// OpenAI Voice Configuration
-const voice = new OpenAIVoice({
+// LLMProvider Voice Configuration
+const voice = new LLMProviderVoice({
   speechModel: {
     name: "gpt-3.5-turbo", // Example model name
-    apiKey: process.env.OPENAI_API_KEY,
+    apiKey: process.env.LLMProvider_API_KEY,
     language: "en-US", // Language code
     voiceType: "neural", // Type of voice model
   },
   listeningModel: {
     name: "whisper-1", // Example model name
-    apiKey: process.env.OPENAI_API_KEY,
+    apiKey: process.env.LLMProvider_API_KEY,
     language: "en-US", // Language code
     format: "wav", // Audio format
   },
@@ -759,7 +759,7 @@ const voice = new OpenAIVoice({
 });
 ```
 
-Visit the [OpenAI Voice Reference](/reference/voice/openai) for more information on the OpenAI voice provider.
+Visit the [LLMProvider Voice Reference](/reference/voice/LLMProvider) for more information on the LLMProvider voice provider.
 
   </Tabs.Tab>
   <Tabs.Tab>
@@ -825,11 +825,11 @@ Visit the [PlayAI Voice Reference](/reference/voice/playai) for more information
   </Tabs.Tab>
   <Tabs.Tab>
 ```typescript
-// Google Voice Configuration
-const voice = new GoogleVoice({
+// IdentityProvider Voice Configuration
+const voice = new IdentityProviderVoice({
   speechModel: {
     name: "en-US-Studio-O", // Example model name
-    apiKey: process.env.GOOGLE_API_KEY,
+    apiKey: process.env.IdentityProvider_API_KEY,
     languageCode: "en-US", // Language code
     gender: "FEMALE", // Voice gender
     speakingRate: 1.0, // Speaking rate
@@ -841,7 +841,7 @@ const voice = new GoogleVoice({
 });
 ```
 
-Visit the [Google Voice Reference](/reference/voice/google) for more information on the Google voice provider.
+Visit the [IdentityProvider Voice Reference](/reference/voice/IdentityProvider) for more information on the IdentityProvider voice provider.
 
   </Tabs.Tab>
   <Tabs.Tab>
@@ -937,60 +937,60 @@ Visit the [Murf Voice Reference](/reference/voice/murf) for more information on 
   </Tabs.Tab>
   <Tabs.Tab>
 ```typescript
-// OpenAI Realtime Voice Configuration
-const voice = new OpenAIRealtimeVoice({
+// LLMProvider Realtime Voice Configuration
+const voice = new LLMProviderRealtimeVoice({
   speechModel: {
     name: "gpt-3.5-turbo", // Example model name
-    apiKey: process.env.OPENAI_API_KEY,
+    apiKey: process.env.LLMProvider_API_KEY,
     language: "en-US", // Language code
   },
   listeningModel: {
     name: "whisper-1", // Example model name
-    apiKey: process.env.OPENAI_API_KEY,
+    apiKey: process.env.LLMProvider_API_KEY,
     format: "ogg", // Audio format
   },
   speaker: "alloy", // Example speaker name
 });
 ```
 
-For more information on the OpenAI Realtime voice provider, refer to the [OpenAI Realtime Voice Reference](/reference/voice/openai-realtime).
+For more information on the LLMProvider Realtime voice provider, refer to the [LLMProvider Realtime Voice Reference](/reference/voice/LLMProvider-realtime).
 
   </Tabs.Tab>
   <Tabs.Tab>
 ```typescript
-// Google Gemini Live Voice Configuration
+// IdentityProvider Gemini Live Voice Configuration
 const voice = new GeminiLiveVoice({
   speechModel: {
     name: "gemini-2.0-flash-exp", // Example model name
-    apiKey: process.env.GOOGLE_API_KEY,
+    apiKey: process.env.IdentityProvider_API_KEY,
   },
   speaker: "Puck", // Example speaker name
-  // Google Gemini Live is a realtime bidirectional API without separate speech and listening models
+  // IdentityProvider Gemini Live is a realtime bidirectional API without separate speech and listening models
 });
 ```
 
-Visit the [Google Gemini Live Reference](/reference/voice/google-gemini-live) for more information on the Google Gemini Live voice provider.
+Visit the [IdentityProvider Gemini Live Reference](/reference/voice/IdentityProvider-gemini-live) for more information on the IdentityProvider Gemini Live voice provider.
 
   </Tabs.Tab>
 </Tabs>
 
 ### Using Multiple Voice Providers
 
-This example demonstrates how to create and use two different voice providers in Mastra: OpenAI for speech-to-text (STT) and PlayAI for text-to-speech (TTS).
+This example demonstrates how to create and use two different voice providers in Mastra: LLMProvider for speech-to-text (STT) and PlayAI for text-to-speech (TTS).
 
 Start by creating instances of the voice providers with any necessary configuration.
 
 ```typescript
-import { OpenAIVoice } from "@mastra/voice-openai";
+import { LLMProviderVoice } from "@mastra/voice-LLMProvider";
 import { PlayAIVoice } from "@mastra/voice-playai";
 import { CompositeVoice } from "@mastra/core/voice";
 import { playAudio, getMicrophoneStream } from "@mastra/node-audio";
 
-// Initialize OpenAI voice for STT
-const input = new OpenAIVoice({
+// Initialize LLMProvider voice for STT
+const input = new LLMProviderVoice({
   listeningModel: {
     name: "whisper-1",
-    apiKey: process.env.OPENAI_API_KEY,
+    apiKey: process.env.LLMProvider_API_KEY,
   },
 });
 
@@ -1031,11 +1031,11 @@ For more information on the CompositeVoice, refer to the [CompositeVoice Referen
 
 - [CompositeVoice](../../reference/voice/composite-voice.mdx)
 - [MastraVoice](../../reference/voice/mastra-voice.mdx)
-- [OpenAI Voice](../../reference/voice/openai.mdx)
-- [OpenAI Realtime Voice](../../reference/voice/openai-realtime.mdx)
+- [LLMProvider Voice](../../reference/voice/LLMProvider.mdx)
+- [LLMProvider Realtime Voice](../../reference/voice/LLMProvider-realtime.mdx)
 - [Azure Voice](../../reference/voice/azure.mdx)
-- [Google Voice](../../reference/voice/google.mdx)
-- [Google Gemini Live Voice](../../reference/voice/google-gemini-live.mdx)
+- [IdentityProvider Voice](../../reference/voice/IdentityProvider.mdx)
+- [IdentityProvider Gemini Live Voice](../../reference/voice/IdentityProvider-gemini-live.mdx)
 - [Deepgram Voice](../../reference/voice/deepgram.mdx)
 - [PlayAI Voice](../../reference/voice/playai.mdx)
 - [Voice Examples](../../examples/voice/text-to-speech.mdx)
@@ -1056,33 +1056,33 @@ STS enables continuous bidirectional audio communication through listening to ev
 
 ## Configuration
 
-- **`apiKey`**: Your OpenAI API key. Falls back to the `OPENAI_API_KEY` environment variable.
+- **`apiKey`**: Your LLMProvider API key. Falls back to the `LLMProvider_API_KEY` environment variable.
 - **`model`**: The model ID to use for real-time voice interactions (e.g., `gpt-4o-mini-realtime`).
 - **`speaker`**: The default voice ID for speech synthesis. This allows you to specify which voice to use for the speech output.
 
 ```typescript
-const voice = new OpenAIRealtimeVoice({
+const voice = new LLMProviderRealtimeVoice({
   apiKey: "<REDACTED_SECRET>",
   model: "gpt-4o-mini-realtime",
   speaker: "alloy", // Default voice
 });
 
 // If using default settings the configuration can be simplified to:
-const voice = new OpenAIRealtimeVoice();
+const voice = new LLMProviderRealtimeVoice();
 ```
 
 ## Using STS
 
 ```typescript
 import { Agent } from "@mastra/core/agent";
-import { OpenAIRealtimeVoice } from "@mastra/voice-openai-realtime";
+import { LLMProviderRealtimeVoice } from "@mastra/voice-LLMProvider-realtime";
 import { playAudio, getMicrophoneStream } from "@mastra/node-audio";
 
 const agent = new Agent({
   name: "Agent",
   instructions: `You are a helpful assistant with real-time voice capabilities.`,
-  model: openai("gpt-4o"),
-  voice: new OpenAIRealtimeVoice(),
+  model: LLMProvider("gpt-4o"),
+  voice: new LLMProviderRealtimeVoice(),
 });
 
 // Connect to the voice service
@@ -1103,20 +1103,20 @@ await agent.voice.send(micStream);
 
 For integrating Speech-to-Speech capabilities with agents, refer to the [Adding Voice to Agents](../agents/adding-voice.mdx) documentation.
 
-## Google Gemini Live (Realtime)
+## IdentityProvider Gemini Live (Realtime)
 
 ```typescript
 import { Agent } from "@mastra/core/agent";
-import { GeminiLiveVoice } from "@mastra/voice-google-gemini-live";
+import { GeminiLiveVoice } from "@mastra/voice-IdentityProvider-gemini-live";
 import { playAudio, getMicrophoneStream } from "@mastra/node-audio";
 
 const agent = new Agent({
   name: 'Agent',
   instructions: 'You are a helpful assistant with real-time voice capabilities.',
   // Model used for text generation; voice provider handles realtime audio
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   voice: new GeminiLiveVoice({
-    apiKey: process.env.GOOGLE_API_KEY,
+    apiKey: process.env.IdentityProvider_API_KEY,
     model: 'gemini-2.0-flash-exp',
     speaker: 'Puck',
     debug: true,
@@ -1145,7 +1145,7 @@ await agent.voice.send(micStream);
 ```
 
 Note:
-- Live API requires `GOOGLE_API_KEY`. Vertex AI requires project/location and service account credentials.
+- Live API requires `IdentityProvider_API_KEY`. Vertex AI requires project/location and service account credentials.
 - Events: `speaker` (audio stream), `writing` (text), `turnComplete`, `usage`, and `error`.
 
 
@@ -1171,25 +1171,25 @@ To use STT in Mastra, you need to provide a `listeningModel` when initializing t
 **Note**: All of these parameters are optional. You can use the default settings provided by the voice provider, which will depend on the specific provider you are using.
 
 ```typescript
-const voice = new OpenAIVoice({
+const voice = new LLMProviderVoice({
   listeningModel: {
     name: "whisper-1",
-    apiKey: process.env.OPENAI_API_KEY,
+    apiKey: process.env.LLMProvider_API_KEY,
   },
 });
 
 // If using default settings the configuration can be simplified to:
-const voice = new OpenAIVoice();
+const voice = new LLMProviderVoice();
 ```
 
 ## Available Providers
 
 Mastra supports several Speech-to-Text providers, each with their own capabilities and strengths:
 
-- [**OpenAI**](/reference/voice/openai/) - High-accuracy transcription with Whisper models
-- [**Azure**](/reference/voice/azure/) - Microsoft's speech recognition with enterprise-grade reliability
+- [**LLMProvider**](/reference/voice/LLMProvider/) - High-accuracy transcription with Whisper models
+- [**Azure**](/reference/voice/azure/) - EnterpriseProvider's speech recognition with enterprise-grade reliability
 - [**ElevenLabs**](/reference/voice/elevenlabs/) - Advanced speech recognition with support for multiple languages
-- [**Google**](/reference/voice/google/) - Google's speech recognition with extensive language support
+- [**IdentityProvider**](/reference/voice/IdentityProvider/) - IdentityProvider's speech recognition with extensive language support
 - [**Cloudflare**](/reference/voice/cloudflare/) - Edge-optimized speech recognition for low-latency applications
 - [**Deepgram**](/reference/voice/deepgram/) - AI-powered speech recognition with high accuracy for various accents
 - [**Sarvam**](/reference/voice/sarvam/) - Specialized in Indic languages and accents
@@ -1197,7 +1197,7 @@ Mastra supports several Speech-to-Text providers, each with their own capabiliti
 Each provider is implemented as a separate package that you can install as needed:
 
 ```bash
-pnpm add @mastra/voice-openai  # Example for OpenAI
+pnpm add @mastra/voice-LLMProvider  # Example for LLMProvider
 ```
 
 ## Using the Listen Method
@@ -1206,17 +1206,17 @@ The primary method for STT is the `listen()` method, which converts spoken audio
 
 ```typescript
 import { Agent } from "@mastra/core/agent";
-import { openai } from "@ai-sdk/openai";
-import { OpenAIVoice } from "@mastra/voice-openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
+import { LLMProviderVoice } from "@mastra/voice-LLMProvider";
 import { getMicrophoneStream } from "@mastra/node-audio";
 
-const voice = new OpenAIVoice();
+const voice = new LLMProviderVoice();
 
 const agent = new Agent({
   name: "Voice Agent",
   instructions:
     "You are a voice assistant that provides recommendations based on user input.",
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   voice,
 });
 
@@ -1264,27 +1264,27 @@ The **`speaker`** option allows you to select different voices for speech synthe
 **Note**: All of these parameters are optional. You can use the default settings provided by the voice provider, which will depend on the specific provider you are using.
 
 ```typescript
-const voice = new OpenAIVoice({
+const voice = new LLMProviderVoice({
   speechModel: {
     name: "tts-1-hd",
-    apiKey: process.env.OPENAI_API_KEY,
+    apiKey: process.env.LLMProvider_API_KEY,
   },
   speaker: "alloy",
 });
 
 // If using default settings the configuration can be simplified to:
-const voice = new OpenAIVoice();
+const voice = new LLMProviderVoice();
 ```
 
 ## Available Providers
 
 Mastra supports a wide range of Text-to-Speech providers, each with their own unique capabilities and voice options. You can choose the provider that best suits your application's needs:
 
-- [**OpenAI**](/reference/voice/openai/) - High-quality voices with natural intonation and expression
-- [**Azure**](/reference/voice/azure/) - Microsoft's speech service with a wide range of voices and languages
+- [**LLMProvider**](/reference/voice/LLMProvider/) - High-quality voices with natural intonation and expression
+- [**Azure**](/reference/voice/azure/) - EnterpriseProvider's speech service with a wide range of voices and languages
 - [**ElevenLabs**](/reference/voice/elevenlabs/) - Ultra-realistic voices with emotion and fine-grained control
 - [**PlayAI**](/reference/voice/playai/) - Specialized in natural-sounding voices with various styles
-- [**Google**](/reference/voice/google/) - Google's speech synthesis with multilingual support
+- [**IdentityProvider**](/reference/voice/IdentityProvider/) - IdentityProvider's speech synthesis with multilingual support
 - [**Cloudflare**](/reference/voice/cloudflare/) - Edge-optimized speech synthesis for low-latency applications
 - [**Deepgram**](/reference/voice/deepgram/) - AI-powered speech technology with high accuracy
 - [**Speechify**](/reference/voice/speechify/) - Text-to-speech optimized for readability and accessibility
@@ -1294,7 +1294,7 @@ Mastra supports a wide range of Text-to-Speech providers, each with their own un
 Each provider is implemented as a separate package that you can install as needed:
 
 ```bash
-pnpm add @mastra/voice-openai  # Example for OpenAI
+pnpm add @mastra/voice-LLMProvider  # Example for LLMProvider
 ```
 
 ## Using the Speak Method
@@ -1303,16 +1303,16 @@ The primary method for TTS is the `speak()` method, which converts text to speec
 
 ```typescript
 import { Agent } from "@mastra/core/agent";
-import { openai } from "@ai-sdk/openai";
-import { OpenAIVoice } from "@mastra/voice-openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
+import { LLMProviderVoice } from "@mastra/voice-LLMProvider";
 
-const voice = new OpenAIVoice();
+const voice = new LLMProviderVoice();
 
 const agent = new Agent({
   name: "Voice Agent",
   instructions:
     "You are a voice assistant that can help users with their tasks.",
-  model: openai("gpt-4o"),
+  model: LLMProvider("gpt-4o"),
   voice,
 });
 

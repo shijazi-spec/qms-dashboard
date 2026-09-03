@@ -360,7 +360,7 @@ export interface CalendarEvent {
   _hygiene_issue?: string;
 }
 
-export interface Five9Call {
+export interface ContactCenterProviderCall {
   id: string;
   session_id: string;
   agent_id: string;
@@ -380,8 +380,8 @@ export interface Five9Call {
 }
 
 export async function getLeads(maxRecords?: number): Promise<Lead[]> {
-  const { fetchAllZohoRecords } = await import("../utils/zohoCRM");
-  const records = await fetchAllZohoRecords("Leads", {
+  const { fetchAllCRMProviderRecords } = await import("../utils/CRMProviderCRM");
+  const records = await fetchAllCRMProviderRecords("Leads", {
     maxRecords,
     sortBy: "Modified_Time",
     sortOrder: "desc",
@@ -416,8 +416,8 @@ export async function getLeads(maxRecords?: number): Promise<Lead[]> {
 }
 
 export async function getDeals(maxRecords?: number): Promise<Deal[]> {
-  const { fetchAllZohoRecords } = await import("../utils/zohoCRM");
-  const records = await fetchAllZohoRecords("Deals", {
+  const { fetchAllCRMProviderRecords } = await import("../utils/CRMProviderCRM");
+  const records = await fetchAllCRMProviderRecords("Deals", {
     maxRecords,
     sortBy: "Modified_Time",
     sortOrder: "desc",
@@ -452,17 +452,17 @@ export async function getDeals(maxRecords?: number): Promise<Deal[]> {
 }
 
 export async function getActivities(): Promise<Activity[]> {
-  // Tasks data has been removed platform-wide — no Zoho Tasks pagination.
+  // Tasks data has been removed platform-wide — no CRMProvider Tasks pagination.
   // Returning an empty list so callers continue to work without breaking.
   return [];
 }
 
-// Module-level cache to avoid hammering the Zoho Users API (and to throttle
+// Module-level cache to avoid hammering the CRMProvider Users API (and to throttle
 // retries when the API is unavailable due to OAuth scope/auth issues).
 let _usersCache: { ts: number; data: User[] } | null = null;
-let _zohoUsersFailUntil = 0;
+let _CRMProviderUsersFailUntil = 0;
 const USERS_TTL_MS = 10 * 60 * 1000; // success: 10 min
-const ZOHO_USERS_BACKOFF_MS = 5 * 60 * 1000; // failure: 5-min cool-down before retrying Zoho
+const CRMProvider_USERS_BACKOFF_MS = 5 * 60 * 1000; // failure: 5-min cool-down before retrying CRMProvider
 
 export async function getUsers(): Promise<User[]> {
   if (_usersCache && Date.now() - _usersCache.ts < USERS_TTL_MS) {
@@ -474,8 +474,8 @@ export async function getUsers(): Promise<User[]> {
   const consumedSeedKeys = new Set<string>();
   const norm = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
 
-  // 1. Pull live Zoho users (best-effort) so CRM record Owner IDs resolve to names.
-  let zohoUsers: {
+  // 1. Pull live CRMProvider users (best-effort) so CRM record Owner IDs resolve to names.
+  let CRMProviderUsers: {
     id: string;
     full_name: string;
     email: string;
@@ -483,21 +483,21 @@ export async function getUsers(): Promise<User[]> {
     role: string;
     profile: string;
   }[] = [];
-  if (Date.now() >= _zohoUsersFailUntil) {
+  if (Date.now() >= _CRMProviderUsersFailUntil) {
     try {
-      const { fetchZohoUsers } = await import("../utils/zohoCRM");
-      zohoUsers = await fetchZohoUsers("AllUsers");
-      logger.info(`👥 [Users] Fetched ${zohoUsers.length} users from Zoho`);
+      const { fetchCRMProviderUsers } = await import("../utils/CRMProviderCRM");
+      CRMProviderUsers = await fetchCRMProviderUsers("AllUsers");
+      logger.info(`👥 [Users] Fetched ${CRMProviderUsers.length} users from CRMProvider`);
     } catch (err: any) {
-      _zohoUsersFailUntil = Date.now() + ZOHO_USERS_BACKOFF_MS;
+      _CRMProviderUsersFailUntil = Date.now() + CRMProvider_USERS_BACKOFF_MS;
       logger.warn(
-        `⚠️ [Users] Zoho Users API unavailable (backing off ${ZOHO_USERS_BACKOFF_MS / 60000}m), falling back to seed only: ${err?.message || err}`,
+        `⚠️ [Users] CRMProvider Users API unavailable (backing off ${CRMProvider_USERS_BACKOFF_MS / 60000}m), falling back to seed only: ${err?.message || err}`,
       );
     }
   }
 
-  // 2. For every Zoho user, prefer the seed entry by name; seed wins on team/status/modules.
-  for (const zu of zohoUsers) {
+  // 2. For every CRMProvider user, prefer the seed entry by name; seed wins on team/status/modules.
+  for (const zu of CRMProviderUsers) {
     const seed = findSeedUser(zu.full_name);
     if (seed) consumedSeedKeys.add(norm(seed.name));
     out.push({
@@ -517,7 +517,7 @@ export async function getUsers(): Promise<User[]> {
     });
   }
 
-  // 3. Add any seed entries that didn't match a Zoho user (synthetic id so the API still groups them).
+  // 3. Add any seed entries that didn't match a CRMProvider user (synthetic id so the API still groups them).
   for (const s of SEED_USERS) {
     if (consumedSeedKeys.has(norm(s.name))) continue;
     out.push({
@@ -532,14 +532,14 @@ export async function getUsers(): Promise<User[]> {
   }
 
   logger.info(
-    `👥 [Users] Final roster: ${out.length} (seed=${SEED_USERS.length}, zoho=${zohoUsers.length})`,
+    `👥 [Users] Final roster: ${out.length} (seed=${SEED_USERS.length}, CRMProvider=${CRMProviderUsers.length})`,
   );
   _usersCache = { ts: Date.now(), data: out };
   return out;
 }
 
 export async function getCalendarEvents(): Promise<CalendarEvent[]> {
-  const { fetchCalendarEvents } = await import("../utils/googleCalendar");
+  const { fetchCalendarEvents } = await import("../utils/IdentityProviderCalendar");
   const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
   const events = await fetchCalendarEvents(startDate, endDate, "primary");
@@ -558,13 +558,13 @@ export async function getCalendarEvents(): Promise<CalendarEvent[]> {
   }));
 }
 
-export async function getFive9Calls(): Promise<Five9Call[]> {
+export async function getContactCenterProviderCalls(): Promise<ContactCenterProviderCall[]> {
   return [];
 }
 
 export async function addLead(lead: Partial<Lead>): Promise<Lead> {
-  const { createZohoRecord } = await import("../utils/zohoCRM");
-  const result = await createZohoRecord("Leads", {
+  const { createCRMProviderRecord } = await import("../utils/CRMProviderCRM");
+  const result = await createCRMProviderRecord("Leads", {
     First_Name: lead.First_Name || "",
     Last_Name: lead.Last_Name || "",
     Email: lead.Email || "",
@@ -589,8 +589,8 @@ export async function addLead(lead: Partial<Lead>): Promise<Lead> {
 }
 
 export async function addDeal(deal: Partial<Deal>): Promise<Deal> {
-  const { createZohoRecord } = await import("../utils/zohoCRM");
-  const result = await createZohoRecord("Deals", {
+  const { createCRMProviderRecord } = await import("../utils/CRMProviderCRM");
+  const result = await createCRMProviderRecord("Deals", {
     Deal_Name: deal.Deal_Name || "",
     Account_Name: deal.Account_Name || "",
     Stage: deal.Stage || "New Deal",
@@ -617,8 +617,8 @@ export async function updateLead(
   id: string,
   updates: Partial<Lead>,
 ): Promise<Lead | null> {
-  const { updateZohoRecord } = await import("../utils/zohoCRM");
-  await updateZohoRecord("Leads", id, updates);
+  const { updateCRMProviderRecord } = await import("../utils/CRMProviderCRM");
+  await updateCRMProviderRecord("Leads", id, updates);
   return {
     id,
     First_Name: updates.First_Name || "",
@@ -638,8 +638,8 @@ export async function updateDeal(
   id: string,
   updates: Partial<Deal>,
 ): Promise<Deal | null> {
-  const { updateZohoRecord } = await import("../utils/zohoCRM");
-  await updateZohoRecord("Deals", id, updates);
+  const { updateCRMProviderRecord } = await import("../utils/CRMProviderCRM");
+  await updateCRMProviderRecord("Deals", id, updates);
   return {
     id,
     Deal_Name: updates.Deal_Name || "",
@@ -656,14 +656,14 @@ export async function updateDeal(
 }
 
 export async function deleteLead(id: string): Promise<boolean> {
-  const { deleteZohoRecord } = await import("../utils/zohoCRM");
-  await deleteZohoRecord("Leads", id);
+  const { deleteCRMProviderRecord } = await import("../utils/CRMProviderCRM");
+  await deleteCRMProviderRecord("Leads", id);
   return true;
 }
 
 export async function deleteDeal(id: string): Promise<boolean> {
-  const { deleteZohoRecord } = await import("../utils/zohoCRM");
-  await deleteZohoRecord("Deals", id);
+  const { deleteCRMProviderRecord } = await import("../utils/CRMProviderCRM");
+  await deleteCRMProviderRecord("Deals", id);
   return true;
 }
 

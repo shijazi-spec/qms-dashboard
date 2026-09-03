@@ -29,7 +29,7 @@ export const REPORT_STAGES = ["Proposal", "Agreement Signed", "Paid"] as const;
 /** Below this, a percentage is noise rather than a signal. */
 const MIN_DEALS_FOR_RATE = 5;
 
-export function dealZohoUrl(id: string): string {
+export function dealCRMProviderUrl(id: string): string {
   return `<REDACTED_URL>`;
 }
 
@@ -107,7 +107,7 @@ export function stageSummary(rows: DealComplianceReportRow[]): StageSummaryRow[]
   });
 }
 
-/** Stage names arrive from Zoho with inconsistent case and spacing. */
+/** Stage names arrive from CRMProvider with inconsistent case and spacing. */
 export function sameStage(a: string, b: string): boolean {
   return (a || "").trim().toLowerCase() === (b || "").trim().toLowerCase();
 }
@@ -192,7 +192,7 @@ export function buildDealComplianceReportSheets(
         { header: "Missing documents", key: "missing", width: 52 },
         { header: "Attachments", key: "attachments", width: 12 },
         { header: "Checked", key: "checked_at", width: 12 },
-        { header: "Open in Zoho", key: "link", width: 58 },
+        { header: "Open in CRMProvider", key: "link", width: 58 },
       ],
       rows: inStage.map((r) => ({
         status: r.compliant ? "Complete" : "MISSING",
@@ -204,7 +204,7 @@ export function buildDealComplianceReportSheets(
         missing: (r.missing_docs || []).join(", "),
         attachments: r.attachment_count,
         checked_at: day(r.checked_at),
-        link: r.id ? dealZohoUrl(r.id) : "",
+        link: r.id ? dealCRMProviderUrl(r.id) : "",
       })),
     });
   }
@@ -240,7 +240,7 @@ export function buildDealComplianceReportSheets(
       },
       {
         note:
-          "This checks the FILES uploaded to Zoho. Field and data-entry compliance is a " +
+          "This checks the FILES uploaded to CRMProvider. Field and data-entry compliance is a " +
           "separate audit on the Quality Dashboard.",
       },
       { note: "Nothing in this workbook has been changed in the CRM." },

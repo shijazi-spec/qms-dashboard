@@ -34,7 +34,7 @@ export const checkCommunicationEligibilityTool = createTool({
     matched_deals: z.array(
       z.object({
         duplicate_record_id: z.number(),
-        zoho_record_id: z.string().nullable(),
+        CRMProvider_record_id: z.string().nullable(),
         account_name: z.string().nullable(),
         domain: z.string().nullable(),
         company_domain: z.string().nullable(),

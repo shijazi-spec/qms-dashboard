@@ -48,13 +48,13 @@ function buildFakeClient(rows: Record<string, unknown>[]): {
 }
 
 // ---------------------------------------------------------------------------
-// Test 1: row containing a ghp_ GitHub token in payload_preview is rewritten
+// Test 1: row containing a ghp_ SourceControlProvider token in payload_preview is rewritten
 // ---------------------------------------------------------------------------
 console.log("\n=== redactAiPendingActions — payload_preview backfill ===\n");
 
 {
   const GHP_TOKEN = "<REDACTED_TOKEN>";
-  const previewWithLeak = `Approve GitHub deploy for repo ExampleOrg/api — token=${GHP_TOKEN}`;
+  const previewWithLeak = `Approve SourceControlProvider deploy for repo ExampleOrg/api — token=${GHP_TOKEN}`;
 
   const rows = [
     {
@@ -88,7 +88,7 @@ console.log("\n=== redactAiPendingActions — payload_preview backfill ===\n");
       "UPDATE param for payload_preview contains the REDACTED sentinel",
     );
     assert(
-      newPreview.includes("Approve GitHub deploy for repo"),
+      newPreview.includes("Approve SourceControlProvider deploy for repo"),
       "UPDATE param preserves surrounding prose after redaction",
     );
     assert(updateCall.params[3] === 42, "UPDATE WHERE id matches the row id");
@@ -157,7 +157,7 @@ console.log("\n=== redactAiPendingActions — payload_preview backfill ===\n");
     {
       id: 10,
       payload: null,
-      payload_preview: `Rotate Stripe key: ${SK_KEY}`,
+      payload_preview: `Rotate PaymentProvider key: ${SK_KEY}`,
       execution_result: null,
     },
     {
@@ -169,7 +169,7 @@ console.log("\n=== redactAiPendingActions — payload_preview backfill ===\n");
     {
       id: 12,
       payload: null,
-      payload_preview: `GitHub action triggered with token=${GHP2}`,
+      payload_preview: `SourceControlProvider action triggered with token=${GHP2}`,
       execution_result: null,
     },
   ];

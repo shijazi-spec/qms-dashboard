@@ -1,7 +1,7 @@
 {
   "scorecard_version": "2.1.0-copc-1",
   "source_artifacts": [
-    "Five9_SDR_QA_Scorecard_COPC_Template.xlsx"
+    "ContactCenterProvider_SDR_QA_Scorecard_COPC_Template.xlsx"
   ],
   "scoring": {
     "min": 0,
@@ -18,12 +18,12 @@
       "title": "Call Activity & Process Adherence",
       "weight_pct": 30,
       "checkpoints": [
-        { "id": "S1.1", "name": "Login to Call Gap", "metric": "Minutes from agent login to first outbound/answered call", "target": "≤ 10 minutes", "evaluator": "not_yet_sourced", "data_source": "Five9 agent state logs" },
-        { "id": "S1.2", "name": "Post Call Logout Gap", "metric": "Minutes from last call end to agent logout", "target": "≤ 15 minutes", "evaluator": "not_yet_sourced", "data_source": "Five9 agent state logs" },
-        { "id": "S1.3", "name": "Calls Made vs. Target", "metric": "Calls placed ÷ daily target × 100", "target": "≥ 100% of target", "evaluator": "not_yet_sourced", "data_source": "Five9 attempts vs. target table" },
-        { "id": "S1.4", "name": "Calls Answered %", "metric": "Answered calls ÷ attempted calls × 100", "target": "≥ campaign target (e.g. 20–30%)", "evaluator": "not_yet_sourced", "data_source": "Five9 disposition summary" },
-        { "id": "S1.5", "name": "Idle Time Ratio", "metric": "Total idle time ÷ login time × 100", "target": "≤ 15% of login time", "evaluator": "not_yet_sourced", "data_source": "Five9 agent state logs" },
-        { "id": "S1.6", "name": "Calls Logged in Real-Time", "metric": "% calls with matching CRM activity within 15 min of call end", "target": "≥ 95% within 15 minutes", "evaluator": "not_yet_sourced", "data_source": "Five9 ↔ CRM cross-check" },
+        { "id": "S1.1", "name": "Login to Call Gap", "metric": "Minutes from agent login to first outbound/answered call", "target": "≤ 10 minutes", "evaluator": "not_yet_sourced", "data_source": "ContactCenterProvider agent state logs" },
+        { "id": "S1.2", "name": "Post Call Logout Gap", "metric": "Minutes from last call end to agent logout", "target": "≤ 15 minutes", "evaluator": "not_yet_sourced", "data_source": "ContactCenterProvider agent state logs" },
+        { "id": "S1.3", "name": "Calls Made vs. Target", "metric": "Calls placed ÷ daily target × 100", "target": "≥ 100% of target", "evaluator": "not_yet_sourced", "data_source": "ContactCenterProvider attempts vs. target table" },
+        { "id": "S1.4", "name": "Calls Answered %", "metric": "Answered calls ÷ attempted calls × 100", "target": "≥ campaign target (e.g. 20–30%)", "evaluator": "not_yet_sourced", "data_source": "ContactCenterProvider disposition summary" },
+        { "id": "S1.5", "name": "Idle Time Ratio", "metric": "Total idle time ÷ login time × 100", "target": "≤ 15% of login time", "evaluator": "not_yet_sourced", "data_source": "ContactCenterProvider agent state logs" },
+        { "id": "S1.6", "name": "Calls Logged in Real-Time", "metric": "% calls with matching CRM activity within 15 min of call end", "target": "≥ 95% within 15 minutes", "evaluator": "not_yet_sourced", "data_source": "ContactCenterProvider ↔ CRM cross-check" },
         { "id": "S1.7", "name": "SLA Follow-up Compliance", "metric": "% new/assigned leads first-contacted within 1 business day", "target": "≥ 95% within 1 business day", "evaluator": "not_yet_sourced", "data_source": "CRM activities vs lead create" },
         { "id": "S1.8", "name": "Process Stage Accuracy", "metric": "% records following allowed next-stage transitions", "target": "≥ 98% valid transitions", "evaluator": "not_yet_sourced", "data_source": "CRM stage audit" }
       ]
@@ -102,8 +102,8 @@
       "weight_pct": 20,
       "checkpoints": [
         { "id": "S4.1", "name": "Conversion Ratio", "metric": "% of leads moved to next stage/meeting", "target": "≥ 10–20% (campaign-specific)", "evaluator": "not_yet_sourced", "data_source": "CRM funnel" },
-        { "id": "S4.2", "name": "Answer Rate", "metric": "Answered ÷ attempted × 100", "target": "Campaign-specific threshold", "evaluator": "not_yet_sourced", "data_source": "Five9" },
-        { "id": "S4.3", "name": "Utilization Ratio", "metric": "Talk time ÷ login time × 100", "target": "45–65% (campaign-specific)", "evaluator": "not_yet_sourced", "data_source": "Five9 agent states" },
+        { "id": "S4.2", "name": "Answer Rate", "metric": "Answered ÷ attempted × 100", "target": "Campaign-specific threshold", "evaluator": "not_yet_sourced", "data_source": "ContactCenterProvider" },
+        { "id": "S4.3", "name": "Utilization Ratio", "metric": "Talk time ÷ login time × 100", "target": "45–65% (campaign-specific)", "evaluator": "not_yet_sourced", "data_source": "ContactCenterProvider agent states" },
         { "id": "S4.4", "name": "Lead Volume Correlation", "metric": "Correlation between marketing lead volume and SDR activities", "target": "r ≥ +0.5 or qualitative pass", "evaluator": "not_yet_sourced", "data_source": "marketing lead volume vs SDR activities" }
       ]
     }

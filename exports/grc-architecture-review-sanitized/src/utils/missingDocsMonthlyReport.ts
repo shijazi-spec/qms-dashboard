@@ -28,7 +28,7 @@
  */
 import type { DealComplianceReportRow } from "./duplicateRadarDatabase";
 import { ownerBreakdown, stageSummary, pct } from "./dealComplianceReportExport";
-import { QUALITY_REPORT_RECIPIENTS } from "./resendMail";
+import { QUALITY_REPORT_RECIPIENTS } from "./EmailProviderMail";
 
 /** Owners worse than this are named individually in the email body. */
 const NAMED_OWNER_LIMIT = 8;
@@ -133,7 +133,7 @@ export function buildMonthlyMissingDocsEmail(
     : "";
 
   const html =
-    `<div style="font:14px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111">` +
+    `<div style="font:14px/1.5 -IdentityProvider-system,Segoe UI,Roboto,Arial,sans-serif;color:#111">` +
     `<h2 style="margin:0 0 4px">Deal document compliance — ${esc(opts.periodLabel)}</h2>` +
     `<p style="color:#666;font-size:12px;margin:0 0 14px">${esc(coverage)}</p>` +
     `<p><strong>${missing.length}</strong> of <strong>${rows.length}</strong> checked deals are missing ` +
@@ -155,7 +155,7 @@ export function buildMonthlyMissingDocsEmail(
     `<p style="color:#666;font-size:11px;margin-top:18px">` +
     `Percentages are of deals that have been checked, not of all deals. Owners are ranked by the ` +
     `number of incomplete deals, not by rate, and a rate is not shown for owners with very few ` +
-    `checked deals. This checks the files attached in Zoho; nothing has been changed in the CRM.` +
+    `checked deals. This checks the files attached in CRMProvider; nothing has been changed in the CRM.` +
     `</p></div>`;
 
   const text = [

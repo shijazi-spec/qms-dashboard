@@ -479,17 +479,17 @@ export interface ToolHealthCheckResult {
    */
   expiredOverridesReaped: number;
   /**
-   * 1 when a pre-warning Slack message was dispatched this pass because
+   * 1 when a pre-warning ChatProvider message was dispatched this pass because
    * an override row's `expires_at` falls within the look-ahead window
    * (Task #219). 0 when the pass produced no pre-warning (not in window,
-   * already deduped, no channel configured, or Slack failure).
+   * already deduped, no channel configured, or ChatProvider failure).
    */
   overrideExpirySoonWarningSent: number;
   /** Counts on-call pages dispatched for newly-created breach alerts. */
   notificationsSent: number;
   /**
    * Counts breaches where the notifier short-circuited because nothing
-   * is configured (no Slack channel, no email recipient). Useful to spot
+   * is configured (no ChatProvider channel, no email recipient). Useful to spot
    * environments where the alert pipeline is not actually wired up.
    */
   notificationsSkipped: number;
@@ -547,7 +547,7 @@ export interface ToolHealthDeps {
   resolveAlert: typeof resolveAlert;
   /**
    * Pages on-call about a freshly-opened `tool_health` alert. Defaults to
-   * the production Slack/email pipeline; tests stub this to capture pages
+   * the production ChatProvider/email pipeline; tests stub this to capture pages
    * without touching real services.
    */
   notifyToolHealthBreach: typeof notifyToolHealthBreach;
@@ -568,26 +568,26 @@ export interface ToolHealthDeps {
    */
   reapExpiredOverrides?: () => Promise<ReapExpiredToolHealthOverridesResult>;
   /**
-   * Posts a Slack message announcing the auto-revert when the reaper
+   * Posts a ChatProvider message announcing the auto-revert when the reaper
    * clears an expired override (Task #213). Optional so existing stubs
    * stay backwards-compatible — the production default delegates to
    * {@link notifyToolHealthOverrideExpired}, and tests can stub it to
-   * capture the call without touching real Slack.
+   * capture the call without touching real ChatProvider.
    */
   notifyOverrideExpired?: typeof notifyToolHealthOverrideExpired;
   /**
    * Pages on-call when a `tool_health` alert auto-resolves (Task #167).
    * Optional so existing stubs need no churn — the production default
    * delegates to {@link notifyToolHealthRecovery}, and tests can stub
-   * it to capture recovery pages without touching real Slack/email.
+   * it to capture recovery pages without touching real ChatProvider/email.
    */
   notifyToolHealthRecovery?: typeof notifyToolHealthRecovery;
   /**
-   * Posts a Slack pre-warning when an override row's `expires_at` is
+   * Posts a ChatProvider pre-warning when an override row's `expires_at` is
    * within the look-ahead window (Task #219). Optional so existing stubs
    * stay backwards-compatible — the production default delegates to
    * {@link notifyToolHealthOverrideExpiringSoon}, and tests can stub it
-   * to capture the call without touching real Slack.
+   * to capture the call without touching real ChatProvider.
    */
   notifyOverrideExpiringSoon?: typeof notifyToolHealthOverrideExpiringSoon;
   /**
@@ -634,7 +634,7 @@ const DEFAULT_DEPS: Required<ToolHealthDeps> = {
  * `related_record_id`, NOT on `title`, because titles intentionally stay
  * free of live metric values to keep dedupe stable across runs.
  *
- * The returned id (when present) is forwarded into the Slack/email page so
+ * The returned id (when present) is forwarded into the ChatProvider/email page so
  * responders can correlate the message with the underlying `ai_alerts` row.
  */
 async function maybeCreateBreachAlert(
@@ -669,7 +669,7 @@ async function maybeCreateBreachAlert(
 /**
  * Page on-call for a freshly-opened breach alert and roll the result into
  * the cron's running counters. Notifier failures are logged but never
- * abort the surrounding cron pass — a Slack outage must not stop us
+ * abort the surrounding cron pass — a ChatProvider outage must not stop us
  * processing the remaining tools or running the auto-resolve sweep.
  */
 async function dispatchBreachNotification(
@@ -726,13 +726,13 @@ async function dispatchBreachNotification(
     out.notificationsThrottled++;
     return;
   }
-  if (result.slackSent || result.emailSent) {
+  if (result.ChatProviderSent || result.emailSent) {
     out.notificationsSent++;
     return;
   }
-  // Notifier ran to completion but neither Slack nor email actually
+  // Notifier ran to completion but neither ChatProvider nor email actually
   // delivered the page. Either every configured channel returned a
-  // soft-fail (Slack `chat.postMessage` returned `ok:false`, Resend
+  // soft-fail (ChatProvider `chat.postMessage` returned `ok:false`, EmailProvider
   // returned `success:false`, etc.) or the channels we did try all
   // threw and the notifier swallowed the error. Either way the page
   // was missed — write a dead-letter row so ops can see it.
@@ -746,7 +746,7 @@ async function dispatchBreachNotification(
       title,
       alertId,
       failureReason:
-        "Slack/email delivery returned success=false on every configured channel",
+        "ChatProvider/email delivery returned success=false on every configured channel",
     },
     out,
   );
@@ -865,7 +865,7 @@ async function maybeResolveRecoveredAlert(
           detail: note,
         });
         // Task #167: page on-call about the recovery. Best-effort — a
-        // Slack/email outage must not stop us processing remaining tools.
+        // ChatProvider/email outage must not stop us processing remaining tools.
         try {
           await deps.notifyToolHealthRecovery({
             tool_name: agg.tool_name,
@@ -1008,7 +1008,7 @@ export async function runToolHealthCheck(
   };
 
   // Task #219: check for an override that is about to expire and, if found,
-  // send one Slack pre-warning so admins can extend it before the reaper
+  // send one ChatProvider pre-warning so admins can extend it before the reaper
   // fires. This runs BEFORE the reaper so the row is still present. The
   // notifier dedupes on the expires_at ISO key — only one post per expiry
   // per process lifetime, no matter how many ticks fall inside the window.
@@ -1028,7 +1028,7 @@ export async function runToolHealthCheck(
           >,
           minutes_remaining: expiringSoon.minutes_remaining,
         });
-        if (warnResult.slackSent) {
+        if (warnResult.ChatProviderSent) {
           overrideExpirySoonWarningSent = 1;
           logger.info(
             `[ToolHealth] Sent override expiry pre-warning: expires_at=` +
@@ -1037,7 +1037,7 @@ export async function runToolHealthCheck(
           );
         } else if (!warnResult.deduped && !warnResult.skipped) {
           logger.info(
-            `[ToolHealth] Override expiry pre-warning: Slack send returned false ` +
+            `[ToolHealth] Override expiry pre-warning: ChatProvider send returned false ` +
               `(expires_at=${expiringSoon.expires_at.toISOString()}).`,
           );
         }
@@ -1068,10 +1068,10 @@ export async function runToolHealthCheck(
     logger.error("[ToolHealth] Override reaper failed:", err);
   }
 
-  // Task #213: when the reaper actually swept a row, push a Slack post to
+  // Task #213: when the reaper actually swept a row, push a ChatProvider post to
   // the tool-health channel so on-call notices that the override silencing
   // alerts has just lifted. This is strictly best-effort: the override
-  // and audit row have already been written to the database — a Slack
+  // and audit row have already been written to the database — a ChatProvider
   // outage must not abort the surrounding cron tick or undo the revert.
   if (reaperResult?.reaped) {
     try {
@@ -1083,7 +1083,7 @@ export async function runToolHealthCheck(
       });
     } catch (err) {
       logger.error(
-        "[ToolHealth] Override auto-revert Slack notification failed:",
+        "[ToolHealth] Override auto-revert ChatProvider notification failed:",
         err,
       );
     }
@@ -1251,7 +1251,7 @@ export async function runToolHealthCheck(
   // `if (result.created)` branches above — so on a recovery-only tick (every
   // would-be breach skipped as a duplicate, only auto-resolves happening)
   // the breach notifier is structurally never reached and admins do not get
-  // an empty "0 new regressions detected" Slack/email page. The recovery-
+  // an empty "0 new regressions detected" ChatProvider/email page. The recovery-
   // only-tick test in tests/toolHealthAlertsCron.test.ts locks this contract
   // in so a future refactor that adds a digest-style summary notifier here
   // cannot reintroduce that bug without first updating the test.

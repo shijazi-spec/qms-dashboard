@@ -5,7 +5,7 @@
  * ../../utils/eventLogsDatabase (whose module-load IIFE would otherwise hit
  * the real pool transitively through the rbac/auth chain) so the suite is
  * fully hermetic. The pg-pool, Inngest dispatch, seed-users aggregator, and
- * Zoho/CRM endpoints are out of scope for this real-data happy-path suite.
+ * CRMProvider/CRM endpoints are out of scope for this real-data happy-path suite.
  *
  * Run via:  npx vitest run tests/vitest/dashboardApiRoutes.vitest.test.ts
  */
@@ -382,12 +382,12 @@ describe("GET /api/audit/recommendations", () => {
 
 describe("GET /api/integrations/status", () => {
   const ENV_KEYS = [
-    "ZOHO_CLIENT_ID",
-    "ZOHO_CLIENT_SECRET",
-    "ZOHO_REFRESH_TOKEN",
-    "ZOHO_ACCESS_TOKEN",
-    "GOOGLE_CLIENT_ID",
-    "GOOGLE_CLIENT_EMAIL",
+    "CRMProvider_CLIENT_ID",
+    "CRMProvider_CLIENT_SECRET",
+    "CRMProvider_REFRESH_TOKEN",
+    "CRMProvider_ACCESS_TOKEN",
+    "IdentityProvider_CLIENT_ID",
+    "IdentityProvider_CLIENT_EMAIL",
   ] as const;
 
   function withEnv(values: Partial<Record<(typeof ENV_KEYS)[number], string | undefined>>, fn: () => Promise<void>) {
@@ -409,15 +409,15 @@ describe("GET /api/integrations/status", () => {
     })();
   }
 
-  test("200 reports zoho/googleCalendar/email connected when env vars are set", async () => {
+  test("200 reports CRMProvider/IdentityProviderCalendar/email connected when env vars are set", async () => {
     await withEnv(
       {
-        ZOHO_CLIENT_ID: "cid",
-        ZOHO_CLIENT_SECRET: "csec",
-        ZOHO_REFRESH_TOKEN: "rtok",
-        ZOHO_ACCESS_TOKEN: undefined,
-        GOOGLE_CLIENT_ID: "google-cid",
-        GOOGLE_CLIENT_EMAIL: undefined,
+        CRMProvider_CLIENT_ID: "cid",
+        CRMProvider_CLIENT_SECRET: "csec",
+        CRMProvider_REFRESH_TOKEN: "rtok",
+        CRMProvider_ACCESS_TOKEN: undefined,
+        IdentityProvider_CLIENT_ID: "IdentityProvider-cid",
+        IdentityProvider_CLIENT_EMAIL: undefined,
       },
       async () => {
         const handler = await buildHandler(dashboardApiRoutes, "/api/integrations/status", "GET");
@@ -425,23 +425,23 @@ describe("GET /api/integrations/status", () => {
 
         expect(res.status).toBe(200);
         expect(res.body).toEqual({
-          zoho: { connected: true, message: "Connected" },
-          googleCalendar: { connected: true, message: "Connected" },
-          email: { connected: true, message: "Replit Mail configured" },
+          CRMProvider: { connected: true, message: "Connected" },
+          IdentityProviderCalendar: { connected: true, message: "Connected" },
+          email: { connected: true, message: "HostingPlatform Mail configured" },
         });
       },
     );
   });
 
-  test("200 reports zoho + google as disconnected when no env vars are set", async () => {
+  test("200 reports CRMProvider + IdentityProvider as disconnected when no env vars are set", async () => {
     await withEnv(
       {
-        ZOHO_CLIENT_ID: undefined,
-        ZOHO_CLIENT_SECRET: undefined,
-        ZOHO_REFRESH_TOKEN: undefined,
-        ZOHO_ACCESS_TOKEN: undefined,
-        GOOGLE_CLIENT_ID: undefined,
-        GOOGLE_CLIENT_EMAIL: undefined,
+        CRMProvider_CLIENT_ID: undefined,
+        CRMProvider_CLIENT_SECRET: undefined,
+        CRMProvider_REFRESH_TOKEN: undefined,
+        CRMProvider_ACCESS_TOKEN: undefined,
+        IdentityProvider_CLIENT_ID: undefined,
+        IdentityProvider_CLIENT_EMAIL: undefined,
       },
       async () => {
         const handler = await buildHandler(dashboardApiRoutes, "/api/integrations/status", "GET");
@@ -449,9 +449,9 @@ describe("GET /api/integrations/status", () => {
 
         expect(res.status).toBe(200);
         expect(res.body).toEqual({
-          zoho: { connected: false, message: "Not configured" },
-          googleCalendar: { connected: false, message: "Not configured" },
-          email: { connected: true, message: "Replit Mail configured" },
+          CRMProvider: { connected: false, message: "Not configured" },
+          IdentityProviderCalendar: { connected: false, message: "Not configured" },
+          email: { connected: true, message: "HostingPlatform Mail configured" },
         });
       },
     );

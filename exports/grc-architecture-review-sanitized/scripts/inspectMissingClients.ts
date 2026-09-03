@@ -26,7 +26,7 @@ async function main() {
   for (const t of TARGETS) {
     console.log(`\n===== ${t} =====`);
     const q = await pool.query(
-      `SELECT record_type, zoho_module, account_name, company_name, domain, raw_data
+      `SELECT record_type, CRMProvider_module, account_name, company_name, domain, raw_data
          FROM duplicate_records
         WHERE account_name ILIKE $1 OR company_name ILIKE $1 OR record_name ILIKE $1
         ORDER BY record_type

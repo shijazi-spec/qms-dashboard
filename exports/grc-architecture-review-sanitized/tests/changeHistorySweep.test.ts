@@ -141,7 +141,7 @@ async function runSweepFor(tableName: 'nc_change_history' | 'capa_change_history
       field_changed: 'description',
       old_value: `Was using ${SK_KEY} for billing`,
       new_value: `Now using ${GHP_TOKEN} for billing`,
-      change_reason: 'Migration from Stripe to GitHub deploy keys',
+      change_reason: 'Migration from PaymentProvider to SourceControlProvider deploy keys',
     },
     // 4. NON-sensitive field, totally clean → no UPDATE.
     {

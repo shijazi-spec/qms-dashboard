@@ -1,6 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { sendEmail } from "../../utils/replitmail";
+import { sendEmail } from "../../utils/HostingPlatformmail";
 
 export const sendQualityReportTool = createTool({
   id: "send-quality-report",

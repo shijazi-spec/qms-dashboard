@@ -196,8 +196,8 @@ export const triggerRoutes = [
             // free-text justification before it is persisted onto the
             // audit_triggers row. Reviewers occasionally paste log excerpts
             // into the dismissal reason — `redactSensitiveDeep` swaps in
-            // `***REDACTED***` for any embedded JWT, GitHub PAT (`ghp_…`),
-            // OpenAI key (`sk-…`), bcrypt hash, etc.
+            // `***REDACTED***` for any embedded JWT, SourceControlProvider PAT (`ghp_…`),
+            // LLMProvider key (`sk-…`), bcrypt hash, etc.
             const safeReason = redactSensitiveDeep(reason) as string;
             extraUpdates = {
               dismiss_reason: safeReason,

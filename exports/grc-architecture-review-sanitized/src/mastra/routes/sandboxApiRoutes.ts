@@ -52,7 +52,7 @@ export const sandboxApiRoutes = [
             getDeals,
             getActivities,
             getCalendarEvents,
-            getFive9Calls,
+            getContactCenterProviderCalls,
             getDataMode,
           } = await import("../../data");
           const mode = getDataMode();
@@ -62,7 +62,7 @@ export const sandboxApiRoutes = [
               getDeals(),
               getActivities(),
               getCalendarEvents(),
-              getFive9Calls(),
+              getContactCenterProviderCalls(),
             ]);
           const stats = {
             mode,
@@ -184,8 +184,8 @@ export const sandboxApiRoutes = [
         try {
           const auth = await requireSandboxAuth(c);
           if (!auth.ok) return auth.res;
-          const { getFive9Calls } = await import("../../data");
-          const calls = await getFive9Calls();
+          const { getContactCenterProviderCalls } = await import("../../data");
+          const calls = await getContactCenterProviderCalls();
           return c.json({ calls, count: calls.length });
         } catch (error) {
           safeLogger.error("Error fetching calls:", error);
@@ -246,7 +246,7 @@ export const sandboxApiRoutes = [
             getDeals,
             getActivities,
             getCalendarEvents,
-            getFive9Calls,
+            getContactCenterProviderCalls,
             getDataMode,
           } = await import("../../data");
           const mode = getDataMode();
@@ -254,7 +254,7 @@ export const sandboxApiRoutes = [
           const deals = await getDeals();
           const activities = await getActivities();
           const calendarEvents = await getCalendarEvents();
-          const calls = await getFive9Calls();
+          const calls = await getContactCenterProviderCalls();
           const leadIssues: any[] = [];
           leads.forEach((lead: any) => {
             if (!lead.Email)

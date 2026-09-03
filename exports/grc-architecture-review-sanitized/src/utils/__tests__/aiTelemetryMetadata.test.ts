@@ -65,7 +65,7 @@ function check(condition: boolean, label: string): void {
     workflow: "qualityAuditWorkflow",
     step: "sdr-audit",
     scanType: "platform_scan",
-    clientSurface: "slack",
+    clientSurface: "ChatProvider",
   });
   assert.deepStrictEqual(result, {
     prompt_version: "qms@deadbeef",
@@ -75,7 +75,7 @@ function check(condition: boolean, label: string): void {
     workflow: "qualityAuditWorkflow",
     step: "sdr-audit",
     scan_type: "platform_scan",
-    client_surface: "slack",
+    client_surface: "ChatProvider",
   });
   check(true, "(a) all allow-list keys round-trip camelCase → snake_case");
 }

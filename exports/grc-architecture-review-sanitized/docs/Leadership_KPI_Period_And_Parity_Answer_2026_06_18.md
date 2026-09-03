@@ -82,7 +82,7 @@ round-half-up — reconcilable against the raw `details` counts.
 ### ⚠️ Two parity discrepancies to confirm with the Leadership side (math NOT changed)
 
 These are reported, not silently "fixed", because changing the underlying math is
-a major change requiring sign-off (per user prefs in `replit.md`):
+a major change requiring sign-off (per user prefs in `HostingPlatform.md`):
 
 1. **QM-KPI-002 scope** — the implementation currently counts the **full audit
    register**, not strictly the current-quarter plan, even though it is reported

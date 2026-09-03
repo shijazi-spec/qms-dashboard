@@ -5,7 +5,7 @@
 **Date:** March 12, 2026
 **Classification:** CONFIDENTIAL
 **Methodology:** OWASP Testing Guide v4.2
-**Target:** https://<REDACTED_HOST>
+**Target:** <REDACTED_URL_SCHEME><REDACTED_HOST>
 
 ---
 
@@ -30,7 +30,7 @@ Following the penetration testing report dated March 11, 2026 (conducted by Moha
 ### VULN-01: Unauthenticated API Read Access (12+ Endpoints)
 - **Original Severity:** CRITICAL (CVSS 9.1)
 - **Status:** REMEDIATED
-- **Fix:** Global authentication middleware added to all API routes. Every API endpoint now requires a valid Google session cookie or Admin API key. Unauthenticated requests receive `401 Authentication required`.
+- **Fix:** Global authentication middleware added to all API routes. Every API endpoint now requires a valid IdentityProvider session cookie or Admin API key. Unauthenticated requests receive `401 Authentication required`.
 - **Verification:** 18/18 GET endpoints confirmed blocked for unauthenticated users.
 
 ### VULN-02: Unauthenticated Data Creation (POST)
@@ -57,14 +57,14 @@ Following the penetration testing report dated March 11, 2026 (conducted by Moha
 ### VULN-05: Wildcard CORS with Full Method Access
 - **Original Severity:** CRITICAL (CVSS 8.8)
 - **Status:** REMEDIATED
-- **Fix:** CORS policy replaced with explicit origin allowlist derived from `REPLIT_DOMAINS`. Only the application's own domain is reflected in `Access-Control-Allow-Origin`. The `x-mastra-client-type` header removed from allowed headers. Credentials mode enabled for cookie-based auth.
+- **Fix:** CORS policy replaced with explicit origin allowlist derived from `HostingPlatform_DOMAINS`. Only the application's own domain is reflected in `Access-Control-Allow-Origin`. The `x-mastra-client-type` header removed from allowed headers. Credentials mode enabled for cookie-based auth.
 - **Verification:** Request from `<REDACTED_URL>` does NOT get reflected — response shows the app's own domain only.
 
 ### VULN-06: Sensitive Configuration Information Disclosure
 - **Original Severity:** CRITICAL (CVSS 7.5)
 - **Status:** REMEDIATED
 - **Fix:**
-  - All Zoho CRM error messages scrubbed of environment variable names (ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN, ZOHO_ACCESS_TOKEN). Now returns generic "CRM integration not configured. Please contact your administrator."
+  - All CRMProvider CRM error messages scrubbed of environment variable names (CRMProvider_CLIENT_ID, CRMProvider_CLIENT_SECRET, CRMProvider_REFRESH_TOKEN, CRMProvider_ACCESS_TOKEN). Now returns generic "CRM integration not configured. Please contact your administrator."
   - The `/api/crm/data` endpoint now requires authentication (401 for unauthenticated)
   - Admin API key error messages changed from "Unauthorized - Admin API key required" to generic "Authentication required"
 - **Verification:** No environment variable names appear in any API error response.
@@ -84,7 +84,7 @@ Following the penetration testing report dated March 11, 2026 (conducted by Moha
 - **Status:** MITIGATED (Accepted Risk)
 - **Assessment:** The role claim in the session token is signed with HMAC-SHA256. The pentest confirmed that token tampering returns 401 (signature verified). The signing key is stored as an environment secret and never exposed. While storing roles server-side only is a best practice, the current implementation is secure as long as the signing key remains confidential.
 - **Compensating Controls:**
-  - SESSION_SECRET stored as encrypted Replit secret
+  - SESSION_SECRET stored as encrypted HostingPlatform secret
   - HMAC-SHA256 signature verification on every request
   - 7-day token expiry
 
@@ -109,7 +109,7 @@ Following the penetration testing report dated March 11, 2026 (conducted by Moha
 ### VULN-12: Admin API Key Authentication Pattern
 - **Original Severity:** MEDIUM (CVSS 5.9)
 - **Status:** REMEDIATED
-- **Fix:** Error messages changed from "Unauthorized - Admin API key required" to generic "Authentication required". The authentication mechanism is no longer revealed. Google OAuth session is now the primary authentication method, with Admin API key as a secondary/fallback option.
+- **Fix:** Error messages changed from "Unauthorized - Admin API key required" to generic "Authentication required". The authentication mechanism is no longer revealed. IdentityProvider OAuth session is now the primary authentication method, with Admin API key as a secondary/fallback option.
 - **Verification:** API error responses show only "Authentication required" without specifying the mechanism.
 
 ### VULN-13: Unauthenticated Audit Record Creation
@@ -146,12 +146,12 @@ Following the penetration testing report dated March 11, 2026 (conducted by Moha
 - **Fix:** Environment variable names removed from all error messages. Generic messages used ("Authentication required", "CRM integration not configured. Please contact your administrator."). Field-level validation errors only shown to authenticated users.
 - **Verification:** No internal implementation details exposed in unauthenticated error responses.
 
-### VULN-17: Google OAuth Client ID Exposed
+### VULN-17: IdentityProvider OAuth Client ID Exposed
 - **Original Severity:** LOW (CVSS 3.1)
 - **Status:** MITIGATED (By Design)
 - **Assessment:** OAuth Client IDs are semi-public by design — they appear in the browser's URL during the OAuth flow. This is expected behavior per the OAuth 2.0 specification (RFC 6749). The Client ID alone cannot be used to impersonate the application without the Client Secret.
 - **Compensating Controls:**
-  - Google Cloud Console restricts authorized redirect URIs to the production domain only
+  - IdentityProvider Cloud Console restricts authorized redirect URIs to the production domain only
   - Authorized JavaScript origins limited to the application domain
   - Client Secret stored as encrypted environment secret, never exposed
 
@@ -172,10 +172,10 @@ Following the penetration testing report dated March 11, 2026 (conducted by Moha
 ## 3. Security Architecture Summary (Post-Remediation)
 
 ### Authentication Layer
-- **Primary:** Google OAuth 2.0 with HMAC-SHA256 signed session cookies
+- **Primary:** IdentityProvider OAuth 2.0 with HMAC-SHA256 signed session cookies
 - **Secondary:** Admin API key (X-Admin-Key header)
 - **Coverage:** All API endpoints and dashboard pages
-- **Public Exceptions:** /login, /guide, /accept-invite, /api/auth/google, /api/auth/google/callback, /api/auth/me
+- **Public Exceptions:** /login, /guide, /accept-invite, /api/auth/IdentityProvider, /api/auth/IdentityProvider/callback, /api/auth/me
 
 ### Session Security
 - HttpOnly, Secure (production), SameSite=Lax cookie flags

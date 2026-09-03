@@ -2,11 +2,11 @@
  * SALES-KPI-03 (Proposal Cycle Time) and SALES-KPI-04 (Agreement Cycle Time),
  * computed LOCALLY.
  *
- * These were previously reachable only through Zoho's per-deal Stage_History —
+ * These were previously reachable only through CRMProvider's per-deal Stage_History —
  * up to 40 sequential API calls, which is why they were excluded from the
  * interactive recalculate. That path does not work in this tenant: verified
  * live 2026-08-17, a full cycle-times run completed and reported "no synced
- * source data" for both, and /api/zoho/deals/:id/stage-aging returns
+ * source data" for both, and /api/CRMProvider/deals/:id/stage-aging returns
  * source:"created", meaning no usable Stage_Duration came back.
  *
  * The local versions use `modified_date` as the stage-entry proxy — the same
@@ -48,9 +48,9 @@ describe("SALES-KPI-03 Proposal Cycle Time (local)", () => {
     query.mockResolvedValue({ rows: [{ deals: 1, avg_days: 5 }] });
     await calcSalesProposalCycleTime();
     const sql = String(lastCall()?.[0]);
-    expect(sql).toMatch(/zoho_module = 'Deals'/);
+    expect(sql).toMatch(/CRMProvider_module = 'Deals'/);
     expect(sql).toMatch(/modified_date/);
-    // Must NOT reach Zoho — that is the whole point of the local versions.
+    // Must NOT reach CRMProvider — that is the whole point of the local versions.
     expect(sql).not.toMatch(/Stage_History/i);
   });
 

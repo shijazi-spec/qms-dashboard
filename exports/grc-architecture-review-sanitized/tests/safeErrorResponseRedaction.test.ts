@@ -101,7 +101,7 @@ async function bodyOf(res: Response): Promise<any> {
       makeJsonResponse(
         {
           error: 'Bad request',
-          details: 'GitHub PAT <REDACTED_TOKEN> was rejected',
+          details: 'SourceControlProvider PAT <REDACTED_TOKEN> was rejected',
         },
         400,
       ),

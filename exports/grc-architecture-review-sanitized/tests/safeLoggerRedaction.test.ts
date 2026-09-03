@@ -81,7 +81,7 @@ assert(_sanitiseForTest(true) === true, 'boolean passes through unchanged');
 
 {
   const result = _sanitiseForTest({
-    provider: 'zoho',
+    provider: 'CRMProvider',
     access_token: '<REDACTED_SECRET>',
     refresh_token: '<REDACTED_SECRET>',
     client_secret: '<REDACTED_SECRET>',
@@ -127,7 +127,7 @@ assert(_sanitiseForTest(true) === true, 'boolean passes through unchanged');
   const jwt =
     '<REDACTED_TOKEN>';
   const result = _sanitiseForTest({
-    errorText: `Zoho response: Bearer ${jwt}`,
+    errorText: `CRMProvider response: Bearer ${jwt}`,
     httpStatus: 401,
   }) as any;
   assert(
@@ -163,11 +163,11 @@ console.log('\n=== _mergePayloadsForTest — multi-payload merge and redaction =
 {
   const result = _mergePayloadsForTest([
     { userId: 10, access_token: '<REDACTED_SECRET>' },
-    { provider: 'google' },
+    { provider: 'IdentityProvider' },
   ]);
   assert(result.access_token === REDACTED_SENTINEL, 'access_token redacted in merged payload');
   assert(result.userId === 10, 'userId preserved in merged payload');
-  assert(result.provider === 'google', 'provider preserved from second object');
+  assert(result.provider === 'IdentityProvider', 'provider preserved from second object');
 }
 
 {
@@ -181,13 +181,13 @@ console.log('\n=== _mergePayloadsForTest — multi-payload merge and redaction =
 {
   const sk = '<REDACTED_TOKEN>';
   const result = _mergePayloadsForTest([
-    { summary: `rotated key was ${sk}`, provider: 'stripe' },
+    { summary: `rotated key was ${sk}`, provider: 'PaymentProvider' },
   ]);
   assert(
     !(result.summary as string).includes(sk),
     'sk_live_ inside non-sensitive field scrubbed by regex layer in merged payload',
   );
-  assert(result.provider === 'stripe', 'provider preserved in merged payload');
+  assert(result.provider === 'PaymentProvider', 'provider preserved in merged payload');
 }
 
 // Primitive args (non-object) are attached to `extra` so they are not lost.
@@ -219,7 +219,7 @@ assert(
 
 {
   const ghp = '<REDACTED_TOKEN>';
-  const msg = `GitHub PAT leaked: ${ghp}`;
+  const msg = `SourceControlProvider PAT leaked: ${ghp}`;
   const out = _scrubMessageForTest(msg);
   assert(!out.includes(ghp), 'ghp_ token interpolated into message string is scrubbed');
   assert(out.includes(REDACTED_SENTINEL), 'REDACTED sentinel present in message with ghp_ token');

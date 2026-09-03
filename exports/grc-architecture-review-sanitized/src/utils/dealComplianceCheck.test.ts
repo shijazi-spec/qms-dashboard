@@ -20,7 +20,7 @@ assert(requiredDocsForStage("Qualification").length === 0, "non-target stage →
 
 console.log("evaluateDocCompliance — Proposal");
 assert(
-  evaluateDocCompliance("Proposal", [{ fileName: "Acme Financial Offer v2.pdf" }]).compliant,
+  evaluateDocCompliance("Proposal", [{ fileName: "Example Organization Financial Offer v2.pdf" }]).compliant,
   "financial offer present → compliant",
 );
 assert(

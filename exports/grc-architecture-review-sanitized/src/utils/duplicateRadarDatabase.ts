@@ -21,7 +21,7 @@ import type { CrmNameRow } from "./companyNameBatch";
 // in the production bundle). Idempotent.
 //
 // statement_timeout is a RUNAWAY BACKSTOP, not a latency budget. This pool is
-// shared by the radar dashboards, Adam's tools AND the Zoho sync jobs, so the
+// shared by the radar dashboards, Adam's tools AND the CRMProvider sync jobs, so the
 // default is deliberately generous (15 min): no healthy individual statement
 // comes close, but a query wedged behind a lock or a bad plan now dies with a
 // clear Postgres error instead of pinning one of the pool's connections
@@ -82,7 +82,7 @@ export interface DuplicateCluster {
     | null;
   /** Client sector derived from gov_type field or domain heuristic ("private" | "government"). */
   client_sector?: "private" | "government" | null;
-  /** R3: post-merge Zoho verification outcome — 'verified' (records confirmed gone), 'failed' (records still in Zoho), or null (never verified). */
+  /** R3: post-merge CRMProvider verification outcome — 'verified' (records confirmed gone), 'failed' (records still in CRMProvider), or null (never verified). */
   verification_state?: "verified" | "failed" | "pending" | null;
   verification_at?: Date | null;
   verification_notes?: string | null;
@@ -94,7 +94,7 @@ export interface DuplicateRecord {
   id?: number;
   cluster_id: number;
   record_type: "lead" | "deal" | "contact" | "account";
-  zoho_record_id?: string;
+  CRMProvider_record_id?: string;
   record_name: string;
   company_name?: string;
   email?: string;
@@ -119,7 +119,7 @@ export interface DuplicateRecord {
   raw_data?: any;
   layout_name?: string;
   layout_id?: string;
-  zoho_module?: string;
+  CRMProvider_module?: string;
   pipeline?: string;
   products?: string;
   contact_name?: string;
@@ -138,7 +138,7 @@ export interface DuplicateRecord {
   created_at?: Date;
 }
 
-export interface ZohoSyncState {
+export interface CRMProviderSyncState {
   module: string;
   last_sync_at?: Date;
   total_synced: number;
@@ -147,7 +147,7 @@ export interface ZohoSyncState {
 
 export interface DuplicateRecordTask {
   id?: number;
-  zoho_task_id: string;
+  CRMProvider_task_id: string;
   related_record_id?: string;
   cluster_id?: number;
   subject?: string;
@@ -206,7 +206,7 @@ export interface DuplicateFilters {
  * the next $N number to use — caller advances its own paramIdx by the
  * length of the returned params array.
  *
- * "marketplace" matches Zoho layouts the team treats as merchant /
+ * "marketplace" matches CRMProvider layouts the team treats as merchant /
  *   marketplace (currently "Marketplace" and "Partner Accounts" —
  *   matches the existing exclusion logic in cross-module / preflight).
  * "corporate" is the complement, defaulting NULL/empty to corporate so
@@ -282,7 +282,7 @@ export function buildSegmentPredicate(
     return { condition: null, params: [], needsRecordJoin: false };
   }
   // Marketplace layouts are matched by SUBSTRING, not exact name (Sample User
-  // 2026-07-15): the real Zoho layouts are "Doam Marketplace", "Marketplace",
+  // 2026-07-15): the real CRMProvider layouts are "Doam Marketplace", "Marketplace",
   // "Partner Accounts", etc. — an exact `IN ('marketplace','partner accounts')`
   // let "Doam Marketplace" fall through into ExampleOrg. Match any layout that
   // CONTAINS "marketplace" (normalized) or "partneraccounts". Patterns compare
@@ -290,7 +290,7 @@ export function buildSegmentPredicate(
   const markers = ["%marketplace%", "%partneraccounts%"];
   // Layout source (Sample User 2026-07-14): a Marketplace-layout deal was leaking into
   // the ExampleOrg segment because its `layout_name` COLUMN was blank — and blank
-  // layouts default into ExampleOrg. Fall back to the synced raw_data Layout (Zoho
+  // layouts default into ExampleOrg. Fall back to the synced raw_data Layout (CRMProvider
   // returns Layout as {id,name} under `Layout` and/or the system `$layout`; some
   // records only carry the plain string) so a record whose column wasn't
   // populated STILL segments by its true layout instead of defaulting to ExampleOrg.
@@ -713,7 +713,7 @@ export async function searchClustersByText(
 
 // ── Deal-Compliance document-scan persistence ─────────────────────────────
 export interface DealDocComplianceRow {
-  zoho_deal_id: string;
+  CRMProvider_deal_id: string;
   stage: string | null;
   compliant: boolean;
   present_docs: string[];
@@ -725,7 +725,7 @@ export interface DealDocComplianceRow {
 
 /** Upsert the latest doc-compliance result for a deal (one row per deal). */
 export async function upsertDealDocCompliance(rec: {
-  zohoDealId: string;
+  CRMProviderDealId: string;
   stage?: string | null;
   compliant: boolean;
   presentDocs: string[];
@@ -735,9 +735,9 @@ export async function upsertDealDocCompliance(rec: {
 }): Promise<void> {
   await pool.query(
     `INSERT INTO deal_doc_compliance
-       (zoho_deal_id, stage, compliant, present_docs, missing_docs, attachment_count, checked_at, checked_by)
+       (CRMProvider_deal_id, stage, compliant, present_docs, missing_docs, attachment_count, checked_at, checked_by)
      VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, NOW(), $7)
-     ON CONFLICT (zoho_deal_id) DO UPDATE SET
+     ON CONFLICT (CRMProvider_deal_id) DO UPDATE SET
        stage = EXCLUDED.stage,
        compliant = EXCLUDED.compliant,
        present_docs = EXCLUDED.present_docs,
@@ -746,7 +746,7 @@ export async function upsertDealDocCompliance(rec: {
        checked_at = NOW(),
        checked_by = EXCLUDED.checked_by`,
     [
-      rec.zohoDealId,
+      rec.CRMProviderDealId,
       rec.stage || null,
       !!rec.compliant,
       JSON.stringify(rec.presentDocs || []),
@@ -764,16 +764,16 @@ export async function getDealDocCompliance(
 ): Promise<DealDocComplianceRow[]> {
   if (ids && ids.length) {
     const r = await pool.query(
-      `SELECT zoho_deal_id, stage, compliant, present_docs, missing_docs,
+      `SELECT CRMProvider_deal_id, stage, compliant, present_docs, missing_docs,
               attachment_count, checked_at, checked_by
          FROM deal_doc_compliance
-        WHERE zoho_deal_id = ANY($1::text[])`,
+        WHERE CRMProvider_deal_id = ANY($1::text[])`,
       [ids],
     );
     return r.rows;
   }
   const r = await pool.query(
-    `SELECT zoho_deal_id, stage, compliant, present_docs, missing_docs,
+    `SELECT CRMProvider_deal_id, stage, compliant, present_docs, missing_docs,
             attachment_count, checked_at, checked_by
        FROM deal_doc_compliance
       ORDER BY checked_at DESC
@@ -816,8 +816,8 @@ export async function getDealComplianceReportRows(
   const p = buildSegmentPredicate(seg, 1);
   const segCond = p.condition ? " AND " + p.condition : "";
   const res = await pool.query(
-    `SELECT d.zoho_deal_id AS id,
-            COALESCE(NULLIF(BTRIM(r.record_name), ''), d.zoho_deal_id) AS name,
+    `SELECT d.CRMProvider_deal_id AS id,
+            COALESCE(NULLIF(BTRIM(r.record_name), ''), d.CRMProvider_deal_id) AS name,
             COALESCE(NULLIF(BTRIM(d.stage), ''), NULLIF(BTRIM(r.stage), ''), '') AS stage,
             COALESCE(NULLIF(BTRIM(r.owner_name), ''), NULLIF(BTRIM(r.owner_email), ''), 'Unassigned') AS owner,
             COALESCE(
@@ -831,7 +831,7 @@ export async function getDealComplianceReportRows(
             d.attachment_count AS attachment_count,
             d.checked_at AS checked_at
        FROM deal_doc_compliance d
-       JOIN duplicate_records r ON r.zoho_record_id = d.zoho_deal_id
+       JOIN duplicate_records r ON r.CRMProvider_record_id = d.CRMProvider_deal_id
       WHERE r.record_type = 'deal'${segCond}
       ORDER BY d.compliant ASC, COALESCE(r.deal_value, 0) DESC`,
     [...p.params],
@@ -1059,7 +1059,7 @@ export function calculateMultiSignalScore(
 // preflight, the lifecycle endpoints…). The init body executes ~30
 // CREATE TABLE / ALTER TABLE / CREATE INDEX statements plus an optional
 // pg_trgm extension install. They're idempotent (IF NOT EXISTS) but on
-// a cold Replit container the first run takes 5–15s, and 6 endpoints
+// a cold HostingPlatform container the first run takes 5–15s, and 6 endpoints
 // firing in parallel from /duplicates' refreshData all race for the
 // same work. Same cold-start failure mode as initCallIntelligenceTables
 // before its memoization landed (see that file for the playbook).
@@ -1111,8 +1111,8 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
       id SERIAL PRIMARY KEY,
       cluster_id INTEGER,
       event_type VARCHAR(32) NOT NULL,
-      proposed_master_zoho_id VARCHAR(100),
-      chosen_master_zoho_id VARCHAR(100),
+      proposed_master_CRMProvider_id VARCHAR(100),
+      chosen_master_CRMProvider_id VARCHAR(100),
       master_overridden BOOLEAN DEFAULT FALSE,
       fields_migrated INTEGER DEFAULT 0,
       duplicates_tagged INTEGER DEFAULT 0,
@@ -1175,7 +1175,7 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
     .catch(() => {});
 
   // In-platform autonomous-resolution mode/kill-switch override (single row).
-  // Boot-created in BOTH dev & prod so Replit's deploy schema-diff doesn't
+  // Boot-created in BOTH dev & prod so HostingPlatform's deploy schema-diff doesn't
   // propose dropping a runtime-created table. See duplicateResolutionRunner.ts.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS autonomous_resolution_settings (
@@ -1189,12 +1189,12 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
   `);
 
   // Deal-Compliance document-scan results (SOP 7.5.10 attachment checks).
-  // One row per Zoho deal, latest scan only — shared across users/devices so
+  // One row per CRMProvider deal, latest scan only — shared across users/devices so
   // the missing-doc scope persists for re-checking and for sending to owners.
-  // Boot-created in dev & prod so Replit's schema-diff won't propose dropping it.
+  // Boot-created in dev & prod so HostingPlatform's schema-diff won't propose dropping it.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS deal_doc_compliance (
-      zoho_deal_id VARCHAR(64) PRIMARY KEY,
+      CRMProvider_deal_id VARCHAR(64) PRIMARY KEY,
       stage VARCHAR(64),
       compliant BOOLEAN NOT NULL DEFAULT FALSE,
       present_docs JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -1318,7 +1318,7 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
   );
   // R3 (quick-wins): post-merge verification state. When an operator clicks
   // "Mark Resolved + Verify" we check that the cluster's non-primary records
-  // were actually deleted in Zoho and persist the outcome here so the
+  // were actually deleted in CRMProvider and persist the outcome here so the
   // dashboard can surface a Verified / Failed badge.
   //   verification_state: NULL / 'verified' / 'failed' / 'pending'
   //   verification_at:    when we ran the check
@@ -1333,7 +1333,7 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
     `ALTER TABLE duplicate_clusters ADD COLUMN IF NOT EXISTS verification_notes TEXT`,
   );
   // R10 (medium-term): pre-merge snapshots. Cloudingo's flagship feature is
-  // "Undo Merge" — we can't actually undo a Zoho merge (Zoho deletes the
+  // "Undo Merge" — we can't actually undo a CRMProvider merge (CRMProvider deletes the
   // record), but we can freeze a JSON copy of the cluster + every record
   // (including raw_data) at the moment "Mark Resolved" is clicked. The
   // forensic trail lets owners audit what was about to be lost if a
@@ -1366,7 +1366,7 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
       id SERIAL PRIMARY KEY,
       cluster_id INTEGER REFERENCES duplicate_clusters(id) ON DELETE CASCADE,
       record_type VARCHAR(20) NOT NULL,
-      zoho_record_id VARCHAR(100),
+      CRMProvider_record_id VARCHAR(100),
       record_name VARCHAR(500),
       company_name VARCHAR(500),
       email VARCHAR(255),
@@ -1387,7 +1387,7 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
       match_signals JSONB DEFAULT '[]',
       layout_name VARCHAR(255),
       layout_id VARCHAR(100),
-      zoho_module VARCHAR(50),
+      CRMProvider_module VARCHAR(50),
       pipeline VARCHAR(255),
       products TEXT,
       mobile VARCHAR(100),
@@ -1433,7 +1433,7 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
     `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS layout_id VARCHAR(100)`,
   );
   await pool.query(
-    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS zoho_module VARCHAR(50)`,
+    `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS CRMProvider_module VARCHAR(50)`,
   );
   await pool.query(
     `ALTER TABLE duplicate_records ADD COLUMN IF NOT EXISTS pipeline VARCHAR(255)`,
@@ -1494,7 +1494,7 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
   );
 
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS zoho_sync_state (
+    CREATE TABLE IF NOT EXISTS CRMProvider_sync_state (
       module VARCHAR(50) PRIMARY KEY,
       last_sync_at TIMESTAMP,
       total_synced INTEGER DEFAULT 0,
@@ -1507,13 +1507,13 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
   `);
 
   await pool.query(
-    `ALTER TABLE zoho_sync_state ADD COLUMN IF NOT EXISTS sync_started_at TIMESTAMP`,
+    `ALTER TABLE CRMProvider_sync_state ADD COLUMN IF NOT EXISTS sync_started_at TIMESTAMP`,
   );
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS duplicate_record_tasks (
       id SERIAL PRIMARY KEY,
-      zoho_task_id VARCHAR(100) UNIQUE,
+      CRMProvider_task_id VARCHAR(100) UNIQUE,
       related_record_id VARCHAR(100),
       cluster_id INTEGER REFERENCES duplicate_clusters(id) ON DELETE SET NULL,
       subject VARCHAR(500),
@@ -1545,23 +1545,23 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
   // does NOT cover this: it records only the cluster's MASTER id as "resolved",
   // losing both the pending-vs-verified distinction and which duplicates were
   // actually tagged. Rebuilding without this archive silently converts ~44
-  // clusters that are still awaiting a Zoho admin deletion into untouched ones,
+  // clusters that are still awaiting a CRMProvider admin deletion into untouched ones,
   // while the ledger simultaneously credits them as resolved.
   //
-  // Keyed by Zoho ids, never cluster ids, because the rebuild renumbers clusters.
+  // Keyed by CRMProvider ids, never cluster ids, because the rebuild renumbers clusters.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS duplicate_merge_actions_archive (
       id SERIAL PRIMARY KEY,
       module VARCHAR(16) NOT NULL,
-      master_zoho_id VARCHAR(255) NOT NULL,
-      merged_zoho_ids JSONB DEFAULT '[]',
+      master_CRMProvider_id VARCHAR(255) NOT NULL,
+      merged_CRMProvider_ids JSONB DEFAULT '[]',
       action_type VARCHAR(20) NOT NULL,
       performed_by VARCHAR(255),
       notes TEXT,
       original_created_at TIMESTAMP,
       archived_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       restored_at TIMESTAMP NULL,
-      UNIQUE (module, master_zoho_id, action_type)
+      UNIQUE (module, master_CRMProvider_id, action_type)
     )
   `);
 
@@ -1577,25 +1577,25 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
       reparented INTEGER NOT NULL DEFAULT 0,
       errors INTEGER NOT NULL DEFAULT 0,
       error_message TEXT,
-      master_zoho_id VARCHAR(64),
+      master_CRMProvider_id VARCHAR(64),
       created_by VARCHAR(255),
       started_at TIMESTAMPTZ,
       last_progress_at TIMESTAMPTZ,
       finished_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      include_zoho_ids TEXT,
-      link_account_zoho_id TEXT,
+      include_CRMProvider_ids TEXT,
+      link_account_CRMProvider_id TEXT,
       force_merge BOOLEAN NOT NULL DEFAULT false
     )
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_merge_jobs_cluster ON merge_jobs(cluster_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_merge_jobs_cluster_module_status ON merge_jobs(cluster_id, module, status)`);
-  await pool.query(`ALTER TABLE merge_jobs ADD COLUMN IF NOT EXISTS include_zoho_ids TEXT`);
-  await pool.query(`ALTER TABLE merge_jobs ADD COLUMN IF NOT EXISTS link_account_zoho_id TEXT`);
+  await pool.query(`ALTER TABLE merge_jobs ADD COLUMN IF NOT EXISTS include_CRMProvider_ids TEXT`);
+  await pool.query(`ALTER TABLE merge_jobs ADD COLUMN IF NOT EXISTS link_account_CRMProvider_id TEXT`);
   await pool.query(`ALTER TABLE merge_jobs ADD COLUMN IF NOT EXISTS force_merge BOOLEAN NOT NULL DEFAULT false`);
 
-  // Durable resolution ledger — keyed by STABLE Zoho identity (module +
-  // master_zoho_id), NOT by cluster_id. This table is intentionally NOT part of
+  // Durable resolution ledger — keyed by STABLE CRMProvider identity (module +
+  // master_CRMProvider_id), NOT by cluster_id. This table is intentionally NOT part of
   // truncateAllDuplicateData()'s TRUNCATE: "Rebuild Clusters" wipes
   // duplicate_clusters/duplicate_records (and cascades duplicate_merge_actions),
   // which previously collapsed the "solved" scoreboard back to 0 on every
@@ -1606,8 +1606,8 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
     CREATE TABLE IF NOT EXISTS duplicate_resolution_ledger (
       id SERIAL PRIMARY KEY,
       module VARCHAR(20) NOT NULL,
-      master_zoho_id VARCHAR(100),
-      duplicate_zoho_ids JSONB NOT NULL DEFAULT '[]',
+      master_CRMProvider_id VARCHAR(100),
+      duplicate_CRMProvider_ids JSONB NOT NULL DEFAULT '[]',
       action_type VARCHAR(20) NOT NULL DEFAULT 'resolve',
       performed_by VARCHAR(255),
       notes TEXT,
@@ -1617,14 +1617,14 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
   await pool
     .query(
       `CREATE UNIQUE INDEX IF NOT EXISTS idx_dup_res_ledger_identity
-         ON duplicate_resolution_ledger(module, master_zoho_id)
-         WHERE master_zoho_id IS NOT NULL`,
+         ON duplicate_resolution_ledger(module, master_CRMProvider_id)
+         WHERE master_CRMProvider_id IS NOT NULL`,
     )
     .catch(() => {});
   await pool
     .query(
       `CREATE INDEX IF NOT EXISTS idx_dup_res_ledger_master
-         ON duplicate_resolution_ledger(master_zoho_id)`,
+         ON duplicate_resolution_ledger(master_CRMProvider_id)`,
     )
     .catch(() => {});
 
@@ -1705,7 +1705,7 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
   // Segment burndown (2026-07-30): older deployments created this table before
   // the segment column existed. Add it + widen the PK so we can store one row
   // per (date, module, segment). Existing rows default to 'all' → no PK clash.
-  // No DROP TABLE (Replit publish schema-sync trap). Idempotent.
+  // No DROP TABLE (HostingPlatform publish schema-sync trap). Idempotent.
   await pool.query(
     `ALTER TABLE duplicate_progress_daily
        ADD COLUMN IF NOT EXISTS segment VARCHAR(16) NOT NULL DEFAULT 'all'`,
@@ -1719,7 +1719,7 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
        ADD PRIMARY KEY (snapshot_date, module, segment)`,
   );
 
-  // Separation ledger (Sample User 2026-06-20) — durable "these Zoho records are NOT
+  // Separation ledger (Sample User 2026-06-20) — durable "these CRMProvider records are NOT
   // duplicates of each other" decisions captured from Split / Dismiss. The
   // radar otherwise re-clusters by shared name / phone / domain on every sync,
   // which silently undoes an operator's split (the "I split it many times and
@@ -1729,19 +1729,19 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS duplicate_separation_ledger (
       id SERIAL PRIMARY KEY,
-      zoho_id_low VARCHAR(255) NOT NULL,
-      zoho_id_high VARCHAR(255) NOT NULL,
+      CRMProvider_id_low VARCHAR(255) NOT NULL,
+      CRMProvider_id_high VARCHAR(255) NOT NULL,
       reason VARCHAR(32) NOT NULL DEFAULT 'split',
       created_by VARCHAR(255),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE (zoho_id_low, zoho_id_high)
+      UNIQUE (CRMProvider_id_low, CRMProvider_id_high)
     )
   `);
   await pool.query(
-    `CREATE INDEX IF NOT EXISTS idx_dup_sep_low ON duplicate_separation_ledger(zoho_id_low)`,
+    `CREATE INDEX IF NOT EXISTS idx_dup_sep_low ON duplicate_separation_ledger(CRMProvider_id_low)`,
   );
   await pool.query(
-    `CREATE INDEX IF NOT EXISTS idx_dup_sep_high ON duplicate_separation_ledger(zoho_id_high)`,
+    `CREATE INDEX IF NOT EXISTS idx_dup_sep_high ON duplicate_separation_ledger(CRMProvider_id_high)`,
   );
 
   // Empty/Orphaned cleanup: durable record of which records the operator has
@@ -1749,24 +1749,24 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
   // is stale until the next full sync — so without this a just-tagged record
   // reappears on Refresh ("why does it come back?"). The empty-records queries
   // exclude anything in this ledger, so a tagged record drops off immediately;
-  // Untag removes it; a genuine Zoho deletion drops it from the mirror anyway.
+  // Untag removes it; a genuine CRMProvider deletion drops it from the mirror anyway.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS empty_delete_ledger (
       id SERIAL PRIMARY KEY,
-      zoho_record_id VARCHAR(255) NOT NULL,
+      CRMProvider_record_id VARCHAR(255) NOT NULL,
       module VARCHAR(16) NOT NULL,
       tagged_by VARCHAR(255),
       status VARCHAR(16) NOT NULL DEFAULT 'pending_delete',
       deleted_at TIMESTAMP NULL,
       last_checked_at TIMESTAMP NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE (zoho_record_id)
+      UNIQUE (CRMProvider_record_id)
     )
   `);
   // Deletion-lifecycle columns (additive; reflected in the CREATE TABLE above so
-  // schema-parity stays STRICT). status: 'pending_delete' until the Zoho admin
+  // schema-parity stays STRICT). status: 'pending_delete' until the CRMProvider admin
   // removes the record, then 'deleted' with deleted_at set; last_checked_at is
-  // stamped by the reconcile pass that verifies existence in Zoho.
+  // stamped by the reconcile pass that verifies existence in CRMProvider.
   await pool.query(
     `ALTER TABLE empty_delete_ledger ADD COLUMN IF NOT EXISTS status VARCHAR(16) NOT NULL DEFAULT 'pending_delete'`,
   );
@@ -1777,7 +1777,7 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
     `ALTER TABLE empty_delete_ledger ADD COLUMN IF NOT EXISTS last_checked_at TIMESTAMP NULL`,
   );
   await pool.query(
-    `CREATE INDEX IF NOT EXISTS idx_empty_delete_ledger_rec ON empty_delete_ledger(zoho_record_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_empty_delete_ledger_rec ON empty_delete_ledger(CRMProvider_record_id)`,
   );
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_empty_delete_ledger_status ON empty_delete_ledger(status)`,
@@ -1790,15 +1790,15 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS empty_records_dismissed (
       id SERIAL PRIMARY KEY,
-      zoho_record_id VARCHAR(255) NOT NULL,
+      CRMProvider_record_id VARCHAR(255) NOT NULL,
       module VARCHAR(16) NOT NULL,
       dismissed_by VARCHAR(255),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE (zoho_record_id)
+      UNIQUE (CRMProvider_record_id)
     )
   `);
   await pool.query(
-    `CREATE INDEX IF NOT EXISTS idx_empty_records_dismissed_rec ON empty_records_dismissed(zoho_record_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_empty_records_dismissed_rec ON empty_records_dismissed(CRMProvider_record_id)`,
   );
 
   await pool.query(
@@ -1816,7 +1816,7 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
 
   // B6: Additional performance indexes
   await pool.query(
-    `CREATE UNIQUE INDEX IF NOT EXISTS idx_duplicate_records_zoho_id ON duplicate_records(zoho_record_id) WHERE zoho_record_id IS NOT NULL`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_duplicate_records_CRMProvider_id ON duplicate_records(CRMProvider_record_id) WHERE CRMProvider_record_id IS NOT NULL`,
   );
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_duplicate_records_email ON duplicate_records(LOWER(email)) WHERE email IS NOT NULL`,
@@ -1844,7 +1844,7 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS idx_duplicate_records_layout ON duplicate_records(layout_name) WHERE layout_name IS NOT NULL`,
   );
   await pool.query(
-    `CREATE INDEX IF NOT EXISTS idx_duplicate_records_zoho_module ON duplicate_records(zoho_module) WHERE zoho_module IS NOT NULL`,
+    `CREATE INDEX IF NOT EXISTS idx_duplicate_records_CRMProvider_module ON duplicate_records(CRMProvider_module) WHERE CRMProvider_module IS NOT NULL`,
   );
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_duplicate_records_pipeline ON duplicate_records(pipeline) WHERE pipeline IS NOT NULL`,
@@ -1936,7 +1936,7 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
       source_type VARCHAR(20) NOT NULL,
       link_field VARCHAR(40) NOT NULL,
       suggested_target_record_id INT REFERENCES duplicate_records(id) ON DELETE SET NULL,
-      suggested_target_zoho_id VARCHAR(100),
+      suggested_target_CRMProvider_id VARCHAR(100),
       suggested_target_name TEXT,
       suggested_domain TEXT,
       evidence_record_id INT,
@@ -1957,15 +1957,15 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
 
   // Record Hint §4 "Unaccounted deals — decide": the operator's ✗ "dismiss"
   // (Sample User 2026-07-14 — a stalled deal judged NOT a real issue). scanStaleDeals
-  // excludes ids listed here so they stop resurfacing. No Zoho write — local
+  // excludes ids listed here so they stop resurfacing. No CRMProvider write — local
   // triage only.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS stale_deal_dismissals (
-      deal_zoho_id VARCHAR(100) PRIMARY KEY,
+      deal_CRMProvider_id VARCHAR(100) PRIMARY KEY,
       dismissed_by TEXT,
       dismissed_at TIMESTAMPTZ DEFAULT NOW(),
       -- 'dismissed' = operator judged it not a real stale issue (false positive);
-      -- 'resolved'  = operator already handled the deal MANUALLY in Zoho and wants
+      -- 'resolved'  = operator already handled the deal MANUALLY in CRMProvider and wants
       -- it recorded as resolved, not dismissed (Sample User 2026-07-16). Both drop the
       -- deal off the Unaccounted list; the value is for audit/labelling.
       disposition TEXT NOT NULL DEFAULT 'dismissed'
@@ -1996,7 +1996,7 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
     `INSERT INTO duplicate_radar_packet_settings (setting_key, setting_value) VALUES
        ('escalation_contact_name',  'Sample User — Operations Quality'),
        ('escalation_contact_email', 'user@example.invalid'),
-       ('dispute_path',             'If a row should NOT be merged (e.g. intentional parallel deals for compliance reasons), flag it back to GRQ Quality with the Cluster ID and a one-line justification. Do not merge in Zoho until acknowledged.')
+       ('dispute_path',             'If a row should NOT be merged (e.g. intentional parallel deals for compliance reasons), flag it back to GRQ Quality with the Cluster ID and a one-line justification. Do not merge in CRMProvider until acknowledged.')
      ON CONFLICT (setting_key) DO NOTHING`,
   );
 }
@@ -2020,7 +2020,7 @@ export async function getPacketSettings(): Promise<PacketSettings> {
       map.escalation_contact_email || "user@example.invalid",
     dispute_path:
       map.dispute_path ||
-      "If a row should NOT be merged, flag it back to GRQ Quality with the Cluster ID and a one-line justification. Do not merge in Zoho until acknowledged.",
+      "If a row should NOT be merged, flag it back to GRQ Quality with the Cluster ID and a one-line justification. Do not merge in CRMProvider until acknowledged.",
   };
 }
 
@@ -2066,15 +2066,15 @@ export async function upsertRecord(
   const mobileNorm = record.mobile ? normalizePhone(record.mobile) : null;
   const result = await pool.query(
     `INSERT INTO duplicate_records 
-     (cluster_id, record_type, zoho_record_id, record_name, company_name, email, domain,
+     (cluster_id, record_type, CRMProvider_record_id, record_name, company_name, email, domain,
       phone, phone_normalized, mobile, mobile_normalized, owner_name, owner_email, status, stage, deal_value, source, created_date,
       modified_date, is_primary, ai_recommendation, confidence_score, is_mock_data, raw_data,
-      layout_name, layout_id, zoho_module, pipeline, products, contact_name, account_name,
+      layout_name, layout_id, CRMProvider_module, pipeline, products, contact_name, account_name,
       cr_number, vat_number, website, country, region, industry, no_of_employees, title,
       lead_type, gov_type, account_type)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24,
              $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42)
-     ON CONFLICT (zoho_record_id) WHERE zoho_record_id IS NOT NULL DO UPDATE SET
+     ON CONFLICT (CRMProvider_record_id) WHERE CRMProvider_record_id IS NOT NULL DO UPDATE SET
        cluster_id = EXCLUDED.cluster_id,
        record_name = EXCLUDED.record_name,
        company_name = EXCLUDED.company_name,
@@ -2094,7 +2094,7 @@ export async function upsertRecord(
        raw_data = EXCLUDED.raw_data,
        layout_name = EXCLUDED.layout_name,
        layout_id = EXCLUDED.layout_id,
-       zoho_module = EXCLUDED.zoho_module,
+       CRMProvider_module = EXCLUDED.CRMProvider_module,
        pipeline = EXCLUDED.pipeline,
        products = EXCLUDED.products,
        contact_name = EXCLUDED.contact_name,
@@ -2114,7 +2114,7 @@ export async function upsertRecord(
     [
       record.cluster_id,
       record.record_type,
-      record.zoho_record_id,
+      record.CRMProvider_record_id,
       record.record_name,
       record.company_name,
       record.email,
@@ -2138,7 +2138,7 @@ export async function upsertRecord(
       JSON.stringify(record.raw_data || {}),
       record.layout_name,
       record.layout_id,
-      record.zoho_module,
+      record.CRMProvider_module,
       record.pipeline,
       record.products,
       record.contact_name,
@@ -2166,7 +2166,7 @@ export async function addRecordToCluster(
   const phoneNorm = record.phone ? normalizePhone(record.phone) : null;
   const result = await pool.query(
     `INSERT INTO duplicate_records 
-     (cluster_id, record_type, zoho_record_id, record_name, company_name, email, domain,
+     (cluster_id, record_type, CRMProvider_record_id, record_name, company_name, email, domain,
       phone, phone_normalized, owner_name, owner_email, status, stage, deal_value, source, created_date,
       modified_date, is_primary, ai_recommendation, confidence_score, is_mock_data, raw_data)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
@@ -2174,7 +2174,7 @@ export async function addRecordToCluster(
     [
       record.cluster_id,
       record.record_type,
-      record.zoho_record_id,
+      record.CRMProvider_record_id,
       record.record_name,
       record.company_name,
       record.email,
@@ -2286,7 +2286,7 @@ function buildClusterFilterClause(
     clause += ` AND GREATEST(COALESCE(total_leads,0), COALESCE(total_deals,0), COALESCE(total_contacts,0), COALESCE(total_accounts,0)) > 1`;
   }
   // Layout filter: keep clusters that have at least one record in any of the
-  // selected Zoho layouts (Corporate Accounts, Standard, Marketplace, ...).
+  // selected CRMProvider layouts (Corporate Accounts, Standard, Marketplace, ...).
   if (filters?.layouts && filters.layouts.length > 0) {
     clause += ` AND EXISTS (
       SELECT 1 FROM duplicate_records dr
@@ -2476,7 +2476,7 @@ export async function getClusterCount(filters?: {
 /**
  * Snapshot the current "solved" state (status='resolved' / 'resolve' &
  * 'module_resolved' merge actions) into the durable duplicate_resolution_ledger,
- * keyed by the survivor's stable Zoho id. Idempotent (ON CONFLICT DO NOTHING).
+ * keyed by the survivor's stable CRMProvider id. Idempotent (ON CONFLICT DO NOTHING).
  *
  * MUST run at boot AND immediately before any Rebuild truncate — a Rebuild
  * CASCADE-deletes merge_actions and resets cluster status, so progress only
@@ -2487,10 +2487,10 @@ export async function backfillResolutionLedger(): Promise<void> {
   await pool
     .query(
       `INSERT INTO duplicate_resolution_ledger
-         (module, master_zoho_id, action_type, performed_by, notes, resolved_at)
+         (module, master_CRMProvider_id, action_type, performed_by, notes, resolved_at)
        SELECT DISTINCT ON (dr.cluster_id, mod.module)
          mod.module,
-         dr.zoho_record_id,
+         dr.CRMProvider_record_id,
          'resolve',
          dc.resolved_by,
          'backfilled from whole-cluster resolve',
@@ -2513,9 +2513,9 @@ export async function backfillResolutionLedger(): Promise<void> {
                )
              )
          AND dr.record_type IN ('lead','deal','contact','account')
-         AND dr.zoho_record_id IS NOT NULL
+         AND dr.CRMProvider_record_id IS NOT NULL
        ORDER BY dr.cluster_id, mod.module, dr.is_primary DESC, dr.id ASC
-       ON CONFLICT (module, master_zoho_id) WHERE master_zoho_id IS NOT NULL DO NOTHING`,
+       ON CONFLICT (module, master_CRMProvider_id) WHERE master_CRMProvider_id IS NOT NULL DO NOTHING`,
     )
     .catch((e) => {
       logger.warn("[DuplicateRadar] resolution-ledger resolve-backfill skipped (non-fatal)", {
@@ -2525,10 +2525,10 @@ export async function backfillResolutionLedger(): Promise<void> {
   await pool
     .query(
       `INSERT INTO duplicate_resolution_ledger
-         (module, master_zoho_id, action_type, performed_by, notes, resolved_at)
+         (module, master_CRMProvider_id, action_type, performed_by, notes, resolved_at)
        SELECT DISTINCT ON (ma.cluster_id, mod.module)
          mod.module,
-         pr.zoho_record_id,
+         pr.CRMProvider_record_id,
          'module_resolved',
          ma.performed_by,
          'backfilled from module_resolved action',
@@ -2551,9 +2551,9 @@ export async function backfillResolutionLedger(): Promise<void> {
             WHERE r2.cluster_id = ma.cluster_id AND r2.action_type = 'resolve'
          )
          AND pr.record_type IN ('lead','deal','contact','account')
-         AND pr.zoho_record_id IS NOT NULL
+         AND pr.CRMProvider_record_id IS NOT NULL
        ORDER BY ma.cluster_id, mod.module, ma.created_at DESC
-       ON CONFLICT (module, master_zoho_id) WHERE master_zoho_id IS NOT NULL DO NOTHING`,
+       ON CONFLICT (module, master_CRMProvider_id) WHERE master_CRMProvider_id IS NOT NULL DO NOTHING`,
     )
     .catch((e) => {
       logger.warn("[DuplicateRadar] resolution-ledger module-backfill skipped (non-fatal)", {
@@ -2565,12 +2565,12 @@ export async function backfillResolutionLedger(): Promise<void> {
   // Its cluster_id has NO foreign key, so it SURVIVES a Rebuild's TRUNCATE
   // CASCADE (unlike status + merge_actions). Seeding from it RECOVERS solved
   // progress that a prior rebuild wiped before this ledger captured it (the
-  // "0 solved after rebuild" Sample User), keyed by the survivor's stable Zoho id.
+  // "0 solved after rebuild" Sample User), keyed by the survivor's stable CRMProvider id.
   // Excludes applies that were later UNDONE (undo removes the tags + reopens).
   await pool
     .query(
       `INSERT INTO duplicate_resolution_ledger
-         (module, master_zoho_id, action_type, performed_by, notes, resolved_at)
+         (module, master_CRMProvider_id, action_type, performed_by, notes, resolved_at)
        SELECT DISTINCT ON (mm.module, mm.master)
          mm.module,
          mm.master,
@@ -2586,7 +2586,7 @@ export async function backfillResolutionLedger(): Promise<void> {
        FROM duplicate_resolution_feedback f
        JOIN LATERAL (
          SELECT f.plan_json->>'module' AS module,
-                COALESCE(f.chosen_master_zoho_id, f.proposed_master_zoho_id) AS master
+                COALESCE(f.chosen_master_CRMProvider_id, f.proposed_master_CRMProvider_id) AS master
        ) mm ON true
        WHERE f.event_type = 'applied'
          AND COALESCE(f.performed_by, '') NOT ILIKE 'UNDO%'
@@ -2599,7 +2599,7 @@ export async function backfillResolutionLedger(): Promise<void> {
               AND u.created_at > f.created_at
          )
        ORDER BY mm.module, mm.master, f.created_at DESC
-       ON CONFLICT (module, master_zoho_id) WHERE master_zoho_id IS NOT NULL DO NOTHING`,
+       ON CONFLICT (module, master_CRMProvider_id) WHERE master_CRMProvider_id IS NOT NULL DO NOTHING`,
     )
     .catch((e) => {
       logger.warn("[DuplicateRadar] resolution-ledger feedback-backfill skipped (non-fatal)", {
@@ -2674,7 +2674,7 @@ export async function captureDuplicateProgressSnapshot(): Promise<DuplicateProgr
         : "";
       // `> 1`, not `> 0` — a cluster holding ONE record of this module is not a
       // duplicate of it. `> 0` counted every cross-module link as a duplicate
-      // for each module present, which is why the Slack digest reported totals
+      // for each module present, which is why the ChatProvider digest reported totals
       // of 25,259 leads / 54,624 deals / 63,902 contacts against a real
       // duplicate universe of 10,327 clusters (measured 2026-08-20). Matches
       // getSummary, trueDuplicateClusters and the per-module tabs.
@@ -2811,7 +2811,7 @@ export async function getDuplicateProgressSeries(
  *             Progress modules only cover Deals/Accounts, so Leads/Contacts
  *             rows returned here are simply dropped by shapeCleaningProgress's
  *             module guard — never miscounted into the unknown bucket.
- *   - false → every ledger row with a resolved survivor (master_zoho_id IS
+ *   - false → every ledger row with a resolved survivor (master_CRMProvider_id IS
  *             NOT NULL), reproducing the original writer semantics used by
  *             captureDuplicateProgressSnapshot's per-tab "merged" burndown
  *             count (resolve + module_resolved + auto_merge_pending etc).
@@ -2821,15 +2821,15 @@ export async function fetchResolveRowsWithSurvivorSegment(
 ): Promise<ResolveRowRaw[]> {
   const whereClause = resolveOnly
     ? `l.action_type = 'resolve'`
-    : `l.master_zoho_id IS NOT NULL`;
+    : `l.master_CRMProvider_id IS NOT NULL`;
   const r = await pool.query(
     `SELECT l.module AS module,
-            (r.zoho_record_id IS NOT NULL) AS survivor_present,
+            (r.CRMProvider_record_id IS NOT NULL) AS survivor_present,
             COALESCE(NULLIF(r.layout_name,''), r.raw_data#>>'{Layout,name}',
                      r.raw_data#>>'{$layout,name}', r.raw_data->>'Layout') AS layout,
-            COALESCE(jsonb_array_length(NULLIF(l.duplicate_zoho_ids, '[]'::jsonb)), 0) AS dup_count
+            COALESCE(jsonb_array_length(NULLIF(l.duplicate_CRMProvider_ids, '[]'::jsonb)), 0) AS dup_count
        FROM duplicate_resolution_ledger l
-       LEFT JOIN duplicate_records r ON r.zoho_record_id = l.master_zoho_id
+       LEFT JOIN duplicate_records r ON r.CRMProvider_record_id = l.master_CRMProvider_id
       WHERE ${whereClause}`,
   );
   return r.rows.map((x: any) => ({
@@ -2851,7 +2851,7 @@ export async function getDataCleaningProgress(
   // lookup both match rows actually stored under "ExampleOrg".
   const segN = seg === "corporate" ? "ExampleOrg" : seg;
   const sync = await pool.query(
-    `SELECT to_char(MAX(last_sync_at), 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS last_sync_at FROM zoho_sync_state`,
+    `SELECT to_char(MAX(last_sync_at), 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS last_sync_at FROM CRMProvider_sync_state`,
   );
   const resolveRows = await fetchResolveRowsWithSurvivorSegment();
   // No module filter. The tile above this figure says "all layouts", and the
@@ -3030,7 +3030,7 @@ function stageRank(stage: string): number {
  *
  * "ExampleOrg" is the tenant's own placeholder owner on records that were
  * imported or never assigned — it is not a person. "Unassigned" is the
- * fallback this module substitutes when Zoho has neither an owner name nor an
+ * fallback this module substitutes when CRMProvider has neither an owner name nor an
  * owner email.
  */
 const UNOWNED_OWNERS = new Set(["", "unassigned", "ExampleOrg", "ExampleOrg"]);
@@ -3131,12 +3131,12 @@ export interface MultiActiveDealAccount {
     stage: string;
     owner: string;
     amount: number;
-    /** Zoho layout this deal sits on — every deal in a group shares it. */
+    /** CRMProvider layout this deal sits on — every deal in a group shares it. */
     layout: string;
     created: string | null;
     last_activity: string | null;
     /**
-     * RECOMMENDATION ONLY — nothing is written to Zoho. "keep" is the deal the
+     * RECOMMENDATION ONLY — nothing is written to CRMProvider. "keep" is the deal the
      * ranking says should carry the account forward; "close" is everything
      * else in the conflict. Sales decides.
      */
@@ -3162,7 +3162,7 @@ export interface MultiActiveDealAccount {
  * both open deals are still violations of the rule, but they are a
  * housekeeping problem rather than a collision, so the caller can separate them.
  *
- * Grouped by the Zoho Account id from raw_data, falling back to the account
+ * Grouped by the CRMProvider Account id from raw_data, falling back to the account
  * name, so two deals pointing at the same account row group together even when
  * the deal names differ ("stc" vs "STC").
  */
@@ -3170,7 +3170,7 @@ export interface MultiActiveDealAccount {
  * Short-lived result cache, keyed by layout.
  *
  * Viewing the tab and then downloading the Excel ran this query TWICE within
- * seconds, and a single run was enough to make the Replit instance fail its
+ * seconds, and a single run was enough to make the HostingPlatform instance fail its
  * healthcheck (2026-08-25). 90s is long enough to cover "look at the tab, then
  * export it" and short enough that a resolved conflict disappears on the next
  * refresh. Also collapses concurrent callers onto one in-flight query.
@@ -3231,14 +3231,14 @@ async function queryMultiActiveDealAccounts(
     // TWO PASSES, deliberately (2026-08-25). The single-pass version built the
     // deal JSON for EVERY account in the layout and then threw away all but the
     // ~25 with more than one open deal. It took 5-6 seconds and repeatedly took
-    // the Replit instance down — health returned 200 five times running, then
+    // the HostingPlatform instance down — health returned 200 five times running, then
     // 500 immediately after one call. `keys` narrows to the conflicting
     // accounts on cheap columns first; json_agg then runs over tens of groups
     // instead of thousands. MATERIALIZED so `open_deals` is scanned once, not
     // once per reference.
     `WITH open_deals AS MATERIALIZED (
-       SELECT r.zoho_record_id AS id,
-              COALESCE(NULLIF(BTRIM(r.record_name),''), r.zoho_record_id) AS name,
+       SELECT r.CRMProvider_record_id AS id,
+              COALESCE(NULLIF(BTRIM(r.record_name),''), r.CRMProvider_record_id) AS name,
               COALESCE(NULLIF(BTRIM(r.stage),''), r.raw_data->>'Stage', '') AS stage,
               COALESCE(NULLIF(BTRIM(r.owner_name),''), NULLIF(BTRIM(r.owner_email),''), 'Unassigned') AS owner,
               COALESCE(r.deal_value, 0) AS amount,
@@ -3288,7 +3288,7 @@ async function queryMultiActiveDealAccounts(
        --      only domain merges those into one violation.
        --   2. ACCOUNT ID otherwise. Deal records carry NO domain in this
        --      tenant (null on every row sampled) but do carry
-       --      raw_data->Account_Name->id on 14 of 15, and that is how Zoho
+       --      raw_data->Account_Name->id on 14 of 15, and that is how CRMProvider
        --      itself groups them — it is the view Sample User at.
        --   3. Normalised company NAME as the last resort. It cannot lead:
        --      company_name varies per deal for one Account ("Stc", "stcbank",
@@ -3334,7 +3334,7 @@ async function queryMultiActiveDealAccounts(
   const domains = new Map<string, string>();
   if (acctIds.length) {
     const dres = await pool.query(
-      `SELECT zoho_record_id AS id,
+      `SELECT CRMProvider_record_id AS id,
               NULLIF(
                 regexp_replace(
                   regexp_replace(
@@ -3344,7 +3344,7 @@ async function queryMultiActiveDealAccounts(
                 '') AS domain
          FROM duplicate_records
         WHERE record_type = 'account'
-          AND zoho_record_id = ANY($1::text[])`,
+          AND CRMProvider_record_id = ANY($1::text[])`,
       [acctIds],
     );
     for (const row of dres.rows as any[]) {
@@ -3462,7 +3462,7 @@ export async function getSegmentDealComplianceSummary(
             COALESCE(NULLIF(r.owner_name,''), NULLIF(r.owner_email,''), 'Unassigned') AS owner,
             d.missing_docs AS missing_docs
        FROM deal_doc_compliance d
-       JOIN duplicate_records r ON r.zoho_record_id = d.zoho_deal_id
+       JOIN duplicate_records r ON r.CRMProvider_record_id = d.CRMProvider_deal_id
       WHERE r.record_type = 'deal'${segCond}`,
     [...p.params],
   );
@@ -3504,27 +3504,27 @@ export async function getSegmentDealDuplicateCount(
 // placeholder emails / junk phones so a placeholder collision can't trigger it.
 
 /**
- * Zoho ids of records already MERGED AWAY for a module (tagged Duplicate-Delete
+ * CRMProvider ids of records already MERGED AWAY for a module (tagged Duplicate-Delete
  * but not yet deleted by the admin). Until the admin deletes them they still
  * sit in duplicate_records, so the bulk auto-merge matchers must EXCLUDE them —
  * otherwise the BATCHED apply re-derives + re-merges the same groups every batch
- * and never converges (re-hitting Zoho with redundant re-tags). Two sources,
+ * and never converges (re-hitting CRMProvider with redundant re-tags). Two sources,
  * unioned: the durable resolution ledger (agentic / account merges via
  * executeMergePlan) and pending merge actions (contact auto-merges record an
  * 'auto_merge_pending' action carrying the duplicates' DB ids). Best-effort —
  * a missing table just yields an empty set (no exclusion, no regression).
  */
-async function getResolvedDuplicateZohoIds(
+async function getResolvedDuplicateCRMProviderIds(
   module: "Accounts" | "Contacts" | "Leads" | "Deals",
 ): Promise<Set<string>> {
   const out = new Set<string>();
   try {
-    const led = await pool.query<{ duplicate_zoho_ids: unknown }>(
-      `SELECT duplicate_zoho_ids FROM duplicate_resolution_ledger WHERE module = $1`,
+    const led = await pool.query<{ duplicate_CRMProvider_ids: unknown }>(
+      `SELECT duplicate_CRMProvider_ids FROM duplicate_resolution_ledger WHERE module = $1`,
       [module],
     );
     for (const r of led.rows) {
-      const a = Array.isArray(r.duplicate_zoho_ids) ? r.duplicate_zoho_ids : [];
+      const a = Array.isArray(r.duplicate_CRMProvider_ids) ? r.duplicate_CRMProvider_ids : [];
       for (const id of a) if (id != null) out.add(String(id));
     }
   } catch {
@@ -3539,8 +3539,8 @@ async function getResolvedDuplicateZohoIds(
           : module === "Leads"
             ? "lead"
             : "deal";
-    const res = await pool.query<{ zoho_record_id: string }>(
-      `SELECT DISTINCT dr.zoho_record_id
+    const res = await pool.query<{ CRMProvider_record_id: string }>(
+      `SELECT DISTINCT dr.CRMProvider_record_id
          FROM duplicate_merge_actions ma
          CROSS JOIN LATERAL jsonb_array_elements_text(ma.merged_record_ids) AS e(db_id)
          JOIN duplicate_records dr ON dr.id = e.db_id::int
@@ -3548,7 +3548,7 @@ async function getResolvedDuplicateZohoIds(
           AND dr.record_type = $1`,
       [recordType],
     );
-    for (const r of res.rows) if (r.zoho_record_id) out.add(String(r.zoho_record_id));
+    for (const r of res.rows) if (r.CRMProvider_record_id) out.add(String(r.CRMProvider_record_id));
   } catch {
     /* merge-actions table absent/empty */
   }
@@ -3557,7 +3557,7 @@ async function getResolvedDuplicateZohoIds(
 
 /** One contact in a merge group, with its data-completeness score (drill-in). */
 export interface ContactMergeMember {
-  zohoId: string;
+  CRMProviderId: string;
   name: string;
   email: string | null;
   phone: string | null;
@@ -3598,8 +3598,8 @@ interface ExactContactGroup {
   key: string;
   email: string;
   phone: string;
-  survivorZohoId: string;
-  duplicateZohoIds: string[];
+  survivorCRMProviderId: string;
+  duplicateCRMProviderIds: string[];
   /** Second number to preserve on the survivor (Mobile gap-fill) — both members
    *  share the same primary email+phone, so only a differing Mobile can be lost. */
   phoneUpdates: { Phone?: string; Mobile?: string };
@@ -3613,7 +3613,7 @@ async function getExactContactMatchGroups(): Promise<ExactContactGroup[]> {
   const res = await pool.query<{
     k_email: string;
     k_phone: string;
-    zoho_record_id: string;
+    CRMProvider_record_id: string;
     record_name: string | null;
     account_name: string | null;
     owner_name: string | null;
@@ -3627,7 +3627,7 @@ async function getExactContactMatchGroups(): Promise<ExactContactGroup[]> {
   }>(
     `SELECT lower(trim(email)) AS k_email,
             phone_normalized    AS k_phone,
-            zoho_record_id, record_name, account_name, owner_name, title, layout_name,
+            CRMProvider_record_id, record_name, account_name, owner_name, title, layout_name,
             phone, mobile,
             (account_name IS NOT NULL AND btrim(account_name) <> '') AS has_account,
             ( (CASE WHEN account_name IS NOT NULL AND btrim(account_name)<>'' THEN 1 ELSE 0 END)
@@ -3639,7 +3639,7 @@ async function getExactContactMatchGroups(): Promise<ExactContactGroup[]> {
             EXTRACT(EPOCH FROM COALESCE(created_date, modified_date))::bigint AS created_ms
        FROM duplicate_records
       WHERE record_type = 'contact'
-        AND zoho_record_id IS NOT NULL AND btrim(zoho_record_id) <> ''
+        AND CRMProvider_record_id IS NOT NULL AND btrim(CRMProvider_record_id) <> ''
         AND email IS NOT NULL
         AND length(btrim(email)) > 4
         AND position('@' in email) > 1
@@ -3656,10 +3656,10 @@ async function getExactContactMatchGroups(): Promise<ExactContactGroup[]> {
 
   // Skip contacts already merged away (tagged Duplicate-Delete, pending admin
   // delete) so the batched apply converges instead of re-merging them forever.
-  const resolvedContactIds = await getResolvedDuplicateZohoIds("Contacts");
+  const resolvedContactIds = await getResolvedDuplicateCRMProviderIds("Contacts");
   const byKey = new Map<string, typeof res.rows>();
   for (const row of res.rows) {
-    if (resolvedContactIds.has(row.zoho_record_id)) continue;
+    if (resolvedContactIds.has(row.CRMProvider_record_id)) continue;
     if (!row.k_email || !row.k_phone) continue;
     const key = `${row.k_email}|${row.k_phone}`;
     const arr = byKey.get(key) || [];
@@ -3669,9 +3669,9 @@ async function getExactContactMatchGroups(): Promise<ExactContactGroup[]> {
 
   const groups: ExactContactGroup[] = [];
   for (const [key, rows] of byKey.entries()) {
-    // Dedupe by zoho id; need ≥2 DISTINCT records to be a real duplicate set.
+    // Dedupe by CRMProvider id; need ≥2 DISTINCT records to be a real duplicate set.
     const seen = new Map<string, (typeof rows)[number]>();
-    for (const r of rows) if (!seen.has(r.zoho_record_id)) seen.set(r.zoho_record_id, r);
+    for (const r of rows) if (!seen.has(r.CRMProvider_record_id)) seen.set(r.CRMProvider_record_id, r);
     const members = [...seen.values()];
     if (members.length < 2) continue;
     // Survivor: most complete → linked-Account → oldest.
@@ -3694,7 +3694,7 @@ async function getExactContactMatchGroups(): Promise<ExactContactGroup[]> {
         owner: m.owner_name,
       });
       return {
-        zohoId: m.zoho_record_id,
+        CRMProviderId: m.CRMProvider_record_id,
         name: (m.record_name || "").trim(),
         email: email || null,
         phone: phone || null,
@@ -3707,7 +3707,7 @@ async function getExactContactMatchGroups(): Promise<ExactContactGroup[]> {
         fieldsPopulated: pop,
         fieldsTotal: CONTACT_SCORE_FIELDS,
         completionPct: Math.round((pop / CONTACT_SCORE_FIELDS) * 100),
-        isSurvivor: m.zoho_record_id === survivor.zoho_record_id,
+        isSurvivor: m.CRMProvider_record_id === survivor.CRMProvider_record_id,
       };
     });
     // Both members share the same primary email + phone (that's the match key),
@@ -3726,8 +3726,8 @@ async function getExactContactMatchGroups(): Promise<ExactContactGroup[]> {
       key,
       email,
       phone,
-      survivorZohoId: survivor.zoho_record_id,
-      duplicateZohoIds: dups.map((d) => d.zoho_record_id),
+      survivorCRMProviderId: survivor.CRMProvider_record_id,
+      duplicateCRMProviderIds: dups.map((d) => d.CRMProvider_record_id),
       phoneUpdates,
       extraPhones,
       members: memberRows,
@@ -3747,7 +3747,7 @@ export async function previewExactContactMatches(): Promise<{
     const groups = await getExactContactMatchGroups();
     return {
       qualifyingGroups: groups.length,
-      duplicatesToTag: groups.reduce((n, g) => n + g.duplicateZohoIds.length, 0),
+      duplicatesToTag: groups.reduce((n, g) => n + g.duplicateCRMProviderIds.length, 0),
       numbersPreserved: groups.filter(
         (g) => g.phoneUpdates.Phone || g.phoneUpdates.Mobile,
       ).length,
@@ -3765,22 +3765,22 @@ export async function previewExactContactMatches(): Promise<{
 
 /**
  * Apply the bulk merge: tag the duplicate(s) in each exact-match group
- * Duplicate-Delete (keeping the survivor), batching the Zoho add_tags calls.
+ * Duplicate-Delete (keeping the survivor), batching the CRMProvider add_tags calls.
  * Records a ledger entry per survivor so the merge counts as "merged" in the
  * progress/breakdown views. Bounded by `limit` groups per run (re-runnable).
  */
 export async function applyExactContactMatches(opts: {
   limit?: number;
   performedBy: string;
-  /** Per-group survivor overrides { "email|phone": zohoIdToKeep }. */
+  /** Per-group survivor overrides { "email|phone": CRMProviderIdToKeep }. */
   overrides?: Record<string, string>;
   /** Per-group EXCLUDED contact ids — left untouched (not survivor, not tagged). */
   excludes?: Record<string, string[]>;
 }): Promise<{ mergedGroups: number; taggedRecords: number; remaining: number; errors: number }> {
-  const { addZohoTags, updateZohoRecord, zohoWritesAllowedInEnv } = await import("./zohoCRM");
+  const { addCRMProviderTags, updateCRMProviderRecord, CRMProviderWritesAllowedInEnv } = await import("./CRMProviderCRM");
   const { withTimeout } = await import("./promiseTimeout");
-  if (!zohoWritesAllowedInEnv()) {
-    throw new Error("Live Zoho writes are disabled outside production.");
+  if (!CRMProviderWritesAllowedInEnv()) {
+    throw new Error("Live CRMProvider writes are disabled outside production.");
   }
   const limit = Math.max(1, Math.min(Math.floor(opts.limit || 300), 1000));
   const all = await getExactContactMatchGroups();
@@ -3794,13 +3794,13 @@ export async function applyExactContactMatches(opts: {
   const resolved = batch
     .map((g) => {
       const ex = new Set(opts.excludes?.[g.key] ?? []);
-      const included = g.members.map((m) => m.zohoId).filter((id) => !ex.has(id));
+      const included = g.members.map((m) => m.CRMProviderId).filter((id) => !ex.has(id));
       if (included.length < 2) return null; // nothing to merge after exclusions
       const ov = opts.overrides?.[g.key];
       const chosen = ov && included.includes(ov)
         ? ov
-        : included.includes(g.survivorZohoId)
-          ? g.survivorZohoId
+        : included.includes(g.survivorCRMProviderId)
+          ? g.survivorCRMProviderId
           : included[0]!;
       const dupIds = included.filter((id) => id !== chosen);
       return { g, chosen, dupIds };
@@ -3815,8 +3815,8 @@ export async function applyExactContactMatches(opts: {
   const writeOk: typeof resolved = [];
   for (const r of resolved) {
     try {
-      const chosenMember = r.g.members.find((m) => m.zohoId === r.chosen);
-      const dupMembers = r.g.members.filter((m) => r.dupIds.includes(m.zohoId));
+      const chosenMember = r.g.members.find((m) => m.CRMProviderId === r.chosen);
+      const dupMembers = r.g.members.filter((m) => r.dupIds.includes(m.CRMProviderId));
       const phoneUpd = planMergedContactPhones({
         survivorPhone: chosenMember?.phoneRaw ?? null,
         survivorMobile: chosenMember?.mobileRaw ?? null,
@@ -3826,7 +3826,7 @@ export async function applyExactContactMatches(opts: {
       }).updates;
       if (phoneUpd.Phone || phoneUpd.Mobile) {
         await withTimeout(
-          updateZohoRecord("Contacts", r.chosen, phoneUpd as Record<string, unknown>),
+          updateCRMProviderRecord("Contacts", r.chosen, phoneUpd as Record<string, unknown>),
           20_000,
           `field-migrate ${r.chosen}`,
         );
@@ -3842,8 +3842,8 @@ export async function applyExactContactMatches(opts: {
   resolved.length = 0;
   resolved.push(...writeOk);
 
-  // Tag in chunks of 100 ids (Zoho add_tags multi-record limit). Track which
-  // ids were ACTUALLY tagged so a failed chunk (e.g. Zoho rate-limited while a
+  // Tag in chunks of 100 ids (CRMProvider add_tags multi-record limit). Track which
+  // ids were ACTUALLY tagged so a failed chunk (e.g. CRMProvider rate-limited while a
   // sync is running) doesn't get marked AI-Applied · pending below — those
   // groups stay Untouched and re-runnable instead of stuck pending forever.
   const CHUNK = 100;
@@ -3853,7 +3853,7 @@ export async function applyExactContactMatches(opts: {
     const chunk = dupIds.slice(i, i + CHUNK);
     try {
       await withTimeout(
-        addZohoTags("Contacts", chunk, ["Duplicate-Delete"]),
+        addCRMProviderTags("Contacts", chunk, ["Duplicate-Delete"]),
         20_000,
         `tag contacts ${i}`,
       );
@@ -3869,31 +3869,31 @@ export async function applyExactContactMatches(opts: {
 
   // Mark each touched cluster AI-APPLIED · pending (Sample User 2026-06-21). We record
   // an 'auto_merge_pending' merge action — NOT a ledger 'resolve' — so the
-  // cluster moves out of Untouched into "AI-Applied · pending Zoho admin delete"
+  // cluster moves out of Untouched into "AI-Applied · pending CRMProvider admin delete"
   // but does NOT prematurely flip to Resolved. It becomes Resolved only once the
-  // admin actually deletes the tagged duplicates in Zoho, which the next sync's
+  // admin actually deletes the tagged duplicates in CRMProvider, which the next sync's
   // reconcileAutoMergedContactDeletions() detects (it then writes the durable
   // ledger entry, and restoreLedgerResolvedClusterStatus flips it to resolved).
   for (const { g, chosen, dupIds: groupDups } of resolved) {
     try {
-      // Only mark groups whose duplicates were ACTUALLY tagged in Zoho.
-      const taggedDupZohoIds = groupDups.filter((id) => taggedOk.has(id));
-      if (taggedDupZohoIds.length === 0) continue; // tag failed → leave Untouched
+      // Only mark groups whose duplicates were ACTUALLY tagged in CRMProvider.
+      const taggedDupCRMProviderIds = groupDups.filter((id) => taggedOk.has(id));
+      if (taggedDupCRMProviderIds.length === 0) continue; // tag failed → leave Untouched
       const idRes = await pool.query<{
         id: number;
         cluster_id: number | null;
-        zoho_record_id: string;
+        CRMProvider_record_id: string;
       }>(
-        `SELECT id, cluster_id, zoho_record_id
+        `SELECT id, cluster_id, CRMProvider_record_id
            FROM duplicate_records
-          WHERE zoho_record_id = ANY($1::text[])`,
-        [[chosen, ...taggedDupZohoIds]],
+          WHERE CRMProvider_record_id = ANY($1::text[])`,
+        [[chosen, ...taggedDupCRMProviderIds]],
       );
       const rows = idRes.rows;
-      const survivorRow = rows.find((r) => r.zoho_record_id === chosen);
+      const survivorRow = rows.find((r) => r.CRMProvider_record_id === chosen);
       const clusterId = survivorRow?.cluster_id ?? rows[0]?.cluster_id ?? null;
       const dupDbIds = rows
-        .filter((r) => taggedDupZohoIds.includes(r.zoho_record_id))
+        .filter((r) => taggedDupCRMProviderIds.includes(r.CRMProvider_record_id))
         .map((r) => r.id);
       if (!clusterId || dupDbIds.length === 0) continue;
       await pool.query(
@@ -3905,7 +3905,7 @@ export async function applyExactContactMatches(opts: {
           survivorRow?.id ?? null,
           JSON.stringify(dupDbIds),
           opts.performedBy,
-          `Bulk auto-merge: exact email+phone. Tagged ${dupDbIds.length} Duplicate-Delete, pending Zoho admin delete.`,
+          `Bulk auto-merge: exact email+phone. Tagged ${dupDbIds.length} Duplicate-Delete, pending CRMProvider admin delete.`,
         ],
       );
       mergedGroups++;
@@ -3933,7 +3933,7 @@ export async function applyExactContactMatches(opts: {
  * Pure + exported for unit/simulation testing.
  *   • 0–1 distinct email total → that single email is the PRIMARY (no secondary).
  *   • ≥2 distinct emails → primary stays, the freshest OTHER email → Secondary_Email;
- *     any further alternates are returned in `extra` (Zoho has one secondary slot).
+ *     any further alternates are returned in `extra` (CRMProvider has one secondary slot).
  */
 export function planMergedContactEmails(input: {
   survivorEmail: string | null;
@@ -3971,11 +3971,11 @@ export function planMergedContactEmails(input: {
 
 /**
  * Decide the survivor's phone fields for a same-name+phone contact merge.
- * Mirrors planMergedContactEmails but for Zoho's two phone slots (Phone +
+ * Mirrors planMergedContactEmails but for CRMProvider's two phone slots (Phone +
  * Mobile). Saudi-normalised dedupe (drop +966 / leading 0, last 9 digits) so the
  * same number in different formats isn't double-stored. NEVER overwrites a number
  * the survivor already holds — only GAP-FILLS an empty slot — so a good number
- * can't be clobbered. A 3rd+ distinct number is returned in `extra` (Zoho keeps
+ * can't be clobbered. A 3rd+ distinct number is returned in `extra` (CRMProvider keeps
  * only two). Pure + exported for unit/simulation testing.
  *   • survivor keeps its Phone (or, if it had none, the freshest distinct number
  *     becomes Phone);
@@ -4025,8 +4025,8 @@ export function planMergedContactPhones(input: {
 interface NamePhoneContactGroup {
   /** Stable id = normalizedName|phone — carries a survivor override on apply. */
   key: string;
-  survivorZohoId: string;
-  duplicateZohoIds: string[];
+  survivorCRMProviderId: string;
+  duplicateCRMProviderIds: string[];
   emailUpdates: { Email?: string; Secondary_Email?: string };
   extraEmails: string[];
   phoneUpdates: { Phone?: string; Mobile?: string };
@@ -4038,7 +4038,7 @@ interface NamePhoneContactGroup {
 /** Find contact groups sharing the same Arabic-normalized name + same phone. */
 async function getNamePhoneContactGroups(): Promise<NamePhoneContactGroup[]> {
   const res = await pool.query<{
-    zoho_record_id: string;
+    CRMProvider_record_id: string;
     record_name: string;
     email: string | null;
     phone_normalized: string | null;
@@ -4053,13 +4053,13 @@ async function getNamePhoneContactGroups(): Promise<NamePhoneContactGroup[]> {
     layout_name: string | null;
     created_ms: string | null;
   }>(
-    `SELECT zoho_record_id, record_name, email,
+    `SELECT CRMProvider_record_id, record_name, email,
             phone_normalized, mobile_normalized, phone, mobile,
             account_name, title, website, company_name, owner_name, layout_name,
             EXTRACT(EPOCH FROM COALESCE(created_date, modified_date))::bigint AS created_ms
        FROM duplicate_records
       WHERE record_type = 'contact'
-        AND zoho_record_id IS NOT NULL AND btrim(zoho_record_id) <> ''
+        AND CRMProvider_record_id IS NOT NULL AND btrim(CRMProvider_record_id) <> ''
         AND record_name IS NOT NULL AND btrim(record_name) <> ''
         AND (
           (phone_normalized IS NOT NULL AND length(phone_normalized) >= 7)
@@ -4071,10 +4071,10 @@ async function getNamePhoneContactGroups(): Promise<NamePhoneContactGroup[]> {
 
   // Skip contacts already merged away (pending admin delete) so the batched
   // apply converges instead of re-merging the same name+phone groups forever.
-  const resolvedContactIds = await getResolvedDuplicateZohoIds("Contacts");
+  const resolvedContactIds = await getResolvedDuplicateCRMProviderIds("Contacts");
   const byKey = new Map<string, typeof res.rows>();
   for (const row of res.rows) {
-    if (resolvedContactIds.has(row.zoho_record_id)) continue;
+    if (resolvedContactIds.has(row.CRMProvider_record_id)) continue;
     const nameKey = normalizePersonName(row.record_name);
     if (!nameKey) continue;
     // "Best phone" = the Phone field, else Mobile. (Cross-field Phone-vs-Mobile
@@ -4091,7 +4091,7 @@ async function getNamePhoneContactGroups(): Promise<NamePhoneContactGroup[]> {
   const groups: NamePhoneContactGroup[] = [];
   for (const [key, rows] of byKey.entries()) {
     const seenIds = new Map<string, (typeof rows)[number]>();
-    for (const r of rows) if (!seenIds.has(r.zoho_record_id)) seenIds.set(r.zoho_record_id, r);
+    for (const r of rows) if (!seenIds.has(r.CRMProvider_record_id)) seenIds.set(r.CRMProvider_record_id, r);
     const members = [...seenIds.values()];
     if (members.length < 2) continue;
     const hasEmail = (r: (typeof rows)[number]) => (r.email && r.email.trim() ? 1 : 0);
@@ -4101,7 +4101,7 @@ async function getNamePhoneContactGroups(): Promise<NamePhoneContactGroup[]> {
       (r.website && r.website.trim() ? 1 : 0) +
       (r.company_name && r.company_name.trim() ? 1 : 0);
     members.sort((a, b) => {
-      // A record WITH an email must survive: Zoho dup-checks the PRIMARY Email,
+      // A record WITH an email must survive: CRMProvider dup-checks the PRIMARY Email,
       // so we never promote a still-existing duplicate's email to the survivor's
       // primary (that would be rejected). The survivor's email stays primary;
       // any different duplicate email goes to the un-dup-checked Secondary_Email.
@@ -4153,7 +4153,7 @@ async function getNamePhoneContactGroups(): Promise<NamePhoneContactGroup[]> {
         owner: m.owner_name,
       });
       return {
-        zohoId: m.zoho_record_id,
+        CRMProviderId: m.CRMProvider_record_id,
         name: (m.record_name || "").trim(),
         email: (m.email || "").trim() || null,
         phone: ph || null,
@@ -4166,13 +4166,13 @@ async function getNamePhoneContactGroups(): Promise<NamePhoneContactGroup[]> {
         fieldsPopulated: pop,
         fieldsTotal: CONTACT_SCORE_FIELDS,
         completionPct: Math.round((pop / CONTACT_SCORE_FIELDS) * 100),
-        isSurvivor: m.zoho_record_id === survivor.zoho_record_id,
+        isSurvivor: m.CRMProvider_record_id === survivor.CRMProvider_record_id,
       };
     });
     groups.push({
       key,
-      survivorZohoId: survivor.zoho_record_id,
-      duplicateZohoIds: dups.map((d) => d.zoho_record_id),
+      survivorCRMProviderId: survivor.CRMProvider_record_id,
+      duplicateCRMProviderIds: dups.map((d) => d.CRMProvider_record_id),
       emailUpdates: updates,
       extraEmails: extra,
       phoneUpdates,
@@ -4196,7 +4196,7 @@ export async function previewNamePhoneContactMatches(): Promise<{
     const groups = await getNamePhoneContactGroups();
     return {
       qualifyingGroups: groups.length,
-      duplicatesToTag: groups.reduce((n, g) => n + g.duplicateZohoIds.length, 0),
+      duplicatesToTag: groups.reduce((n, g) => n + g.duplicateCRMProviderIds.length, 0),
       emailsPreserved: groups.filter(
         (g) => g.emailUpdates.Email || g.emailUpdates.Secondary_Email,
       ).length,
@@ -4222,7 +4222,7 @@ export async function previewNamePhoneContactMatches(): Promise<{
 export async function applyNamePhoneContactMatches(opts: {
   limit?: number;
   performedBy: string;
-  /** Per-group survivor overrides { "name|phone": zohoIdToKeep }. */
+  /** Per-group survivor overrides { "name|phone": CRMProviderIdToKeep }. */
   overrides?: Record<string, string>;
   /** Per-group EXCLUDED contact ids — left untouched (not survivor, not tagged). */
   excludes?: Record<string, string[]>;
@@ -4233,10 +4233,10 @@ export async function applyNamePhoneContactMatches(opts: {
   remaining: number;
   errors: number;
 }> {
-  const { addZohoTags, updateZohoRecord, zohoWritesAllowedInEnv } = await import("./zohoCRM");
+  const { addCRMProviderTags, updateCRMProviderRecord, CRMProviderWritesAllowedInEnv } = await import("./CRMProviderCRM");
   const { withTimeout } = await import("./promiseTimeout");
-  if (!zohoWritesAllowedInEnv()) {
-    throw new Error("Live Zoho writes are disabled outside production.");
+  if (!CRMProviderWritesAllowedInEnv()) {
+    throw new Error("Live CRMProvider writes are disabled outside production.");
   }
   const limit = Math.max(1, Math.min(Math.floor(opts.limit || 200), 1000));
   const all = await getNamePhoneContactGroups();
@@ -4254,26 +4254,26 @@ export async function applyNamePhoneContactMatches(opts: {
       // the survivor's email primary and routes a different dup email to
       // Secondary_Email). Excluded members are left completely untouched.
       const ex = new Set(opts.excludes?.[g.key] ?? []);
-      const included = g.members.map((m) => m.zohoId).filter((id) => !ex.has(id));
+      const included = g.members.map((m) => m.CRMProviderId).filter((id) => !ex.has(id));
       if (included.length < 2) continue; // nothing to merge after exclusions
       const ov = opts.overrides?.[g.key];
       const chosen = ov && included.includes(ov)
         ? ov
-        : included.includes(g.survivorZohoId)
-          ? g.survivorZohoId
+        : included.includes(g.survivorCRMProviderId)
+          ? g.survivorCRMProviderId
           : included[0]!;
-      let dupZohoIds = g.duplicateZohoIds;
+      let dupCRMProviderIds = g.duplicateCRMProviderIds;
       let updates: {
         Email?: string;
         Secondary_Email?: string;
         Phone?: string;
         Mobile?: string;
       } = { ...g.emailUpdates, ...g.phoneUpdates };
-      if (chosen !== g.survivorZohoId || ex.size > 0) {
-        dupZohoIds = included.filter((id) => id !== chosen);
-        const chosenMember = g.members.find((m) => m.zohoId === chosen);
+      if (chosen !== g.survivorCRMProviderId || ex.size > 0) {
+        dupCRMProviderIds = included.filter((id) => id !== chosen);
+        const chosenMember = g.members.find((m) => m.CRMProviderId === chosen);
         const includedDups = g.members
-          .filter((m) => included.includes(m.zohoId) && m.zohoId !== chosen)
+          .filter((m) => included.includes(m.CRMProviderId) && m.CRMProviderId !== chosen)
           .sort((a, b) => Number(b.createdMs || 0) - Number(a.createdMs || 0));
         const emailUpd = planMergedContactEmails({
           survivorEmail: chosenMember?.email ?? null,
@@ -4291,7 +4291,7 @@ export async function applyNamePhoneContactMatches(opts: {
       // 1) Preserve the email(s) AND number(s) on the survivor BEFORE tagging.
       if (updates.Email || updates.Secondary_Email || updates.Phone || updates.Mobile) {
         await withTimeout(
-          updateZohoRecord("Contacts", chosen, updates as Record<string, unknown>),
+          updateCRMProviderRecord("Contacts", chosen, updates as Record<string, unknown>),
           20_000,
           `field-migrate ${chosen}`,
         );
@@ -4299,10 +4299,10 @@ export async function applyNamePhoneContactMatches(opts: {
       }
       // 2) Tag the duplicates Duplicate-Delete.
       const taggedOk = new Set<string>();
-      for (let i = 0; i < dupZohoIds.length; i += 100) {
-        const chunk = dupZohoIds.slice(i, i + 100);
+      for (let i = 0; i < dupCRMProviderIds.length; i += 100) {
+        const chunk = dupCRMProviderIds.slice(i, i + 100);
         await withTimeout(
-          addZohoTags("Contacts", chunk, ["Duplicate-Delete"]),
+          addCRMProviderTags("Contacts", chunk, ["Duplicate-Delete"]),
           20_000,
           `tag ${chosen} ${i}`,
         );
@@ -4310,17 +4310,17 @@ export async function applyNamePhoneContactMatches(opts: {
         for (const id of chunk) taggedOk.add(id);
       }
       // 3) Mark the cluster AI-Applied · pending (only for the tagged dups).
-      const taggedDupZohoIds = dupZohoIds.filter((id) => taggedOk.has(id));
-      if (taggedDupZohoIds.length > 0) {
-        const idRes = await pool.query<{ id: number; cluster_id: number | null; zoho_record_id: string }>(
-          `SELECT id, cluster_id, zoho_record_id FROM duplicate_records WHERE zoho_record_id = ANY($1::text[])`,
-          [[chosen, ...taggedDupZohoIds]],
+      const taggedDupCRMProviderIds = dupCRMProviderIds.filter((id) => taggedOk.has(id));
+      if (taggedDupCRMProviderIds.length > 0) {
+        const idRes = await pool.query<{ id: number; cluster_id: number | null; CRMProvider_record_id: string }>(
+          `SELECT id, cluster_id, CRMProvider_record_id FROM duplicate_records WHERE CRMProvider_record_id = ANY($1::text[])`,
+          [[chosen, ...taggedDupCRMProviderIds]],
         );
         const rows = idRes.rows;
-        const survivorRow = rows.find((r) => r.zoho_record_id === chosen);
+        const survivorRow = rows.find((r) => r.CRMProvider_record_id === chosen);
         const clusterId = survivorRow?.cluster_id ?? rows[0]?.cluster_id ?? null;
         const dupDbIds = rows
-          .filter((r) => taggedDupZohoIds.includes(r.zoho_record_id))
+          .filter((r) => taggedDupCRMProviderIds.includes(r.CRMProvider_record_id))
           .map((r) => r.id);
         if (clusterId && dupDbIds.length > 0) {
           await pool.query(
@@ -4332,7 +4332,7 @@ export async function applyNamePhoneContactMatches(opts: {
               survivorRow?.id ?? null,
               JSON.stringify(dupDbIds),
               opts.performedBy,
-              `Bulk auto-merge: same name + phone. Preserved email(s) on survivor; tagged ${dupDbIds.length} Duplicate-Delete, pending Zoho admin delete.`,
+              `Bulk auto-merge: same name + phone. Preserved email(s) on survivor; tagged ${dupDbIds.length} Duplicate-Delete, pending CRMProvider admin delete.`,
             ],
           );
           mergedGroups++;
@@ -4380,7 +4380,7 @@ export const ACCOUNT_SCOPE_LAYOUTS: Record<"corporate" | "partner", string[]> = 
 
 /** One account in a domain+name group, with its data-completeness score. */
 export interface AccountDomainNameMember {
-  zohoId: string;
+  CRMProviderId: string;
   name: string;
   domain: string | null;
   owner: string | null;
@@ -4409,8 +4409,8 @@ export interface AccountDomainNameGroup {
   domain: string;
   nameKey: string;
   /** Proposed survivor: the member with the highest completion %. Override-able. */
-  survivorZohoId: string;
-  duplicateZohoIds: string[];
+  survivorCRMProviderId: string;
+  duplicateCRMProviderIds: string[];
   /** Distinct display names across the group (surfaces EN vs AR variants). */
   names: string[];
   label: string;
@@ -4437,7 +4437,7 @@ async function getAccountDomainNameGroups(
   const maxDistinctNames = opts?.maxDistinctNames ?? 6;
   if (!layoutNames.length) return [];
   const res = await pool.query<{
-    zoho_record_id: string;
+    CRMProvider_record_id: string;
     record_name: string | null;
     company_name: string | null;
     domain: string | null;
@@ -4451,13 +4451,13 @@ async function getAccountDomainNameGroups(
     layout_norm: string | null;
     created_ms: string | null;
   }>(
-    `SELECT zoho_record_id, record_name, company_name, domain, owner_name, website,
+    `SELECT CRMProvider_record_id, record_name, company_name, domain, owner_name, website,
             cr_number, vat_number, country, industry, layout_name,
             LOWER(COALESCE(layout_name, '')) AS layout_norm,
             EXTRACT(EPOCH FROM COALESCE(created_date, modified_date))::bigint AS created_ms
        FROM duplicate_records
       WHERE record_type = 'account'
-        AND zoho_record_id IS NOT NULL AND btrim(zoho_record_id) <> ''
+        AND CRMProvider_record_id IS NOT NULL AND btrim(CRMProvider_record_id) <> ''
         AND domain IS NOT NULL AND btrim(domain) <> ''
         AND LOWER(COALESCE(layout_name, '')) = ANY($1::text[])`,
     [layoutNames],
@@ -4465,10 +4465,10 @@ async function getAccountDomainNameGroups(
 
   // Deal count per Account (local DB — deals whose Account_Name.id points at the
   // account). Shown in the preview in place of the unreliable CR number; a bigger
-  // Deals book is a stronger survivor signal. No Zoho call — counted from the
+  // Deals book is a stronger survivor signal. No CRMProvider call — counted from the
   // already-synced deal records.
   const dealCountByAccount = new Map<string, number>();
-  const acctIds = res.rows.map((r) => r.zoho_record_id).filter(Boolean);
+  const acctIds = res.rows.map((r) => r.CRMProvider_record_id).filter(Boolean);
   if (acctIds.length > 0) {
     const dcRes = await pool.query<{ account_id: string; n: string }>(
       `SELECT raw_data->'Account_Name'->>'id' AS account_id, COUNT(*) AS n
@@ -4483,19 +4483,19 @@ async function getAccountDomainNameGroups(
     }
   }
 
-  // Exclude accounts already merged away (see getResolvedDuplicateZohoIds):
+  // Exclude accounts already merged away (see getResolvedDuplicateCRMProviderIds):
   // tagged duplicates aren't deleted until the admin acts, so without this they
   // keep re-grouping and the BATCHED apply re-merges the same groups every batch
-  // (never converges, re-hammering Zoho). Excluding them collapses a merged
+  // (never converges, re-hammering CRMProvider). Excluding them collapses a merged
   // group to a singleton, which drops out — so the work set shrinks each batch.
-  const resolvedDupIds = await getResolvedDuplicateZohoIds("Accounts");
+  const resolvedDupIds = await getResolvedDuplicateCRMProviderIds("Accounts");
   // Groups the operator DISMISSED ("not duplicates") — their accounts are
   // recorded as mutually separated, so the group must never reappear or merge.
   const sepPairs = await getSeparationPairKeySet();
 
   const byKey = new Map<string, typeof res.rows>();
   for (const row of res.rows) {
-    if (resolvedDupIds.has(row.zoho_record_id)) continue; // already merged away
+    if (resolvedDupIds.has(row.CRMProvider_record_id)) continue; // already merged away
     const dom = (row.domain || "").trim().toLowerCase();
     const nameKey = normalizeCompanyName(row.record_name || row.company_name || "");
     // Merge WITHIN the exact same layout only (Sample User 2026-06-23). The scope
@@ -4541,13 +4541,13 @@ async function getAccountDomainNameGroups(
   const groups: AccountDomainNameGroup[] = [];
   for (const [key, rows] of byKey.entries()) {
     const seen = new Map<string, (typeof rows)[number]>();
-    for (const r of rows) if (!seen.has(r.zoho_record_id)) seen.set(r.zoho_record_id, r);
+    for (const r of rows) if (!seen.has(r.CRMProvider_record_id)) seen.set(r.CRMProvider_record_id, r);
     const sorted = [...seen.values()];
     if (sorted.length < 2) continue;
     // Skip a DISMISSED group: if any member pair was recorded as separated
     // ("not duplicates"), drop the whole group so it never auto-merges.
     if (sepPairs.size > 0) {
-      const ids = sorted.map((r) => r.zoho_record_id);
+      const ids = sorted.map((r) => r.CRMProvider_record_id);
       let separated = false;
       for (let a = 0; a < ids.length && !separated; a++) {
         for (let b = a + 1; b < ids.length; b++) {
@@ -4577,7 +4577,7 @@ async function getAccountDomainNameGroups(
     const members: AccountDomainNameMember[] = sorted.map((m) => {
       const pop = fieldsPopulated(m);
       return {
-        zohoId: m.zoho_record_id,
+        CRMProviderId: m.CRMProvider_record_id,
         name: (m.record_name || m.company_name || "").trim(),
         domain: m.domain,
         owner: m.owner_name,
@@ -4588,11 +4588,11 @@ async function getAccountDomainNameGroups(
         industry: m.industry,
         layout: m.layout_name,
         createdMs: m.created_ms != null ? Number(m.created_ms) : null,
-        dealCount: dealCountByAccount.get(m.zoho_record_id) ?? 0,
+        dealCount: dealCountByAccount.get(m.CRMProvider_record_id) ?? 0,
         fieldsPopulated: pop,
         fieldsTotal: total,
         completionPct: Math.round((pop / total) * 100),
-        isSurvivor: m.zoho_record_id === survivor.zoho_record_id,
+        isSurvivor: m.CRMProvider_record_id === survivor.CRMProvider_record_id,
       };
     });
     const names = [
@@ -4612,8 +4612,8 @@ async function getAccountDomainNameGroups(
       nameKey: normalizeCompanyName(
         sorted[0]!.record_name || sorted[0]!.company_name || "",
       ),
-      survivorZohoId: survivor.zoho_record_id,
-      duplicateZohoIds: dups.map((d) => d.zoho_record_id),
+      survivorCRMProviderId: survivor.CRMProvider_record_id,
+      duplicateCRMProviderIds: dups.map((d) => d.CRMProvider_record_id),
       names,
       label: (survivor.record_name || survivor.company_name || "").trim(),
       members,
@@ -4631,7 +4631,7 @@ export async function previewAccountDomainNameMerge(): Promise<{
     const groups = await getAccountDomainNameGroups(layouts).catch(() => []);
     return {
       groups: groups.length,
-      accountsToTag: groups.reduce((n, g) => n + g.duplicateZohoIds.length, 0),
+      accountsToTag: groups.reduce((n, g) => n + g.duplicateCRMProviderIds.length, 0),
       // Return up to 200 so the operator can drill into and override the
       // survivor of every group before applying (was 15 — too few to verify).
       sample: groups.slice(0, 200),
@@ -4657,7 +4657,7 @@ export async function previewAccountDomainOnlyMerge(): Promise<{
     );
     return {
       groups: groups.length,
-      accountsToTag: groups.reduce((n, g) => n + g.duplicateZohoIds.length, 0),
+      accountsToTag: groups.reduce((n, g) => n + g.duplicateCRMProviderIds.length, 0),
       sample: groups.slice(0, 200),
     };
   };
@@ -4682,13 +4682,13 @@ export async function applyAccountDomainNameMerge(opts: {
   performedBy: string;
   /**
    * Per-group survivor overrides, keyed by AccountDomainNameGroup.key
-   * (domain|nameKey) → the Zoho id to KEEP. When a group isn't listed we keep
+   * (domain|nameKey) → the CRMProvider id to KEEP. When a group isn't listed we keep
    * the default survivor (highest completion %). An override pointing at a
    * record not in the group is ignored by the engine (it falls back safely).
    */
   overrides?: Record<string, string>;
   /**
-   * Per-group EXCLUDED account ids, keyed by group key → zoho ids to leave OUT
+   * Per-group EXCLUDED account ids, keyed by group key → CRMProvider ids to leave OUT
    * of the merge entirely (not survivor, not tagged — untouched). Lets the
    * operator drop a wrong member (e.g. a Partner account) from a 3+ group and
    * still merge the rest.
@@ -4712,9 +4712,9 @@ export async function applyAccountDomainNameMerge(opts: {
   const limit = Math.max(1, Math.min(Math.floor(opts.limit || 100), 500));
   const batch = all.slice(0, limit);
   const { buildMergePlan } = await import("./duplicateMergePlanner");
-  const { executeMergePlan, zohoWritesAllowedInEnv } = await import("./duplicateMergeExecutor");
-  if (!opts.dryRun && !zohoWritesAllowedInEnv()) {
-    throw new Error("Live Zoho writes are disabled outside production.");
+  const { executeMergePlan, CRMProviderWritesAllowedInEnv } = await import("./duplicateMergeExecutor");
+  if (!opts.dryRun && !CRMProviderWritesAllowedInEnv()) {
+    throw new Error("Live CRMProvider writes are disabled outside production.");
   }
   let merged = 0,
     accountsTagged = 0,
@@ -4727,13 +4727,13 @@ export async function applyAccountDomainNameMerge(opts: {
       // Drop operator-EXCLUDED members (e.g. a Partner account in a 3-group) so
       // only the chosen set merges; the excluded ones are left untouched.
       const excludedSet = new Set(opts.excludes?.[g.key] ?? []);
-      const zohoIds = [g.survivorZohoId, ...g.duplicateZohoIds].filter(
+      const CRMProviderIds = [g.survivorCRMProviderId, ...g.duplicateCRMProviderIds].filter(
         (id) => !excludedSet.has(id),
       );
-      if (zohoIds.length < 2) continue; // nothing left to merge after exclusions
+      if (CRMProviderIds.length < 2) continue; // nothing left to merge after exclusions
       const recRes = await pool.query(
-        `SELECT * FROM duplicate_records WHERE record_type = 'account' AND zoho_record_id = ANY($1::text[])`,
-        [zohoIds],
+        `SELECT * FROM duplicate_records WHERE record_type = 'account' AND CRMProvider_record_id = ANY($1::text[])`,
+        [CRMProviderIds],
       );
       const recs = recRes.rows as DuplicateRecord[];
       if (recs.length < 2) continue;
@@ -4742,17 +4742,17 @@ export async function applyAccountDomainNameMerge(opts: {
       // applied survivor == the previewed one.
       const overrideId = opts.overrides?.[g.key];
       const chosenSurvivorId =
-        overrideId && zohoIds.includes(overrideId)
+        overrideId && CRMProviderIds.includes(overrideId)
           ? overrideId
-          : zohoIds.includes(g.survivorZohoId)
-            ? g.survivorZohoId
-            : (g.members.find((m) => zohoIds.includes(m.zohoId))?.zohoId ?? zohoIds[0]!);
+          : CRMProviderIds.includes(g.survivorCRMProviderId)
+            ? g.survivorCRMProviderId
+            : (g.members.find((m) => CRMProviderIds.includes(m.CRMProviderId))?.CRMProviderId ?? CRMProviderIds[0]!);
       const survivorRow =
-        recs.find((r) => (r as any).zoho_record_id === chosenSurvivorId) || recs[0];
+        recs.find((r) => (r as any).CRMProvider_record_id === chosenSurvivorId) || recs[0];
       const clusterId = (survivorRow as any)?.cluster_id ?? (recs[0] as any)?.cluster_id;
       if (!clusterId) continue;
       const plan = buildMergePlan("Accounts", clusterId, recs, {
-        masterZohoId: chosenSurvivorId,
+        masterCRMProviderId: chosenSurvivorId,
       });
       if (plan.fieldDecisions.some((d) => d.field === "Description" && d.action === "fill")) {
         namesPreserved++;
@@ -4764,7 +4764,7 @@ export async function applyAccountDomainNameMerge(opts: {
         // resolves it once every module's duplicates are tagged/merged.
         closeCluster: false,
       });
-      accountsTagged += plan.duplicateZohoIds.length;
+      accountsTagged += plan.duplicateCRMProviderIds.length;
       reparentedDeals += report.reparented?.deals ?? 0;
       reparentedContacts += report.reparented?.contacts ?? 0;
       merged++;
@@ -4798,7 +4798,7 @@ export async function applyAccountDomainNameMerge(opts: {
 
 export interface ContactLinkCandidate {
   clusterId: number;
-  accountZohoId: string;
+  accountCRMProviderId: string;
   accountName: string;
   contacts: number;
 }
@@ -4810,12 +4810,12 @@ export async function getContactLinkCandidates(
   const res = await pool.query<{
     cluster_id: number;
     contacts: string;
-    account_zoho_id: string | null;
+    account_CRMProvider_id: string | null;
     account_name: string | null;
   }>(
     `SELECT dr.cluster_id,
             COUNT(*) FILTER (WHERE dr.record_type = 'contact') AS contacts,
-            (ARRAY_AGG(dr.zoho_record_id) FILTER (WHERE dr.record_type = 'account'))[1] AS account_zoho_id,
+            (ARRAY_AGG(dr.CRMProvider_record_id) FILTER (WHERE dr.record_type = 'account'))[1] AS account_CRMProvider_id,
             (ARRAY_AGG(COALESCE(NULLIF(btrim(dr.record_name),''), dr.company_name))
                FILTER (WHERE dr.record_type = 'account'))[1] AS account_name
        FROM duplicate_records dr
@@ -4824,7 +4824,7 @@ export async function getContactLinkCandidates(
         AND dr.cluster_id IS NOT NULL
       GROUP BY dr.cluster_id
      HAVING COUNT(*) FILTER (WHERE dr.record_type = 'contact') >= 1
-        AND COUNT(DISTINCT dr.zoho_record_id) FILTER (WHERE dr.record_type = 'account') = 1
+        AND COUNT(DISTINCT dr.CRMProvider_record_id) FILTER (WHERE dr.record_type = 'account') = 1
         AND COUNT(*) FILTER (WHERE dr.record_type IN ('lead','deal')) = 0
       LIMIT $1`,
     [limit],
@@ -4832,11 +4832,11 @@ export async function getContactLinkCandidates(
   return res.rows
     .map((r) => ({
       clusterId: Number(r.cluster_id),
-      accountZohoId: (r.account_zoho_id || "").trim(),
+      accountCRMProviderId: (r.account_CRMProvider_id || "").trim(),
       accountName: (r.account_name || "").trim(),
       contacts: Number(r.contacts) || 0,
     }))
-    .filter((c) => c.accountZohoId && Number.isFinite(c.clusterId));
+    .filter((c) => c.accountCRMProviderId && Number.isFinite(c.clusterId));
 }
 
 /** Read-only preview: how many clusters / contacts the bulk link would touch. */
@@ -4884,9 +4884,9 @@ export async function applyContactLinkToAccount(opts: {
   const limit = Math.max(1, Math.min(Math.floor(opts.limit || 50), 200));
   const batch = all.slice(0, limit);
   const { buildMergePlan } = await import("./duplicateMergePlanner");
-  const { executeMergePlan, zohoWritesAllowedInEnv } = await import("./duplicateMergeExecutor");
-  if (!opts.dryRun && !zohoWritesAllowedInEnv()) {
-    throw new Error("Live Zoho writes are disabled outside production.");
+  const { executeMergePlan, CRMProviderWritesAllowedInEnv } = await import("./duplicateMergeExecutor");
+  if (!opts.dryRun && !CRMProviderWritesAllowedInEnv()) {
+    throw new Error("Live CRMProvider writes are disabled outside production.");
   }
   let linked = 0,
     contactsLinked = 0,
@@ -4897,12 +4897,12 @@ export async function applyContactLinkToAccount(opts: {
     try {
       const recs = await getRecordsByClusterId(cand.clusterId);
       const plan = buildMergePlan("Contacts", cand.clusterId, recs, {
-        linkAccountZohoId: cand.accountZohoId,
+        linkAccountCRMProviderId: cand.accountCRMProviderId,
       });
       // Only link clusters that are link-only — if there are genuine duplicates,
       // leave the cluster for the merge flow (don't blindly link + risk hiding a
       // real dup).
-      if (plan.duplicateZohoIds.length > 0) {
+      if (plan.duplicateCRMProviderIds.length > 0) {
         <REDACTED_TOKEN>++;
         continue;
       }
@@ -4923,7 +4923,7 @@ export async function applyContactLinkToAccount(opts: {
       if (!errorSample) errorSample = msg;
       logger.warn("[DuplicateRadar] bulk contact link group failed (non-fatal)", {
         clusterId: cand.clusterId,
-        accountZohoId: cand.accountZohoId,
+        accountCRMProviderId: cand.accountCRMProviderId,
         error: msg,
       });
     }
@@ -4941,8 +4941,8 @@ export async function applyContactLinkToAccount(opts: {
 
 /**
  * Resolve auto-merged contact clusters ONCE their tagged duplicates are
- * actually deleted in Zoho (Sample User 2026-06-21). The bulk auto-merge marks a
- * cluster 'auto_merge_pending' (→ shows as "AI-Applied · pending Zoho admin
+ * actually deleted in CRMProvider (Sample User 2026-06-21). The bulk auto-merge marks a
+ * cluster 'auto_merge_pending' (→ shows as "AI-Applied · pending CRMProvider admin
  * delete"). This pass writes the durable resolution-ledger entry only after
  * deletion-detection has removed EVERY tagged duplicate — so the cluster stays
  * pending until the admin truly deletes, then restoreLedgerResolvedClusterStatus
@@ -4977,12 +4977,12 @@ export async function reconcileAutoMergedContactDeletions(): Promise<number> {
       if (!dupIds.length || !a.primary_record_id) continue;
       // Survivor must still exist (a full rebuild would have reassigned ids;
       // don't false-resolve on stale references).
-      const surv = await pool.query<{ zoho_record_id: string }>(
-        `SELECT zoho_record_id FROM duplicate_records WHERE id = $1`,
+      const surv = await pool.query<{ CRMProvider_record_id: string }>(
+        `SELECT CRMProvider_record_id FROM duplicate_records WHERE id = $1`,
         [a.primary_record_id],
       );
-      const survivorZoho = surv.rows[0]?.zoho_record_id;
-      if (!survivorZoho) continue;
+      const survivorCRMProvider = surv.rows[0]?.CRMProvider_record_id;
+      if (!survivorCRMProvider) continue;
       // Are ALL tagged duplicates gone (admin deleted them)?
       const still = await pool.query<{ n: number }>(
         `SELECT COUNT(*)::int AS n FROM duplicate_records WHERE id = ANY($1::int[])`,
@@ -4992,10 +4992,10 @@ export async function reconcileAutoMergedContactDeletions(): Promise<number> {
       // Deleted → record the true merge; the ledger-restore pass resolves it.
       await pool.query(
         `INSERT INTO duplicate_resolution_ledger
-           (module, master_zoho_id, duplicate_zoho_ids, action_type, performed_by, notes, resolved_at)
+           (module, master_CRMProvider_id, duplicate_CRMProvider_ids, action_type, performed_by, notes, resolved_at)
          VALUES ('Contacts', $1, '[]'::jsonb, 'resolve', $2, 'bulk exact email+phone — admin deleted tagged dups', NOW())
-         ON CONFLICT (module, master_zoho_id) WHERE master_zoho_id IS NOT NULL DO NOTHING`,
-        [survivorZoho, a.performed_by || "auto-merge"],
+         ON CONFLICT (module, master_CRMProvider_id) WHERE master_CRMProvider_id IS NOT NULL DO NOTHING`,
+        [survivorCRMProvider, a.performed_by || "auto-merge"],
       );
       // Convert the pending marker to a normal resolve marker so it isn't
       // re-checked and reads correctly in the Manual Actions log.
@@ -5007,7 +5007,7 @@ export async function reconcileAutoMergedContactDeletions(): Promise<number> {
     }
     if (resolved > 0) {
       logger.info(
-        `🔁 [DuplicateRadar] Auto-merge: ${resolved} cluster(s) had their tagged dups deleted in Zoho → resolving`,
+        `🔁 [DuplicateRadar] Auto-merge: ${resolved} cluster(s) had their tagged dups deleted in CRMProvider → resolving`,
       );
     }
     return resolved;
@@ -5024,15 +5024,15 @@ export async function reconcileAutoMergedContactDeletions(): Promise<number> {
  *
  * Walk every status='active' cluster and flip it to status='resolved' when
  * EVERY module present in the cluster has a matching entry in
- * `duplicate_resolution_ledger` (keyed by the survivor's stable Zoho id +
- * module). Run this at the end of every scanZohoCRMForDuplicates pass —
+ * `duplicate_resolution_ledger` (keyed by the survivor's stable CRMProvider id +
+ * module). Run this at the end of every scanCRMProviderCRMForDuplicates pass —
  * right after updateClusterStats — so the cluster that the sync just
  * created for a previously-handled overlap doesn't show back up in the
  * Open queue under a fresh cluster_id.
  *
  * Mechanics: array-set inclusion. `modules_present` is what record_types
  * the cluster has; `modules_ledger_resolved` is the subset of those
- * record_types whose Zoho id is in the ledger for the matching module.
+ * record_types whose CRMProvider id is in the ledger for the matching module.
  * Since modules_ledger_resolved ⊆ modules_present by construction, equal
  * cardinalities mean every present module is covered.
  *
@@ -5058,7 +5058,7 @@ export async function restoreLedgerResolvedClusterStatus(): Promise<{
                 array_agg(DISTINCT record_type)
                   FILTER (WHERE EXISTS (
                     SELECT 1 FROM duplicate_resolution_ledger lg
-                    WHERE lg.master_zoho_id = duplicate_records.zoho_record_id
+                    WHERE lg.master_CRMProvider_id = duplicate_records.CRMProvider_record_id
                       AND lg.module = CASE duplicate_records.record_type
                                         WHEN 'lead'    THEN 'Leads'
                                         WHEN 'deal'    THEN 'Deals'
@@ -5072,7 +5072,7 @@ export async function restoreLedgerResolvedClusterStatus(): Promise<{
                       AND lg.action_type = 'resolve'
                   ))                                                            AS resolved_modules
            FROM duplicate_records
-          WHERE zoho_record_id IS NOT NULL
+          WHERE CRMProvider_record_id IS NOT NULL
           GROUP BY cluster_id
        )
        UPDATE duplicate_clusters dc
@@ -5107,7 +5107,7 @@ export async function restoreLedgerResolvedClusterStatus(): Promise<{
 // Hard reset for the "Rebuild Clusters" admin action.
 // Wipes all clusters + records so the next scan starts from a clean slate.
 /**
- * Snapshot every merge action to Zoho-id keys before a rebuild wipes them.
+ * Snapshot every merge action to CRMProvider-id keys before a rebuild wipes them.
  *
  * Returns how many rows were archived so the caller can refuse to truncate if
  * the snapshot did not happen — losing the AI-Applied backlog is not something
@@ -5116,15 +5116,15 @@ export async function restoreLedgerResolvedClusterStatus(): Promise<{
 export async function archiveMergeActions(): Promise<number> {
   const r = await pool.query(
     `INSERT INTO duplicate_merge_actions_archive
-       (module, master_zoho_id, merged_zoho_ids, action_type, performed_by, notes, original_created_at)
+       (module, master_CRMProvider_id, merged_CRMProvider_ids, action_type, performed_by, notes, original_created_at)
      SELECT DISTINCT ON (ma.cluster_id, mod.module, ma.action_type)
        mod.module,
-       pr.zoho_record_id,
+       pr.CRMProvider_record_id,
        COALESCE(
-         (SELECT jsonb_agg(dr2.zoho_record_id)
+         (SELECT jsonb_agg(dr2.CRMProvider_record_id)
             FROM duplicate_records dr2
            WHERE dr2.cluster_id = ma.cluster_id
-             AND dr2.zoho_record_id IS NOT NULL
+             AND dr2.CRMProvider_record_id IS NOT NULL
              AND dr2.id <> pr.id),
          '[]'::jsonb),
        ma.action_type, ma.performed_by, ma.notes, ma.created_at
@@ -5140,10 +5140,10 @@ export async function archiveMergeActions(): Promise<number> {
                 WHEN 'contact' THEN 'Contacts' WHEN 'account' THEN 'Accounts'
               END AS module
      ) mod ON true
-     WHERE pr.zoho_record_id IS NOT NULL AND mod.module IS NOT NULL
+     WHERE pr.CRMProvider_record_id IS NOT NULL AND mod.module IS NOT NULL
      ORDER BY ma.cluster_id, mod.module, ma.action_type, ma.created_at DESC
-     ON CONFLICT (module, master_zoho_id, action_type) DO UPDATE SET
-       merged_zoho_ids = EXCLUDED.merged_zoho_ids,
+     ON CONFLICT (module, master_CRMProvider_id, action_type) DO UPDATE SET
+       merged_CRMProvider_ids = EXCLUDED.merged_CRMProvider_ids,
        archived_at = NOW(),
        restored_at = NULL`,
   );
@@ -5155,20 +5155,20 @@ export async function archiveMergeActions(): Promise<number> {
 /**
  * Re-attach archived merge actions to the clusters a rescan rebuilt.
  *
- * Matches on the master's Zoho id, so a cluster that reformed around the same
+ * Matches on the master's CRMProvider id, so a cluster that reformed around the same
  * surviving record gets its AI-Applied marker back. Records that no longer
- * exist in Zoho simply do not match — which is correct: if the admin really did
+ * exist in CRMProvider simply do not match — which is correct: if the admin really did
  * delete them, the cluster should not come back as pending.
  */
 export async function restoreMergeActions(): Promise<number> {
   const r = await pool.query(
     `INSERT INTO duplicate_merge_actions
        (cluster_id, primary_record_id, merged_record_ids, action_type, performed_by, notes, created_at)
-     SELECT dr.cluster_id, dr.id, a.merged_zoho_ids, a.action_type, a.performed_by,
+     SELECT dr.cluster_id, dr.id, a.merged_CRMProvider_ids, a.action_type, a.performed_by,
             COALESCE(a.notes, '') || ' [restored after rebuild]', a.original_created_at
        FROM duplicate_merge_actions_archive a
        JOIN duplicate_records dr
-         ON dr.zoho_record_id = a.master_zoho_id
+         ON dr.CRMProvider_record_id = a.master_CRMProvider_id
         AND dr.cluster_id IS NOT NULL
         AND CASE dr.record_type
               WHEN 'lead' THEN 'Leads' WHEN 'deal' THEN 'Deals'
@@ -5198,7 +5198,7 @@ export async function truncateAllDuplicateData(): Promise<void> {
   // truncate and re-credits "solved" to whatever cluster each survivor lands in
   // after the rescan.
   await backfillResolutionLedger();
-  // Snapshot the AI-Applied backlog to Zoho-id keys. NOT wrapped in a
+  // Snapshot the AI-Applied backlog to CRMProvider-id keys. NOT wrapped in a
   // try/catch: if this fails the truncate must not proceed, because the
   // markers it protects cannot be reconstructed afterwards.
   await archiveMergeActions();
@@ -5234,7 +5234,7 @@ export async function getRecordsByClusterId(
  * Two unrelated companies that share a generic name fragment can end up
  * in the same cluster (e.g. "Al Suwaidi Industrial Services" + "APEX
  * Industrial Services"). Surfacing this lets the operator review &
- * split before any merge/link is performed in Zoho.
+ * split before any merge/link is performed in CRMProvider.
  *
  * `domain_groups` maps each domain to the record IDs holding that
  * domain so the UI can offer a one-click "Split by domain" action.
@@ -5592,7 +5592,7 @@ export interface SameDomainClusterGroup {
 /**
  * Find every domain that has ≥2 clusters with status='active' OR
  * status='resolved'. Sample User's view-time fix taught us to count
- * resolved clusters too — they still represent live Zoho records.
+ * resolved clusters too — they still represent live CRMProvider records.
  * 'ignored' clusters (operator-dismissed false positives) are skipped
  * since merging them would resurrect a deliberate dismissal.
  *
@@ -5611,7 +5611,7 @@ export async function findSameDomainClusterDuplicates(opts: {
   const limit = Math.min(500, Math.max(1, opts.limit ?? 200));
 
   // Segment chip (Sample User 2026-07-15): only surface domains that have ≥1 cluster
-  // holding a record on the chosen Zoho Layout — same predicate as every tab.
+  // holding a record on the chosen CRMProvider Layout — same predicate as every tab.
   // $1 = limit+1, so segment bind params start at $2.
   const cmParams: any[] = [limit + 1];
   let cmSegExists = "";
@@ -5727,25 +5727,25 @@ ${cmSegExists}      GROUP BY domain
     try {
       const recQ = await pool.query<{
         cluster_id: number;
-        zoho_record_id: string;
+        CRMProvider_record_id: string;
       }>(
-        `SELECT cluster_id, zoho_record_id FROM duplicate_records
+        `SELECT cluster_id, CRMProvider_record_id FROM duplicate_records
           WHERE cluster_id = ANY($1::int[])
-            AND zoho_record_id IS NOT NULL AND btrim(zoho_record_id) <> ''`,
+            AND CRMProvider_record_id IS NOT NULL AND btrim(CRMProvider_record_id) <> ''`,
         [allClusterIds],
       );
       const clusterOfZid = new Map<string, number>();
       for (const r of recQ.rows) {
-        clusterOfZid.set(String(r.zoho_record_id), Number(r.cluster_id));
+        clusterOfZid.set(String(r.CRMProvider_record_id), Number(r.cluster_id));
       }
       const sepQ = await pool.query<{
-        zoho_id_low: string;
-        zoho_id_high: string;
-      }>(`SELECT zoho_id_low, zoho_id_high FROM duplicate_separation_ledger`);
+        CRMProvider_id_low: string;
+        CRMProvider_id_high: string;
+      }>(`SELECT CRMProvider_id_low, CRMProvider_id_high FROM duplicate_separation_ledger`);
       const separatedPairs = new Set<string>();
       for (const p of sepQ.rows) {
-        const a = clusterOfZid.get(String(p.zoho_id_low));
-        const b = clusterOfZid.get(String(p.zoho_id_high));
+        const a = clusterOfZid.get(String(p.CRMProvider_id_low));
+        const b = clusterOfZid.get(String(p.CRMProvider_id_high));
         if (a != null && b != null && a !== b) {
           separatedPairs.add(a < b ? `${a}|${b}` : `${b}|${a}`);
         }
@@ -6300,7 +6300,7 @@ export async function updateClusterStats(clusterId: number): Promise<void> {
 
   // A cluster has 2+ records of the same type → classic same-module duplicate
   // (merge candidate). A cluster with multiple records but ≤1 per type is a
-  // cross-module overlap (e.g. 1 Lead + 1 Account for the same company) — Zoho
+  // cross-module overlap (e.g. 1 Lead + 1 Account for the same company) — CRMProvider
   // does NOT support cross-module merges, so the action is CONVERT (lead →
   // contact under the existing account) or LINK (set Account_Name on the
   // deal/contact). Either way these are real cleanup work and must be surfaced
@@ -6447,7 +6447,7 @@ export async function searchDuplicates(params: DuplicateSearchParams): Promise<{
   }
 
   if (params.contract_number?.trim()) {
-    conditions.push(`dr.zoho_record_id LIKE $${paramIndex++}`);
+    conditions.push(`dr.CRMProvider_record_id LIKE $${paramIndex++}`);
     queryParams.push(`%${params.contract_number.trim()}%`);
   }
 
@@ -6523,42 +6523,42 @@ export async function searchDuplicates(params: DuplicateSearchParams): Promise<{
 // A1: Replaced destructive clear with incremental approach
 //
 // IMPORTANT: in incremental mode we deliberately do NOT call markStaleRecords()
-// any more. The previous behaviour was unsafe: an incremental Zoho fetch only
+// any more. The previous behaviour was unsafe: an incremental CRMProvider fetch only
 // returns recently-modified records (or the most-recent N), so every untouched
 // record would be marked stale and then purged by cleanupStaleRecords() —
 // silently corrupting the radar over time. Records that were truly deleted in
-// Zoho are now caught by the deletion-detection pass in the scan flow
-// (fetchDeletedZohoRecords + removeRecordsByZohoIds).
+// CRMProvider are now caught by the deletion-detection pass in the scan flow
+// (fetchDeletedCRMProviderRecords + removeRecordsByCRMProviderIds).
 export async function clearAllDuplicateData(): Promise<void> {
   const scanMode = process.env.DUPLICATE_SCAN_MODE || "incremental";
   if (scanMode === "full") {
     logger.info(
-      "🗑️ [DuplicateRadar] FULL mode: Clearing all duplicate data for fresh Zoho import...",
+      "🗑️ [DuplicateRadar] FULL mode: Clearing all duplicate data for fresh CRMProvider import...",
     );
     await pool.query("DELETE FROM duplicate_records");
     await pool.query("DELETE FROM duplicate_clusters");
     logger.info("✅ [DuplicateRadar] All duplicate data cleared");
   } else {
     logger.info(
-      "♻️ [DuplicateRadar] INCREMENTAL mode: relying on upserts + Zoho deletion detection (no stale-marking)",
+      "♻️ [DuplicateRadar] INCREMENTAL mode: relying on upserts + CRMProvider deletion detection (no stale-marking)",
     );
   }
 }
 
-// Purge records by their Zoho ID (used when Zoho reports them as deleted/merged).
+// Purge records by their CRMProvider ID (used when CRMProvider reports them as deleted/merged).
 // Returns the cluster IDs that lost records so the caller can re-score them.
-export async function removeRecordsByZohoIds(
-  zohoIds: string[],
+export async function removeRecordsByCRMProviderIds(
+  CRMProviderIds: string[],
   opts?: { module?: string },
 ): Promise<{ removedCount: number; affectedClusterIds: number[] }> {
-  if (!zohoIds || zohoIds.length === 0) {
+  if (!CRMProviderIds || CRMProviderIds.length === 0) {
     return { removedCount: 0, affectedClusterIds: [] };
   }
-  const params: any[] = [zohoIds];
-  let where = "zoho_record_id = ANY($1::text[])";
+  const params: any[] = [CRMProviderIds];
+  let where = "CRMProvider_record_id = ANY($1::text[])";
   if (opts?.module) {
     params.push(opts.module);
-    where += ` AND zoho_module = $${params.length}`;
+    where += ` AND CRMProvider_module = $${params.length}`;
   }
   const affected = await pool.query(
     `SELECT DISTINCT cluster_id FROM duplicate_records WHERE ${where} AND cluster_id IS NOT NULL`,
@@ -6574,7 +6574,7 @@ export async function removeRecordsByZohoIds(
   const removedCount = del.rowCount || 0;
   if (removedCount > 0) {
     logger.info(
-      `🗑️ [DuplicateRadar] Removed ${removedCount} record(s) deleted/merged in Zoho` +
+      `🗑️ [DuplicateRadar] Removed ${removedCount} record(s) deleted/merged in CRMProvider` +
         (opts?.module ? ` (${opts.module})` : "") +
         ` — ${affectedClusterIds.length} cluster(s) affected`,
     );
@@ -6593,26 +6593,26 @@ export async function markStaleRecords(): Promise<number> {
 }
 
 /**
- * Targeted version of markStaleRecords for a single Zoho record id. Used by
- * the agentic merge executor when Zoho responds 400 "the related id given
- * seems to be invalid" — that record is already gone from Zoho and our
+ * Targeted version of markStaleRecords for a single CRMProvider record id. Used by
+ * the agentic merge executor when CRMProvider responds 400 "the related id given
+ * seems to be invalid" — that record is already gone from CRMProvider and our
  * local copy is a ghost; tagging stale_pending hands it to the existing
  * cleanupStaleRecords sweep so the next tick purges it. Returns true if a
  * row was actually flipped (false = no local match, or already stale).
  */
 export async function markRecordStalePending(
   module: string,
-  zohoRecordId: string,
+  CRMProviderRecordId: string,
 ): Promise<boolean> {
-  if (!zohoRecordId) return false;
+  if (!CRMProviderRecordId) return false;
   const result = await pool.query(
     `UPDATE duplicate_records
         SET match_signals = match_signals || '["stale_pending"]'::jsonb
-      WHERE zoho_record_id = $1
-        AND zoho_module    = $2
+      WHERE CRMProvider_record_id = $1
+        AND CRMProvider_module    = $2
         AND is_mock_data   = false
         AND NOT (match_signals @> '["stale_pending"]'::jsonb)`,
-    [zohoRecordId, module],
+    [CRMProviderRecordId, module],
   );
   return (result.rowCount || 0) > 0;
 }
@@ -6620,9 +6620,9 @@ export async function markRecordStalePending(
 /**
  * Mark specific duplicate_records rows (by primary-key id) stale_pending so the
  * cleanup sweep purges them. Used when a CRM re-check confirms a record was
- * deleted in Zoho (404) — e.g. the admin deleted a Duplicate-Delete duplicate,
+ * deleted in CRMProvider (404) — e.g. the admin deleted a Duplicate-Delete duplicate,
  * so it should disappear from the (now-resolved) cluster, leaving the survivor.
- * Matches by id (not zoho_module, which can be null on legacy rows).
+ * Matches by id (not CRMProvider_module, which can be null on legacy rows).
  */
 export async function markRecordsStalePendingByIds(
   ids: number[],
@@ -6884,7 +6884,7 @@ export function normalizeCompanyName(name: string): string {
 
 // Free-mail providers we never treat as a "corporate domain" for the
 // purpose of the conflict guard below. Mirrors the list already used in
-// `src/utils/zohoCRM.ts`. Keep extending this if more providers appear.
+// `src/utils/CRMProviderCRM.ts`. Keep extending this if more providers appear.
 const PUBLIC_EMAIL_DOMAINS = new Set<string>([
   "<REDACTED_HOST>",
   "<REDACTED_HOST>",
@@ -6918,7 +6918,7 @@ function isCorporateDomain(d: string | null | undefined): boolean {
   return !PUBLIC_EMAIL_DOMAINS.has(norm);
 }
 
-// Placeholder / sentinel company names that CS users type into Zoho when the
+// Placeholder / sentinel company names that CS users type into CRMProvider when the
 // real company name is unknown. These should never form identity-bearing
 // clusters — two unrelated records both named "N/A" are not duplicates of
 // each other. Records with these names get routed to a single quarantine
@@ -6961,55 +6961,55 @@ export function isPlaceholderName(
   return false;
 }
 
-/** The Zoho id of the (primary) Account record inside a matched cluster — used to
+/** The CRMProvider id of the (primary) Account record inside a matched cluster — used to
  * put a re-engagement Deal under the company we already have. Null if the cluster
  * has no account record. */
-export async function getAccountZohoIdByCluster(clusterId: number): Promise<string | null> {
+export async function getAccountCRMProviderIdByCluster(clusterId: number): Promise<string | null> {
   if (!Number.isFinite(clusterId)) return null;
   const r = await pool.query(
-    `SELECT zoho_record_id FROM duplicate_records
+    `SELECT CRMProvider_record_id FROM duplicate_records
        WHERE cluster_id = $1 AND record_type = 'account'
-         AND zoho_record_id IS NOT NULL AND btrim(zoho_record_id) <> ''
+         AND CRMProvider_record_id IS NOT NULL AND btrim(CRMProvider_record_id) <> ''
        ORDER BY is_primary DESC NULLS LAST, modified_date DESC NULLS LAST
        LIMIT 1`,
     [clusterId],
   );
-  return r.rows[0]?.zoho_record_id ? String(r.rows[0].zoho_record_id) : null;
+  return r.rows[0]?.CRMProvider_record_id ? String(r.rows[0].CRMProvider_record_id) : null;
 }
 
-/** Resolve the Zoho id of an existing Account by domain (preferred) then by
+/** Resolve the CRMProvider id of an existing Account by domain (preferred) then by
  * exact normalized company name. Used by the Preflight Structured Push
  * "re-engage churned" action: churned clients are matched via the CS directory
  * (which sets no cluster_id in basic mode), so the existing Account must be
  * found the same way the match was — by domain / company name. Null if none. */
-export async function getAccountZohoIdByDomainOrName(
+export async function getAccountCRMProviderIdByDomainOrName(
   domain: string | null | undefined,
   companyName: string | null | undefined,
 ): Promise<string | null> {
   const dom = String(domain || "").trim().toLowerCase();
   if (dom) {
     const r = await pool.query(
-      `SELECT zoho_record_id FROM duplicate_records
+      `SELECT CRMProvider_record_id FROM duplicate_records
          WHERE record_type = 'account' AND LOWER(btrim(domain)) = $1
-           AND zoho_record_id IS NOT NULL AND btrim(zoho_record_id) <> ''
+           AND CRMProvider_record_id IS NOT NULL AND btrim(CRMProvider_record_id) <> ''
          ORDER BY is_primary DESC NULLS LAST, modified_date DESC NULLS LAST
          LIMIT 1`,
       [dom],
     );
-    if (r.rows[0]?.zoho_record_id) return String(r.rows[0].zoho_record_id);
+    if (r.rows[0]?.CRMProvider_record_id) return String(r.rows[0].CRMProvider_record_id);
   }
   const nm = String(companyName || "").trim().toLowerCase();
   if (nm && nm.length >= 3) {
     const r = await pool.query(
-      `SELECT zoho_record_id FROM duplicate_records
+      `SELECT CRMProvider_record_id FROM duplicate_records
          WHERE record_type = 'account'
            AND LOWER(btrim(COALESCE(record_name, company_name, ''))) = $1
-           AND zoho_record_id IS NOT NULL AND btrim(zoho_record_id) <> ''
+           AND CRMProvider_record_id IS NOT NULL AND btrim(CRMProvider_record_id) <> ''
          ORDER BY is_primary DESC NULLS LAST, modified_date DESC NULLS LAST
          LIMIT 1`,
       [nm],
     );
-    if (r.rows[0]?.zoho_record_id) return String(r.rows[0].zoho_record_id);
+    if (r.rows[0]?.CRMProvider_record_id) return String(r.rows[0].CRMProvider_record_id);
   }
   return null;
 }
@@ -7020,67 +7020,67 @@ export async function getAccountZohoIdByDomainOrName(
  * sequential scans (it hung the UI). This loads once, then callers match in
  * memory. Best row per key wins (primary, then most-recently-modified). */
 export async function getAccountDirectory(): Promise<{
-  byDomain: Map<string, { zohoId: string; name: string }>;
-  byName: Map<string, { zohoId: string; name: string }>;
-  byId: Map<string, { zohoId: string; name: string }>;
+  byDomain: Map<string, { CRMProviderId: string; name: string }>;
+  byName: Map<string, { CRMProviderId: string; name: string }>;
+  byId: Map<string, { CRMProviderId: string; name: string }>;
 }> {
   const r = await pool.query(
-    `SELECT zoho_record_id,
+    `SELECT CRMProvider_record_id,
             LOWER(btrim(domain)) AS dom,
             LOWER(btrim(COALESCE(record_name, company_name, ''))) AS nm,
             COALESCE(NULLIF(btrim(record_name), ''), NULLIF(btrim(company_name), ''), '') AS disp
        FROM duplicate_records
       WHERE record_type = 'account'
-        AND zoho_record_id IS NOT NULL AND btrim(zoho_record_id) <> ''
+        AND CRMProvider_record_id IS NOT NULL AND btrim(CRMProvider_record_id) <> ''
       ORDER BY is_primary DESC NULLS LAST, modified_date DESC NULLS LAST`,
   );
-  const byDomain = new Map<string, { zohoId: string; name: string }>();
-  const byName = new Map<string, { zohoId: string; name: string }>();
-  const byId = new Map<string, { zohoId: string; name: string }>();
+  const byDomain = new Map<string, { CRMProviderId: string; name: string }>();
+  const byName = new Map<string, { CRMProviderId: string; name: string }>();
+  const byId = new Map<string, { CRMProviderId: string; name: string }>();
   for (const row of r.rows) {
-    const ref = { zohoId: String(row.zoho_record_id), name: String(row.disp || "") };
+    const ref = { CRMProviderId: String(row.CRMProvider_record_id), name: String(row.disp || "") };
     const dom = String(row.dom || "");
     const nm = String(row.nm || "");
     if (dom && !byDomain.has(dom)) byDomain.set(dom, ref);   // first = best (query is pre-ordered)
     if (nm && nm.length >= 3 && !byName.has(nm)) byName.set(nm, ref);
-    if (!byId.has(ref.zohoId)) byId.set(ref.zohoId, ref);
+    if (!byId.has(ref.CRMProviderId)) byId.set(ref.CRMProviderId, ref);
   }
   return { byDomain, byName, byId };
 }
 
-/** Like getAccountZohoIdByDomainOrName but returns the account's display NAME
- * alongside its Zoho id, so the Preflight push can show a human-readable
+/** Like getAccountCRMProviderIdByDomainOrName but returns the account's display NAME
+ * alongside its CRMProvider id, so the Preflight push can show a human-readable
  * "links to <Account>" instead of a bare id. Same domain→name match order. */
 export async function getAccountRefByDomainOrName(
   domain: string | null | undefined,
   companyName: string | null | undefined,
-): Promise<{ zohoId: string; name: string } | null> {
+): Promise<{ CRMProviderId: string; name: string } | null> {
   const dom = String(domain || "").trim().toLowerCase();
   if (dom) {
     const r = await pool.query(
-      `SELECT zoho_record_id, COALESCE(NULLIF(btrim(record_name), ''), NULLIF(btrim(company_name), ''), '') AS name
+      `SELECT CRMProvider_record_id, COALESCE(NULLIF(btrim(record_name), ''), NULLIF(btrim(company_name), ''), '') AS name
          FROM duplicate_records
          WHERE record_type = 'account' AND LOWER(btrim(domain)) = $1
-           AND zoho_record_id IS NOT NULL AND btrim(zoho_record_id) <> ''
+           AND CRMProvider_record_id IS NOT NULL AND btrim(CRMProvider_record_id) <> ''
          ORDER BY is_primary DESC NULLS LAST, modified_date DESC NULLS LAST
          LIMIT 1`,
       [dom],
     );
-    if (r.rows[0]?.zoho_record_id) return { zohoId: String(r.rows[0].zoho_record_id), name: String(r.rows[0].name || "") };
+    if (r.rows[0]?.CRMProvider_record_id) return { CRMProviderId: String(r.rows[0].CRMProvider_record_id), name: String(r.rows[0].name || "") };
   }
   const nm = String(companyName || "").trim().toLowerCase();
   if (nm && nm.length >= 3) {
     const r = await pool.query(
-      `SELECT zoho_record_id, COALESCE(NULLIF(btrim(record_name), ''), NULLIF(btrim(company_name), ''), '') AS name
+      `SELECT CRMProvider_record_id, COALESCE(NULLIF(btrim(record_name), ''), NULLIF(btrim(company_name), ''), '') AS name
          FROM duplicate_records
          WHERE record_type = 'account'
            AND LOWER(btrim(COALESCE(record_name, company_name, ''))) = $1
-           AND zoho_record_id IS NOT NULL AND btrim(zoho_record_id) <> ''
+           AND CRMProvider_record_id IS NOT NULL AND btrim(CRMProvider_record_id) <> ''
          ORDER BY is_primary DESC NULLS LAST, modified_date DESC NULLS LAST
          LIMIT 1`,
       [nm],
     );
-    if (r.rows[0]?.zoho_record_id) return { zohoId: String(r.rows[0].zoho_record_id), name: String(r.rows[0].name || "") };
+    if (r.rows[0]?.CRMProvider_record_id) return { CRMProviderId: String(r.rows[0].CRMProvider_record_id), name: String(r.rows[0].name || "") };
   }
   return null;
 }
@@ -7104,7 +7104,7 @@ async function clusterHasConflictingDomain(
   // Pull both the explicit domain column AND the email so we can derive
   // the corporate part of the email when Company_Domain is empty. Without
   // this, a cluster whose existing records have email-only identity
-  // (Zoho Company_Domain blank) returns an empty conflict set and the
+  // (CRMProvider Company_Domain blank) returns an empty conflict set and the
   // guard becomes a no-op.
   const res = await pool.query(
     `SELECT LOWER(domain) AS d, email
@@ -7401,10 +7401,10 @@ function _sepPair(a: string, b: string): [string, string] {
   return a < b ? [a, b] : [b, a];
 }
 
-// Cache the set of Zoho ids that appear in ANY separation pair, so a full
+// Cache the set of CRMProvider ids that appear in ANY separation pair, so a full
 // rebuild (50k+ records) does ONE lookup per sync instead of one per record:
 // the vast majority of records aren't in the ledger, so we short-circuit
-// getSeparatedZohoIds() without a query. Invalidated on every write; TTL is a
+// getSeparatedCRMProviderIds() without a query. Invalidated on every write; TTL is a
 // backstop. Refreshed lazily.
 let _sepParticipants: Set<string> | null = null;
 let _sepParticipantsAt = 0;
@@ -7417,9 +7417,9 @@ export async function getSeparationParticipants(): Promise<Set<string>> {
   }
   const r = await pool
     .query(
-      `SELECT zoho_id_low AS z FROM duplicate_separation_ledger
+      `SELECT CRMProvider_id_low AS z FROM duplicate_separation_ledger
        UNION
-       SELECT zoho_id_high AS z FROM duplicate_separation_ledger`,
+       SELECT CRMProvider_id_high AS z FROM duplicate_separation_ledger`,
     )
     .catch(() => ({ rows: [] as any[] }));
   _sepParticipants = new Set((r.rows || []).map((x: any) => x.z).filter(Boolean));
@@ -7428,7 +7428,7 @@ export async function getSeparationParticipants(): Promise<Set<string>> {
 }
 
 /**
- * Record separations: every pair of Zoho ids that ended up in DIFFERENT groups
+ * Record separations: every pair of CRMProvider ids that ended up in DIFFERENT groups
  * becomes a permanent "do not cluster together" entry. Pass each resulting
  * group as its own array (a Split passes [survivors, movedOut, ...]; a Dismiss
  * passes one singleton group per record so all pairs are separated). Idempotent.
@@ -7456,9 +7456,9 @@ export async function recordSeparations(
   for (const [low, high] of pairs) {
     const r = await pool
       .query(
-        `INSERT INTO duplicate_separation_ledger (zoho_id_low, zoho_id_high, reason, created_by)
+        `INSERT INTO duplicate_separation_ledger (CRMProvider_id_low, CRMProvider_id_high, reason, created_by)
          VALUES ($1, $2, $3, $4)
-         ON CONFLICT (zoho_id_low, zoho_id_high) DO NOTHING`,
+         ON CONFLICT (CRMProvider_id_low, CRMProvider_id_high) DO NOTHING`,
         [low, high, reason, createdBy],
       )
       .catch(() => ({ rowCount: 0 }));
@@ -7477,12 +7477,12 @@ export async function recordSeparations(
 export async function getSeparationPairKeySet(): Promise<Set<string>> {
   const out = new Set<string>();
   try {
-    const r = await pool.query<{ zoho_id_low: string; zoho_id_high: string }>(
-      `SELECT zoho_id_low, zoho_id_high FROM duplicate_separation_ledger`,
+    const r = await pool.query<{ CRMProvider_id_low: string; CRMProvider_id_high: string }>(
+      `SELECT CRMProvider_id_low, CRMProvider_id_high FROM duplicate_separation_ledger`,
     );
     for (const row of r.rows) {
-      if (row.zoho_id_low && row.zoho_id_high) {
-        out.add(row.zoho_id_low + "|" + row.zoho_id_high);
+      if (row.CRMProvider_id_low && row.CRMProvider_id_high) {
+        out.add(row.CRMProvider_id_low + "|" + row.CRMProvider_id_high);
       }
     }
   } catch {
@@ -7491,34 +7491,34 @@ export async function getSeparationPairKeySet(): Promise<Set<string>> {
   return out;
 }
 
-/** All Zoho ids this record has been separated from (empty for the 99% case). */
-export async function getSeparatedZohoIds(zohoId?: string): Promise<string[]> {
-  if (!zohoId) return [];
+/** All CRMProvider ids this record has been separated from (empty for the 99% case). */
+export async function getSeparatedCRMProviderIds(CRMProviderId?: string): Promise<string[]> {
+  if (!CRMProviderId) return [];
   // Fast path: if this id isn't in any separation pair, skip the per-record
   // query entirely (the common case on a 50k-record sync).
   const participants = await getSeparationParticipants();
-  if (!participants.has(zohoId)) return [];
+  if (!participants.has(CRMProviderId)) return [];
   const r = await pool
     .query(
-      `SELECT CASE WHEN zoho_id_low = $1 THEN zoho_id_high ELSE zoho_id_low END AS other
+      `SELECT CASE WHEN CRMProvider_id_low = $1 THEN CRMProvider_id_high ELSE CRMProvider_id_low END AS other
          FROM duplicate_separation_ledger
-        WHERE zoho_id_low = $1 OR zoho_id_high = $1`,
-      [zohoId],
+        WHERE CRMProvider_id_low = $1 OR CRMProvider_id_high = $1`,
+      [CRMProviderId],
     )
     .catch(() => ({ rows: [] as any[] }));
   return (r.rows || []).map((x: any) => x.other).filter(Boolean);
 }
 
-async function clusterContainsAnyZohoId(
+async function clusterContainsAnyCRMProviderId(
   clusterId: number,
-  zohoIds: string[],
+  CRMProviderIds: string[],
 ): Promise<boolean> {
-  if (!zohoIds.length) return false;
+  if (!CRMProviderIds.length) return false;
   const r = await pool
     .query(
       `SELECT 1 FROM duplicate_records
-        WHERE cluster_id = $1 AND zoho_record_id = ANY($2::text[]) LIMIT 1`,
-      [clusterId, zohoIds],
+        WHERE cluster_id = $1 AND CRMProvider_record_id = ANY($2::text[]) LIMIT 1`,
+      [clusterId, CRMProviderIds],
     )
     .catch(() => ({ rows: [] as any[] }));
   return (r.rows || []).length > 0;
@@ -7537,10 +7537,10 @@ export async function findOrCreateClusterByCompany(
   // are duplicates when the module is "Accounts".
   recordType?: "lead" | "deal" | "contact" | "account",
   recordName?: string,
-  // The incoming record's Zoho id — when set, the separation ledger is honored
+  // The incoming record's CRMProvider id — when set, the separation ledger is honored
   // so a record the operator split/dismissed apart is never re-fused into a
   // cluster still holding a record it was separated from (Sample User 2026-06-20).
-  zohoRecordId?: string,
+  CRMProviderRecordId?: string,
 ): Promise<DuplicateCluster> {
   // CONTACTS: bypass the company-name / domain branches and require ≥2
   // strict-match attributes (email / phone / name). Two contacts sharing
@@ -7585,7 +7585,7 @@ export async function findOrCreateClusterByCompany(
 
   // Effective identity domain: prefer the explicit Company_Domain field, but
   // fall back to the corporate part of the email address. Without this fallback
-  // a record whose Zoho Company_Domain is empty (but whose email is on a real
+  // a record whose CRMProvider Company_Domain is empty (but whose email is on a real
   // corporate domain) bypasses the conflict guard below and gets fused with
   // any same-named cluster — the root cause of mixed-cluster fan-outs on
   // generic Saudi/Arabic company names.
@@ -7603,20 +7603,20 @@ export async function findOrCreateClusterByCompany(
   // skip any candidate cluster that still holds one of their separated records
   // and fall through to the next branch (ultimately a fresh cluster). Empty for
   // virtually every record → `notSeparatedFrom` is a no-op, zero added queries.
-  const separatedIds = await getSeparatedZohoIds(zohoRecordId);
+  const separatedIds = await getSeparatedCRMProviderIds(CRMProviderRecordId);
   // DIAGNOSTIC (Sample User 2026-06-26): when an operator reports a dismissed/split
   // cluster "coming back", this confirms whether the ledger guard is actually
   // firing for the re-synced record. Only logs for the rare separated record,
   // so it's quiet in normal operation. No behaviour change.
   if (separatedIds.length > 0) {
     logger.info(
-      `[DuplicateRadar][sep-guard] record ${zohoRecordId} (${recordType}, "${companyName}") is separated from ${separatedIds.length} id(s) — clusterer will refuse to re-fuse it`,
+      `[DuplicateRadar][sep-guard] record ${CRMProviderRecordId} (${recordType}, "${companyName}") is separated from ${separatedIds.length} id(s) — clusterer will refuse to re-fuse it`,
     );
   }
   const notSeparatedFrom = async (clu: any): Promise<boolean> =>
     separatedIds.length === 0
       ? true
-      : !(await clusterContainsAnyZohoId(clu.id, separatedIds));
+      : !(await clusterContainsAnyCRMProviderId(clu.id, separatedIds));
 
   if (domain) {
     const existingByDomain = await pool.query(
@@ -7966,38 +7966,38 @@ export async function getClusterSnapshot(
 }
 
 /**
- * Durable "solved" ledger write — keyed by STABLE Zoho identity (module +
- * survivor zoho id), NOT by cluster_id. Survives a Rebuild Clusters wipe so the
+ * Durable "solved" ledger write — keyed by STABLE CRMProvider identity (module +
+ * survivor CRMProvider id), NOT by cluster_id. Survives a Rebuild Clusters wipe so the
  * per-module "solved" scoreboard does not collapse to 0 on every rescan.
- * Best-effort — never throws to the caller. No-op without a master zoho id
+ * Best-effort — never throws to the caller. No-op without a master CRMProvider id
  * (nothing stable to re-attribute after a rebuild).
  */
 export async function recordResolutionLedgerEntry(params: {
   module: string;
-  masterZohoId: string | null | undefined;
-  duplicateZohoIds?: string[];
+  masterCRMProviderId: string | null | undefined;
+  duplicateCRMProviderIds?: string[];
   actionType?: "resolve" | "module_resolved";
   performedBy?: string;
   notes?: string;
 }): Promise<void> {
-  const { module, masterZohoId } = params;
-  if (!module || !masterZohoId) return;
+  const { module, masterCRMProviderId } = params;
+  if (!module || !masterCRMProviderId) return;
   try {
     await pool.query(
       `INSERT INTO duplicate_resolution_ledger
-         (module, master_zoho_id, duplicate_zoho_ids, action_type, performed_by, notes)
+         (module, master_CRMProvider_id, duplicate_CRMProvider_ids, action_type, performed_by, notes)
        VALUES ($1, $2, $3::jsonb, $4, $5, $6)
-       ON CONFLICT (module, master_zoho_id) WHERE master_zoho_id IS NOT NULL
+       ON CONFLICT (module, master_CRMProvider_id) WHERE master_CRMProvider_id IS NOT NULL
        DO UPDATE SET
-         duplicate_zoho_ids = EXCLUDED.duplicate_zoho_ids,
+         duplicate_CRMProvider_ids = EXCLUDED.duplicate_CRMProvider_ids,
          action_type = EXCLUDED.action_type,
          performed_by = EXCLUDED.performed_by,
          notes = EXCLUDED.notes,
          resolved_at = NOW()`,
       [
         module,
-        masterZohoId,
-        JSON.stringify(params.duplicateZohoIds || []),
+        masterCRMProviderId,
+        JSON.stringify(params.duplicateCRMProviderIds || []),
         params.actionType || "resolve",
         params.performedBy || null,
         params.notes || null,
@@ -8074,11 +8074,11 @@ export async function resolveCluster(
   if (action === "ignore") {
     try {
       const zr = await pool.query(
-        `SELECT zoho_record_id FROM duplicate_records
-          WHERE cluster_id = $1 AND zoho_record_id IS NOT NULL`,
+        `SELECT CRMProvider_record_id FROM duplicate_records
+          WHERE cluster_id = $1 AND CRMProvider_record_id IS NOT NULL`,
         [clusterId],
       );
-      const groups = zr.rows.map((r) => [r.zoho_record_id as string]);
+      const groups = zr.rows.map((r) => [r.CRMProvider_record_id as string]);
       if (groups.length >= 2) {
         const n = await recordSeparations(groups, "dismiss", performedBy);
         logger.info(
@@ -8095,12 +8095,12 @@ export async function resolveCluster(
   // Durable ledger write so this "Mark Resolved" survives a future Rebuild
   // Clusters wipe. Only 'resolve' counts as solved ('ignore' is a dismissal).
   // We key EACH present module to a record OF THAT MODULE (its primary if any,
-  // else a representative) so the survivor's stable Zoho id re-attributes to
+  // else a representative) so the survivor's stable CRMProvider id re-attributes to
   // whatever cluster it lands in after a rescan. Best-effort.
   if (action === "resolve") {
     try {
       const recs = await pool.query(
-        `SELECT id, record_type, zoho_record_id, is_primary
+        `SELECT id, record_type, CRMProvider_record_id, is_primary
            FROM duplicate_records WHERE cluster_id = $1`,
         [clusterId],
       );
@@ -8117,21 +8117,21 @@ export async function resolveCluster(
       }
       for (const m of modules) {
         const modRecs = recs.rows.filter(
-          (r) => rtToModule[r.record_type as string] === m && r.zoho_record_id,
+          (r) => rtToModule[r.record_type as string] === m && r.CRMProvider_record_id,
         );
         if (modRecs.length === 0) continue;
         const modMaster =
           modRecs.find((r) => primaryRecordId && r.id === primaryRecordId) ||
           modRecs.find((r) => r.is_primary) ||
           modRecs[0];
-        const modMasterZoho = modMaster.zoho_record_id as string;
-        const dupZohoIds = modRecs
-          .filter((r) => r.zoho_record_id && r.zoho_record_id !== modMasterZoho)
-          .map((r) => r.zoho_record_id as string);
+        const modMasterCRMProvider = modMaster.CRMProvider_record_id as string;
+        const dupCRMProviderIds = modRecs
+          .filter((r) => r.CRMProvider_record_id && r.CRMProvider_record_id !== modMasterCRMProvider)
+          .map((r) => r.CRMProvider_record_id as string);
         await recordResolutionLedgerEntry({
           module: m,
-          masterZohoId: modMasterZoho,
-          duplicateZohoIds: dupZohoIds,
+          masterCRMProviderId: modMasterCRMProvider,
+          duplicateCRMProviderIds: dupCRMProviderIds,
           actionType: "resolve",
           performedBy,
           notes: notes || "Mark Resolved",
@@ -8157,7 +8157,7 @@ export async function bulkResolve(
   for (const id of clusterIds) {
     if (action === "reopen") {
       // Re-open = set the cluster back to 'active' (recover a mistaken dismiss /
-      // resolve). No Zoho changes — same as the per-cluster Re-open.
+      // resolve). No CRMProvider changes — same as the per-cluster Re-open.
       await updateClusterStatus(id, "active");
     } else {
       await resolveCluster(id, action, performedBy);
@@ -8171,21 +8171,21 @@ export async function bulkResolve(
  * R3 — Post-merge verification.
  *
  * After an operator marks a cluster resolved (asserting they merged the
- * duplicates in Zoho), check whether Zoho actually has the non-primary
- * records gone. We do per-record `searchZohoRecords(module, id:equals:RID)`
- * lookups — returning 0 rows means the record no longer exists in Zoho
+ * duplicates in CRMProvider), check whether CRMProvider actually has the non-primary
+ * records gone. We do per-record `searchCRMProviderRecords(module, id:equals:RID)`
+ * lookups — returning 0 rows means the record no longer exists in CRMProvider
  * (it was merged, deleted, or moved).
  *
  * Returns a structured result. The caller decides what to do with it
  * (write back verification_state, flip status, notify operator).
  *
  * Why per-record search and not the /deleted feed: the deleted feed has
- * an indeterminate lag (Zoho documents "up to a few minutes") so it's
+ * an indeterminate lag (CRMProvider documents "up to a few minutes") so it's
  * unreliable in the seconds immediately after a merge. A search-by-id
  * returns 204/empty within the same request as the operator's action.
  *
  * Concurrency: at most 4 records are checked in parallel to stay polite
- * with Zoho's rate limiter. Most clusters have 2–5 records so we don't
+ * with CRMProvider's rate limiter. Most clusters have 2–5 records so we don't
  * fan out further.
  */
 export interface ClusterVerificationResult {
@@ -8196,32 +8196,32 @@ export interface ClusterVerificationResult {
   notes: string;
   per_record: Array<{
     record_id: number;
-    zoho_record_id: string | null;
+    CRMProvider_record_id: string | null;
     module: string;
     status: "deleted" | "still_present" | "error" | "skipped";
     detail?: string;
   }>;
 }
 
-export async function verifyClusterMergedInZoho(
+export async function verifyClusterMergedInCRMProvider(
   clusterId: number,
 ): Promise<ClusterVerificationResult> {
-  const { searchZohoRecords } = await import("./zohoCRM");
+  const { searchCRMProviderRecords } = await import("./CRMProviderCRM");
 
   const rowsR = await pool.query<{
     id: number;
-    zoho_record_id: string | null;
-    zoho_module: string | null;
+    CRMProvider_record_id: string | null;
+    CRMProvider_module: string | null;
     record_type: string | null;
     is_primary: boolean;
   }>(
-    `SELECT id, zoho_record_id, zoho_module, record_type, is_primary
+    `SELECT id, CRMProvider_record_id, CRMProvider_module, record_type, is_primary
        FROM duplicate_records
       WHERE cluster_id = $1`,
     [clusterId],
   );
 
-  // Only the non-primary records are expected to be gone in Zoho.
+  // Only the non-primary records are expected to be gone in CRMProvider.
   const nonPrimary = rowsR.rows.filter((r) => !r.is_primary);
 
   if (nonPrimary.length === 0) {
@@ -8231,18 +8231,18 @@ export async function verifyClusterMergedInZoho(
       still_present: 0,
       errors: 0,
       notes:
-        "No non-primary records in this cluster; nothing to verify against Zoho.",
+        "No non-primary records in this cluster; nothing to verify against CRMProvider.",
       per_record: [],
     };
   }
 
-  // Map record_type → Zoho module name. Records carry zoho_module directly
+  // Map record_type → CRMProvider module name. Records carry CRMProvider_module directly
   // when ingested via the scanner; fall back to type-based mapping for
   // older rows that don't have it.
   const moduleFor = (
     r: (typeof nonPrimary)[number],
   ): string | null => {
-    if (r.zoho_module && r.zoho_module.trim()) return r.zoho_module.trim();
+    if (r.CRMProvider_module && r.CRMProvider_module.trim()) return r.CRMProvider_module.trim();
     const t = (r.record_type ?? "").trim().toLowerCase();
     if (t === "lead") return "Leads";
     if (t === "deal") return "Deals";
@@ -8254,54 +8254,54 @@ export async function verifyClusterMergedInZoho(
   const concurrency = 4;
   const perRecord: ClusterVerificationResult["per_record"] = [];
 
-  // Run lookups in batches to bound Zoho API pressure.
+  // Run lookups in batches to bound CRMProvider API pressure.
   for (let i = 0; i < nonPrimary.length; i += concurrency) {
     const batch = nonPrimary.slice(i, i + concurrency);
     const results = await Promise.all(
       batch.map(async (r) => {
-        if (!r.zoho_record_id) {
+        if (!r.CRMProvider_record_id) {
           return {
             record_id: r.id,
-            zoho_record_id: null,
+            CRMProvider_record_id: null,
             module: r.record_type ?? "unknown",
             status: "skipped" as const,
-            detail: "Record has no zoho_record_id (synthetic / pre-sync row)",
+            detail: "Record has no CRMProvider_record_id (synthetic / pre-sync row)",
           };
         }
         const mod = moduleFor(r);
         if (!mod) {
           return {
             record_id: r.id,
-            zoho_record_id: r.zoho_record_id,
+            CRMProvider_record_id: r.CRMProvider_record_id,
             module: r.record_type ?? "unknown",
             status: "skipped" as const,
-            detail: `Unknown Zoho module for record_type=${r.record_type}`,
+            detail: `Unknown CRMProvider module for record_type=${r.record_type}`,
           };
         }
         try {
-          const found = await searchZohoRecords(
+          const found = await searchCRMProviderRecords(
             mod,
-            `(id:equals:${r.zoho_record_id})`,
+            `(id:equals:${r.CRMProvider_record_id})`,
           );
           if (!found || found.length === 0) {
             return {
               record_id: r.id,
-              zoho_record_id: r.zoho_record_id,
+              CRMProvider_record_id: r.CRMProvider_record_id,
               module: mod,
               status: "deleted" as const,
             };
           }
           return {
             record_id: r.id,
-            zoho_record_id: r.zoho_record_id,
+            CRMProvider_record_id: r.CRMProvider_record_id,
             module: mod,
             status: "still_present" as const,
-            detail: `Zoho still has this ${mod.slice(0, -1)} record`,
+            detail: `CRMProvider still has this ${mod.slice(0, -1)} record`,
           };
         } catch (err: any) {
           return {
             record_id: r.id,
-            zoho_record_id: r.zoho_record_id,
+            CRMProvider_record_id: r.CRMProvider_record_id,
             module: mod,
             status: "error" as const,
             detail: String(err?.message ?? err),
@@ -8320,15 +8320,15 @@ export async function verifyClusterMergedInZoho(
   const skipped = perRecord.filter((p) => p.status === "skipped").length;
 
   // "Verified" = every non-primary record we could check is gone, AND no
-  // errors. Skipped records (no zoho id) don't fail verification but they
+  // errors. Skipped records (no CRMProvider id) don't fail verification but they
   // do mean we couldn't fully confirm.
   const verified = stillPresent === 0 && errors === 0;
   const noteParts: string[] = [];
-  if (confirmed > 0) noteParts.push(`${confirmed} confirmed deleted in Zoho`);
+  if (confirmed > 0) noteParts.push(`${confirmed} confirmed deleted in CRMProvider`);
   if (stillPresent > 0)
-    noteParts.push(`${stillPresent} still present in Zoho`);
+    noteParts.push(`${stillPresent} still present in CRMProvider`);
   if (errors > 0) noteParts.push(`${errors} lookup error(s)`);
-  if (skipped > 0) noteParts.push(`${skipped} skipped (no zoho id)`);
+  if (skipped > 0) noteParts.push(`${skipped} skipped (no CRMProvider id)`);
   const notes =
     noteParts.length > 0 ? noteParts.join("; ") : "No records to verify.";
 
@@ -8427,7 +8427,7 @@ export async function getMergeHistoryEnriched(opts: {
 /**
  * Append a merge_action row WITHOUT closing the cluster. Used for cross-module
  * clusters when a single-module Apply (e.g. Accounts) finishes — the merged
- * Accounts are tagged Duplicate-Delete in Zoho but the cluster stays open so
+ * Accounts are tagged Duplicate-Delete in CRMProvider but the cluster stays open so
  * the operator can still resolve its Contacts/Deals/Leads. Without this log
  * row there is no record of which Accounts were already merged, so the next
  * Contact merge plan would surface the deleted SLB / Slb duplicates as link
@@ -8708,7 +8708,7 @@ export async function checkForDuplicates(params: {
  * R4 — Duplicate creation-rate trend.
  *
  * Industry-standard leading indicator: count NEW DUPLICATE records created
- * per bucket (week or day) — "are bad-data inputs still flowing into Zoho
+ * per bucket (week or day) — "are bad-data inputs still flowing into CRMProvider
  * at the same rate, or is prevention work moving the needle?" Stakeholders
  * care about the slope, not the absolute count.
  *
@@ -8740,7 +8740,7 @@ export interface DuplicateCreationTrendBucket {
 
 /**
  * AMOUNT-AT-RISK OPEN vs CLOSED breakdown (Sample User 2026-07-29). The Amount at
- * risk = SUM of the Zoho `Amount` of every DUPLICATE (non-primary) deal in an
+ * risk = SUM of the CRMProvider `Amount` of every DUPLICATE (non-primary) deal in an
  * ACTIVE cluster. This splits that total by deal STAGE: "closed" = terminal /
  * customer states (Paid, Agreement Signed, Closed Won/Lost, Dropped, Cancelled,
  * Transferred to CS, Client Activated) — a duplicate of an already-concluded
@@ -8874,9 +8874,9 @@ export async function getInflationOpenClosedBreakdown(
 }
 
 /**
- * CLIENTHUB ↔ ZOHO RECONCILE BY CRM ID (Sample User 2026-08-03). Given the Zoho
+ * CLIENTHUB ↔ CRMProvider RECONCILE BY CRM ID (Sample User 2026-08-03). Given the CRMProvider
  * record IDs ClientHub stores (its "CRM ID" column), classify each against the
- * Zoho mirror so a ClientHub-vs-QMS count gap can be attributed exactly:
+ * CRMProvider mirror so a ClientHub-vs-QMS count gap can be attributed exactly:
  *   corporate_deal   — a Deal on a ExampleOrg layout WITH a CS Phase set → this is
  *                      what the CS-Lifecycle census counts.
  *   non_corporate    — a Deal but on a Marketplace / WalaOne layout → the census
@@ -8885,7 +8885,7 @@ export async function getInflationOpenClosedBreakdown(
  *                      the deal-based census can't count it.
  *   blank_phase      — a ExampleOrg Deal but its CS Phase field is empty → the
  *                      is_cs_deal gate drops it.
- *   not_in_mirror    — the id isn't in the synced Zoho mirror at all.
+ *   not_in_mirror    — the id isn't in the synced CRMProvider mirror at all.
  * Read-only.
  */
 interface ReconcilePhaseBucket {
@@ -8961,12 +8961,12 @@ export async function reconcileCrmIds(
     return { total: 0, summary, by_phase_corporate, clienthub_phases, rows: [] };
   const dbRows = (
     await pool.query(
-      `SELECT r.zoho_record_id AS crm_id, r.record_type,
+      `SELECT r.CRMProvider_record_id AS crm_id, r.record_type,
               COALESCE(NULLIF(r.layout_name,''), r.raw_data#>>'{Layout,name}', r.raw_data#>>'{$layout,name}', r.raw_data->>'Layout','') AS layout,
               COALESCE(NULLIF(r.raw_data->>'Phase',''), NULLIF(r.raw_data->>'CS_Phase',''), NULLIF(r.raw_data->>'Customer_Phase','')) AS phase,
               COALESCE(NULLIF(r.stage,''), r.raw_data->>'Stage','') AS stage
          FROM duplicate_records r
-        WHERE r.zoho_record_id = ANY($1::text[])`,
+        WHERE r.CRMProvider_record_id = ANY($1::text[])`,
       [ids],
     )
   ).rows as any[];
@@ -9022,38 +9022,38 @@ export async function reconcileCrmIds(
 
 /**
  * LIVE "lost data" check (Sample User 2026-08-04). For ClientHub CRM IDs the reconcile
- * flagged as not_in_mirror, ask Zoho DIRECTLY (GET by id) across the likely
+ * flagged as not_in_mirror, ask CRMProvider DIRECTLY (GET by id) across the likely
  * modules. Three outcomes per id:
- *   - in_zoho : found live in some module → just a local sync gap, not lost.
+ *   - in_CRMProvider : found live in some module → just a local sync gap, not lost.
  *   - lost    : every module returned 404/empty → genuinely gone from the CRM
  *               (deleted / never existed) — the "lost data" the CS team wants.
  *   - error   : a lookup errored (rate-limit/auth) and none confirmed found →
  *               could NOT verify, so we do NOT call it lost.
  * Read-only (GETs), bounded, small concurrency.
  */
-export async function verifyCrmIdsInZoho(
+export async function verifyCrmIdsInCRMProvider(
   crmIds: string[],
   opts?: { max?: number },
 ): Promise<{
   total: number;
-  in_zoho: number;
+  in_CRMProvider: number;
   lost: number;
   errored: number;
-  rows: Array<{ crm_id: string; verdict: "in_zoho" | "lost" | "error"; module: string | null }>;
+  rows: Array<{ crm_id: string; verdict: "in_CRMProvider" | "lost" | "error"; module: string | null }>;
 }> {
   const ids = Array.from(
     new Set((crmIds || []).map((x) => String(x).trim()).filter(Boolean)),
   ).slice(0, Math.max(1, Math.min(opts?.max ?? 500, 2000)));
   const rows: Array<{
     crm_id: string;
-    verdict: "in_zoho" | "lost" | "error";
+    verdict: "in_CRMProvider" | "lost" | "error";
     module: string | null;
   }> = [];
-  let in_zoho = 0;
+  let in_CRMProvider = 0;
   let lost = 0;
   let errored = 0;
-  if (!ids.length) return { total: 0, in_zoho, lost, errored, rows };
-  const { fetchZohoRecordById } = await import("./zohoCRM");
+  if (!ids.length) return { total: 0, in_CRMProvider, lost, errored, rows };
+  const { fetchCRMProviderRecordById } = await import("./CRMProviderCRM");
   const modules = ["Deals", "Accounts", "Contacts", "Leads"];
   let idx = 0;
   const worker = async () => {
@@ -9064,7 +9064,7 @@ export async function verifyCrmIdsInZoho(
       let hadError = false;
       for (const m of modules) {
         try {
-          const rec = await fetchZohoRecordById(m, id);
+          const rec = await fetchCRMProviderRecordById(m, id);
           if (rec) {
             found = true;
             mod = m;
@@ -9075,8 +9075,8 @@ export async function verifyCrmIdsInZoho(
         }
       }
       if (found) {
-        in_zoho++;
-        rows.push({ crm_id: id, verdict: "in_zoho", module: mod });
+        in_CRMProvider++;
+        rows.push({ crm_id: id, verdict: "in_CRMProvider", module: mod });
       } else if (hadError) {
         errored++;
         rows.push({ crm_id: id, verdict: "error", module: null });
@@ -9088,13 +9088,13 @@ export async function verifyCrmIdsInZoho(
   };
   const CONC = 5;
   await Promise.all(Array.from({ length: Math.min(CONC, ids.length) }, worker));
-  return { total: ids.length, in_zoho, lost, errored, rows };
+  return { total: ids.length, in_CRMProvider, lost, errored, rows };
 }
 
 /**
  * OWNER OFFBOARDING (Sample User 2026-07-30). For a (usually resigned) deal owner,
  * list their OPEN-pipeline deals grouped by Stage so the operator can review
- * and bulk-close / re-stage them in Zoho. "Open pipeline" = openStagePredicate
+ * and bulk-close / re-stage them in CRMProvider. "Open pipeline" = openStagePredicate
  * (NOT Agreement Signed / Paid and NOT any closed/terminal stage). Read-only.
  * Owner is matched EXACTLY on owner_name (a destructive follow-up write acts on
  * these ids, so we do not fuzzy-match and risk touching another rep's deals).
@@ -9120,7 +9120,7 @@ export async function getOwnerOpenDeals(ownerName: string): Promise<{
   if (!owner) return { owner: "", total: 0, total_value: 0, by_stage: [] };
   const rows = (
     await pool.query(
-      `SELECT r.zoho_record_id AS id,
+      `SELECT r.CRMProvider_record_id AS id,
               COALESCE(NULLIF(r.account_name,''), NULLIF(r.company_name,''), '(unnamed deal)') AS name,
               LOWER(r.domain) AS domain,
               COALESCE(r.deal_value, 0)::float AS value,
@@ -9129,7 +9129,7 @@ export async function getOwnerOpenDeals(ownerName: string): Promise<{
          FROM duplicate_records r
         WHERE r.record_type = 'deal'
           AND r.owner_name = $1
-          AND r.zoho_record_id IS NOT NULL AND r.zoho_record_id <> ''
+          AND r.CRMProvider_record_id IS NOT NULL AND r.CRMProvider_record_id <> ''
           AND (${openStagePredicate("r")})
         ORDER BY value DESC`,
       [owner],
@@ -9167,7 +9167,7 @@ export async function getOwnerOpenDeals(ownerName: string): Promise<{
 /**
  * OWNER OFFBOARDING — the destructive bulk write (Sample User 2026-07-30). Re-checks
  * each id against the mirror (must still be OWNED BY `owner` and OPEN-pipeline)
- * so we never act on stale selections, then bulk-updates Zoho: action
+ * so we never act on stale selections, then bulk-updates CRMProvider: action
  * 'close_lost' → Stage 'Closed Lost' + the Lost-Reason field (env
  * DUPLICATE_RADAR_FIELD_LOST_REASON, default Reason_For_Loss); action 'move' →
  * Stage = targetStage. Returns per-deal outcomes + a skipped list.
@@ -9195,11 +9195,11 @@ export async function bulkUpdateOwnerDeals(input: {
   // Re-validate against the mirror: still this owner AND still open-pipeline.
   const valid = (
     await pool.query(
-      `SELECT r.zoho_record_id AS id
+      `SELECT r.CRMProvider_record_id AS id
          FROM duplicate_records r
         WHERE r.record_type = 'deal'
           AND r.owner_name = $1
-          AND r.zoho_record_id = ANY($2::text[])
+          AND r.CRMProvider_record_id = ANY($2::text[])
           AND (${openStagePredicate("r")})`,
       [owner, ids],
     )
@@ -9209,7 +9209,7 @@ export async function bulkUpdateOwnerDeals(input: {
   if (!valid.length) {
     return { attempted: 0, updated: 0, failed: 0, skipped, outcomes: [] };
   }
-  const { updateZohoRecordsBulk } = await import("./zohoCRM");
+  const { updateCRMProviderRecordsBulk } = await import("./CRMProviderCRM");
   let records: Array<Record<string, any>>;
   if (input.action === "move") {
     const stage = String(input.targetStage || "").trim();
@@ -9226,7 +9226,7 @@ export async function bulkUpdateOwnerDeals(input: {
       [lostField]: reason,
     }));
   }
-  const outcomes = await updateZohoRecordsBulk("Deals", records);
+  const outcomes = await updateCRMProviderRecordsBulk("Deals", records);
   const updated = outcomes.filter((o) => o.status === "success").length;
   return {
     attempted: valid.length,
@@ -9249,7 +9249,7 @@ export async function bulkUpdateOwnerDeals(input: {
  * PRIOR window of equal length, broken down three ways — by Lead SOURCE, by
  * OWNER, and by MODULE — and sorts each by the biggest INCREASE. The top of each
  * list is the pain area: the channel / person / record-type that is leaking the
- * most new duplicates into Zoho. Read-only.
+ * most new duplicates into CRMProvider. Read-only.
  */
 export interface SpikeBreakdownRow {
   label: string;
@@ -9331,9 +9331,9 @@ export async function getDuplicateSpikeBreakdown(opts: {
   const recent_total = sum(by_module, "recent");
   const prior_total = sum(by_module, "prior");
 
-  // PROVENANCE — new-in-Zoho vs pre-existing (Sample User 2026-07-23). Answers "did
+  // PROVENANCE — new-in-CRMProvider vs pre-existing (Sample User 2026-07-23). Answers "did
   // inflation rise from a real NEW leak, or from re-detecting OLD records?".
-  //   · created_date  = when the record was born in ZOHO (100% reliable).
+  //   · created_date  = when the record was born in CRMProvider (100% reliable).
   //   · created_at    = when OUR mirror first inserted it (SYNCED date). Caveat:
   //                     a FULL rebuild re-inserts every row, resetting created_at,
   //                     so when a rebuild falls inside the window these read high.
@@ -9478,7 +9478,7 @@ export async function getEnhancedSummary(): Promise<{
   topClustersByInflation: any[];
   lastScanInfo: any;
   /** ISO timestamp of the most recent successful sync across all modules
-   *  (incremental OR full) — sourced from zoho_sync_state. Drives the
+   *  (incremental OR full) — sourced from CRMProvider_sync_state. Drives the
    *  "Last sync" line on the Executive Summary card. Distinct from
    *  lastScanInfo, which is the most recent FULL rebuild only. */
   lastSyncAt: string | null;
@@ -9622,14 +9622,14 @@ export async function getEnhancedSummary(): Promise<{
   `);
 
   // Most recent sync of ANY kind (incremental Sync Now / scheduled cron /
-  // full rebuild) — taken from the per-module zoho_sync_state. This is
+  // full rebuild) — taken from the per-module CRMProvider_sync_state. This is
   // what the operator-facing "Last sync" line reflects. The incremental
   // syncs that landed via the inngest path between full rebuilds DO
-  // update zoho_sync_state but not duplicate_detection_logs, which is
+  // update CRMProvider_sync_state but not duplicate_detection_logs, which is
   // why the legacy Last-Scan card looked frozen on the last full
   // rebuild date. The query is a no-op if the table is empty.
   const lastSyncResult = await pool.query(`
-    SELECT MAX(last_sync_at) AS last_sync_at FROM zoho_sync_state
+    SELECT MAX(last_sync_at) AS last_sync_at FROM CRMProvider_sync_state
   `);
   const lastSyncAt: string | null = lastSyncResult.rows[0]?.last_sync_at
     ? new Date(lastSyncResult.rows[0].last_sync_at).toISOString()
@@ -9709,7 +9709,7 @@ export async function getLastScanDate(): Promise<Date | null> {
  * internally.
  *
  * Errors in any single tab are swallowed and returned as
- * `error: <message>` on that tab's slot so a slow Zoho dependency or
+ * `error: <message>` on that tab's slot so a slow CRMProvider dependency or
  * missing optional table never bricks the whole exec view.
  */
 export interface RadarTabSnapshot {
@@ -10063,17 +10063,17 @@ export async function getDuplicateRadarOverview(): Promise<DuplicateRadarOvervie
 /**
  * SQL predicate (static, no params) — TRUE when the record at `alias` is QUEUED
  * FOR DELETION: tagged Empty-Delete (via the in-platform ledger OR the synced
- * Zoho Tag) or Duplicate-Delete (synced Zoho Tag). Such records must not appear
+ * CRMProvider Tag) or Duplicate-Delete (synced CRMProvider Tag). Such records must not appear
  * in the Untouched view of ANY Duplicate Radar tab, nor be compared against
  * other records — they're on their way out, awaiting the CRM admin's deletion
- * (Sample User 2026-06-26). They DO stay visible in the "AI-Applied · pending Zoho
+ * (Sample User 2026-06-26). They DO stay visible in the "AI-Applied · pending CRMProvider
  * admin delete" bucket, so the exclusion is applied only to the active/Untouched
  * view by the caller. COALESCE(...,false) so a record with a null/absent Tag is
  * treated as NOT queued (it must still count as a real record).
  */
 function queuedForDeletionSql(alias: string): string {
   return `COALESCE(
-    ${alias}.zoho_record_id IN (SELECT zoho_record_id FROM empty_delete_ledger)
+    ${alias}.CRMProvider_record_id IN (SELECT CRMProvider_record_id FROM empty_delete_ledger)
     OR ${alias}.raw_data->'Tag' @> '[{"name":"Empty-Delete"}]'::jsonb
     OR ${alias}.raw_data->'Tag' @> '[{"name":"Duplicate-Delete"}]'::jsonb
   , false)`;
@@ -10193,7 +10193,7 @@ export async function getDuplicateRecordsByType(
   const offset = options?.offset || 0;
 
   // AI-status filter — visualises the "this cluster was already AI-applied
-  // and is now waiting for the Zoho admin to physically delete the tagged
+  // and is now waiting for the CRMProvider admin to physically delete the tagged
   // duplicates" state. Default 'active' keeps the legacy view (untouched
   // active clusters). 'tagged_pending' = active cluster that has at least
   // one merge_action against it. 'resolved' = cluster status='resolved'.
@@ -10203,7 +10203,7 @@ export async function getDuplicateRecordsByType(
   // exactly one, by lifecycle precedence (Sample User 2026-06-24):
   //   Resolved > AI-Applied(pending) > Dismissed > Untouched
   // CRITICAL DISTINCTION: an `auto_merge_pending` action means the AI tagged the
-  // duplicates and is WAITING for the Zoho admin to delete them (→ AI-Applied).
+  // duplicates and is WAITING for the CRMProvider admin to delete them (→ AI-Applied).
   // A `resolve` / `module_resolved` action means the cluster was ALREADY resolved
   // / merged (→ Resolved). The old filter lumped all three as "AI-Applied", so
   // past-resolved clusters whose status hadn't flipped to 'resolved' (records
@@ -10216,7 +10216,7 @@ export async function getDuplicateRecordsByType(
   let statusFilter = "AND dc.status = 'active'";
   let mergeActionFilter = "";
   if (aiStatus === "tagged_pending") {
-    // AI-APPLIED · pending Zoho admin delete (Sample User 2026-07-06): an apply ran —
+    // AI-APPLIED · pending CRMProvider admin delete (Sample User 2026-07-06): an apply ran —
     // records were TAGGED Duplicate-Delete — but the cluster is NOT yet Resolved
     // (the admin hasn't deleted the tagged records AND Verify-in-CRM / a sync
     // hasn't confirmed they're gone). This is the "waiting for deletion" queue.
@@ -10267,8 +10267,8 @@ export async function getDuplicateRecordsByType(
         OR EXISTS (
           SELECT 1 FROM duplicate_records de
            WHERE de.cluster_id = dc.id AND de.record_type = 'deal'
-             AND de.zoho_record_id IS NOT NULL AND btrim(de.zoho_record_id) <> ''
-           GROUP BY de.zoho_record_id
+             AND de.CRMProvider_record_id IS NOT NULL AND btrim(de.CRMProvider_record_id) <> ''
+           GROUP BY de.CRMProvider_record_id
           HAVING COUNT(*) >= 2
         )
       )`;
@@ -10313,13 +10313,13 @@ export async function getDuplicateRecordsByType(
     // ONE record tab with no server-side filter: it counted every cluster holding
     // >=2 leads — including COLLEAGUES who share only their company's domain — so
     // the footer read "5,158 duplicate groups / 258 pages" while the client, which
-    // re-groups leads by a DIRECT identity signal (name / email / phone / Zoho id,
+    // re-groups leads by a DIRECT identity signal (name / email / phone / CRMProvider id,
     // matching renderLeadRows' union-find), rendered just 1 real duplicate on the
     // page. (Contacts already had this gate; Accounts don't need one — their
     // renderer keeps a per-cluster fallback bucket so fuzzy-name clusters never
     // drop.) A cluster now counts as a lead-duplicate only when >=2 of its leads
     // DIRECTLY share email, OR phone, OR mobile, OR a normalised name, OR the same
-    // Zoho record id (a repeated id = an indexer/sync twin, still worth surfacing).
+    // CRMProvider record id (a repeated id = an indexer/sync twin, still worth surfacing).
     genuineDupFilter = `
       AND (
         EXISTS (
@@ -10357,8 +10357,8 @@ export async function getDuplicateRecordsByType(
         OR EXISTS (
           SELECT 1 FROM duplicate_records li
            WHERE li.cluster_id = dc.id AND li.record_type = 'lead'
-             AND li.zoho_record_id IS NOT NULL AND btrim(li.zoho_record_id) <> ''
-           GROUP BY li.zoho_record_id
+             AND li.CRMProvider_record_id IS NOT NULL AND btrim(li.CRMProvider_record_id) <> ''
+           GROUP BY li.CRMProvider_record_id
           HAVING COUNT(*) >= 2
         )
       )`;
@@ -10382,7 +10382,7 @@ export async function getDuplicateRecordsByType(
   // already tagged for deletion drops off. Applied to the UNTOUCHED (active) view
   // ONLY — the pending-verify bucket must keep these records visible until the
   // CRM admin confirms the deletion. Effective the instant the operator tags
-  // (ledger) and after sync (Zoho Tag).
+  // (ledger) and after sync (CRMProvider Tag).
   const hideQueued = aiStatus === "active";
   const stillTwoUntagged = hideQueued
     ? `
@@ -10536,7 +10536,7 @@ export async function getDuplicateRecordsByType(
   }
 
   // Sidecar — per-cluster AI-status. Powers the new "🤖 Already AI-applied,
-  // pending Zoho admin delete" badge on each cluster header so the operator
+  // pending CRMProvider admin delete" badge on each cluster header so the operator
   // can tell apart untouched / tagged / fully-resolved clusters without
   // opening each one. One query per page (≤ ~50 clusters), aggregated by id.
   if (clusterIds.length > 0) {
@@ -10575,7 +10575,7 @@ export async function getDuplicateRecordsByType(
       // 2026-07-06: RESOLVED only when the cluster STATUS is actually flipped to
       // 'resolved' (Verify-in-CRM / sync-reconciled). Any apply action
       // (auto_merge_pending OR resolve/module_resolved) with the status not yet
-      // resolved = AI-Applied · pending Zoho delete. Keeps the per-row badge in
+      // resolved = AI-Applied · pending CRMProvider delete. Keeps the per-row badge in
       // sync with its tab so "Applied" never masquerades as "Resolved".
       const aiState =
         meta.status === "resolved"
@@ -10666,10 +10666,10 @@ export async function autoResolveClusters(): Promise<{
   // REMOVED (2026-06-12): the old high-confidence auto-resolve marked any
   // cluster with confidence_score >= 95% as 'resolved' — but high confidence
   // that two records are duplicates is NOT the same as them having been MERGED
-  // in Zoho. This silently marked real, un-merged duplicates "Resolved",
+  // in CRMProvider. This silently marked real, un-merged duplicates "Resolved",
   // locking operators out of merging them ("already resolved" guard). A cluster
   // must only become 'resolved' from an actual Apply/merge or an explicit
-  // operator "Mark Resolved" after merging in Zoho. highConfidenceResolved
+  // operator "Mark Resolved" after merging in CRMProvider. highConfidenceResolved
   // stays 0 to preserve the return shape for callers.
 
   return {
@@ -10680,13 +10680,13 @@ export async function autoResolveClusters(): Promise<{
 }
 
 // C7: Smart AI recommendations considering completeness, deals, recency
-// Zoho-correct recommendation engine.
+// CRMProvider-correct recommendation engine.
 //
-// Zoho does NOT support cross-module merges (you cannot merge a Contact into an
+// CRMProvider does NOT support cross-module merges (you cannot merge a Contact into an
 // Account). The right action depends on the relationship between the record
 // types in the cluster, not just on which one looks "best":
 //
-//   • same module as primary  → MERGE (native Zoho merge inside the module)
+//   • same module as primary  → MERGE (native CRMProvider merge inside the module)
 //   • Contact/Deal under an Account primary → LINK (set Account_Name field)
 //   • Deal under a Contact primary          → LINK (set Contact_Name field)
 //   • Lead when a real Account/Contact/Deal already exists → CLOSE/convert
@@ -10778,7 +10778,7 @@ export function generateSmartRecommendations(
     return { record: r, score, reasons };
   });
 
-  // Pick primary by Zoho-module priority first, then by quality score.
+  // Pick primary by CRMProvider-module priority first, then by quality score.
   // Account beats Contact beats Deal beats Lead beats Task.
   scored.sort((a, b) => {
     const pa = RECORD_TYPE_PRIORITY[a.record.record_type] || 0;
@@ -10800,7 +10800,7 @@ export function generateSmartRecommendations(
         record_id: item.record.id!,
         record_name: item.record.record_name,
         is_primary: true,
-        recommendation: `KEEP as primary ${primaryType} (best Zoho-priority + quality score)`,
+        recommendation: `KEEP as primary ${primaryType} (best CRMProvider-priority + quality score)`,
         action_type: "keep" as const,
         confidence: 95,
         reasons: item.reasons,
@@ -10813,7 +10813,7 @@ export function generateSmartRecommendations(
 
     if (t === primaryType) {
       action = "merge";
-      recommendation = `MERGE into primary ${primaryType} (native Zoho merge — same module)`;
+      recommendation = `MERGE into primary ${primaryType} (native CRMProvider merge — same module)`;
     } else if (
       primaryType === "account" &&
       ((t as string) === "contact" ||
@@ -10839,7 +10839,7 @@ export function generateSmartRecommendations(
         "CLOSE — a converted Account/Contact/Deal already exists for this company";
     } else {
       action = "review";
-      recommendation = `REVIEW manually — cross-module pairing (${primaryType} ↔ ${t}) has no automatic Zoho action`;
+      recommendation = `REVIEW manually — cross-module pairing (${primaryType} ↔ ${t}) has no automatic CRMProvider action`;
     }
 
     return {
@@ -10885,8 +10885,8 @@ export function getClusterRecordTypeMeta(records: DuplicateRecord[]): {
  * co-exist. Pure helper, exported for vitest.
  *
  * Industry context: a Lead at `<REDACTED_HOST>` representing the same person /
- * company as a Contact under the existing ACME Account is the most common
- * cross-module duplicate. The fix is NOT "merge" (Zoho doesn't support
+ * company as a Contact under the existing Example Organization Account is the most common
+ * cross-module duplicate. The fix is NOT "merge" (CRMProvider doesn't support
  * cross-module merges) — it's CONVERT (the Lead becomes the Contact) or
  * LINK (set Account_Name on the deal/contact). The generateSmartRecommendations
  * helper already emits the right per-record action; this classifier groups
@@ -10911,7 +10911,7 @@ export function getClusterRecordTypeMeta(records: DuplicateRecord[]): {
 // ─── Cross-module lifecycle helpers ──────────────────────────────────────
 //
 // Sample User's refined rules (2026-06-16):
-//   • Lead has no "link to Account/Contact" field in Zoho — the only
+//   • Lead has no "link to Account/Contact" field in CRMProvider — the only
 //     action on a Lead in a cross-module cluster is CLOSE, and that's
 //     already handled by the Leads Duplicates tab. So Lead↔Contact and
 //     Lead↔Account add NOISE to this tab and must be hidden.
@@ -10920,7 +10920,7 @@ export function getClusterRecordTypeMeta(records: DuplicateRecord[]): {
 //   • "Existing client" = a Paid / Agreement Signed style Deal (those
 //     are CS-owned). A Contact alone is NOT customer evidence.
 //   • Contact↔Account, Deal↔Account, Contact↔Deal are the real LINK
-//     queue — these CAN be wired up in Zoho via Account_Name /
+//     queue — these CAN be wired up in CRMProvider via Account_Name /
 //     Contact_Name and that's the actionable work on this tab.
 //
 // Stage / status string sets are lowercased + frozen at module load so
@@ -10956,7 +10956,7 @@ const CLIENT_DEAL_STAGES_LOWER: ReadonlySet<string> = new Set([
 
 /** A Lead is "active" when its Lead_Status is not in the disqualified /
  *  closed / converted set. Empty / null status counts as active (raw
- *  records from Zoho occasionally lack the field). */
+ *  records from CRMProvider occasionally lack the field). */
 export function isActiveLead(leadStatus: string | null | undefined): boolean {
   const v = String(leadStatus ?? "").trim().toLowerCase();
   if (!v) return true;
@@ -11237,7 +11237,7 @@ export async function getCrossModuleOverlaps(opts: {
                 array_agg(DISTINCT record_type)
                   FILTER (WHERE EXISTS (
                     SELECT 1 FROM duplicate_resolution_ledger lg
-                    WHERE lg.master_zoho_id = duplicate_records.zoho_record_id
+                    WHERE lg.master_CRMProvider_id = duplicate_records.CRMProvider_record_id
                       AND lg.module = CASE duplicate_records.record_type
                                         WHEN 'lead'    THEN 'Leads'
                                         WHEN 'deal'    THEN 'Deals'
@@ -11311,7 +11311,7 @@ export async function getCrossModuleOverlaps(opts: {
   // ─── Refined-rule filter (Sample User 2026-06-16) ───────────────────────────
   //
   // Hide clusters whose ONLY cross-module relationship is Lead↔Contact or
-  // Lead↔Account — those have no Zoho action available on this tab (a
+  // Lead↔Account — those have no CRMProvider action available on this tab (a
   // Lead can't be linked to anything), and CLOSE-the-Lead is the job of
   // the Leads Duplicates tab anyway. Keep the cluster if ANY of these
   // actionable conditions are true:
@@ -11433,7 +11433,7 @@ export async function getCrossModuleOverlaps(opts: {
       // deal_account chips are deprecated on this tab — the latter 3 now
       // live on the Record Hint tab (see the `visible` filter above, which
       // already drops those pairings from this endpoint's result set), and
-      // lead_contact/lead_account never had a Zoho action here. The chip
+      // lead_contact/lead_account never had a CRMProvider action here. The chip
       // filters never match; the frontend hides those chips entirely — this
       // just makes the backend safe if a stale client still sends them.
       case "lead_contact":
@@ -11500,15 +11500,15 @@ export async function getCrossModuleOverlaps(opts: {
  * Follow-up 3 — Bulk-close lead records in cross-module clusters.
  *
  * Context: cross-module clusters (R6) have a Lead alongside a Contact /
- * Account / Deal for the same domain. Zoho doesn't support cross-module
+ * Account / Deal for the same domain. CRMProvider doesn't support cross-module
  * merges, so the recommended action is to CLOSE the lead — the company
  * is already represented by the canonical Account / Contact / Deal.
- * Operators were doing this one-by-one in Zoho; this helper does it in
- * bulk via the Zoho update-record API.
+ * Operators were doing this one-by-one in CRMProvider; this helper does it in
+ * bulk via the CRMProvider update-record API.
  *
  * Per cluster:
- *   1. Fetch the cluster's lead records (record_type='lead', has zoho_record_id)
- *   2. For each lead, call Zoho `PUT /Leads/:id` with
+ *   1. Fetch the cluster's lead records (record_type='lead', has CRMProvider_record_id)
+ *   2. For each lead, call CRMProvider `PUT /Leads/:id` with
  *      Lead_Status='Lost Lead' + a Description note explaining why.
  *      Already-Lost / already-Junk leads are skipped silently (idempotent).
  *   3. If every lead update succeeded, mark the cluster resolved via
@@ -11522,7 +11522,7 @@ export async function getCrossModuleOverlaps(opts: {
  *     clusters to act on (no "close everything matching this filter").
  *   - maxClusters hard-clamps the batch size at 25 (default).
  *   - dryRun=true returns the per-cluster plan without writing.
- *   - Concurrency 3 — Zoho rate limits are real.
+ *   - Concurrency 3 — CRMProvider rate limits are real.
  */
 export interface BulkCloseLeadResult {
   cluster_id: number;
@@ -11530,7 +11530,7 @@ export interface BulkCloseLeadResult {
   leads_skipped: number;
   leads_failed: number;
   cluster_resolved: boolean;
-  errors: Array<{ zoho_lead_id: string; message: string }>;
+  errors: Array<{ CRMProvider_lead_id: string; message: string }>;
   notes: string;
 }
 
@@ -11566,32 +11566,32 @@ export async function bulkCloseLeadsInClusters(opts: {
     };
   }
 
-  const { updateZohoRecord, zohoWritesAllowedInEnv } = await import("./zohoCRM");
+  const { updateCRMProviderRecord, CRMProviderWritesAllowedInEnv } = await import("./CRMProviderCRM");
 
-  // Env guardrail: bulk-close mutates live Zoho (Lead_Status → Lost Lead), so
-  // a REAL run must be blocked outside production (dev shares prod's Zoho
+  // Env guardrail: bulk-close mutates live CRMProvider (Lead_Status → Lost Lead), so
+  // a REAL run must be blocked outside production (dev shares prod's CRMProvider
   // credentials). Dry-run is always allowed (it writes nothing).
-  if (!dryRun && !zohoWritesAllowedInEnv()) {
+  if (!dryRun && !CRMProviderWritesAllowedInEnv()) {
     throw new Error(
-      "Bulk-close is blocked outside production (dev shares production's Zoho credentials). " +
-        "Run it from the deployed app, or set RESOLUTION_ALLOW_WRITES_OUTSIDE_PROD=true only for a dedicated non-prod Zoho org.",
+      "Bulk-close is blocked outside production (dev shares production's CRMProvider credentials). " +
+        "Run it from the deployed app, or set RESOLUTION_ALLOW_WRITES_OUTSIDE_PROD=true only for a dedicated non-prod CRMProvider org.",
     );
   }
 
   const closeOneLead = async (
-    zohoLeadId: string,
+    CRMProviderLeadId: string,
     clusterId: number,
     currentStatus: string | null,
   ): Promise<{ status: "closed" | "skipped" | "failed"; message?: string }> => {
     // Idempotency: skip leads already in a Lost / Junk terminal state so
-    // re-running the batch doesn't spam Zoho with no-op updates.
+    // re-running the batch doesn't spam CRMProvider with no-op updates.
     const lower = (currentStatus ?? "").trim().toLowerCase();
     if (lower === "lost lead" || lower === "junk lead") {
       return { status: "skipped", message: `Already ${currentStatus}` };
     }
     if (dryRun) return { status: "closed" }; // count as "would-close" in dry run
     try {
-      await updateZohoRecord("Leads", zohoLeadId, {
+      await updateCRMProviderRecord("Leads", CRMProviderLeadId, {
         Lead_Status: "Lost Lead",
         Description: `Closed by Duplicate Radar bulk-close on cross-module cluster #${clusterId}. The company is represented in another module (Account / Contact / Deal) and a duplicate Lead is no longer needed.`,
       });
@@ -11609,15 +11609,15 @@ export async function bulkCloseLeadsInClusters(opts: {
   for (const clusterId of ids) {
     const leadsR = await pool.query<{
       id: number;
-      zoho_record_id: string | null;
+      CRMProvider_record_id: string | null;
       status: string | null;
     }>(
-      `SELECT id, zoho_record_id, status
+      `SELECT id, CRMProvider_record_id, status
          FROM duplicate_records
         WHERE cluster_id = $1
           AND record_type = 'lead'
-          AND zoho_record_id IS NOT NULL
-          AND zoho_record_id <> ''`,
+          AND CRMProvider_record_id IS NOT NULL
+          AND CRMProvider_record_id <> ''`,
       [clusterId],
     );
 
@@ -11630,7 +11630,7 @@ export async function bulkCloseLeadsInClusters(opts: {
         leads_failed: 0,
         cluster_resolved: false,
         errors: [],
-        notes: "No lead records with zoho_record_id in this cluster",
+        notes: "No lead records with CRMProvider_record_id in this cluster",
       });
       continue;
     }
@@ -11644,7 +11644,7 @@ export async function bulkCloseLeadsInClusters(opts: {
     for (let i = 0; i < leads.length; i += concurrency) {
       const batch = leads.slice(i, i + concurrency);
       const results = await Promise.all(
-        batch.map((l) => closeOneLead(l.zoho_record_id!, clusterId, l.status)),
+        batch.map((l) => closeOneLead(l.CRMProvider_record_id!, clusterId, l.status)),
       );
       for (let j = 0; j < results.length; j++) {
         const r = results[j]!;
@@ -11654,7 +11654,7 @@ export async function bulkCloseLeadsInClusters(opts: {
         else {
           failed++;
           errors.push({
-            zoho_lead_id: lead.zoho_record_id ?? "",
+            CRMProvider_lead_id: lead.CRMProvider_record_id ?? "",
             message: r.message ?? "Unknown error",
           });
         }
@@ -11673,16 +11673,16 @@ export async function bulkCloseLeadsInClusters(opts: {
           "resolve",
           opts.performedBy,
           undefined,
-          `Bulk-close: closed ${closed} lead${closed === 1 ? "" : "s"} in Zoho (cross-module cluster — company represented in another module)`,
+          `Bulk-close: closed ${closed} lead${closed === 1 ? "" : "s"} in CRMProvider (cross-module cluster — company represented in another module)`,
         );
         clusterResolved = true;
       } catch (err) {
-        // resolveCluster failing after the Zoho writes succeeded is a
+        // resolveCluster failing after the CRMProvider writes succeeded is a
         // partial state; surface the error but the leads ARE closed in
-        // Zoho already. Operator can mark the cluster resolved manually.
+        // CRMProvider already. Operator can mark the cluster resolved manually.
         errors.push({
-          zoho_lead_id: "",
-          message: `Cluster mark-resolved failed after Zoho updates: ${(err as Error).message}`,
+          CRMProvider_lead_id: "",
+          message: `Cluster mark-resolved failed after CRMProvider updates: ${(err as Error).message}`,
         });
       }
     }
@@ -11718,19 +11718,19 @@ export async function bulkCloseLeadsInClusters(opts: {
 
 export async function getSyncState(
   module: string,
-): Promise<ZohoSyncState | null> {
+): Promise<CRMProviderSyncState | null> {
   const result = await pool.query(
-    "SELECT * FROM zoho_sync_state WHERE module = $1",
+    "SELECT * FROM CRMProvider_sync_state WHERE module = $1",
     [module],
   );
   return result.rows[0] || null;
 }
 
-export async function getAllSyncStates(): Promise<ZohoSyncState[]> {
+export async function getAllSyncStates(): Promise<CRMProviderSyncState[]> {
   // Tasks module was removed platform-wide; filter out any stale rows so the
   // Sync Status badges only reflect modules we actively sync.
   const result = await pool.query(
-    "SELECT * FROM zoho_sync_state WHERE module NOT IN ('Tasks') ORDER BY module",
+    "SELECT * FROM CRMProvider_sync_state WHERE module NOT IN ('Tasks') ORDER BY module",
   );
   return result.rows;
 }
@@ -11738,7 +11738,7 @@ export async function getAllSyncStates(): Promise<ZohoSyncState[]> {
 /**
  * Record a module's sync state.
  *
- * `last_sync_at` is the INCREMENTAL WATERMARK — the next run asks Zoho for
+ * `last_sync_at` is the INCREMENTAL WATERMARK — the next run asks CRMProvider for
  * records modified since it (If-Modified-Since). So it may only advance when a
  * sync actually COMPLETED.
  *
@@ -11767,16 +11767,16 @@ export async function upsertSyncState(
   // rather than picking one. This is the first query a module sync runs, so
   // without the casts no sync starts at all.
   await pool.query(
-    `INSERT INTO zoho_sync_state (module, last_sync_at, total_synced, sync_status, sync_started_at)
+    `INSERT INTO CRMProvider_sync_state (module, last_sync_at, total_synced, sync_status, sync_started_at)
      VALUES ($1::text, CASE WHEN $4::boolean THEN NOW() ELSE NULL END, $2::int, $3::text,
              CASE WHEN $3::text = 'syncing' THEN NOW() ELSE NULL END)
      ON CONFLICT (module) DO UPDATE SET
-       last_sync_at = CASE WHEN $4::boolean THEN NOW() ELSE zoho_sync_state.last_sync_at END,
-       total_synced = CASE WHEN $4::boolean THEN $2::int ELSE zoho_sync_state.total_synced END,
+       last_sync_at = CASE WHEN $4::boolean THEN NOW() ELSE CRMProvider_sync_state.last_sync_at END,
+       total_synced = CASE WHEN $4::boolean THEN $2::int ELSE CRMProvider_sync_state.total_synced END,
        sync_status  = $3::text,
        sync_started_at = CASE
          WHEN $3::text = 'syncing' THEN NOW()
-         ELSE zoho_sync_state.sync_started_at END`,
+         ELSE CRMProvider_sync_state.sync_started_at END`,
     [module, totalSynced, status, completed],
   );
 }
@@ -11807,7 +11807,7 @@ export const SYNC_STALE_AFTER_MS = 30 * 60 * 1000;
 export async function failStaleSyncingModules(): Promise<string[]> {
   try {
     const r = await pool.query(
-      `UPDATE zoho_sync_state
+      `UPDATE CRMProvider_sync_state
           SET sync_status = 'failed'
         WHERE sync_status = 'syncing'
           AND (sync_started_at IS NULL
@@ -11874,7 +11874,7 @@ export async function getDistinctPipelines(): Promise<string[]> {
 export async function getDistinctStages(): Promise<string[]> {
   const result = await pool.query(
     `SELECT DISTINCT stage FROM duplicate_records
-       WHERE zoho_module = 'Deals' AND stage IS NOT NULL AND stage != ''
+       WHERE CRMProvider_module = 'Deals' AND stage IS NOT NULL AND stage != ''
        ORDER BY stage`,
   );
   return result.rows.map((r) => r.stage);
@@ -11904,7 +11904,7 @@ export async function getFilteredClusters(
 
   const aiStatus = (filters.ai_status || "").trim();
   if (aiStatus === "tagged_pending") {
-    // Applied but NOT yet confirmed gone from Zoho.
+    // Applied but NOT yet confirmed gone from CRMProvider.
     whereConditions.push("c.status NOT IN ('resolved','ignored')");
     whereConditions.push(`(${HAS_PENDING} OR ${HAS_RESOLVED_ACTION})`);
   } else if (aiStatus === "resolved") {
@@ -11955,7 +11955,7 @@ export async function getFilteredClusters(
   if (filters.modules && filters.modules.length > 0) {
     joinNeeded = true;
     recordConditions.push(
-      `r.zoho_module IN (${filters.modules.map((_, i) => `$${paramIdx + i}`).join(",")})`,
+      `r.CRMProvider_module IN (${filters.modules.map((_, i) => `$${paramIdx + i}`).join(",")})`,
     );
     params.push(...filters.modules);
     paramIdx += filters.modules.length;
@@ -12049,7 +12049,7 @@ export async function getFilteredSummary(
   if (filters.modules && filters.modules.length > 0) {
     joinNeeded = true;
     recordConditions.push(
-      `r.zoho_module IN (${filters.modules.map((_, i) => `$${paramIdx + i}`).join(",")})`,
+      `r.CRMProvider_module IN (${filters.modules.map((_, i) => `$${paramIdx + i}`).join(",")})`,
     );
     params.push(...filters.modules);
     paramIdx += filters.modules.length;
@@ -12147,14 +12147,14 @@ export async function upsertTask(
   task: Omit<DuplicateRecordTask, "id" | "created_at">,
 ): Promise<DuplicateRecordTask> {
   const result = await pool.query(
-    `INSERT INTO duplicate_record_tasks (zoho_task_id, related_record_id, cluster_id, subject, due_date, status, owner_name, description)
+    `INSERT INTO duplicate_record_tasks (CRMProvider_task_id, related_record_id, cluster_id, subject, due_date, status, owner_name, description)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     ON CONFLICT (zoho_task_id) DO UPDATE SET
+     ON CONFLICT (CRMProvider_task_id) DO UPDATE SET
        subject = EXCLUDED.subject, due_date = EXCLUDED.due_date, status = EXCLUDED.status,
        owner_name = EXCLUDED.owner_name, description = EXCLUDED.description
      RETURNING *`,
     [
-      task.zoho_task_id,
+      task.CRMProvider_task_id,
       task.related_record_id,
       task.cluster_id,
       task.subject,
@@ -12395,8 +12395,8 @@ export function assessDataQuality(record: {
   };
 }
 
-export async function lookupRecordsByZohoIds(zohoIds: string[]): Promise<{
-  [zohoId: string]: {
+export async function lookupRecordsByCRMProviderIds(CRMProviderIds: string[]): Promise<{
+  [CRMProviderId: string]: {
     clusterId: number;
     clusterDomain: string;
     clusterCompany: string | null;
@@ -12409,20 +12409,20 @@ export async function lookupRecordsByZohoIds(zohoIds: string[]): Promise<{
     isJunk: boolean;
   };
 }> {
-  if (!zohoIds.length) return {};
+  if (!CRMProviderIds.length) return {};
   const result = await pool.query(
-    `SELECT dr.zoho_record_id, dr.cluster_id, dr.record_type,
+    `SELECT dr.CRMProvider_record_id, dr.cluster_id, dr.record_type,
             dr.data_quality_score, dr.data_quality_flags,
             dc.domain, dc.company_name, dc.confidence_level,
             dc.confidence_score, dc.total_records
      FROM duplicate_records dr
      JOIN duplicate_clusters dc ON dc.id = dr.cluster_id
-     WHERE dr.zoho_record_id = ANY($1)`,
-    [zohoIds],
+     WHERE dr.CRMProvider_record_id = ANY($1)`,
+    [CRMProviderIds],
   );
   const map: Record<string, any> = {};
   for (const row of result.rows) {
-    map[row.zoho_record_id] = {
+    map[row.CRMProvider_record_id] = {
       clusterId: row.cluster_id,
       clusterDomain: row.domain,
       clusterCompany: row.company_name,
@@ -12539,10 +12539,10 @@ export async function scanClusterForCsOverlap(
   const domain = clusterRow.rows[0].domain as string;
 
   const recordsRow = await pool.query(
-    `SELECT id, zoho_module, raw_data, gov_type
+    `SELECT id, CRMProvider_module, raw_data, gov_type
        FROM duplicate_records
        WHERE cluster_id = $1
-         AND zoho_module = 'Deals'
+         AND CRMProvider_module = 'Deals'
          AND cleanup_class IS NULL`,
     [clusterId],
   );
@@ -12615,7 +12615,7 @@ export interface CsOverlapBatchResult {
 
 /**
  * Scan every cluster that has at least one Deal record. Idempotent — safe to
- * re-run any time (e.g. nightly, or on-demand after Zoho resync).
+ * re-run any time (e.g. nightly, or on-demand after CRMProvider resync).
  */
 export async function scanAllClustersForCsOverlap(): Promise<CsOverlapBatchResult> {
   const t0 = Date.now();
@@ -12623,7 +12623,7 @@ export async function scanAllClustersForCsOverlap(): Promise<CsOverlapBatchResul
     `SELECT DISTINCT c.id
        FROM duplicate_clusters c
        INNER JOIN duplicate_records r ON r.cluster_id = c.id
-       WHERE r.zoho_module = 'Deals'`,
+       WHERE r.CRMProvider_module = 'Deals'`,
   );
 
   const out: CsOverlapBatchResult = {
@@ -12683,7 +12683,7 @@ import {
 export interface CsLifecycleViolationRow {
   record_id: number;
   cluster_id: number | null;
-  zoho_record_id: string | null;
+  CRMProvider_record_id: string | null;
   account_name: string | null;
   domain: string | null;
   current_phase: string | null;
@@ -12696,12 +12696,12 @@ export interface CsLifecycleViolationRow {
   // surfaced as its own column so CS can spot silent accounts.
   last_contact_date: string | null;
   health: string | null;
-  // ExtID (Admin) — Zoho custom field surfaced in the CS Lifecycle tab
+  // ExtID (Admin) — CRMProvider custom field surfaced in the CS Lifecycle tab
   // (operator request 2026-05-30). Replaces the Health column in the
   // dashboard UI; Health stays on the row so existing CSV exports and
   // any future consumer keep both signals available.
   ext_id: string | null;
-  // 2026-06-08 — surface the underlying Zoho Deal's Layout name + Stage
+  // 2026-06-08 — surface the underlying CRMProvider Deal's Layout name + Stage
   // value on the row so the dashboard's Advanced Filters (Layout /
   // Stage / Pipeline multi-selects) can actually narrow the CS
   // Lifecycle violation list. Without these, selecting Layout=ExampleOrg
@@ -12728,11 +12728,11 @@ export interface CsLifecycleScanResult {
  */
 /**
  * CS OWNER ROSTER (Sample User 2026-07-20). The platform stores no CS team list — the
- * owner lives per-deal in Zoho's "CS Owner Name" field, so nothing could answer
+ * owner lives per-deal in CRMProvider's "CS Owner Name" field, so nothing could answer
  * "who are the CS owners?" (Adam included). This derives the roster from the
  * data: the DISTINCT CS Owner Name values across Deal records, with how many
  * deals/accounts each owns, plus how many CS deals have NO owner (the
- * missing_cs_owner gap). Tolerates Zoho's key variants and the lookup-object
+ * missing_cs_owner gap). Tolerates CRMProvider's key variants and the lookup-object
  * shape ({name}) exactly like duplicateRadarCsOverlap's extractor.
  */
 export interface CsOwnerRow {
@@ -12759,7 +12759,7 @@ export async function getCsOwners(
   roster_size: number;
 }> {
   const limit = Math.max(1, Math.min(opts.limit ?? 200, 1000));
-  // Zoho key variants — hardcoded constants (no injection surface). A lookup
+  // CRMProvider key variants — hardcoded constants (no injection surface). A lookup
   // field arrives as {name}; a picklist/text arrives as a bare string.
   const OWNER_KEYS = [
     "CS_Owner_Name",
@@ -12871,7 +12871,7 @@ export async function getCsOwners(
 /**
  * DEAL STAGE AUDIT — READ-ONLY (Sample User 2026-07-21).
  *
- * A preflight run surfaced deals on BOTH "On Hold" and "Hold", i.e. the Zoho
+ * A preflight run surfaced deals on BOTH "On Hold" and "Hold", i.e. the CRMProvider
  * Stage picklist carries near-duplicate values. That sample covered only 41
  * rows, so it could not show the real scale. This lists EVERY distinct Stage
  * value across all Deal records with its deal count, a corporate/marketplace
@@ -12881,7 +12881,7 @@ export async function getCsOwners(
  * the picklist.
  *
  * Writes NOTHING. Re-staging records and removing a dead picklist option are
- * deliberate manual steps in Zoho — and in that order, since deleting an option
+ * deliberate manual steps in CRMProvider — and in that order, since deleting an option
  * still in use orphans those deals.
  */
 export interface DealStageAuditRow {
@@ -12996,9 +12996,9 @@ export async function scanCsLifecycleViolations(opts: {
 } = {}): Promise<CsLifecycleScanResult> {
   const t0 = Date.now();
   // Bumped default 2000 → 10000 and cap 5000 → 50000 so the scan covers
-  // the full Deal corpus by default. The bulk Zoho sync currently caps
+  // the full Deal corpus by default. The bulk CRMProvider sync currently caps
   // at 5,000 records per module, so 10000 comfortably scans every
-  // synced Deal; the 50000 ceiling leaves headroom for a future Zoho
+  // synced Deal; the 50000 ceiling leaves headroom for a future CRMProvider
   // page-size bump without another deploy. Without this, the "CS Deals
   // Scanned" KPI was silently capped at the 2000 most-recently-modified
   // Deals — orgs with >2k Deals never saw every CS deal evaluated.
@@ -13033,10 +13033,10 @@ export async function scanCsLifecycleViolations(opts: {
   // real CS Phase, so they still fall out at the is_cs_deal gate — the count
   // stays clean without narrowing by dedup/cleanup state.
   const dealRows = await pool.query(
-    `SELECT r.id, r.cluster_id, r.zoho_record_id, r.account_name,
+    `SELECT r.id, r.cluster_id, r.CRMProvider_record_id, r.account_name,
             r.domain, r.modified_date, r.raw_data, r.gov_type
        FROM duplicate_records r
-      WHERE r.zoho_module = 'Deals'${segmentCond}
+      WHERE r.CRMProvider_module = 'Deals'${segmentCond}
       ORDER BY r.modified_date DESC NULLS LAST
       LIMIT ${limitPh}`,
     params,
@@ -13088,8 +13088,8 @@ export async function scanCsLifecycleViolations(opts: {
         null;
 
       // 2026-06-08 — pull Layout / Stage / Pipeline straight off the
-      // Zoho raw_data so the dashboard's Advanced Filters can match
-      // against them. Layout in Zoho is an object { id, name }; Stage
+      // CRMProvider raw_data so the dashboard's Advanced Filters can match
+      // against them. Layout in CRMProvider is an object { id, name }; Stage
       // and Pipeline are plain strings. Defensive .toString() in case
       // a tenant has the field with an unexpected shape.
       const rawDeal: any = (row.raw_data as any) ?? {};
@@ -13108,7 +13108,7 @@ export async function scanCsLifecycleViolations(opts: {
       violations.push({
         record_id: row.id,
         cluster_id: row.cluster_id ?? null,
-        zoho_record_id: row.zoho_record_id ?? null,
+        CRMProvider_record_id: row.CRMProvider_record_id ?? null,
         account_name: csAccountName,
         domain: row.domain ?? null,
         current_phase: ev.current_phase,
@@ -13160,7 +13160,7 @@ export async function scanCsLifecycleViolations(opts: {
 export interface DealStageAgingViolationRow {
   record_id: number;
   cluster_id: number | null;
-  zoho_record_id: string | null;
+  CRMProvider_record_id: string | null;
   deal_name: string | null;
   account_name: string | null;
   owner_name: string | null;
@@ -13194,10 +13194,10 @@ export async function scanDealStageAgingViolations(
      * JSONB detoasted, shipped over the wire and JSON-parsed in Node — purely
      * so the per-BU report could render ONE integer
      * (summary.total_violations). That single query is what pushed
-     * GET /api/quality-reports/bus/:key past the Replit proxy timeout (504).
+     * GET /api/quality-reports/bus/:key past the HostingPlatform proxy timeout (504).
      *
      * The projection is semantically equivalent, not an approximation:
-     *   - stage: `duplicate_records.stage` is populated from the same Zoho
+     *   - stage: `duplicate_records.stage` is populated from the same CRMProvider
      *     `d.Stage` string the full path reads out of raw_data
      *     (duplicateRadarRoutes.ts:1292), with the raw_data paths kept as a
      *     COALESCE fallback for rows whose column is blank. COALESCE is lazy,
@@ -13219,7 +13219,7 @@ export async function scanDealStageAgingViolations(
     "./dealStageAgingCompliance"
   );
 
-  // Segment chip (ExampleOrg / WalaOne / Marketplace) — filter deals by their Zoho
+  // Segment chip (ExampleOrg / WalaOne / Marketplace) — filter deals by their CRMProvider
   // Layout, using the SAME predicate the radar tabs use so "ExampleOrg" shows only
   // ExampleOrg-layout deals, etc. (Sample User 2026-07-07). Segment bind params come
   // first ($1..$N); the LIMIT is always the last placeholder.
@@ -13243,7 +13243,7 @@ export async function scanDealStageAgingViolations(
                        r.raw_data->>'Stage') AS stage
          FROM duplicate_records r
          LEFT JOIN duplicate_clusters dc ON dc.id = r.cluster_id
-        WHERE r.zoho_module = 'Deals'
+        WHERE r.CRMProvider_module = 'Deals'
           AND r.cleanup_class IS NULL
           AND (dc.status IS NULL OR dc.status = 'active')${segmentCond}
         ORDER BY r.modified_date DESC NULLS LAST
@@ -13265,11 +13265,11 @@ export async function scanDealStageAgingViolations(
   }
 
   const dealRows = await pool.query(
-    `SELECT r.id, r.cluster_id, r.zoho_record_id, r.account_name,
+    `SELECT r.id, r.cluster_id, r.CRMProvider_record_id, r.account_name,
             r.modified_date, r.raw_data
        FROM duplicate_records r
        LEFT JOIN duplicate_clusters dc ON dc.id = r.cluster_id
-      WHERE r.zoho_module = 'Deals'
+      WHERE r.CRMProvider_module = 'Deals'
         AND r.cleanup_class IS NULL
         AND (dc.status IS NULL OR dc.status = 'active')${segmentCond}
       ORDER BY r.modified_date DESC NULLS LAST
@@ -13332,7 +13332,7 @@ export async function scanDealStageAgingViolations(
     violations.push({
       record_id: row.id,
       cluster_id: row.cluster_id ?? null,
-      zoho_record_id: row.zoho_record_id ?? null,
+      CRMProvider_record_id: row.CRMProvider_record_id ?? null,
       deal_name: readObjOrStr(raw.Deal_Name),
       account_name: row.account_name ?? readObjOrStr(raw.Account_Name) ?? null,
       owner_name: ownerName,

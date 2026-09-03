@@ -34,7 +34,7 @@ const TR_ROLES = [
   "quality_specialist",
 ] as const;
 
-const APP_URL = process.env.APP_BASE_URL || "https://<REDACTED_HOST>";
+const APP_URL = process.env.APP_BASE_URL || "<REDACTED_URL_SCHEME><REDACTED_HOST>";
 
 function esc(s: any): string {
   return String(s ?? "")
@@ -129,9 +129,9 @@ export const techRequestRoutes = [
 
           // Send the FULL request so the assignee can act without opening anything.
           try {
-            const { sendResendEmail } = await import("../../utils/resendMail");
+            const { sendEmailProviderEmail } = await import("../../utils/EmailProviderMail");
             const link = `${APP_URL}/r/${req.action_token}`;
-            await sendResendEmail({
+            await sendEmailProviderEmail({
               to: assignee_email,
               subject: `Request${req.client_name ? ` — ${req.client_name}` : ""}: ${request_text.slice(0, 60)}`,
               html:

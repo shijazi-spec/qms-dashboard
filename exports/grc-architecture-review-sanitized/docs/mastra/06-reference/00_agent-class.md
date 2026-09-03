@@ -13,14 +13,14 @@ The `Agent` class is the foundation for creating AI agents in Mastra. It provide
 ### Basic string instructions
 
 ```typescript filename="src/mastra/agents/string-agent.ts" showLineNumbers copy
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 import { Agent } from "@mastra/core/agent";
 
 // String instructions
 export const agent = new Agent({
   name: "test-agent",
   instructions: 'You are a helpful assistant that provides concise answers.',
-  model: openai("gpt-4o")
+  model: LLMProvider("gpt-4o")
 });
 
 // System message object
@@ -30,7 +30,7 @@ export const agent2 = new Agent({
     role: "system", 
     content: "You are an expert programmer" 
   },
-  model: openai("gpt-4o")
+  model: LLMProvider("gpt-4o")
 });
 
 // Array of system messages
@@ -40,7 +40,7 @@ export const agent3 = new Agent({
     { role: "system", content: "You are a helpful assistant" },
     { role: "system", content: "You have expertise in TypeScript" }
   ],
-  model: openai("gpt-4o")
+  model: LLMProvider("gpt-4o")
 });
 ```
 
@@ -49,7 +49,7 @@ export const agent3 = new Agent({
 Use CoreSystemMessage format to access additional properties like `providerOptions` for provider-specific configurations:
 
 ```typescript filename="src/mastra/agents/core-message-agent.ts" showLineNumbers copy
-import { openai } from "@ai-sdk/openai";
+import { LLMProvider } from "@ai-sdk/LLMProvider";
 import { Agent } from "@mastra/core/agent";
 
 export const agent = new Agent({
@@ -58,12 +58,12 @@ export const agent = new Agent({
     role: 'system',
     content: 'You are a helpful assistant specialized in technical documentation.',
     providerOptions: {
-      openai: { 
+      LLMProvider: { 
         reasoningEffort: 'low'
       }
     }
   },
-  model: openai("gpt-5")
+  model: LLMProvider("gpt-5")
 });
 ```
 

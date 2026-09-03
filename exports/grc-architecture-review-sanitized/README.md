@@ -79,21 +79,21 @@ normal `npm test` run is never broken by missing secrets.
 
 ### Tool-health on-call notifier (`tests/toolHealthAlertNotifier.integration.ts`)
 
-Posts a real Slack message and/or Resend email with the **production renderers**
+Posts a real ChatProvider message and/or EmailProvider email with the **production renderers**
 to verify the Block Kit schema, button URL parsing, plaintext fallback length,
 and HTML character escaping before any change reaches the on-call path.
 
 | Variable | Purpose |
 |---|---|
-| `SLACK_BOT_TOKEN` | Slack bot token with `chat:write` scope |
-| `SLACK_TEST_CHANNEL` | Channel id or name to receive the test message |
-| `RESEND_API_KEY` | Resend API key |
-| `RESEND_TEST_EMAIL` | Delivery address (e.g. `user@example.invalid` for a Resend test address) |
-| `TOOL_HEALTH_APP_URL` | _(optional)_ Public origin of the app; enables the clickable button in the Slack Block Kit message |
+| `ChatProvider_BOT_TOKEN` | ChatProvider bot token with `chat:write` scope |
+| `ChatProvider_TEST_CHANNEL` | Channel id or name to receive the test message |
+| `EmailProvider_API_KEY` | EmailProvider API key |
+| `EmailProvider_TEST_EMAIL` | Delivery address (e.g. `user@example.invalid` for a EmailProvider test address) |
+| `TOOL_HEALTH_APP_URL` | _(optional)_ Public origin of the app; enables the clickable button in the ChatProvider Block Kit message |
 
-At least one credential pair (`SLACK_BOT_TOKEN` + `SLACK_TEST_CHANNEL`, or
-`RESEND_API_KEY` + `RESEND_TEST_EMAIL`) must be set for the tests to run.
-Set these as Replit secrets or in a local `.env` file — **never commit them to
+At least one credential pair (`ChatProvider_BOT_TOKEN` + `ChatProvider_TEST_CHANNEL`, or
+`EmailProvider_API_KEY` + `EmailProvider_TEST_EMAIL`) must be set for the tests to run.
+Set these as HostingPlatform secrets or in a local `.env` file — **never commit them to
 source control**.
 
 ```sh
@@ -129,12 +129,12 @@ bash scripts/run-rbac-integration-tests.sh
 
 CI runs this suite in two places:
 
-- `.github/workflows/test.yml` (standard test job) boots postgres + the dev
+- `.SourceControlProvider/workflows/test.yml` (standard test job) boots postgres + the dev
   server with both env vars set and `RUN_RBAC_INTEGRATION_E2E=1`, so the
   same `npm test` invocation that runs the unit tests also drives the RBAC
   HTTP integration suite. Any route-lockdown regression fails the standard
   test job, not just a separate workflow.
-- `.github/workflows/rbac-integration-tests.yml` (dedicated workflow)
+- `.SourceControlProvider/workflows/rbac-integration-tests.yml` (dedicated workflow)
   re-runs only the RBAC HTTP integration suite for fast feedback when
   iterating on RBAC middleware in isolation.
 
@@ -167,8 +167,8 @@ boundary. They catch limiter regressions the in-process tests cannot:
 
 Both files require `ADMIN_API_KEY`, `SESSION_SECRET` (the **same**
 `SESSION_SECRET` the dev server uses), and `DATABASE_URL`. The dev server
-**must** be running with `RATE_LIMIT_DISABLED` unset or `false` — in the Replit
-dev environment it is set to `"true"` (see `.replit` `userenv.development`),
+**must** be running with `RATE_LIMIT_DISABLED` unset or `false` — in the HostingPlatform
+dev environment it is set to `"true"` (see `.HostingPlatform` `userenv.development`),
 which short-circuits the limiter to allow-all and silently degrades the tests
 to false-positives.
 
@@ -183,11 +183,11 @@ bash scripts/run-rate-limiter-integration-tests.sh
 
 CI runs this suite in two places:
 
-- `.github/workflows/test.yml` (standard test job) boots postgres + the dev
+- `.SourceControlProvider/workflows/test.yml` (standard test job) boots postgres + the dev
   server with `RATE_LIMIT_DISABLED=false` and
   `RUN_RATE_LIMITER_INTEGRATION_E2E=1`, so the same `npm test` invocation that
   runs the unit tests also drives the rate-limiter HTTP integration suite.
-- `.github/workflows/rate-limiter-integration.yml` (dedicated workflow)
+- `.SourceControlProvider/workflows/rate-limiter-integration.yml` (dedicated workflow)
   re-runs only the rate-limiter HTTP integration suite for fast feedback when
   iterating on the limiter or middleware in isolation.
 

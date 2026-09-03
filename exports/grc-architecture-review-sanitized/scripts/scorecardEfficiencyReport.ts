@@ -3,7 +3,7 @@
  *
  * Run AFTER scripts/backfillScorecardV2.ts to assess whether the new
  * COPC scorecard is actually scoring the corpus the way we want.
- * Pure SQL aggregation — no OpenAI calls, no writes. Safe to run
+ * Pure SQL aggregation — no LLMProvider calls, no writes. Safe to run
  * any time and produces a one-shot text report on stdout.
  *
  * Answers:
@@ -12,7 +12,7 @@
  *                  rubric systematically harsher / kinder, and by how much?)
  *   • Sections   — average score per COPC section + % deferred per
  *                  section (tells you which sections actually score
- *                  from transcripts vs which are waiting on Five9)
+ *                  from transcripts vs which are waiting on ContactCenterProvider)
  *   • Per-agent  — top 10 by call count, avg v2 score vs avg v1.5
  *   • Outliers   — top 5 biggest positive deltas + top 5 biggest negative
  *                  (calls that swung hardest after re-scoring — worth
@@ -277,7 +277,7 @@ async function run(): Promise<void> {
     console.log("    large positive avg Δ (>+10) suggests v2 is systematically more generous;");
     console.log("    large negative avg Δ (<−10) suggests v2 is harsher — review the prompt.");
     console.log("  • % Deferred per section ≥80% means that section is essentially un-scored from");
-    console.log("    transcripts alone — expected for Activity & Process and KPI (Five9 dependency).");
+    console.log("    transcripts alone — expected for Activity & Process and KPI (ContactCenterProvider dependency).");
     console.log("  • Outliers > 30 points either direction are worth opening manually to validate.");
     console.log();
     console.log(rule());

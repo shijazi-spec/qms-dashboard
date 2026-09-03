@@ -19,8 +19,8 @@
  *           there is a permanent audit trail and the activity feed picks it
  *           up automatically;
  *         • emit a structured logger.warn so log-shipping pipelines see it;
- *         • best-effort POST to `RATE_LIMIT_429_SLACK_WEBHOOK_URL` (or
- *           falls back to `SLACK_WEBHOOK_URL` when the dedicated var is
+ *         • best-effort POST to `RATE_LIMIT_429_ChatProvider_WEBHOOK_URL` (or
+ *           falls back to `ChatProvider_WEBHOOK_URL` when the dedicated var is
  *           unset) — never blocks, never throws.
  *   3. The dashboard reads `spike24h.alertActive` / `spike24h.alertThreshold`
  *      added to `getRateLimitStats()` and renders a red banner above the
@@ -34,9 +34,9 @@
  *   • RATE_LIMIT_429_24H_ALERT_REPEAT_HOURS      — integer, default 6.
  *                                                   Suppresses repeat alerts
  *                                                   for an ongoing spike.
- *   • RATE_LIMIT_429_SLACK_WEBHOOK_URL           — optional Slack webhook
+ *   • RATE_LIMIT_429_ChatProvider_WEBHOOK_URL           — optional ChatProvider webhook
  *                                                   for the page. Falls back
- *                                                   to SLACK_WEBHOOK_URL.
+ *                                                   to ChatProvider_WEBHOOK_URL.
  *   • RATE_LIMIT_429_24H_ALERT_CRON              — cron expression, default
  *                                                   "15 * * * *" (every hour
  *                                                   at :15 to avoid colliding
@@ -140,8 +140,8 @@ export interface SpikeAlertCheckResult {
   alertEmitted: boolean;
   /** True iff the alert was suppressed because a sibling was emitted recently. */
   alertSuppressedAsRepeat: boolean;
-  /** True iff we sent a Slack page in this tick. */
-  slackSent: boolean;
+  /** True iff we sent a ChatProvider page in this tick. */
+  ChatProviderSent: boolean;
   /** True iff we sent at least one email in this tick. */
   emailSent: boolean;
   /** Diagnostic reason string. */
@@ -169,12 +169,12 @@ export interface SpikeAlertCheckDeps {
     metadata: Record<string, unknown>;
   }) => Promise<void>;
   /**
-   * Best-effort Slack notify. Defaults to `fetch(WEBHOOK)` when a webhook
+   * Best-effort ChatProvider notify. Defaults to `fetch(WEBHOOK)` when a webhook
    * is configured; no-op when not. Tests stub this so no real HTTP fires.
    */
-  postSlack?: (text: string) => Promise<boolean>;
+  postChatProvider?: (text: string) => Promise<boolean>;
   /**
-   * Best-effort email notify. Defaults to `sendResendEmail` when an
+   * Best-effort email notify. Defaults to `sendEmailProviderEmail` when an
    * `RATE_LIMIT_429_ALERT_EMAIL` recipient list is configured; no-op when
    * not. Tests stub this.
    */
@@ -252,12 +252,12 @@ const DEFAULT_EMIT_EVENT: NonNullable<
   });
 };
 
-const DEFAULT_POST_SLACK: NonNullable<
-  SpikeAlertCheckDeps["postSlack"]
+const DEFAULT_POST_ChatProvider: NonNullable<
+  SpikeAlertCheckDeps["postChatProvider"]
 > = async (text) => {
   const url =
-    process.env.RATE_LIMIT_429_SLACK_WEBHOOK_URL ||
-    process.env.SLACK_WEBHOOK_URL ||
+    process.env.RATE_LIMIT_429_ChatProvider_WEBHOOK_URL ||
+    process.env.ChatProvider_WEBHOOK_URL ||
     "";
   if (!url) return false;
   try {
@@ -273,7 +273,7 @@ const DEFAULT_POST_SLACK: NonNullable<
           statusText: response.statusText,
           component: "rateLimit429SpikeAlert",
         },
-        "Slack webhook returned non-2xx — alert was already written to system_events",
+        "ChatProvider webhook returned non-2xx — alert was already written to system_events",
       );
       return false;
     }
@@ -281,7 +281,7 @@ const DEFAULT_POST_SLACK: NonNullable<
   } catch (err) {
     logger.warn(
       { err: (err as Error).message, component: "rateLimit429SpikeAlert" },
-      "Slack webhook POST failed — alert was already written to system_events",
+      "ChatProvider webhook POST failed — alert was already written to system_events",
     );
     return false;
   }
@@ -298,8 +298,8 @@ const DEFAULT_SEND_EMAIL: NonNullable<
     .filter(Boolean);
   if (recipients.length === 0) return false;
   try {
-    const { sendResendEmail } = await import("./resendMail");
-    const r = await sendResendEmail({ to: recipients, subject, html, text });
+    const { sendEmailProviderEmail } = await import("./EmailProviderMail");
+    const r = await sendEmailProviderEmail({ to: recipients, subject, html, text });
     return !!r?.success;
   } catch (err) {
     logger.warn(
@@ -363,7 +363,7 @@ function escapeHtml(s: string): string {
  * Run the 24h spike alert check. Idempotent and safe to call from the cron;
  * the repeat-suppression window prevents flapping during an ongoing spike.
  *
- * Never throws — all DB / Slack / email failures are caught and surfaced
+ * Never throws — all DB / ChatProvider / email failures are caught and surfaced
  * via the result so the cron's bookkeeping stays intact.
  */
 export async function runRateLimit429SpikeAlertCheck(
@@ -378,7 +378,7 @@ export async function runRateLimit429SpikeAlertCheck(
   const countRecent =
     depsOverride.countRecentAlertEmissions ?? DEFAULT_COUNT_RECENT;
   const emitEvent = depsOverride.emitSystemEvent ?? DEFAULT_EMIT_EVENT;
-  const postSlack = depsOverride.postSlack ?? DEFAULT_POST_SLACK;
+  const postChatProvider = depsOverride.postChatProvider ?? DEFAULT_POST_ChatProvider;
   const sendEmail = depsOverride.sendEmail ?? DEFAULT_SEND_EMAIL;
 
   // Threshold disabled — short-circuit before touching the DB.
@@ -389,7 +389,7 @@ export async function runRateLimit429SpikeAlertCheck(
       total429: 0,
       alertEmitted: false,
       alertSuppressedAsRepeat: false,
-      slackSent: false,
+      ChatProviderSent: false,
       emailSent: false,
       reason: "disabled",
     };
@@ -413,7 +413,7 @@ export async function runRateLimit429SpikeAlertCheck(
       total429: 0,
       alertEmitted: false,
       alertSuppressedAsRepeat: false,
-      slackSent: false,
+      ChatProviderSent: false,
       emailSent: false,
       reason: "db_error",
     };
@@ -430,7 +430,7 @@ export async function runRateLimit429SpikeAlertCheck(
       total429: aggregate.total429,
       alertEmitted: false,
       alertSuppressedAsRepeat: false,
-      slackSent: false,
+      ChatProviderSent: false,
       emailSent: false,
       reason: evalResult.reason,
     };
@@ -464,7 +464,7 @@ export async function runRateLimit429SpikeAlertCheck(
       total429: aggregate.total429,
       alertEmitted: false,
       alertSuppressedAsRepeat: true,
-      slackSent: false,
+      ChatProviderSent: false,
       emailSent: false,
       reason: "above_threshold",
     };
@@ -494,24 +494,24 @@ export async function runRateLimit429SpikeAlertCheck(
   } catch (err) {
     logger.warn(
       { err: (err as Error).message, component: "rateLimit429SpikeAlert" },
-      "Failed to write rate_limit_429_spike_alert system_event — Slack/email still attempted",
+      "Failed to write rate_limit_429_spike_alert system_event — ChatProvider/email still attempted",
     );
   }
 
-  // Best-effort fan-out. Each channel is caught independently so a Slack
+  // Best-effort fan-out. Each channel is caught independently so a ChatProvider
   // outage cannot silence the email and vice-versa.
-  const slackText =
+  const ChatProviderText =
     `:rotating_light: *24h Rate-Limit Spike* — ${aggregate.total429} \`rate_limit_429\` ` +
     `events in the last 24h (threshold: ${threshold}, ` +
     `suppressed: ${aggregate.totalSuppressed}).\n` +
     `*Top IPs:*\n${formatTopIps(aggregate.topIps)}`;
-  let slackSent = false;
+  let ChatProviderSent = false;
   try {
-    slackSent = await postSlack(slackText);
+    ChatProviderSent = await postChatProvider(ChatProviderText);
   } catch (err) {
     logger.warn(
       { err: (err as Error).message, component: "rateLimit429SpikeAlert" },
-      "postSlack threw",
+      "postChatProvider threw",
     );
   }
 
@@ -546,7 +546,7 @@ to inspect live counters and confirm the source.</p>`;
     total429: aggregate.total429,
     alertEmitted,
     alertSuppressedAsRepeat: false,
-    slackSent,
+    ChatProviderSent,
     emailSent,
     reason: "above_threshold",
   };

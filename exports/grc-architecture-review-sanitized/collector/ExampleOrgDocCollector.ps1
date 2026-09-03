@@ -91,7 +91,7 @@ function Get-Config {
 
     $api = $ApiBase
     if ([string]::IsNullOrWhiteSpace($api)) { $api = $env:DOC_TRACKER_API_BASE }
-    if ([string]::IsNullOrWhiteSpace($api)) { $api = 'https://<REDACTED_HOST>' }
+    if ([string]::IsNullOrWhiteSpace($api)) { $api = '<REDACTED_URL_SCHEME><REDACTED_HOST>' }
 
     $collectorId = $env:DOC_TRACKER_COLLECTOR_ID
     if ([string]::IsNullOrWhiteSpace($collectorId)) { $collectorId = $env:COMPUTERNAME }
@@ -379,7 +379,7 @@ function Send-Snapshot {
         if ($null -ne $_.Exception.Response) { $code = [int]$_.Exception.Response.StatusCode }
         Write-Log "Push failed ($code): $msg" 'ERROR'
         if ($code -eq 503) { Write-Log 'The platform reports ingest is not configured - DOC_TRACKER_INGEST_KEY is unset on the SERVER.' 'ERROR' }
-        if ($code -eq 401) { Write-Log 'Key rejected. Confirm DOC_TRACKER_INGEST_KEY matches the value in Replit Secrets.' 'ERROR' }
+        if ($code -eq 401) { Write-Log 'Key rejected. Confirm DOC_TRACKER_INGEST_KEY matches the value in HostingPlatform Secrets.' 'ERROR' }
         Save-QueuedSnapshot -Config $Config -Json $json
         return $false
     }

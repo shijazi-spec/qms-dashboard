@@ -496,7 +496,7 @@
                                 </div>
                                 <div>
                                     <p class="font-medium text-gray-900">
-                                        Google Calendar
+                                        IdentityProvider Calendar
                                     </p>
                                     <p class="text-sm text-gray-500">
                                         Meeting and event tracking
@@ -532,7 +532,7 @@
                                 </div>
                                 <div>
                                     <p class="font-medium text-gray-900">
-                                        Zoho CRM
+                                        CRMProvider CRM
                                     </p>
                                     <p class="text-sm text-gray-500">
                                         Data hygiene and governance audits
@@ -540,7 +540,7 @@
                                 </div>
                             </div>
                             <span
-                                id="zoho-status"
+                                id="CRMProvider-status"
                                 class="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm font-medium"
                                 >Needs Token</span
                             >
@@ -558,15 +558,15 @@
                                 </div>
                                 <div>
                                     <p class="font-medium text-gray-900">
-                                        Slack App API
+                                        ChatProvider App API
                                     </p>
-                                    <p class="text-sm text-gray-500" id="slack-detail">
+                                    <p class="text-sm text-gray-500" id="ChatProvider-detail">
                                         Notifications & workflow triggers
                                     </p>
                                 </div>
                             </div>
                             <span
-                                id="slack-status"
+                                id="ChatProvider-status"
                                 class="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm font-medium"
                                 >Checking...</span
                             >
@@ -594,7 +594,7 @@
                                 </div>
                                 <div>
                                     <p class="font-medium text-gray-900">
-                                        Email (Replit Mail)
+                                        Email (HostingPlatform Mail)
                                     </p>
                                     <p class="text-sm text-gray-500">
                                         Quality report delivery
@@ -2000,45 +2000,45 @@
                     if (!response.ok) return;
                     const data = await response.json();
                     
-                    const zohoStatus = document.getElementById('zoho-status');
-                    if (zohoStatus && data.zoho) {
-                        if (data.zoho.connected) {
-                            zohoStatus.textContent = ExampleOrgI18n.t('dyn.admin.status_connected');
-                            zohoStatus.className = 'px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium';
-                            zohoStatus.title = data.zoho.message;
+                    const CRMProviderStatus = document.getElementById('CRMProvider-status');
+                    if (CRMProviderStatus && data.CRMProvider) {
+                        if (data.CRMProvider.connected) {
+                            CRMProviderStatus.textContent = ExampleOrgI18n.t('dyn.admin.status_connected');
+                            CRMProviderStatus.className = 'px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium';
+                            CRMProviderStatus.title = data.CRMProvider.message;
                         } else {
-                            zohoStatus.textContent = ExampleOrgI18n.t('dyn.admin.status_needs_token');
-                            zohoStatus.className = 'px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm font-medium';
+                            CRMProviderStatus.textContent = ExampleOrgI18n.t('dyn.admin.status_needs_token');
+                            CRMProviderStatus.className = 'px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm font-medium';
                         }
                     }
                     
                     const calendarStatus = document.getElementById('calendar-status');
-                    if (calendarStatus && data.googleCalendar) {
-                        if (data.googleCalendar.connected) {
+                    if (calendarStatus && data.IdentityProviderCalendar) {
+                        if (data.IdentityProviderCalendar.connected) {
                             calendarStatus.textContent = ExampleOrgI18n.t('dyn.admin.status_connected');
                             calendarStatus.className = 'px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium';
                         }
                     }
 
-                    const slackStatus = document.getElementById('slack-status');
-                    const slackDetail = document.getElementById('slack-detail');
-                    if (slackStatus && data.slack) {
-                        if (data.slack.connected) {
-                            const hasMissing = data.slack.missingScopes && data.slack.missingScopes.length > 0;
-                            slackStatus.textContent = hasMissing ? ExampleOrgI18n.t('dyn.admin.status_connected_scopes_pending') : ExampleOrgI18n.t('dyn.admin.status_fully_connected');
-                            slackStatus.className = hasMissing
+                    const ChatProviderStatus = document.getElementById('ChatProvider-status');
+                    const ChatProviderDetail = document.getElementById('ChatProvider-detail');
+                    if (ChatProviderStatus && data.ChatProvider) {
+                        if (data.ChatProvider.connected) {
+                            const hasMissing = data.ChatProvider.missingScopes && data.ChatProvider.missingScopes.length > 0;
+                            ChatProviderStatus.textContent = hasMissing ? ExampleOrgI18n.t('dyn.admin.status_connected_scopes_pending') : ExampleOrgI18n.t('dyn.admin.status_fully_connected');
+                            ChatProviderStatus.className = hasMissing
                                 ? 'px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium'
                                 : 'px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium';
-                            slackStatus.title = data.slack.message;
-                            if (slackDetail) {
-                                let detail = 'Bot: ' + (data.slack.bot || 'unknown') + ' | ' + (data.slack.workspace || '') ;
-                                if (hasMissing) detail += ' | Missing: ' + data.slack.missingScopes.join(', ');
-                                slackDetail.textContent = detail;
+                            ChatProviderStatus.title = data.ChatProvider.message;
+                            if (ChatProviderDetail) {
+                                let detail = 'Bot: ' + (data.ChatProvider.bot || 'unknown') + ' | ' + (data.ChatProvider.workspace || '') ;
+                                if (hasMissing) detail += ' | Missing: ' + data.ChatProvider.missingScopes.join(', ');
+                                ChatProviderDetail.textContent = detail;
                             }
                         } else {
-                            slackStatus.textContent = ExampleOrgI18n.t('dyn.admin.status_not_connected');
-                            slackStatus.className = 'px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium';
-                            if (slackDetail) slackDetail.textContent = data.slack.message || ExampleOrgI18n.t('dyn.admin.token_not_configured');
+                            ChatProviderStatus.textContent = ExampleOrgI18n.t('dyn.admin.status_not_connected');
+                            ChatProviderStatus.className = 'px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium';
+                            if (ChatProviderDetail) ChatProviderDetail.textContent = data.ChatProvider.message || ExampleOrgI18n.t('dyn.admin.token_not_configured');
                         }
                     }
                 } catch (error) {

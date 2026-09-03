@@ -165,7 +165,7 @@ The Quality Dashboard provides a real-time visualization of your organization's 
 **NEW in v2.1** - Real-time agent/team member performance tracking based on CRM Lead Owner data.
 
 **Features:**
-- Displays all agents/team members from Zoho CRM Lead Owners
+- Displays all agents/team members from CRMProvider CRM Lead Owners
 - Shows quality score (0-100%) for each agent based on their owned records
 - Issue breakdown by severity (Critical, High, Medium, Low)
 - Team filter dropdown to view SDR, Sales, or All Teams
@@ -177,9 +177,9 @@ The Quality Dashboard provides a real-time visualization of your organization's 
 - Weighted scoring: Critical issues (4x), High (3x), Medium (2x), Low (1x)
 
 **Data Source:**
-- Agent names pulled automatically from Zoho CRM Lead Owner field
+- Agent names pulled automatically from CRMProvider CRM Lead Owner field
 - In MOCK mode, uses user mapping from `mockdata/users.json`
-- In REAL mode, uses actual Zoho CRM user names with full pagination
+- In REAL mode, uses actual CRMProvider CRM user names with full pagination
 
 ### Buttons & Actions
 
@@ -1266,7 +1266,7 @@ If issues are found after import:
 
 ### Overview
 
-The Duplicate Radar module provides AI-powered duplicate detection for CRM data hygiene. It identifies duplicate Leads and Deals by analyzing email domains (company-based clustering) and provides confidence scoring to help your team clean up the CRM. The module operates in **READ-ONLY mode** - it detects and recommends, but humans take action in Zoho CRM.
+The Duplicate Radar module provides AI-powered duplicate detection for CRM data hygiene. It identifies duplicate Leads and Deals by analyzing email domains (company-based clustering) and provides confidence scoring to help your team clean up the CRM. The module operates in **READ-ONLY mode** - it detects and recommends, but humans take action in CRMProvider CRM.
 
 ### Key Concepts
 
@@ -1283,7 +1283,7 @@ The Duplicate Radar module provides AI-powered duplicate detection for CRM data 
 | Low | <60% | Possible match - requires manual review |
 
 #### Read-Only Philosophy
-"AI detects, humans act" - The system identifies duplicates and recommends actions, but does not automatically modify Zoho CRM data.
+"AI detects, humans act" - The system identifies duplicates and recommends actions, but does not automatically modify CRMProvider CRM data.
 
 ### Dashboard Views (7 Tabs)
 
@@ -1347,7 +1347,7 @@ Detection and export activity history:
 2. **Check High Confidence first** - These are most likely true duplicates
 3. **Click a cluster** - View all records sharing that domain
 4. **Review records** - Check names, emails, owners
-5. **Take action in Zoho** - Merge or close duplicates in CRM
+5. **Take action in CRMProvider** - Merge or close duplicates in CRM
 6. **Mark as Resolved** - Update cluster status in ExampleOrg
 
 ### Testing in Sandbox
@@ -1440,7 +1440,7 @@ Access admin statistics at `/onboarding?admin=true`:
 
 ### How the AI Works
 
-ExampleOrg uses **GPT-4o** (via Replit AI Integrations) to provide intelligent analysis and recommendations throughout the system.
+ExampleOrg uses **GPT-4o** (via HostingPlatform AI Integrations) to provide intelligent analysis and recommendations throughout the system.
 
 ### AI-Powered Features by Module
 
@@ -1460,7 +1460,7 @@ ExampleOrg uses **GPT-4o** (via Replit AI Integrations) to provide intelligent a
 The **Quality Specialist Agent** runs automatically:
 - **Schedule:** Every Monday at 8 AM UTC
 - **Process:**
-  1. Fetches data from Google Calendar and Zoho CRM
+  1. Fetches data from IdentityProvider Calendar and CRMProvider CRM
   2. Runs AI analysis on data quality
   3. Calculates quality scores (People, Process, Governance)
   4. Stores results in database

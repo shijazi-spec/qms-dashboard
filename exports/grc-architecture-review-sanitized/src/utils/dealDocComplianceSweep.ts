@@ -5,7 +5,7 @@
  * The problem this replaces (Sample User 2026-08-25: "this page is a disaster, it
  * stopped the whole PC when it works"): Deal Compliance only knew a deal's
  * document status if a human opened the tab and pressed "Check all documents",
- * which then walked the loaded rows calling Zoho's attachments API. It capped
+ * which then walked the loaded rows calling CRMProvider's attachments API. It capped
  * at 200 of 976 in-scope deals, so it could never finish — the tab permanently
  * showed hundreds "not yet checked" — and it pinned the browser for minutes
  * while doing it.
@@ -14,7 +14,7 @@
  * checked in the BACKGROUND, a slice at a time, off the existing 45-minute
  * housekeeping loop. The page then reads stored results and renders instantly.
  *
- * A ROLLING sweep, not a nightly burst. 976 deals in one go is ~976 Zoho
+ * A ROLLING sweep, not a nightly burst. 976 deals in one go is ~976 CRMProvider
  * attachment calls in a few minutes — enough to hit rate limits, and this
  * deployment has already shown it will fall over under that kind of load. A
  * slice per tick (default 60, concurrency 3) covers roughly 1,900 checks a
@@ -46,7 +46,7 @@ function sweepMaxAgeHours(): number {
   return Number.isFinite(raw) && raw > 0 ? raw : 24;
 }
 
-/** Concurrent Zoho attachment calls. Matches the interactive batch endpoint. */
+/** Concurrent CRMProvider attachment calls. Matches the interactive batch endpoint. */
 const SWEEP_CONCURRENCY = 3;
 
 export interface DealDocSweepResult {
@@ -67,17 +67,17 @@ export interface DealDocSweepResult {
 export function dueDealsSql(): string {
   const stages = DEAL_COMPLIANCE_STAGES.map((s) => `'${s.toLowerCase()}'`).join(", ");
   return `
-    SELECT r.zoho_record_id AS id,
+    SELECT r.CRMProvider_record_id AS id,
            COALESCE(NULLIF(BTRIM(r.stage), ''), r.raw_data->>'Stage', '') AS stage,
            NULLIF(BTRIM(r.raw_data->'Account_Name'->>'id'), '') AS account_id
       FROM duplicate_records r
-      LEFT JOIN deal_doc_compliance d ON d.zoho_deal_id = r.zoho_record_id
+      LEFT JOIN deal_doc_compliance d ON d.CRMProvider_deal_id = r.CRMProvider_record_id
      WHERE r.record_type = 'deal'
        AND LOWER(BTRIM(COALESCE(NULLIF(BTRIM(r.stage), ''), r.raw_data->>'Stage', ''))) IN (${stages})
        AND (d.checked_at IS NULL OR d.checked_at < NOW() - ($1 || ' hours')::interval)
      -- Never-checked first: a deal nobody has ever looked at must not be
      -- starved by one that was checked an hour ago.
-     ORDER BY d.checked_at ASC NULLS FIRST, r.zoho_record_id ASC
+     ORDER BY d.checked_at ASC NULLS FIRST, r.CRMProvider_record_id ASC
      LIMIT $2`;
 }
 
@@ -93,7 +93,7 @@ export async function runDealDocComplianceSweep(
   limit = sweepBatchSize(),
 ): Promise<DealDocSweepResult> {
   const { upsertDealDocCompliance } = await import("./duplicateRadarDatabase");
-  const { fetchRecordAttachments } = await import("./zohoCRM");
+  const { fetchRecordAttachments } = await import("./CRMProviderCRM");
   const { evaluateDocCompliance } = await import("./dealComplianceCheck");
 
   const maxAge = sweepMaxAgeHours();
@@ -106,7 +106,7 @@ export async function runDealDocComplianceSweep(
 
   // Company documents (VAT, CR, National Address) live on the ACCOUNT, so the
   // Account's attachments are needed too — but one Account carries many deals,
-  // and fetching per deal would multiply the Zoho calls for no new information.
+  // and fetching per deal would multiply the CRMProvider calls for no new information.
   // Cached for the pass, with nulls cached as well so a company with no
   // attachments is not re-requested for every one of its deals.
   // The PROMISE is cached, not the result: the workers run concurrently, and
@@ -151,7 +151,7 @@ export async function runDealDocComplianceSweep(
         const acctAtts = await accountAttachments(d.accountId);
         const r = evaluateDocCompliance(d.stage, atts, acctAtts);
         await upsertDealDocCompliance({
-          zohoDealId: d.id,
+          CRMProviderDealId: d.id,
           stage: d.stage,
           compliant: !!r.compliant,
           presentDocs: (r.presentDocs || []).map((p: any) => p.label),
@@ -186,10 +186,10 @@ export async function countNeverChecked(): Promise<number> {
     const res = await pool.query(
       `SELECT COUNT(*)::text AS n
          FROM duplicate_records r
-         LEFT JOIN deal_doc_compliance d ON d.zoho_deal_id = r.zoho_record_id
+         LEFT JOIN deal_doc_compliance d ON d.CRMProvider_deal_id = r.CRMProvider_record_id
         WHERE r.record_type = 'deal'
           AND LOWER(BTRIM(COALESCE(NULLIF(BTRIM(r.stage), ''), r.raw_data->>'Stage', ''))) IN (${stages})
-          AND d.zoho_deal_id IS NULL`,
+          AND d.CRMProvider_deal_id IS NULL`,
     );
     return Number(res.rows[0]?.n) || 0;
   } catch {

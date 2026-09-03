@@ -84,7 +84,7 @@ These properties resolve to final values after the stream completes:
     {
       name: "reasoning",
       type: "Promise<string>",
-      description: "Complete reasoning text for models that support reasoning (like OpenAI's o1 series). Returns empty string for models without reasoning capability."
+      description: "Complete reasoning text for models that support reasoning (like LLMProvider's o1 series). Returns empty string for models without reasoning capability."
     },
     {
       name: "reasoningText",

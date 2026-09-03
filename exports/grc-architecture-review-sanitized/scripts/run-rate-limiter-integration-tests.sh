@@ -25,7 +25,7 @@
 #
 # Why this wrapper exists:
 #   Both files were originally only runnable by hand with `npx tsx ...` and
-#   needed the dev server to have rate limiting enabled. In the Replit dev
+#   needed the dev server to have rate limiting enabled. In the HostingPlatform dev
 #   environment the server runs with `RATE_LIMIT_DISABLED=true` so the
 #   limiter short-circuits to allow-all, which means the burst phase of
 #   every scenario produces zero 429+Retry-After responses and the tests
@@ -34,7 +34,7 @@
 #   future regression.
 #
 #   This wrapper, plus the matching CI plumbing in
-#   `.github/workflows/rate-limiter-integration.yml` and `.github/workflows/test.yml`
+#   `.SourceControlProvider/workflows/rate-limiter-integration.yml` and `.SourceControlProvider/workflows/test.yml`
 #   (which run `npm run dev` *without* setting `RATE_LIMIT_DISABLED=true`,
 #   so the limiter is enforced), makes both files run on every pipeline
 #   and exit non-zero on any limiter regression.
@@ -75,8 +75,8 @@
 #   bash scripts/run-rate-limiter-integration-tests.sh
 #
 # Wired into:
-#   - .github/workflows/rate-limiter-integration.yml (dedicated CI)
-#   - .github/workflows/test.yml via RUN_RATE_LIMITER_INTEGRATION_E2E=1
+#   - .SourceControlProvider/workflows/rate-limiter-integration.yml (dedicated CI)
+#   - .SourceControlProvider/workflows/test.yml via RUN_RATE_LIMITER_INTEGRATION_E2E=1
 #   - tests/runIntegrationTests.ts when RUN_RATE_LIMITER_INTEGRATION_E2E=1
 # ----------------------------------------------------------------------------
 set -euo pipefail
@@ -106,15 +106,15 @@ if [ "${#missing[@]}" -gt 0 ]; then
   echo "   audit/read/export scenarios." >&2
   echo "" >&2
   echo "   In CI these are set in" >&2
-  echo "   .github/workflows/rate-limiter-integration.yml and" >&2
-  echo "   .github/workflows/test.yml. Locally, export them before running" >&2
+  echo "   .SourceControlProvider/workflows/rate-limiter-integration.yml and" >&2
+  echo "   .SourceControlProvider/workflows/test.yml. Locally, export them before running" >&2
   echo "   this script — and make sure the dev server is running WITHOUT" >&2
   echo "   RATE_LIMIT_DISABLED=true (otherwise every burst sees zero 429s)." >&2
   exit 2
 fi
 
 # Defensive: if RATE_LIMIT_DISABLED leaks into the test process from the
-# Replit dev environment, the test process itself doesn't care (it only
+# HostingPlatform dev environment, the test process itself doesn't care (it only
 # sends HTTP requests) but we emit a clear warning so a developer running
 # this against a dev server they haven't reconfigured isn't surprised by
 # every burst returning zero 429s.
