@@ -2213,6 +2213,7 @@
     "cert_state_not_started": "لم يبدأ",
     "cert_dependency_badge": "تبعية",
     "cert_toggle_error": "تعذر التحديث — حاول مرة أخرى.",
+    "cert_fw_unit_milestones": "معالم",
     "ingest_standard": "استيعاب معيار",
     "ingest_modal_title": "استيعاب معيار من وثيقة",
     "ingest_modal_subtitle": "ارفع وثيقة المعيار أولاً في مكتبة QMS، ثم اخترها هنا. الذكاء الاصطناعي يصيغ المسودة، وأنت تراجعها قبل أن تصبح التزامات.",

@@ -2213,6 +2213,7 @@
     "cert_state_not_started": "Not started",
     "cert_dependency_badge": "Dependency",
     "cert_toggle_error": "Could not update — try again.",
+    "cert_fw_unit_milestones": "milestones",
     "ingest_standard": "Ingest Standard",
     "ingest_modal_title": "Ingest Standard from Document",
     "ingest_modal_subtitle": "Upload a regulation/standard PDF in the QMS library first, then pick it here. AI drafts the clauses; you review before they become obligations.",

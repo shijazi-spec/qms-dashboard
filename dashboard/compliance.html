@@ -791,7 +791,7 @@
             const meta = _certEvidenceMeta(reading.state);
             const sourceLabel = escAttr(_certSourceLabel(reading.source || a.evidence_source));
             const detail = (reading.state === 'satisfied' || reading.state === 'not_satisfied')
-                ? (reading.have + ' / ' + reading.need)
+                ? (escAttr(reading.have) + ' / ' + escAttr(reading.need))
                 : (sourceLabel || '—');
             return '<div class="cert-action-row flex items-start gap-3 py-2 border-t border-gray-100" data-testid="cert-action-row-' + key + '">'
                 + '<span class="mt-0.5 flex h-4 w-4 items-center justify-center text-xs" aria-hidden="true">' + meta.glyph + '</span>'
@@ -874,7 +874,7 @@
                 + depBadge
                 + '<span class="font-bold text-gray-900 text-sm flex-1">' + escAttr(m.milestone_name || '') + '</span>'
                 + '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium ' + state.cls + '">' + escAttr(state.label) + '</span>'
-                + '<span class="text-xs text-gray-500 font-medium shrink-0">' + progress.done + ' / ' + progress.total + '</span>'
+                + '<span class="text-xs text-gray-500 font-medium shrink-0">' + escAttr(progress.done) + ' / ' + escAttr(progress.total) + '</span>'
                 + '</button>'
                 + '<div class="px-3 pb-2" id="' + bodyId + '">' + rowsHtml + '</div>'
                 + '</div>';
@@ -920,9 +920,10 @@
                     + '⚠ ' + escAttr(_ct('compliance.roadmap_gap_unreachable', 'No milestone in the plan delivers this.')) + '</div>';
             } else {
                 const pct = Math.max(0, Math.min(100, r.pct || 0));
+                const unitLabel = escAttr(_ct('compliance.cert_fw_unit_milestones', 'milestones'));
                 bodyHtml = '<div class="flex items-center gap-2 mt-2" data-testid="cert-card-bar-' + code + '">'
                     + '<div class="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-green-500" data-style="width:' + pct + '%"></div></div>'
-                    + '<span class="text-[11px] text-gray-500 shrink-0">' + pct + '% (' + r.delivered + '/' + r.total + ')</span>'
+                    + '<span class="text-[11px] text-gray-500 shrink-0">' + pct + '% (' + escAttr(r.delivered) + '/' + escAttr(r.total) + ' ' + unitLabel + ')</span>'
                     + '</div>';
             }
             return '<div class="cert-framework-card border rounded-lg p-3 ' + ((noDate || r.unreachable) ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-200') + '" data-testid="cert-framework-card-' + code + '">'
