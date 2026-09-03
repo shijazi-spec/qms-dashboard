@@ -63,125 +63,31 @@
         .chip button { color: inherit; opacity: 0.7; }
         .chip button:hover { opacity: 1; }
 
-        /* ─── Certification Roadmap (GRQ-PLAN-2026-01) ───────────────── */
-        .roadmap-chain {
-            display: flex;
-            align-items: flex-start;
-            overflow-x: auto;
-            padding: 0.5rem 0.25rem 1.5rem;
-        }
-        .roadmap-node {
-            position: relative;
-            flex: 0 0 128px;
-            width: 128px;
-            text-align: center;
-            padding: 0 6px;
-        }
-        .roadmap-node-date {
-            font-size: 0.7rem;
-            color: #6B7280;
-            white-space: nowrap;
-        }
-        .roadmap-node-dot {
-            width: 16px;
-            height: 16px;
-            margin: 4px auto;
-            border-radius: 9999px;
-            border: 3px solid #D1D5DB;
-            background: #FFFFFF;
-        }
-        .roadmap-node-dot.state-delivered { background: #10B981; border-color: #10B981; }
-        .roadmap-node-dot.state-late { background: #F59E0B; border-color: #F59E0B; }
-        .roadmap-node-dot.state-overdue { background: #EF4444; border-color: #EF4444; }
-        .roadmap-node-dot.state-active { background: #4F46E5; border-color: #4F46E5; box-shadow: 0 0 0 4px rgba(79,70,229,0.18); }
-        .roadmap-node-dot.state-blocked { background: #F59E0B; border-color: #F59E0B; }
-        .roadmap-node-dot.state-planned { background: #FFFFFF; border-color: #D1D5DB; }
-        .roadmap-connector {
-            flex: 0 0 26px;
-            width: 26px;
-            height: 2px;
-            background: #D1D5DB;
-            margin-top: 26px;
-        }
-        .roadmap-connector.is-past { background: #10B981; }
-        .roadmap-node-label {
-            display: block;
-            width: 100%;
-            background: none;
-            border: none;
-            padding: 0;
-            cursor: pointer;
-            line-height: 1.2;
-        }
-        .roadmap-node-label:hover .roadmap-node-key { color: #4338CA; text-decoration: underline; }
-        .roadmap-node-key { font-size: 0.75rem; font-weight: 600; color: #1F2937; }
-        .roadmap-node-cert { font-size: 0.65rem; color: #9CA3AF; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .roadmap-node-badge { margin-top: 4px; }
-        .roadmap-node-blocker {
-            margin-top: 4px;
-            font-size: 0.63rem;
-            line-height: 1.25;
-            color: #B45309;
-        }
-        .roadmap-detail {
-            display: none;
-            position: absolute;
-            z-index: 30;
-            top: 100%;
-            left: 50%;
-            margin-left: -115px;
-            margin-top: 8px;
-            width: 230px;
-            background: #FFFFFF;
-            border: 1px solid #E5E7EB;
-            border-radius: 0.5rem;
-            box-shadow: 0 6px 18px rgba(0,0,0,0.14);
-            padding: 10px 12px;
-            text-align: start;
-            font-size: 0.72rem;
-            color: #374151;
-        }
-        .roadmap-node:hover .roadmap-detail,
-        .roadmap-node.roadmap-detail-open .roadmap-detail { display: block; }
-        .roadmap-today {
-            flex: 0 0 auto;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 0 4px;
-            width: 40px;
-        }
-        .roadmap-today-line { width: 2px; height: 30px; background: #4F46E5; margin-top: 4px; }
-        .roadmap-today-label {
-            font-size: 0.6rem;
-            font-weight: 700;
-            color: #4338CA;
-            background: #EEF2FF;
-            border-radius: 9999px;
-            padding: 1px 6px;
-            white-space: nowrap;
-        }
-        .roadmap-rule-line {
-            display: block;
-            height: 1px;
-            background: linear-gradient(to right, transparent, #E5E7EB 12%, #E5E7EB 88%, transparent);
-        }
-        .roadmap-bar-track { background: #E5E7EB; border-radius: 9999px; height: 8px; overflow: hidden; flex: 1; }
-        .roadmap-bar-fill { background: #10B981; height: 100%; border-radius: 9999px; }
+        /* ─── Certification Action Plan (GRQ-PLAN-2026-01, Task 6) ───────
+           Framework readiness cards + collapsible per-milestone action
+           groups replace the old chain diagram. Deliberately minimal custom
+           CSS — everything else below is done with the page's existing
+           Tailwind utility classes (see the render functions further down
+           in this file's main script block). `accent-color` needs a real CSS
+           rule to turn a ticked manual checkbox green, because inline style
+           attributes are not allowed and no Tailwind forms plugin is loaded. ─ */
+        .cert-checkbox { accent-color: #10B981; cursor: pointer; }
+        .cert-group-header { cursor: pointer; }
 
-        /* ─── Roadmap print/PDF hand-over (Task 6) ───────────────────── */
-        .roadmap-print-only { display: none; }
+        /* ─── Certification plan print/PDF hand-over ─────────────────────── */
+        .cert-print-only { display: none; }
         @media print {
             @page { size: A4 landscape; margin: 12mm; }
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
             html, body { background: #FFFFFF !important; }
             body { padding: 0 !important; margin: 0 !important; }
-            /* Show only the roadmap section — everything else that lives
-               inside <main> (header/actions, stray section heading, filter
-               bar, KPI cards, status counters, frameworks grid, framework
-               detail, analytics/charts row, obligations table) is hidden by
-               this single rule instead of an enumerated list, so nothing
-               new added to <main> later silently leaks into print. */
+            /* Show only the certification-plan section — everything else
+               that lives inside <main> (header/actions, stray section
+               heading, filter bar, KPI cards, status counters, frameworks
+               grid, framework detail, analytics/charts row, obligations
+               table) is hidden by this single rule instead of an enumerated
+               list, so nothing new added to <main> later silently leaks
+               into print. */
             main > *:not([data-testid="section-cert-milestones"]) { display: none !important; }
             main { max-width: none !important; margin: 0 !important; padding: 0 !important; }
             /* Elements outside <main>: nav rail + top bar, every modal, the
@@ -191,26 +97,18 @@
             #ai-consultant-widget {
                 display: none !important;
             }
-            /* Inside the roadmap section: the on-screen document header
+            /* Inside the section: the on-screen document header
                (title/provenance/preparer + the Print button) is replaced by
-               the self-identifying .roadmap-print-only header below. */
-            .roadmap-header-screen { display: none !important; }
-            .roadmap-print-only { display: block !important; }
+               the self-identifying .cert-print-only header below. */
+            .cert-header-screen { display: none !important; }
+            .cert-print-only { display: block !important; }
             [data-testid="section-cert-milestones"] { margin: 0 !important; }
-            /* Never clip the horizontal chain — let it wrap instead of
-               scrolling off the printed page. */
-            .roadmap-chain {
-                overflow: visible !important;
-                flex-wrap: wrap !important;
-            }
-            .roadmap-chain,
-            .roadmap-node,
-            .roadmap-connector,
-            .roadmap-today {
+            .cert-framework-card,
+            .cert-group {
                 break-inside: avoid;
                 page-break-inside: avoid;
             }
-            [data-testid="roadmap-risk-banner"] {
+            [data-testid="cert-risk-banner"] {
                 break-inside: avoid;
                 page-break-inside: avoid;
             }
@@ -256,17 +154,17 @@
             </div>
         </div>
 
-        <!-- ─── Certification Roadmap (GRQ-PLAN-2026-01) ───── -->
+        <!-- ─── Certification Action Plan (GRQ-PLAN-2026-01) ───── -->
         <section data-testid="section-cert-milestones" class="mb-6">
             <div class="bg-white rounded-lg border border-gray-200 p-4 md:p-5">
-                <!-- Document header (screen only — replaced in print by .roadmap-print-only below) -->
-                <div class="roadmap-header-screen flex flex-wrap items-start justify-between gap-3 pb-3 mb-2 border-b border-gray-100">
+                <!-- Document header (screen only — replaced in print by .cert-print-only below) -->
+                <div class="cert-header-screen flex flex-wrap items-start justify-between gap-3 pb-3 mb-4 border-b border-gray-100">
                     <div>
                         <h2 class="text-lg font-semibold text-gray-900" data-i18n="compliance.roadmap_title">Certification Milestone Plan</h2>
-                        <p class="text-xs text-gray-500 mt-0.5" id="roadmapProvenance">—</p>
-                        <p class="text-xs text-gray-400 mt-0.5" id="roadmapPreparer"></p>
+                        <p class="text-xs text-gray-500 mt-0.5" id="certProvenance">—</p>
+                        <p class="text-xs text-gray-400 mt-0.5" id="certPreparer"></p>
                     </div>
-                    <button type="button" data-on-click="printRoadmap" class="px-3 py-1.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-xs font-medium flex items-center gap-1.5" data-testid="button-print-roadmap">
+                    <button type="button" data-on-click="printCertPlan" class="px-3 py-1.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-xs font-medium flex items-center gap-1.5" data-testid="button-print-roadmap">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m10-10V5a2 2 0 00-2-2H9a2 2 0 00-2 2v2m10 0H7m10 0h2M7 17h10v4H7v-4z"/></svg>
                         <span data-i18n="compliance.roadmap_print">Print / PDF</span>
                     </button>
@@ -274,39 +172,39 @@
 
                 <!-- Print-only header — hidden on screen, shown in @media print so the
                      hand-over PDF self-identifies even printed on its own. -->
-                <div class="roadmap-print-only pb-3 mb-2 border-b border-gray-300" data-testid="roadmap-print-header">
+                <div class="cert-print-only pb-3 mb-2 border-b border-gray-300" data-testid="cert-print-header">
                     <h1 class="text-lg font-semibold text-gray-900" data-i18n="compliance.roadmap_title">Certification Milestone Plan</h1>
-                    <p class="text-xs text-gray-700 mt-0.5"><span data-i18n="compliance.roadmap_print_source">Source:</span> <span id="roadmapPrintSource">—</span></p>
-                    <p class="text-xs text-gray-700 mt-0.5" id="roadmapPrintPreparer">—</p>
-                    <p class="text-xs text-gray-500 mt-0.5"><span data-i18n="compliance.roadmap_print_generated">Generated on:</span> <span id="roadmapPrintGenerated">—</span></p>
+                    <p class="text-xs text-gray-700 mt-0.5"><span data-i18n="compliance.roadmap_print_source">Source:</span> <span id="certPrintSource">—</span></p>
+                    <p class="text-xs text-gray-700 mt-0.5" id="certPrintPreparer">—</p>
+                    <p class="text-xs text-gray-500 mt-0.5"><span data-i18n="compliance.roadmap_print_generated">Generated on:</span> <span id="certPrintGenerated">—</span></p>
                 </div>
 
-                <!-- Chain -->
-                <div id="roadmapChain" class="roadmap-chain" data-testid="roadmap-chain">
-                    <div class="text-sm text-gray-400 py-6 text-center w-full" data-i18n="compliance.ms_empty_plan">No milestones.</div>
-                </div>
-
-                <!-- Chain rule line -->
-                <div class="mt-2" data-testid="roadmap-rule">
-                    <span class="roadmap-rule-line" aria-hidden="true"></span>
-                    <p class="text-xs text-gray-500 text-center mt-2" id="roadmapRuleText" data-i18n="compliance.roadmap_rule">This chain cannot be shortened: documents approved → staff trained → audit worth running → management review.</p>
+                <!-- Framework cards — full width, one per readiness entry.
+                     The two deliberate gaps (NCA-ECC / NCA-DCC unreachable,
+                     SOC 2 has no target date in v3.0) are always rendered,
+                     never hidden. -->
+                <div class="mb-5">
+                    <h3 class="text-sm font-semibold text-gray-800 mb-2" data-i18n="compliance.roadmap_readiness">Framework readiness</h3>
+                    <div id="certFrameworkCards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" data-testid="cert-framework-cards">
+                        <div class="text-sm text-gray-400 py-6 text-center" data-i18n="compliance.roadmap_no_readiness">No framework targets.</div>
+                    </div>
                 </div>
 
                 <!-- Standing risk banner (the plan document's own warning) -->
-                <div class="flex items-start gap-2 mt-4 px-3 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-800" data-testid="roadmap-risk-banner">
+                <div class="flex items-start gap-2 mb-5 px-3 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-800" data-testid="cert-risk-banner">
                     <span aria-hidden="true">⚠</span>
                     <p data-i18n="compliance.roadmap_risk_banner">GRC produces documents. It does not produce evidence. From October onward every remaining milestone depends on material that other departments hold — the largest risk to the dates in this plan.</p>
                 </div>
 
-                <!-- Footer: Unlocks + Framework readiness -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-5 pt-4 border-t border-gray-100">
-                    <div>
-                        <h3 class="text-sm font-semibold text-gray-800 mb-2" data-i18n="compliance.roadmap_unlocks">Unlocks</h3>
-                        <div id="roadmapUnlocks" class="space-y-1.5" data-testid="roadmap-unlocks"></div>
-                    </div>
-                    <div>
-                        <h3 class="text-sm font-semibold text-gray-800 mb-2" data-i18n="compliance.roadmap_readiness">Framework readiness</h3>
-                        <div id="roadmapReadiness" class="space-y-2" data-testid="roadmap-readiness"></div>
+                <!-- Action plan — one collapsible group per milestone,
+                     ordered by planned date; every action shows its
+                     evidence class (auto / manual / awaiting data /
+                     unavailable), never a bare checkbox pretending to know
+                     more than the platform can prove. -->
+                <div>
+                    <h3 class="text-sm font-semibold text-gray-800 mb-2" data-i18n="compliance.cert_action_plan_heading">Certification action plan</h3>
+                    <div id="certActionPlan" class="space-y-2" data-testid="cert-action-plan">
+                        <div class="text-sm text-gray-400 py-6 text-center" data-i18n="compliance.ms_empty_plan">No milestones.</div>
                     </div>
                 </div>
             </div>
@@ -795,9 +693,9 @@
             if (!v) return fb;
             // The i18n lookup ECHOES the key (or its last fragment) when the key
             // is missing from the loaded bundle — and that echo is truthy, so a
-            // plain `t(k) || fb` can never fall back. That is how raw slugs like
-            // "ms_lbl_docs" reached the screen on a stale i18n bundle. Treat an
-            // echo as a miss and use the English fallback instead.
+            // plain `t(k) || fb` can never fall back. That is how raw i18n key
+            // slugs have previously reached the screen on a stale i18n bundle.
+            // Treat an echo as a miss and use the English fallback instead.
             const last = k.slice(k.lastIndexOf('.') + 1);
             return (v === k || v === last) ? fb : v;
         }
@@ -806,238 +704,290 @@
             return (window.WalaPlusI18n && window.WalaPlusI18n.tDynamic) ? (window.WalaPlusI18n.tDynamic(prefix, value) || value) : value;
         }
 
-        // ─── Certification Roadmap (GRQ-PLAN-2026-01). `chain` (plan
-        // milestones in dependency order, each with a derived `state`) and
-        // `readiness` (per-framework progress) are computed server-side by
-        // src/utils/certificationRoadmap.ts. This block only renders them.
+        // ─── Certification Action Plan (GRQ-PLAN-2026-01, Task 6). Framework
+        // readiness cards + one collapsible group per milestone, each action
+        // showing its evidence class. Server-computed data only — this block
+        // renders `readiness`, `plan`, `dependency`, `actions` and
+        // `action_progress` exactly as returned by GET
+        // /api/certification-milestones (src/mastra/routes/
+        // certificationMilestoneRoutes.ts); it never recomputes a milestone's
+        // delivered/pct figures locally, so the page can never show a number
+        // that disagrees with GRC-KPI-002 (the defect this feature exists to
+        // close — design spec §1.3).
         // Uses escAttr (this file's existing HTML-escape helper) for every
         // value interpolated from the database — never a second helper.
-        const ROADMAP_PAST_STATES = { delivered_on_time: 1, delivered_late: 1, overdue: 1 };
-        const ROADMAP_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const CERT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
         // Dates are plain 'YYYY-MM-DD' strings from the API. Parsed by
         // splitting, never via `new Date(str)`, to avoid the timezone-shift
         // bug this codebase has already hit twice on date-only strings.
-        function _roadmapDateParts(s) {
+        function _certDateParts(s) {
             if (!s || typeof s !== 'string') return null;
             const parts = s.split('-');
             if (parts.length !== 3) return null;
             const mIdx = parseInt(parts[1], 10) - 1;
             if (!(mIdx >= 0 && mIdx < 12)) return null;
-            return { year: parts[0], month: ROADMAP_MONTHS[mIdx], day: parseInt(parts[2], 10) };
+            return { year: parts[0], month: CERT_MONTHS[mIdx], day: parseInt(parts[2], 10) };
         }
-        function _roadmapNodeDate(s) {
-            const p = _roadmapDateParts(s);
-            return p ? (p.month + ' ' + p.day) : '—';
-        }
-        function _roadmapFullDate(s) {
-            const p = _roadmapDateParts(s);
+        function _certFullDate(s) {
+            const p = _certDateParts(s);
             return p ? (p.month + ' ' + p.day + ', ' + p.year) : _ct('compliance.roadmap_no_date_set', 'No date set');
         }
-        function _roadmapMonthOnly(s) {
-            const p = _roadmapDateParts(s);
-            return p ? p.month : '—';
-        }
 
-        // Short per-node label for the plan's known milestone_keys.
-        //
-        // These lookups are written as STRING LITERALS on purpose. The i18n
-        // guardrail in scripts/check-i18n.cjs scans statically for quoted-literal
-        // keys; a lookup whose key comes from a variable is invisible to it, so
-        // every one of these keys was reported as an unused orphan and failed
-        // tests/i18nCoverage.test.ts. Keep them literal rather than baselining.
-        //
-        // Any milestone_key NOT listed here — e.g. an operator-added row —
-        // falls back to the suffix-derivation below so nothing renders blank.
-        function _roadmapShortLabel(m) {
-            const key = String(m.milestone_key || '');
-            switch (key) {
-                case 'PLAN-2026-08-DOCS':    return _ct('compliance.ms_lbl_docs', 'Documents');
-                case 'PLAN-2026-09-APPROVE': return _ct('compliance.ms_lbl_approve', 'Approval');
-                case 'PLAN-2026-10-SAQA':    return _ct('compliance.ms_lbl_saqa', 'SAQ A + Training');
-                case 'PLAN-2026-11-AUDIT':   return _ct('compliance.ms_lbl_audit', 'Internal Audit');
-                case 'PLAN-2026-12-MGMTREV': return _ct('compliance.ms_lbl_mgmtrev', 'Management Review');
-                case 'PLAN-2027-01-PENTEST': return _ct('compliance.ms_lbl_pentest', 'Penetration Test');
-                case 'PLAN-2027-02-SURV':    return _ct('compliance.ms_lbl_surv', 'Surveillance Audit');
-                default: break;
-            }
-            const idx = key.lastIndexOf('-');
-            const seg = (idx >= 0 ? key.slice(idx + 1) : key).toLowerCase();
-            return seg ? seg.charAt(0).toUpperCase() + seg.slice(1) : (m.certification || '');
-        }
-
-        function _roadmapStateMeta(state) {
+        // ─── Evidence chip helpers (design spec §3 / certificationEvidence.ts).
+        // Four states, always shown distinctly — `awaiting_data` is a truthful
+        // "not yet" (the source table is empty) and `unavailable` is "we
+        // cannot tell" (the source could not be read); neither is ever
+        // rendered as 0% or as "not done".
+        function _certEvidenceMeta(state) {
             switch (state) {
-                case 'delivered_on_time':
-                    return { dot: 'state-delivered', badge: 'bg-green-100 text-green-700', glyph: '', label: _ct('compliance.ms_on_time', 'On time') };
-                case 'delivered_late':
-                    return { dot: 'state-late', badge: 'bg-amber-100 text-amber-800', glyph: '', label: _ct('compliance.ms_late', 'Late') };
-                case 'overdue':
-                    return { dot: 'state-overdue', badge: 'bg-red-100 text-red-700', glyph: '', label: _ct('compliance.ms_overdue', 'Overdue') };
-                case 'active':
-                    return { dot: 'state-active', badge: 'bg-indigo-100 text-indigo-700', glyph: '', label: _ct('compliance.roadmap_state_active', 'Active') };
-                case 'blocked':
-                    return { dot: 'state-blocked', badge: 'bg-amber-100 text-amber-800', glyph: '⚠ ', label: _ct('compliance.roadmap_state_blocked', 'Blocked') };
+                case 'satisfied':
+                    return { glyph: '✓', cls: 'bg-green-100 text-green-700', label: _ct('compliance.cert_evidence_satisfied', 'Verified') };
+                case 'not_satisfied':
+                    return { glyph: '○', cls: 'bg-red-50 text-red-700', label: _ct('compliance.cert_evidence_not_satisfied', 'Not yet satisfied') };
+                case 'awaiting_data':
+                    return { glyph: '⏳', cls: 'bg-amber-100 text-amber-800', label: _ct('compliance.cert_evidence_awaiting', 'Awaiting data') };
+                case 'unavailable':
                 default:
-                    return { dot: 'state-planned', badge: 'bg-gray-100 text-gray-600', glyph: '', label: _ct('compliance.ms_planned', 'Planned') };
+                    return { glyph: '⚠', cls: 'bg-slate-200 text-slate-700', label: _ct('compliance.cert_evidence_unavailable', 'Could not read source') };
             }
         }
+        // `evidence_source` identifiers are dotted, e.g. "training_records.count"
+        // — the table/collection name (before the first dot) is what actually
+        // names the source for a human reading the page.
+        function _certSourceLabel(source) {
+            if (!source) return '';
+            return String(source).split('.')[0];
+        }
 
-        // The gating `dependency` row for a blocked node: the dependency
-        // whose gates_keys names this milestone and that isn't delivered yet.
-        function _roadmapBlockerFor(milestoneKey, dependencyRows) {
-            const rows = dependencyRows || [];
-            for (let i = 0; i < rows.length; i++) {
-                const dep = rows[i];
-                if (Array.isArray(dep.gates_keys) && dep.gates_keys.indexOf(milestoneKey) !== -1 && !dep.delivered_date) {
-                    return dep;
+        function _certActionRowHtml(a) {
+            const text = escAttr(a.action_text || '');
+            const ownerLabel = escAttr(_ct('compliance.roadmap_owner_label', 'Owner'));
+            const owner = ownerLabel + ': ' + escAttr(a.owner || '—');
+            const key = escAttr(a.action_key);
+            if (a.verification_mode === 'manual') {
+                const isDone = !!a.done_at;
+                let doneHtml = '';
+                if (isDone) {
+                    const doneDate = _certFullDate(String(a.done_at).slice(0, 10));
+                    doneHtml = ' <span class="text-green-700">· ' + escAttr(_ct('compliance.cert_done_by_label', 'Done by')) + ' '
+                        + escAttr(a.done_by || '—') + ' (' + escAttr(doneDate) + ')</span>';
                 }
+                return '<div class="cert-action-row flex items-start gap-3 py-2 border-t border-gray-100" data-testid="cert-action-row-' + key + '">'
+                    + '<input type="checkbox" class="cert-checkbox mt-0.5"' + (isDone ? ' checked' : '')
+                    + ' data-on-click="toggleCertAction" data-args="[&quot;' + key + '&quot;]"'
+                    + ' data-testid="checkbox-cert-action-' + key + '">'
+                    + '<div class="flex-1 min-w-0">'
+                    + '<div class="text-sm text-gray-800">' + text + '</div>'
+                    + '<div class="text-xs text-gray-400 mt-0.5">' + owner
+                    + ' · <span>' + escAttr(_ct('compliance.cert_manual_label', 'Manual')) + '</span>'
+                    + doneHtml
+                    + '</div></div></div>';
             }
-            return null;
+            // auto — read-only evidence indicator, never a checkbox: a tickable
+            // box would imply an assertion the platform is already making for
+            // you (design spec §5).
+            const reading = a.reading || { state: 'unavailable', have: 0, need: 0, source: a.evidence_source };
+            const meta = _certEvidenceMeta(reading.state);
+            const sourceLabel = escAttr(_certSourceLabel(reading.source || a.evidence_source));
+            const detail = (reading.state === 'satisfied' || reading.state === 'not_satisfied')
+                ? (reading.have + ' / ' + reading.need)
+                : (sourceLabel || '—');
+            return '<div class="cert-action-row flex items-start gap-3 py-2 border-t border-gray-100" data-testid="cert-action-row-' + key + '">'
+                + '<span class="mt-0.5 flex h-4 w-4 items-center justify-center text-xs" aria-hidden="true">' + meta.glyph + '</span>'
+                + '<div class="flex-1 min-w-0">'
+                + '<div class="text-sm text-gray-800">' + text + '</div>'
+                + '<div class="text-xs text-gray-400 mt-0.5 flex flex-wrap items-center gap-1.5">'
+                + '<span>' + owner + '</span>'
+                + '<span>' + escAttr(_ct('compliance.cert_auto_label', 'Auto')) + '</span>'
+                + '<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ' + meta.cls + '">'
+                + escAttr(meta.label) + ' — ' + detail + '</span>'
+                + '</div></div></div>';
         }
 
-        function _roadmapNodeHtml(m, dependencyRows) {
-            const meta = _roadmapStateMeta(m.state);
-            const shortLabel = escAttr(_roadmapShortLabel(m));
-            const cert = escAttr(m.certification || '');
-            const badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium ' + meta.badge + '">'
-                + meta.glyph + escAttr(meta.label) + '</span>';
+        // ─── Milestone groups — one per plan milestone AND per Technology
+        // dependency row (both carry actions; a dependency's actions must not
+        // silently vanish from the page just because it isn't a `plan` row —
+        // the risk banner exists precisely because those two rows are the
+        // biggest risk to the dates above them). Sorted by planned_date; ties
+        // keep plan-before-dependency (stable sort, `plan` rows come first in
+        // the concatenation).
+        function _certGroupRows(d) {
+            const rows = (d.plan || []).concat(d.dependency || []);
+            return rows.slice().sort(function (a, b) {
+                const ad = a.planned_date || '9999-99-99';
+                const bd = b.planned_date || '9999-99-99';
+                return ad < bd ? -1 : ad > bd ? 1 : 0;
+            });
+        }
+        function _certActionsByMilestone(actions) {
+            const map = {};
+            (actions || []).forEach(function (a) {
+                (map[a.milestone_key] = map[a.milestone_key] || []).push(a);
+            });
+            Object.keys(map).forEach(function (mk) {
+                map[mk].sort(function (a, b) { return (a.sort_order || 0) - (b.sort_order || 0); });
+            });
+            return map;
+        }
 
-            let blockerHtml = '';
-            if (m.state === 'blocked') {
-                const dep = _roadmapBlockerFor(m.milestone_key, dependencyRows);
-                const depText = dep ? (escAttr(dep.owner || dep.certification || '')) : escAttr(_ct('compliance.roadmap_gap_unreachable', 'No milestone in the plan delivers this.'));
-                const depTitle = dep ? escAttr(dep.milestone_name || '') : '';
-                blockerHtml = '<div class="roadmap-node-blocker" title="' + depTitle + '" data-testid="roadmap-blocker-' + escAttr(m.milestone_key) + '">'
-                    + '⚠ ' + escAttr(_ct('compliance.roadmap_blocked_by', 'Blocked by')) + ': ' + depText
-                    + '</div>';
+        // The group pill reflects live action completion (action_progress),
+        // never the milestone's `delivered_date` — that column is only
+        // stamped by the manual-toggle recompute (design spec §4.3) and would
+        // silently lag behind an all-auto milestone whose evidence has since
+        // satisfied itself but was never touched by a human tick.
+        function _certGroupState(progress, plannedDate, todayStr) {
+            if (progress.total > 0 && progress.complete) {
+                return { cls: 'bg-green-100 text-green-700', label: _ct('compliance.cert_state_complete', 'Complete') };
             }
+            if (plannedDate && plannedDate < todayStr) {
+                return { cls: 'bg-red-100 text-red-700', label: _ct('compliance.cert_state_overdue', 'Overdue') };
+            }
+            if (progress.done > 0) {
+                return { cls: 'bg-indigo-100 text-indigo-700', label: _ct('compliance.cert_state_in_progress', 'In progress') };
+            }
+            return { cls: 'bg-gray-100 text-gray-600', label: _ct('compliance.cert_state_not_started', 'Not started') };
+        }
 
-            const unlocks = (m.unlocks_codes || []).map(escAttr).join(', ');
-            const nodeId = 'roadmap-node-' + escAttr(m.milestone_key);
-            const detailHtml = '<div class="roadmap-detail" role="note">'
-                + '<div class="font-semibold text-gray-900">' + escAttr(m.milestone_name || '') + '</div>'
-                + '<div class="mt-1.5 text-gray-500">' + escAttr(_ct('compliance.roadmap_owner_label', 'Owner')) + ': ' + escAttr(m.owner || '—') + '</div>'
-                + '<div class="mt-1 text-gray-500">' + escAttr(_ct('compliance.roadmap_target_label', 'Target')) + ': ' + escAttr(_roadmapFullDate(m.planned_date)) + '</div>'
-                + '<div class="mt-1 text-gray-500">' + escAttr(_ct('compliance.roadmap_unlocks', 'Unlocks')) + ': ' + (unlocks || '—') + '</div>'
-                + '</div>';
+        function _certGroupHtml(m, actionsByMilestone, progressByMilestone, todayStr) {
+            const mk = m.milestone_key;
+            const actions = actionsByMilestone[mk] || [];
+            const progress = progressByMilestone[mk] || { done: 0, total: actions.length, complete: false };
+            const state = _certGroupState(progress, m.planned_date, todayStr);
+            const safeMk = escAttr(mk);
+            const bodyId = 'cert-group-body-' + safeMk;
+            const isDependency = m.milestone_type === 'dependency';
+            const depBadge = isDependency
+                ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">' + escAttr(_ct('compliance.cert_dependency_badge', 'Dependency')) + '</span>'
+                : '';
+            const rowsHtml = actions.length
+                ? actions.map(_certActionRowHtml).join('')
+                : '<div class="text-xs text-gray-400 py-2">' + escAttr(_ct('compliance.ms_empty_plan', 'No milestones.')) + '</div>';
 
-            return '<div class="roadmap-node" id="' + nodeId + '" data-testid="roadmap-node-' + escAttr(m.milestone_key) + '">'
-                + '<div class="roadmap-node-date">' + escAttr(_roadmapNodeDate(m.planned_date)) + '</div>'
-                + '<div class="roadmap-node-dot ' + meta.dot + '"></div>'
-                + '<button type="button" class="roadmap-node-label" data-on-click="toggleClass" data-args="[&quot;' + nodeId + '&quot;,&quot;roadmap-detail-open&quot;]" data-testid="roadmap-node-toggle-' + escAttr(m.milestone_key) + '">'
-                + '<span class="roadmap-node-key">' + shortLabel + '</span>'
-                + '<span class="roadmap-node-cert">' + cert + '</span>'
+            return '<div class="cert-group border border-gray-200 rounded-lg overflow-hidden" data-testid="cert-group-' + safeMk + '">'
+                + '<button type="button" class="cert-group-header w-full flex flex-wrap items-center gap-2 px-3 py-2.5 bg-gray-50 text-start" '
+                + 'data-on-click="toggleClass" data-args="[&quot;' + bodyId + '&quot;,&quot;hidden&quot;]" '
+                + 'data-testid="cert-group-toggle-' + safeMk + '">'
+                + '<span class="text-gray-400" aria-hidden="true">▾</span>'
+                + '<span class="text-xs text-gray-400 shrink-0">' + escAttr(_certFullDate(m.planned_date)) + '</span>'
+                + '<span class="text-[10px] uppercase tracking-wide text-gray-400 font-medium">' + escAttr(m.certification || '') + '</span>'
+                + depBadge
+                + '<span class="font-bold text-gray-900 text-sm flex-1">' + escAttr(m.milestone_name || '') + '</span>'
+                + '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium ' + state.cls + '">' + escAttr(state.label) + '</span>'
+                + '<span class="text-xs text-gray-500 font-medium shrink-0">' + progress.done + ' / ' + progress.total + '</span>'
                 + '</button>'
-                + '<div class="roadmap-node-badge">' + badgeHtml + '</div>'
-                + blockerHtml
-                + detailHtml
+                + '<div class="px-3 pb-2" id="' + bodyId + '">' + rowsHtml + '</div>'
                 + '</div>';
         }
 
-        function _roadmapTodayMarkerHtml() {
-            return '<div class="roadmap-today" data-testid="roadmap-today-marker">'
-                + '<span class="roadmap-today-label">' + escAttr(_ct('compliance.roadmap_today', 'Today')) + '</span>'
-                + '<div class="roadmap-today-line"></div>'
-                + '</div>';
-        }
-
-        function _renderRoadmapChain(chain, dependencyRows) {
-            const el = document.getElementById('roadmapChain');
-            if (!chain || chain.length === 0) {
-                el.innerHTML = '<div class="text-sm text-gray-400 py-6 text-center w-full">' + escAttr(_ct('compliance.ms_empty_plan', 'No milestones.')) + '</div>';
+        function _renderCertActionPlan(d) {
+            const el = document.getElementById('certActionPlan');
+            const groups = _certGroupRows(d);
+            if (groups.length === 0) {
+                el.innerHTML = '<div class="text-sm text-gray-400 py-6 text-center">' + escAttr(_ct('compliance.ms_empty_plan', 'No milestones.')) + '</div>';
                 return;
             }
-            // "Today" sits between the last past node (delivered/overdue) and
-            // the first non-past node (active/blocked/planned).
-            let todayIdx = -1;
-            for (let i = 0; i < chain.length; i++) {
-                if (!ROADMAP_PAST_STATES[chain[i].state]) { todayIdx = i; break; }
-            }
-            let html = '';
-            for (let i = 0; i < chain.length; i++) {
-                if (i === todayIdx) html += _roadmapTodayMarkerHtml();
-                html += _roadmapNodeHtml(chain[i], dependencyRows);
-                if (i < chain.length - 1) {
-                    const pastCls = ROADMAP_PAST_STATES[chain[i].state] ? ' is-past' : '';
-                    html += '<div class="roadmap-connector' + pastCls + '"></div>';
-                }
-            }
-            if (todayIdx === -1) html += _roadmapTodayMarkerHtml(); // all past — today is at the end
-            el.innerHTML = html;
+            const actionsByMilestone = _certActionsByMilestone(d.actions || []);
+            const progressByMilestone = d.action_progress || {};
+            const todayStr = new Date().toISOString().slice(0, 10);
+            el.innerHTML = groups.map(function (m) {
+                return _certGroupHtml(m, actionsByMilestone, progressByMilestone, todayStr);
+            }).join('');
         }
 
-        function _renderRoadmapUnlocks(chain) {
-            const el = document.getElementById('roadmapUnlocks');
-            const rows = (chain || []).filter(function (m) { return m.unlocks_codes && m.unlocks_codes.length; });
-            if (rows.length === 0) {
-                el.innerHTML = '<div class="text-xs text-gray-400">' + escAttr(_ct('compliance.roadmap_no_unlocks', 'Nothing unlocks yet.')) + '</div>';
-                return;
-            }
-            el.innerHTML = rows.map(function (m) {
-                const codes = (m.unlocks_codes || []).map(escAttr).join(', ');
-                return '<div class="flex items-center gap-2 text-xs" data-testid="roadmap-unlock-' + escAttr(m.milestone_key) + '">'
-                    + '<span class="text-gray-500 w-12 shrink-0">' + escAttr(_roadmapMonthOnly(m.planned_date)) + '</span>'
-                    + '<span class="text-gray-400">→</span>'
-                    + '<span class="text-gray-800 font-medium">' + codes + '</span>'
+        // ─── Framework readiness cards (design spec §5 step 1). `readiness`
+        // is computed server-side by frameworkReadiness() in
+        // src/utils/certificationRoadmap.ts and rendered here verbatim —
+        // never recomputed from `actions` client-side, so this card can never
+        // disagree with GRC-KPI-002.
+        function _certFrameworkCardHtml(r) {
+            const code = escAttr(r.code);
+            const noDate = !r.planned_date;
+            const dateLabel = noDate
+                ? escAttr(_ct('compliance.roadmap_no_date_set', 'No date set'))
+                : escAttr(_certFullDate(r.planned_date));
+            let bodyHtml;
+            // The two deliberate gaps, checked in this order: a missing
+            // target date (SOC 2) is the more fundamental gap and is checked
+            // ahead of "unreachable" even though SOC 2 is technically
+            // unreachable too (no plan milestone unlocks it either) — the
+            // date gap is the one worth naming for SOC 2.
+            if (noDate) {
+                bodyHtml = '<div class="flex items-center gap-1.5 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2" data-testid="cert-card-gap-' + code + '">'
+                    + '⚠ ' + escAttr(_ct('compliance.roadmap_gap_no_date', 'No target date set in plan v3.0.')) + '</div>';
+            } else if (r.unreachable) {
+                bodyHtml = '<div class="flex items-center gap-1.5 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2" data-testid="cert-card-gap-' + code + '">'
+                    + '⚠ ' + escAttr(_ct('compliance.roadmap_gap_unreachable', 'No milestone in the plan delivers this.')) + '</div>';
+            } else {
+                const pct = Math.max(0, Math.min(100, r.pct || 0));
+                bodyHtml = '<div class="flex items-center gap-2 mt-2" data-testid="cert-card-bar-' + code + '">'
+                    + '<div class="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-green-500" data-style="width:' + pct + '%"></div></div>'
+                    + '<span class="text-[11px] text-gray-500 shrink-0">' + pct + '% (' + r.delivered + '/' + r.total + ')</span>'
                     + '</div>';
-            }).join('');
+            }
+            return '<div class="cert-framework-card border rounded-lg p-3 ' + ((noDate || r.unreachable) ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-200') + '" data-testid="cert-framework-card-' + code + '">'
+                + '<div class="font-bold text-gray-900 text-sm">' + code + '</div>'
+                + '<div class="text-xs text-gray-400 mt-0.5">' + escAttr(_ct('compliance.roadmap_target_label', 'Target')) + ': ' + dateLabel + '</div>'
+                + bodyHtml
+                + '</div>';
         }
-
-        function _renderRoadmapReadiness(readiness) {
-            const el = document.getElementById('roadmapReadiness');
+        function _renderCertFrameworkCards(readiness) {
+            const el = document.getElementById('certFrameworkCards');
             if (!readiness || readiness.length === 0) {
-                el.innerHTML = '<div class="text-xs text-gray-400">' + escAttr(_ct('compliance.roadmap_no_readiness', 'No framework targets.')) + '</div>';
+                el.innerHTML = '<div class="text-sm text-gray-400 py-6 text-center">' + escAttr(_ct('compliance.roadmap_no_readiness', 'No framework targets.')) + '</div>';
                 return;
             }
-            el.innerHTML = readiness.map(function (r) {
-                const code = escAttr(r.code);
-                const dateLabel = r.planned_date ? escAttr(_roadmapFullDate(r.planned_date)) : escAttr(_ct('compliance.roadmap_no_date_set', 'No date set'));
-                let bodyHtml;
-                if (r.unreachable) {
-                    // Two distinct, deliberate gaps — never hidden:
-                    // (a) no plan milestone unlocks this code, or
-                    // (b) the source document itself sets no target date.
-                    const gapMsg = (!r.planned_date)
-                        ? _ct('compliance.roadmap_gap_no_date', 'No target date set in plan v3.0.')
-                        : _ct('compliance.roadmap_gap_unreachable', 'No milestone in the plan delivers this.');
-                    bodyHtml = '<div class="flex items-center gap-1.5 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-1" data-testid="roadmap-readiness-gap-' + code + '">'
-                        + '⚠ ' + escAttr(gapMsg) + '</div>';
-                } else {
-                    const pct = Math.max(0, Math.min(100, r.pct || 0));
-                    bodyHtml = '<div class="flex items-center gap-2 mt-1" data-testid="roadmap-readiness-bar-' + code + '">'
-                        + '<div class="roadmap-bar-track"><div class="roadmap-bar-fill" data-style="width:' + pct + '%"></div></div>'
-                        + '<span class="text-[11px] text-gray-500 shrink-0">' + pct + '% (' + r.delivered + '/' + r.total + ')</span>'
-                        + '</div>';
-                }
-                return '<div data-testid="roadmap-readiness-row-' + code + '">'
-                    + '<div class="flex items-center justify-between text-xs">'
-                    + '<span class="font-medium text-gray-800">' + code + '</span>'
-                    + '<span class="text-gray-400">' + dateLabel + '</span>'
-                    + '</div>' + bodyHtml + '</div>';
-            }).join('');
+            el.innerHTML = readiness.map(_certFrameworkCardHtml).join('');
         }
 
         // Task 6: the @media print stylesheet hides everything except the
-        // roadmap section and swaps in the .roadmap-print-only header. The
-        // generated-on date is refreshed right before printing so it always
-        // reflects the moment the PDF was produced, not when the page loaded.
-        function _setRoadmapPrintGeneratedDate() {
-            const el = document.getElementById('roadmapPrintGenerated');
+        // certification-plan section and swaps in the .cert-print-only
+        // header. The generated-on date is refreshed right before printing
+        // so it always reflects the moment the PDF was produced, not when
+        // the page loaded.
+        function _setCertPrintGeneratedDate() {
+            const el = document.getElementById('certPrintGenerated');
             if (el) el.textContent = new Date().toISOString().slice(0, 10);
         }
-        function printRoadmap() {
+        function printCertPlan() {
             try {
-                _setRoadmapPrintGeneratedDate();
+                _setCertPrintGeneratedDate();
                 window.print();
             } catch (e) { /* no-op if unsupported */ }
         }
 
         function _mLoadError() {
             const msg = escAttr(_ct('compliance.ms_load_error', 'Could not load milestones.'));
-            document.getElementById('roadmapChain').innerHTML = '<div class="text-sm text-red-500 w-full text-center py-6">' + msg + '</div>';
-            document.getElementById('roadmapUnlocks').innerHTML = '<div class="text-sm text-red-500">' + msg + '</div>';
-            document.getElementById('roadmapReadiness').innerHTML = '<div class="text-sm text-red-500">' + msg + '</div>';
+            document.getElementById('certFrameworkCards').innerHTML = '<div class="text-sm text-red-500 text-center py-6">' + msg + '</div>';
+            document.getElementById('certActionPlan').innerHTML = '<div class="text-sm text-red-500 text-center py-6">' + msg + '</div>';
+        }
+        // POSTs the manual-tick endpoint (RBAC-gated + `auto`-action-refusing
+        // server-side, per certificationMilestoneRoutes.ts) and always
+        // reloads the whole section afterwards so the group's `n / m`
+        // progress, its state pill, and (if every action is now done) the
+        // derived milestone completion stay consistent with the server —
+        // never patched optimistically in the DOM.
+        async function toggleCertAction(actionKey) {
+            try {
+                const res = await fetch('/api/certification-actions/' + encodeURIComponent(actionKey) + '/toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin'
+                });
+                if (!res.ok) {
+                    let msg = _ct('compliance.cert_toggle_error', 'Could not update — try again.');
+                    try {
+                        const err = await res.json();
+                        if (err && err.error) msg = err.error;
+                    } catch (e) { /* non-JSON error body */ }
+                    alert(msg);
+                }
+            } catch (e) {
+                console.error('Error toggling certification action:', e);
+                alert(_ct('compliance.cert_toggle_error', 'Could not update — try again.'));
+            } finally {
+                await loadMilestones();
+            }
         }
         async function loadMilestones() {
             try {
@@ -1047,19 +997,18 @@
                 // .textContent is inherently HTML-safe (no markup parsing), so no
                 // escAttr needed here — it's only for values interpolated into
                 // innerHTML template strings below.
-                document.getElementById('roadmapProvenance').textContent =
+                document.getElementById('certProvenance').textContent =
                     (d.source_doc || '') + ' v' + (d.plan_version || '');
-                document.getElementById('roadmapPreparer').textContent =
+                document.getElementById('certPreparer').textContent =
                     _ct('compliance.roadmap_preparer', 'Prepared by Maram Alharbi, GRC Manager');
                 // Print-only header (Task 6) — same data, no re-fetch.
-                document.getElementById('roadmapPrintSource').textContent =
+                document.getElementById('certPrintSource').textContent =
                     (d.source_doc || '') + ' v' + (d.plan_version || '');
-                document.getElementById('roadmapPrintPreparer').textContent =
+                document.getElementById('certPrintPreparer').textContent =
                     _ct('compliance.roadmap_preparer', 'Prepared by Maram Alharbi, GRC Manager');
-                _setRoadmapPrintGeneratedDate();
-                _renderRoadmapChain(d.chain || [], d.dependency || []);
-                _renderRoadmapUnlocks(d.chain || []);
-                _renderRoadmapReadiness(d.readiness || []);
+                _setCertPrintGeneratedDate();
+                _renderCertFrameworkCards(d.readiness || []);
+                _renderCertActionPlan(d);
             } catch (e) {
                 console.error('Error loading milestones:', e);
                 _mLoadError();
