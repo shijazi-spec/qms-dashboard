@@ -825,6 +825,20 @@ export const kpiRoutes = [
     createHandler: async () => {
       return async (c: any) => {
         try {
+          // Gate in the handler, exactly like every sibling KPI route. The
+          // ROUTE_PERMISSION_MAP entry is a coarse first pass; KPI_READ_ROLES
+          // is the authoritative set, and both must agree. This route
+          // previously relied on the map alone, whose hand-written role list
+          // had drifted to 13 roles, so a `viewer` got 200 where every other
+          // KPI route returns 403.
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_READ_ROLES]);
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions for KPI data",
+            );
           const { verifySeededKpiVisibility } = await import(
             "../../utils/kpiDatabase"
           );

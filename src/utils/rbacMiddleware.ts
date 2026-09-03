@@ -1122,12 +1122,19 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin"],
   },
   // KPI seed health — READ-ONLY diagnostic: per-team counts of how many
-  // seeded KPIs the pages can actually see. Returns no KPI content, so it
-  // carries the same read set as the rest of the KPI surface.
+  // seeded KPIs the pages can actually see.
+  //
+  // These roles MUST stay identical to KPI_READ_ROLES in
+  // src/mastra/routes/kpiRoutes.ts, which is what the handler itself enforces.
+  // This list was previously hand-written with 13 roles and drifted from that
+  // constant, so a `viewer` passed this gate and — because the handler was also
+  // missing its requireRole call — received 200 where every sibling KPI route
+  // returns 403. Two gates, both wrong, which is why the symptom kept coming
+  // back. If you change one list, change the other.
   {
     pattern: /^\/api\/kpis\/seed-health$/,
     methods: ["GET"],
-    roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead", "viewer"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
   // KPI auto-calc recompute — governance write roles only.
   {
