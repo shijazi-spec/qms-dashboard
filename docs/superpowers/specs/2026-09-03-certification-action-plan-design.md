@@ -16,7 +16,7 @@ Two releases stored Maram's plan and drew it. Neither made it **workable**. Sara
 
 Three faults:
 
-1. **Granularity.** A milestone is not one item. September alone is five discrete deliverables. Seven nodes cannot be "checked and followed"; twenty actions can.
+1. **Granularity.** A milestone is not one item. September alone is five discrete deliverables. Seven nodes cannot be "checked and followed"; twenty-one actions can.
 2. **No proof.** A checkbox anyone can tick is not evidence. The platform already holds the document register, approvals, audits, management reviews, risks and training records — the plan should *read them* and prove itself.
 3. **Nothing can be ticked anyway.** `certification_milestones.delivered_date` has **no write path**: `insertSource()` is INSERT-only, and the 16 seeded rows are protected by a partial unique index, so a POST either errors or creates a duplicate ghost row that `calcCertMilestoneDelivery()` scores but `GET /api/certification-milestones` hides. KPI and page can silently disagree.
 
@@ -24,7 +24,7 @@ Three faults:
 
 | # | Decision | Chosen |
 |---|---|---|
-| 1 | Granularity | **20 actions** across the 7 milestones, plus 2 Technology dependencies |
+| 1 | Granularity | **21 actions** across the 7 milestones, plus 2 Technology dependencies (23 rows). September has 6 because "approved" and "…and signed" are separate: the platform has no signature capability |
 | 2 | Proof | Each action declares an **evidence source**; the platform verifies what it can |
 | 3 | Verification classes | `auto` · `auto (awaiting data)` · `manual` — always shown, never hidden |
 | 4 | Milestone completion | **Derived** from its actions, not written by hand |
