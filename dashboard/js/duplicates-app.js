@@ -9649,8 +9649,18 @@
                     { credentials: 'same-origin' }).then(function (r) { return r.json(); });
                 if (!d || d.error) { rrToast('Could not build the email: ' + ((d && d.error) || 'unknown error')); return; }
 
-                var scopeBits = [];
-                if (per.year) scopeBits.push(per.quarter ? ('Q' + per.quarter + ' ' + per.year) : String(per.year));
+                // Header carries the DATE the report was produced (Sarah's edit,
+                // 03.09.2026) rather than the period filter — a compliance
+                // report is read as "where we stood on this day". The period
+                // itself moves into the scope note so it is still stated.
+                var _n2 = function (n) { return (n < 10 ? '0' : '') + n; };
+                var _today = new Date();
+                var stamp = _n2(_today.getDate()) + '.' + _n2(_today.getMonth() + 1) + '.' + _today.getFullYear();
+                // Default deadline a week out, in Sarah's dd/mm/yyyy — a
+                // starting point to adjust, not a rule.
+                var _due = new Date(_today.getTime() + 7 * 86400000);
+                var deadline = _n2(_due.getDate()) + '/' + _n2(_due.getMonth() + 1) + '/' + _due.getFullYear();
+                var scopeBits = [stamp];
                 var segLabel = ({ walaplus: 'WalaPlus', marketplace: 'Marketplace', walaone: 'WalaOne' })[d.segment] || 'all layouts';
                 scopeBits.push(segLabel);
 
@@ -9701,9 +9711,9 @@
                         '⚠️  ' + _fn(d.no_amount) + ' of these deals carry NO Amount (SAR) at all'
                             + (d.no_amount_missing_docs ? ' — ' + _fn(d.no_amount_missing_docs) + ' of them are also missing documents' : '') + '.',
                         '    A deal cannot reach Proposal or Agreement Signed without a value: it has been quoted to the client.',
-                        '    Because the system can only count what is recorded, those deals add SAR 0 to the figure above —',
+                        '    Because the system can only count what is recorded, those deals add SAR 0 to the figure above;',
                         '    so the real exposure is HIGHER than SAR ' + _fn(d.value_at_risk) + ', and these deals are invisible in',
-                        '    pipeline value, forecasting and win-ratio reporting until the Amount is filled in.',
+                        '    pipeline value, forecasting, and win-ratio reporting until the Amount is filled in.',
                     ];
                 }
 
@@ -9715,7 +9725,7 @@
                     // report will not always go to the same person, and a
                     // wrong name at the top of a performance report is the one
                     // mistake that gets noticed before the numbers do.
-                    '📄 Deal documents — compliance report · ' + scopeBits.join(' · '),
+                    '📄 Deal documents — Compliance report · ' + scopeBits.join(' · '),
                     '',
                     'Dear [name],',
                     '',
@@ -9730,7 +9740,7 @@
                     'By stage:',
                     stageLines.length ? stageLines.join('\n') : '  (no deals in the reported stages)',
                     '',
-                    'Owners with the most missing:',
+                    'Deal Owners with the most missing documents:',
                     ownerLines.length
                         ? ownerLines.join('\n') + (moreOwners ? '\n  • …and ' + _fn(moreOwners) + ' more — full list in the "By owner" tab.' : '')
                         : '  (none)',
@@ -9760,6 +9770,12 @@
                     '  🗓️  Please action the highest-value deals first — the list is sorted that way.',
                 ]).concat(d.no_amount ? ['  💰  Fill in the Amount (SAR) on the deals flagged above so they can be forecast and counted.'] : [])
                  .concat([
+                    // A dated ask, not an open one (Sarah's edit). An action
+                    // list with no date is a suggestion; this is the line that
+                    // makes the follow-up checkable. Defaults to a week out —
+                    // adjust it before sending.
+                    '',
+                    '>> DEADLINE: ' + deadline,
                     '',
                     'How to read the attachment:',
                 ]).concat((d.notes || []).map(function (n) { return '  • ' + n; }))

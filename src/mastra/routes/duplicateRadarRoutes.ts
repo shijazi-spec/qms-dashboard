@@ -4170,6 +4170,8 @@ export const duplicateRadarRoutes = [
             checked: rows.length,
             inScope: pipeline ? rows.length : rows.length + neverChecked,
             pipeline: pipeline || undefined,
+            periodYear: Number.isFinite(eYear) ? eYear : undefined,
+            periodQuarter: Number.isFinite(eQuarter) ? eQuarter : undefined,
           }),
         });
       } catch (e: any) {

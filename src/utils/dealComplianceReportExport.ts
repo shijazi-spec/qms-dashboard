@@ -282,12 +282,22 @@ export function buildReportNotes(opts: {
   checked: number;
   inScope?: number;
   pipeline?: string;
+  periodYear?: number;
+  periodQuarter?: number;
 }): string[] {
   const inScope = opts.inScope ?? opts.checked;
+  // The period is stated HERE because the email header now carries the date the
+  // report was produced rather than the filter it was built with (Sarah's edit,
+  // 2026-09-03). Without this line the year/quarter scope would be invisible,
+  // and a reader would take a filtered report for the whole book.
+  const period = opts.periodYear
+    ? ` · period ${opts.periodQuarter ? `Q${opts.periodQuarter} ` : ""}${opts.periodYear}`
+    : "";
   return [
     `Scope: layout ${opts.segment}` +
       (opts.pipeline ? ` · pipeline ${opts.pipeline}` : " · all pipelines") +
-      ` · stages ${REPORT_STAGES.join(", ")}. Paid deals are excluded — Customer Success handles those.`,
+      period +
+      ` · stages ${REPORT_STAGES.join(", ")}. [Paid deals are excluded — Customer Success handles those].`,
     inScope > opts.checked
       ? `${opts.checked} of ${inScope} in-scope deals have been checked so far; the rest are queued.`
       : `All ${opts.checked} in-scope deals have been checked.`,
