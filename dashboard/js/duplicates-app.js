@@ -8214,9 +8214,12 @@
             setCard('dcCardMissing', missing);
             setCard('dcCardAtRisk', missing ? _dcSar(atRisk) : '—');
             setCard('dcCardPending', Math.max(0, deals.length - ok - missing));
-            _dcRenderCharts();
-            // Keep an active chart filter consistent as row statuses fill in.
+            // Repaint the table + charts together. With a filter active
+            // _dcFilterTableRows already rebuilds the charts (they aggregate the
+            // visible deals), so calling _dcRenderCharts as well would build
+            // every chart twice on each batch of check results.
             if (window._dcChartFilter) _dcFilterTableRows();
+            else _dcRenderCharts();
         }
 
         // ── Compliance charts: 100%-stacked bars by stage & by owner ─────────
@@ -8228,7 +8231,16 @@
 
         function _dcAggregate(dimKey) {
             // Returns { labels:[], compliant:[], missing:[], unchecked:[] } grouped by dimKey ('stage'|'owner').
-            var deals = window._dcDeals || [];
+            //
+            // Aggregates the VISIBLE deals, not the whole dataset (Sarah
+            // 2026-09-05: "when I select a stage here the charts shall be shown
+            // what the actual deal owner and number of the data inside").
+            // Filtering to Paid · missing used to leave the charts showing all
+            // 284 deals and every owner, so the table said 2 rows while the
+            // chart beside it said 50 — the two disagreed on screen. The charts
+            // now drill into the selection, and the "clear filter" chip above
+            // the table is what widens them back out.
+            var deals = _dcVisibleDeals();
             var results = window._dcResults || {};
             var map = {}; // key -> {c,m,u,mAmt}
             deals.forEach(function (d) {
@@ -8306,8 +8318,28 @@
             if (typeof Chart === 'undefined') return;
             ['stage', 'owner'].forEach(function (dim) {
                 var id = dim === 'stage' ? 'dcStageChart' : 'dcOwnerChart';
-                if (window._dcCharts[dim]) { try { window._dcCharts[dim].destroy(); } catch (e) {} }
-                window._dcCharts[dim] = _dcBuildChart(id, dim);
+                // Each chart is built in ISOLATION. Previously one throw aborted
+                // the forEach, and because 'stage' runs first that left the
+                // stage canvas destroyed-but-not-rebuilt (blank) AND the owner
+                // chart never re-rendered, so it kept showing the previous
+                // dataset — a blank panel beside a stale one, which is exactly
+                // what Sarah hit on 2026-09-05.
+                try {
+                    if (window._dcCharts[dim]) { try { window._dcCharts[dim].destroy(); } catch (e) {} }
+                    // Belt and braces: Chart.js refuses `new Chart()` on a canvas
+                    // it still has registered ("Canvas is already in use"), and a
+                    // destroy() that half-failed above leaves exactly that state.
+                    // getChart() finds the registered instance whatever we think
+                    // we are holding.
+                    if (typeof Chart.getChart === 'function') {
+                        var stuck = Chart.getChart(document.getElementById(id));
+                        if (stuck) { try { stuck.destroy(); } catch (e) {} }
+                    }
+                    window._dcCharts[dim] = _dcBuildChart(id, dim);
+                } catch (e) {
+                    window._dcCharts[dim] = null;
+                    console.error('[deal-compliance] chart "' + dim + '" failed to render:', e);
+                }
             });
         }
 
@@ -8338,6 +8370,10 @@
         function _dcFilterTableRows() {
             _dcPage = 0;
             _dcRenderPage();
+            // The charts aggregate the visible deals, so they have to be rebuilt
+            // whenever the selection changes — otherwise the table and the chart
+            // beside it describe different sets of deals.
+            _dcRenderCharts();
         }
 
         // `live` = true only when the operator clicks "Refresh from Zoho (live)".
