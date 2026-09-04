@@ -214,6 +214,29 @@ await suite.test("GET /policies — 301-redirects to /integrated-qms for every c
   }
 });
 
+// /compliance is a permanent (301) redirect to its renamed canonical URL
+// /certification-milestones. It must NOT serve a page shell (gated or
+// otherwise) and must NOT depend on the caller's role — a redirect leaks
+// nothing, and the role gate is enforced on the /certification-milestones
+// target. Assert the redirect fires regardless of credentials. Mirrors the
+// /policies → /integrated-qms test above.
+await suite.test("GET /compliance — 301-redirects to /certification-milestones for every caller", async () => {
+  const cases: CaseInput[] = [
+    {}, // no session, no key
+    { cookie: sessionCookieFor("department_viewer") }, // low-priv session
+    { cookie: sessionCookieFor("admin") }, // admin session
+  ];
+  for (const input of cases) {
+    const res = await callRoute("/compliance", input);
+    suite.expectEqual(res.status, 301, "/compliance redirect status");
+    suite.expectEqual(
+      res.headers?.["Location"],
+      "/certification-milestones",
+      "/compliance redirect Location",
+    );
+  }
+});
+
 // Sanity: every allowlist must include 'admin'. This is invariant: the
 // admin role is the operational super-user for the platform and must be
 // able to load every dashboard shell. A future refactor that drops admin
