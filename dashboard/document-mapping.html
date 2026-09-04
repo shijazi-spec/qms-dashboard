@@ -164,6 +164,44 @@
             </div>
         </section>
 
+        <!-- Compliance v2 — Auto-mapped citations review queue -->
+        <section class="bg-white rounded-lg shadow mb-6" data-testid="section-automapped">
+            <div class="p-4 border-b border-gray-200 flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="docmap.automapped_title">Auto-Mapped, Needs Review</h2>
+                    <p class="text-xs text-gray-500" data-i18n="docmap.automapped_subtitle">Document/clause links the citation extractor created automatically (e.g. when a document explicitly cites "ISO 27001 A.5.15"). Confirm to keep the link, or reject to remove it.</p>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <button type="button" data-on-click="runAutoReview" id="autoReviewBtn" class="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-medium flex items-center gap-1 disabled:opacity-60" data-testid="button-ai-review">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span id="autoReviewLabel" data-i18n="docmap.ai_review">AI review queue</span>
+                    </button>
+                    <button type="button" data-on-click="bulkConfirmReviewed" class="text-xs px-3 py-1.5 rounded-lg bg-emerald-700 text-white hover:bg-emerald-800 font-medium" data-testid="button-bulk-confirm" data-i18n="docmap.bulk_confirm">Confirm AI-approved</button>
+                    <button type="button" data-on-click="bulkRejectReviewed" class="text-xs px-3 py-1.5 rounded-lg border border-red-300 text-red-700 hover:bg-red-50 font-medium" data-testid="button-bulk-reject" data-i18n="docmap.bulk_reject">Reject AI-rejected</button>
+                    <button type="button" data-on-click="bulkConfirmAll" class="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 font-medium" data-testid="button-bulk-confirm-all" title="Confirms every pending link regardless of the AI verdict" data-i18n="docmap.bulk_confirm_all">Confirm all</button>
+                    <button type="button" data-on-click="loadAutoMapped" class="text-sm text-emerald-700 hover:text-emerald-800 font-medium" data-testid="button-automapped-reload" data-i18n="common.refresh">Refresh</button>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_framework">Framework</th>
+                            <th scope="col" class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_clause">Clause</th>
+                            <th scope="col" class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_document">Document</th>
+                            <th scope="col" class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_citation">Citation</th>
+                            <th scope="col" class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_excerpt">Excerpt</th>
+                            <th scope="col" class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_verdict">AI Verdict</th>
+                            <th scope="col" class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="autoMappedTableBody" class="bg-white divide-y divide-gray-200">
+                        <tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
         <!-- AI gap remediation: recommend what to create/implement for each gap -->
         <section class="bg-white rounded-lg shadow mb-6" data-testid="section-recommendations">
             <div class="p-4 border-b border-gray-200 flex items-center justify-between gap-3 flex-wrap">
@@ -246,43 +284,6 @@
             </div>
         </section>
 
-        <!-- Compliance v2 — Auto-mapped citations review queue -->
-        <section class="bg-white rounded-lg shadow mb-6" data-testid="section-automapped">
-            <div class="p-4 border-b border-gray-200 flex items-start justify-between gap-3 flex-wrap">
-                <div>
-                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="docmap.automapped_title">Auto-Mapped, Needs Review</h2>
-                    <p class="text-xs text-gray-500" data-i18n="docmap.automapped_subtitle">Document/clause links the citation extractor created automatically (e.g. when a document explicitly cites "ISO 27001 A.5.15"). Confirm to keep the link, or reject to remove it.</p>
-                </div>
-                <div class="flex items-center gap-2 flex-wrap">
-                    <button type="button" data-on-click="runAutoReview" id="autoReviewBtn" class="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-medium flex items-center gap-1 disabled:opacity-60" data-testid="button-ai-review">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        <span id="autoReviewLabel" data-i18n="docmap.ai_review">AI review queue</span>
-                    </button>
-                    <button type="button" data-on-click="bulkConfirmReviewed" class="text-xs px-3 py-1.5 rounded-lg bg-emerald-700 text-white hover:bg-emerald-800 font-medium" data-testid="button-bulk-confirm" data-i18n="docmap.bulk_confirm">Confirm AI-approved</button>
-                    <button type="button" data-on-click="bulkRejectReviewed" class="text-xs px-3 py-1.5 rounded-lg border border-red-300 text-red-700 hover:bg-red-50 font-medium" data-testid="button-bulk-reject" data-i18n="docmap.bulk_reject">Reject AI-rejected</button>
-                    <button type="button" data-on-click="bulkConfirmAll" class="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 font-medium" data-testid="button-bulk-confirm-all" title="Confirms every pending link regardless of the AI verdict" data-i18n="docmap.bulk_confirm_all">Confirm all</button>
-                    <button type="button" data-on-click="loadAutoMapped" class="text-sm text-emerald-700 hover:text-emerald-800 font-medium" data-testid="button-automapped-reload" data-i18n="common.refresh">Refresh</button>
-                </div>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th scope="col" class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_framework">Framework</th>
-                            <th scope="col" class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_clause">Clause</th>
-                            <th scope="col" class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_document">Document</th>
-                            <th scope="col" class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_citation">Citation</th>
-                            <th scope="col" class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_excerpt">Excerpt</th>
-                            <th scope="col" class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_verdict">AI Verdict</th>
-                            <th scope="col" class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase" data-i18n="docmap.col_actions">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="autoMappedTableBody" class="bg-white divide-y divide-gray-200">
-                        <tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">Loading…</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
     </main>
 
     <!-- AI gap-recommendation detail modal -->
@@ -682,10 +683,10 @@
             await loadFrameworks();
             await loadCoverage();
             await loadGaps();
+            await loadAutoMapped();
             await loadRecommendations();
             await loadFindings();
             await loadConsoleClauses();
-            await loadAutoMapped();
             await loadEmbedStatus();
         }
 
