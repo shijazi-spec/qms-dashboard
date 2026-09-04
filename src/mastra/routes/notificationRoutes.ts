@@ -84,11 +84,11 @@ export const notificationRoutes = [
           // Use live DB role to prevent a demoted user from seeing the global
           // unread count instead of only their own.
           let isLiveAdmin = false;
+          let liveRole: string | undefined;
           if (!isAdminKey && user?.email) {
             const platformUser = await getPlatformUser(user.email);
-            isLiveAdmin =
-              platformUser?.status === "active" &&
-              platformUser?.role === "admin";
+            if (platformUser?.status === "active") liveRole = platformUser.role;
+            isLiveAdmin = liveRole === "admin";
           }
 
           const recipientFilter =
@@ -96,8 +96,35 @@ export const notificationRoutes = [
               ? undefined
               : user?.email ?? undefined;
 
-          const count = await getUnreadCount(recipientFilter);
-          return c.json({ count });
+          const hubCount = await getUnreadCount(recipientFilter);
+
+          // The bell LISTS audit_notifications (triggerRoutes wins the
+          // /api/notifications registration), so a badge built from the hub
+          // table alone read 0 while the dropdown showed hundreds of open
+          // items. Total both feeds, scoped the same way each list is.
+          let alertCount = 0;
+          try {
+            const { getUnreadNotificationCount, initAuditTriggerTables } =
+              await import("../../utils/auditTriggerDatabase");
+            const { TRIGGER_ADMIN_ROLES, TRIGGER_REVIEWER_ROLES } =
+              await import("./triggerRoles");
+
+            // Only count what this caller could actually open: the audit list
+            // is gated on TRIGGER_REVIEWER_ROLES and scoped to recipient_role.
+            // liveRole is the DB role, never the cookie's.
+            const role = isAdminKey ? "admin" : liveRole;
+            if (role && TRIGGER_REVIEWER_ROLES.includes(role as UserRole)) {
+              await initAuditTriggerTables();
+              alertCount = await getUnreadNotificationCount(
+                TRIGGER_ADMIN_ROLES.has(role) ? undefined : role,
+              );
+            }
+          } catch (alertError) {
+            // A badge is not worth failing the request over.
+            logger.error("[Notifications] audit count failed:", alertError);
+          }
+
+          return c.json({ count: hubCount + alertCount });
         } catch (error) {
           return c.json({ error: "Failed to fetch count" }, 500);
         }
@@ -153,58 +180,13 @@ export const notificationRoutes = [
     },
   },
   {
-    // Bulk "Mark all as read" for the bell dropdown. Without it, clearing a
-    // backlog meant one POST per notification — impractical when the table
-    // holds tens of thousands of rows.
-    //
-    // SCOPING IS THE WHOLE POINT: a session caller only ever clears what they
-    // can see (their own notifications plus NULL-recipient broadcasts), which
-    // is the same predicate getNotifications/getUnreadCount use. Only an
-    // admin-key caller clears globally. Getting this wrong would wipe other
-    // people's inboxes, so the recipient is derived server-side from the
-    // session and never taken from the request body.
-    path: "/api/notifications/read-all",
-    method: "POST" as const,
-    createHandler: async () => {
-      return async (c: any) => {
-        try {
-          const { getSessionUser, hasValidAdminApiKey } = await import(
-            "../../utils/rbacMiddleware"
-          );
-          const { markAllAsRead } = await import(
-            "../../utils/notificationHub"
-          );
-
-          const isAdminKey = hasValidAdminApiKey(c);
-          let recipient: string | undefined;
-
-          if (!isAdminKey) {
-            const user = getSessionUser(c);
-            if (!user) return c.json({ error: "Authentication required" }, 401);
-
-            // Live DB role, not the cookie — a demoted user must not retain
-            // the global clear. Same check the :id/read handler makes.
-            const platformUser = await getPlatformUser(user.email);
-            const isLiveAdmin =
-              platformUser?.status === "active" &&
-              platformUser?.role === "admin";
-
-            // Non-admins are scoped to their own inbox. A live admin still
-            // gets the global clear, matching the per-id handler's rule that
-            // an admin may act on any notification.
-            recipient = isLiveAdmin ? undefined : user.email;
-          }
-
-          const updated = await markAllAsRead(recipient);
-          return c.json({ success: true, updated });
-        } catch (error) {
-          logger.error("[Notifications] mark-all-read failed:", error);
-          return c.json({ error: "Failed to mark all as read" }, 500);
-        }
-      };
-    },
-  },
-  {
+    // NOTE: `POST /api/notifications/read-all` deliberately lives in
+    // triggerRoutes.ts, not here. `/api/notifications` is registered in BOTH
+    // files and triggerRoutes is spread first in src/mastra/index.ts, so that
+    // file is what actually serves this path space — the bell lists
+    // `audit_notifications`, not the hub table below. A read-all defined here
+    // would be shadowed for the GET it is meant to clear. The trigger handler
+    // clears BOTH feeds, including this one via `markAllAsRead`.
     path: "/api/notifications/:id/dismiss",
     method: "POST" as const,
     createHandler: async () => {

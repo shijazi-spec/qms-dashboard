@@ -470,6 +470,74 @@ export async function getUnreadNotifications(
   return result.rows;
 }
 
+/**
+ * Page through notifications INCLUDING already-read ones, newest first.
+ *
+ * `getUnreadNotifications` above hard-codes `is_read = false` and takes no
+ * limit, which is why the bell could only ever show open items and always
+ * fetched the whole table. The full-history view needs the opposite: read rows
+ * visible, and a bounded page plus a total so the caller can paginate.
+ *
+ * `role` scopes to `recipient_role` exactly as the unread query does — pass it
+ * for a non-admin caller, omit it for an admin who may see every role's items.
+ */
+export async function getNotificationHistory(options: {
+  role?: string;
+  unreadOnly?: boolean;
+  limit?: number;
+  offset?: number;
+}): Promise<{ notifications: AuditNotification[]; total: number }> {
+  const conditions: string[] = [];
+  const params: any[] = [];
+
+  if (options.unreadOnly) conditions.push("an.is_read = false");
+  if (options.role) {
+    params.push(options.role);
+    conditions.push(`an.recipient_role = $${params.length}`);
+  }
+  const where =
+    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  // Clamped: the caller supplies this from a query string.
+  const limit = Math.min(Math.max(Number(options.limit) || 50, 1), 200);
+  const offset = Math.max(Number(options.offset) || 0, 0);
+
+  const countResult = await pool.query(
+    `SELECT COUNT(*)::int AS total
+       FROM audit_notifications an
+       JOIN audit_triggers at ON an.trigger_id = at.id
+       ${where}`,
+    params,
+  );
+
+  const result = await pool.query(
+    `SELECT an.*, at.trigger_type, at.severity, at.status as trigger_status
+       FROM audit_notifications an
+       JOIN audit_triggers at ON an.trigger_id = at.id
+       ${where}
+      ORDER BY an.created_at DESC
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    [...params, limit, offset],
+  );
+
+  return {
+    notifications: result.rows,
+    total: countResult.rows[0]?.total ?? 0,
+  };
+}
+
+export async function getUnreadNotificationCount(
+  role?: string,
+): Promise<number> {
+  const result = await pool.query(
+    `SELECT COUNT(*)::int AS count
+       FROM audit_notifications
+      WHERE is_read = false${role ? " AND recipient_role = $1" : ""}`,
+    role ? [role] : [],
+  );
+  return result.rows[0]?.count ?? 0;
+}
+
 export async function markNotificationRead(
   notificationId: number,
 ): Promise<void> {
@@ -477,6 +545,28 @@ export async function markNotificationRead(
     "UPDATE audit_notifications SET is_read = true, read_at = NOW() WHERE id = $1",
     [notificationId],
   );
+}
+
+/**
+ * Bulk "mark all as read", returning how many rows changed.
+ *
+ * Scoped by `recipient_role` for the same reason the per-id handler checks it:
+ * a reviewer must not clear another role's queue. Omitting `role` clears every
+ * role and is only for an admin caller — the route decides which applies.
+ *
+ * Bounded by `is_read = false` so re-running is cheap and does not rewrite
+ * `read_at` on rows that were already read.
+ */
+export async function markAllNotificationsRead(
+  role?: string,
+): Promise<number> {
+  const result = await pool.query(
+    `UPDATE audit_notifications
+        SET is_read = true, read_at = NOW()
+      WHERE is_read = false${role ? " AND recipient_role = $1" : ""}`,
+    role ? [role] : [],
+  );
+  return result.rowCount ?? 0;
 }
 
 export async function getTriggersStats(): Promise<{

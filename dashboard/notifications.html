@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>WalaPlus - All Notifications</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="walaplus-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        html { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; min-height: 100vh; }
+        .severity-critical { background-color: #FEE2E2; color: #B91C1C; }
+        .severity-high     { background-color: #FEE2E2; color: #B91C1C; }
+        .severity-warning  { background-color: #FEF3C7; color: #D97706; }
+        .severity-medium   { background-color: #FEF3C7; color: #D97706; }
+        .severity-info     { background-color: #DBEAFE; color: #1E3A8A; }
+        .severity-low      { background-color: #DCFCE7; color: #166534; }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.1"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="walaplus-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/navigation.js?v=5.9"></script>
+
+    <main class="max-w-6xl mx-auto px-4 py-8">
+        <header class="mb-6 flex flex-wrap items-start justify-between gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900" data-i18n="notifications.page_title">All Notifications</h1>
+                <p class="text-sm text-gray-500 mt-1" data-i18n="notifications.page_subtitle">Every alert this platform has raised for you, newest first.</p>
+            </div>
+            <button type="button" id="mark-all-btn" data-on-click="NotificationsPage.markAll"
+                    class="text-sm px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                    data-i18n="notifications.mark_all_read" data-testid="button-page-mark-all">Mark all read</button>
+        </header>
+
+        <div class="mb-4 flex flex-wrap items-center gap-2" role="group" aria-label="Filter notifications">
+            <button type="button" data-on-click="NotificationsPage.setFilter" data-args='["all"]'
+                    id="filter-all" class="wp-notif-filter text-sm px-3 py-1.5 rounded-full border border-gray-300 bg-white text-gray-700"
+                    data-i18n="notifications.filter_all" data-testid="filter-all">All</button>
+            <button type="button" data-on-click="NotificationsPage.setFilter" data-args='["unread"]'
+                    id="filter-unread" class="wp-notif-filter text-sm px-3 py-1.5 rounded-full border border-gray-300 bg-white text-gray-700"
+                    data-i18n="notifications.filter_unread" data-testid="filter-unread">Unread</button>
+            <button type="button" data-on-click="NotificationsPage.setFilter" data-args='["read"]'
+                    id="filter-read" class="wp-notif-filter text-sm px-3 py-1.5 rounded-full border border-gray-300 bg-white text-gray-700"
+                    data-i18n="notifications.filter_read" data-testid="filter-read">Read</button>
+            <span id="notif-summary" class="text-xs text-gray-500 ms-2" aria-live="polite"></span>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                    <thead class="bg-gray-50 text-gray-600">
+                        <tr>
+                            <th scope="col" class="text-start font-semibold px-4 py-3" data-i18n="notifications.col_notification">Notification</th>
+                            <th scope="col" class="text-start font-semibold px-4 py-3" data-i18n="notifications.col_source">Source</th>
+                            <th scope="col" class="text-start font-semibold px-4 py-3" data-i18n="notifications.col_severity">Severity</th>
+                            <th scope="col" class="text-start font-semibold px-4 py-3" data-i18n="notifications.col_received">Received</th>
+                            <th scope="col" class="text-start font-semibold px-4 py-3" data-i18n="notifications.col_state">State</th>
+                        </tr>
+                    </thead>
+                    <tbody id="notif-tbody" class="divide-y divide-gray-100">
+                        <tr><td colspan="5" class="px-4 py-8 text-center text-gray-400" data-i18n="common.loading">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <nav class="mt-4 flex items-center justify-between" aria-label="Pagination">
+            <button type="button" id="page-prev" data-on-click="NotificationsPage.prevPage"
+                    class="text-sm px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-40"
+                    data-i18n="notifications.prev" data-testid="button-prev-page">Previous</button>
+            <span id="page-info" class="text-xs text-gray-500"></span>
+            <button type="button" id="page-next" data-on-click="NotificationsPage.nextPage"
+                    class="text-sm px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-40"
+                    data-i18n="notifications.next" data-testid="button-next-page">Next</button>
+        </nav>
+    </main>
+
+    <script>
+        // Full notification history. The bell in the top bar only shows the 10
+        // newest UNREAD items; "View All" links here for everything else.
+        //
+        // The feed is served by triggerRoutes.ts, not notificationHub —
+        // `/api/notifications` is registered in both files and triggerRoutes is
+        // spread first in src/mastra/index.ts. So rows arrive in the
+        // `audit_notifications` shape: `subject`/`is_read`, not `title`/`status`.
+        // `include_read=true` is what makes the handler return read rows at all.
+        window.NotificationsPage = {
+            PAGE_SIZE: 50,
+            filter: 'all',
+            offset: 0,
+            total: 0,
+
+            _t: function (key, fallback) {
+                var i18n = window.WalaPlusI18n;
+                var v = (i18n && i18n.t) ? i18n.t(key) : null;
+                return (v && v !== key) ? v : fallback;
+            },
+
+            esc: function (s) {
+                return String(s === null || s === undefined ? '' : s)
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            },
+
+            setFilter: function (which) {
+                this.filter = which;
+                this.offset = 0;
+                this.load();
+            },
+
+            prevPage: function () {
+                this.offset = Math.max(0, this.offset - this.PAGE_SIZE);
+                this.load();
+            },
+
+            nextPage: function () {
+                if (this.offset + this.PAGE_SIZE < this.total) {
+                    this.offset += this.PAGE_SIZE;
+                    this.load();
+                }
+            },
+
+            markAll: function () {
+                var btn = document.getElementById('mark-all-btn');
+                if (btn) btn.disabled = true;
+                var self = this;
+                fetch('/api/notifications/read-all', { method: 'POST', credentials: 'same-origin' })
+                    .then(function () {
+                        self.load();
+                        // Keep the top-bar badge in step with what just changed.
+                        if (window.WalaPlusNav && window.WalaPlusNav.pollAlertCount) {
+                            window.WalaPlusNav.pollAlertCount();
+                        }
+                    })
+                    .catch(function () {})
+                    .then(function () { if (btn) btn.disabled = false; });
+            },
+
+            markRead: function (id) {
+                var self = this;
+                fetch('/api/notifications/' + encodeURIComponent(id) + '/read',
+                      { method: 'POST', credentials: 'same-origin' })
+                    .then(function () {
+                        self.load();
+                        if (window.WalaPlusNav && window.WalaPlusNav.pollAlertCount) {
+                            window.WalaPlusNav.pollAlertCount();
+                        }
+                    })
+                    .catch(function () {});
+            },
+
+            _highlightFilter: function () {
+                var ids = { all: 'filter-all', unread: 'filter-unread', read: 'filter-read' };
+                var self = this;
+                Object.keys(ids).forEach(function (key) {
+                    var el = document.getElementById(ids[key]);
+                    if (!el) return;
+                    var on = (key === self.filter);
+                    el.classList.toggle('bg-indigo-600', on);
+                    el.classList.toggle('text-white', on);
+                    el.classList.toggle('border-indigo-600', on);
+                    el.classList.toggle('bg-white', !on);
+                    el.classList.toggle('text-gray-700', !on);
+                    el.setAttribute('aria-pressed', on ? 'true' : 'false');
+                });
+            },
+
+            load: function () {
+                this._highlightFilter();
+                var tbody = document.getElementById('notif-tbody');
+                if (!tbody) return;
+
+                // The API filters unread server-side; "read" has no server
+                // filter, so it is asked for everything and narrowed here.
+                var unreadOnly = (this.filter === 'unread');
+                var url = '/api/notifications?limit=' + this.PAGE_SIZE +
+                          '&offset=' + this.offset +
+                          (unreadOnly ? '' : '&include_read=true');
+
+                var self = this;
+                fetch(url, { credentials: 'same-origin' })
+                    .then(function (r) {
+                        if (!r.ok) throw new Error('HTTP ' + r.status);
+                        return r.json();
+                    })
+                    .then(function (data) {
+                        var rows = data.notifications || [];
+                        if (self.filter === 'read') {
+                            rows = rows.filter(function (n) { return n.is_read === true || n.status === 'read'; });
+                        }
+                        self.total = Number(data.total) || rows.length;
+                        self.render(rows);
+                    })
+                    .catch(function () {
+                        tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-red-500">' +
+                            self.esc(self._t('notifications.load_failed', 'Could not load notifications.')) +
+                            '</td></tr>';
+                    });
+            },
+
+            render: function (rows) {
+                var tbody = document.getElementById('notif-tbody');
+                if (!tbody) return;
+
+                if (rows.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">' +
+                        this.esc(this._t('notifications.none_yet', 'No notifications yet')) + '</td></tr>';
+                } else {
+                    var self = this;
+                    tbody.innerHTML = rows.map(function (n) {
+                        var isRead = (n.is_read === true || n.status === 'read');
+                        var subject = self.esc(n.subject || n.title || 'Notification');
+                        var message = self.esc(n.message || '');
+                        var source = self.esc(n.trigger_type || n.module || '—');
+                        var sev = String(n.severity || 'info').toLowerCase();
+                        var when = n.created_at ? new Date(n.created_at) : null;
+                        var whenText = when && !isNaN(when.getTime())
+                            ? when.toLocaleString()
+                            : '—';
+                        var state = isRead
+                            ? '<span class="text-xs text-gray-500">' + self.esc(self._t('notifications.state_read', 'Read')) + '</span>'
+                            : '<button type="button" class="text-xs text-indigo-600 hover:text-indigo-800 underline" ' +
+                              'data-on-click="NotificationsPage.markRead" data-args="[' + Number(n.id) + ']">' +
+                              self.esc(self._t('notifications.mark_read', 'Mark read')) + '</button>';
+
+                        return '<tr class="' + (isRead ? 'opacity-60' : '') + '">' +
+                            '<td class="px-4 py-3 align-top">' +
+                                '<span class="block font-medium text-gray-900">' + subject + '</span>' +
+                                '<span class="block text-xs text-gray-500 mt-0.5">' + message + '</span>' +
+                            '</td>' +
+                            '<td class="px-4 py-3 align-top text-gray-600">' + source + '</td>' +
+                            '<td class="px-4 py-3 align-top">' +
+                                '<span class="text-xs px-2 py-1 rounded-full severity-' + self.esc(sev) + '">' + self.esc(sev) + '</span>' +
+                            '</td>' +
+                            '<td class="px-4 py-3 align-top text-gray-600 whitespace-nowrap">' + self.esc(whenText) + '</td>' +
+                            '<td class="px-4 py-3 align-top">' + state + '</td>' +
+                        '</tr>';
+                    }).join('');
+                }
+
+                var shownFrom = this.total === 0 ? 0 : this.offset + 1;
+                var shownTo = this.offset + rows.length;
+                var info = this._t('notifications.showing', 'Showing') + ' ' + shownFrom + '–' + shownTo +
+                           ' ' + this._t('notifications.of', 'of') + ' ' + this.total;
+                var infoEl = document.getElementById('page-info');
+                if (infoEl) infoEl.textContent = info;
+                var summaryEl = document.getElementById('notif-summary');
+                if (summaryEl) summaryEl.textContent = info;
+
+                var prev = document.getElementById('page-prev');
+                var next = document.getElementById('page-next');
+                if (prev) prev.disabled = this.offset <= 0;
+                if (next) next.disabled = this.offset + this.PAGE_SIZE >= this.total;
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', function () {
+            // Explicit registration is REQUIRED: safe-actions auto-registers
+            // only global *functions* at init, and NotificationsPage is an
+            // object, so its methods would otherwise never be dispatchable
+            // from data-on-click.
+            if (window.SafeActions && window.SafeActions.register) {
+                window.SafeActions.register('NotificationsPage', window.NotificationsPage);
+            }
+            window.NotificationsPage.load();
+        });
+    </script>
+    <script>
+        // i18n bootstrap — translates every data-i18n attribute on the page
+        // (matches the pattern used by every other dashboard page; required
+        // by scripts/check-i18n.cjs "Page wiring" check).
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
+    </script>
+</body>
+</html>

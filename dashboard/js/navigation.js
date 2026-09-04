@@ -573,15 +573,12 @@ const WalaPlusNav = {
     }
   },
 
-  // Bell-dropdown paging state. Collapsed = the 10 newest UNREAD, which is
-  // what the bell is for. Expanded ("View All") = a larger page that also
-  // includes already-read items, so the control still shows something once
-  // the unread list is empty. It used to be an <a href="/consultant">, which
-  // navigated to the GRQ Assistant page — a page with no notifications view,
-  // so pressing "View All" appeared to do nothing.
-  _notifExpanded: false,
+  // The bell shows the 10 newest UNREAD items, which is what a bell is for.
+  // Everything else — read history, filtering, paging — lives on the
+  // /notifications page that "View All" links to. It used to point at
+  // /consultant, the GRQ Assistant page, which has no notifications view, so
+  // pressing "View All" appeared to do nothing.
   NOTIF_COLLAPSED_LIMIT: 10,
-  NOTIF_EXPANDED_LIMIT: 50,
 
   pollAlertCount() {
     this.refreshAlertBadge();
@@ -609,29 +606,32 @@ const WalaPlusNav = {
     }).catch(() => {});
   },
 
+  // The bell is served by triggerRoutes.ts, NOT notificationHub: `/api/
+  // notifications` is registered in both files and triggerRoutes is spread
+  // first in src/mastra/index.ts, so rows arrive in the `audit_notifications`
+  // shape — `subject`/`is_read`, not `title`/`status`. Read both spellings
+  // here so the dropdown keeps working whichever feed a row came from.
+  _notifIsRead(n) {
+    return n.is_read === true || n.status === 'read';
+  },
+
   refreshNotifications() {
-    const expanded = this._notifExpanded;
-    const limit = expanded ? this.NOTIF_EXPANDED_LIMIT : this.NOTIF_COLLAPSED_LIMIT;
-    // Expanded drops the status filter so read history is visible too.
-    const query = expanded ? '?limit=' + limit : '?limit=' + limit + '&status=unread';
-    fetch('/api/notifications' + query, { credentials: 'same-origin' })
+    // `limit` is what makes the server return a bounded page plus a total;
+    // without it the handler ships every unread row (hundreds of them).
+    fetch('/api/notifications?limit=' + this.NOTIF_COLLAPSED_LIMIT, { credentials: 'same-origin' })
       .then(r => r.ok ? r.json() : { notifications: [], total: 0 })
       .then(data => {
         const list = document.getElementById('nav-notifications-list');
         if (!list) return;
         const page = data.notifications || [];
-        // Expanding drops the status filter so read history shows up, but a
-        // DISMISSED notification was explicitly removed by the user and must
-        // never come back. The API takes one exact-match status, not a NOT,
-        // so the exclusion happens here.
+        // A DISMISSED notification was explicitly removed by the user and must
+        // never come back. Only the hub feed has that state.
         const items = page.filter(n => n.status !== 'dismissed');
         if (items.length === 0) {
-          // Both lookups are written as STRING LITERALS, never a variable key:
-          // the i18n guardrail in scripts/check-i18n.cjs can only verify a key
-          // against en.json/ar.json when it can read it statically.
-          const empty = expanded
-            ? this._t('notifications.none_yet')
-            : this._t('notifications.no_notifications');
+          // Written as a STRING LITERAL, never a variable key: the i18n
+          // guardrail in scripts/check-i18n.cjs can only verify a key against
+          // en.json/ar.json when it can read it statically.
+          const empty = this._t('notifications.no_notifications');
           list.innerHTML = '<p class="text-center text-sm text-gray-400 py-4">' + this.escapeHtml(empty) + '</p>';
           return;
         }
@@ -642,10 +642,9 @@ const WalaPlusNav = {
           const safeModule = Object.prototype.hasOwnProperty.call(KNOWN_MODULES, n.module) ? n.module : 'System';
           const iconColor = KNOWN_MODULES[safeModule] || 'text-gray-500';
           const safeId = Number.isFinite(Number(n.id)) && Number(n.id) >= 0 ? Number(n.id) : 0;
-          // The API column is `title`; `subject` was never in the payload, so
-          // every row used to render as the literal word "Notification".
+          // `subject` is the audit-notification column, `title` the hub one.
           const subject = this.escapeHtml(n.title || n.subject || 'Notification');
-          if (n.status === 'read') {
+          if (this._notifIsRead(n)) {
             // Already read: no mark-as-read affordance, muted dot.
             return `<div class="flex items-start space-x-2 p-2 rounded-lg w-full text-left opacity-60">
               <span class="w-2 h-2 mt-1.5 rounded-full bg-gray-300 flex-shrink-0" aria-hidden="true"></span>
@@ -679,28 +678,11 @@ const WalaPlusNav = {
       .catch(() => {});
   },
 
-  // "View All" / "Show less". Re-points the label at the other i18n key rather
-  // than writing text directly, so a later language switch still translates it.
-  toggleNotificationsView() {
-    this._notifExpanded = !this._notifExpanded;
-    const btn = document.getElementById('nav-notif-view-all');
-    if (btn) {
-      // data-i18n carries the key so a later language switch re-translates the
-      // label; the text itself is looked up with STRING LITERALS so the i18n
-      // guardrail can verify both keys resolve in en.json and ar.json.
-      btn.setAttribute('data-i18n', this._notifExpanded ? 'notifications.show_less' : 'nav.view_all');
-      btn.textContent = this._notifExpanded
-        ? this._t('notifications.show_less')
-        : this._t('nav.view_all');
-    }
-    this.refreshNotifications();
-  },
-
   // Bulk clear. The badge sums TWO feeds, so clearing it takes two calls:
   //
-  //   notifications  — per-recipient. The server scopes the UPDATE to the
-  //                    session user, so this only touches what this user can
-  //                    see; the request carries no recipient. Always sent.
+  //   notifications  — one POST clears BOTH notification feeds server-side
+  //                    (audit trigger alerts + the hub inbox), each scoped to
+  //                    what this user is allowed to see. Always sent.
   //   consultant AI  — SHARED (ai_alerts has no recipient column) and the
   //   alerts           write stamps this account as the triager of every row,
   //                    so it is confirmed first and only offered when there is
@@ -766,7 +748,13 @@ const WalaPlusNav = {
 
   markRead(id) {
     fetch(`/api/notifications/${id}/read`, { method: 'POST', credentials: 'same-origin' })
-      .then(() => { this.pollAlertCount(); })
+      .then(() => {
+        // Re-render the list too, not just the badge: without this the row
+        // keeps its unread dot until the next 60s poll and the click looks
+        // like it did nothing.
+        this.pollAlertCount();
+        this.refreshNotifications();
+      })
       .catch(() => {});
   },
 
@@ -1255,7 +1243,7 @@ const WalaPlusNav = {
                 <span class="flex items-center gap-2">
                   <button type="button" id="nav-notif-mark-all" data-nav-keep-open data-on-click="WalaPlusNav.markAllRead" class="text-xs text-gray-500 hover:text-gray-800 disabled:opacity-50" data-i18n="notifications.mark_all_read" data-testid="button-mark-all-read">${this._t('notifications.mark_all_read')}</button>
                   <span class="text-gray-300" aria-hidden="true">|</span>
-                  <button type="button" id="nav-notif-view-all" data-nav-keep-open data-on-click="WalaPlusNav.toggleNotificationsView" class="text-xs text-indigo-600 hover:text-indigo-800" data-i18n="nav.view_all" data-testid="button-view-all-notifications">${this._t('nav.view_all')}</button>
+                  <a href="/notifications" class="text-xs text-indigo-600 hover:text-indigo-800" data-i18n="nav.view_all" data-testid="link-view-all-notifications">${this._t('nav.view_all')}</a>
                 </span>
               </div>
               <div id="nav-notifications-list" class="overflow-y-auto max-h-72 p-2 space-y-1">

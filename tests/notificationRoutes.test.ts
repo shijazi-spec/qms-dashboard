@@ -43,15 +43,24 @@ await suite.test("POST /api/notifications/:id/dismiss — 400 with non-numeric i
   suite.expectEqual(res.body?.error, "Invalid ID", "body.error");
 });
 
-await suite.test("POST /api/notifications/read-all — 401 without a session", async () => {
-  // The bulk clear must never run for an anonymous caller: it scopes the
-  // UPDATE to the session user, so no session means there is nothing it could
-  // legitimately clear. Guards against the handler falling through to the
-  // admin-key branch (which clears EVERY recipient's notifications).
-  const handler = await buildHandler(notificationRoutes, "/api/notifications/read-all", "POST");
-  const res = await handler(makeContext({ method: "POST" }));
-  suite.expectEqual(res.status, 401, "status");
-  suite.expectEqual(res.body?.error, "Authentication required", "body.error");
+await suite.test("POST /api/notifications/read-all is NOT defined here", async () => {
+  // Regression guard for a real production bug. `/api/notifications` is
+  // registered in BOTH this file and triggerRoutes.ts, and triggerRoutes is
+  // spread FIRST in src/mastra/index.ts — so triggerRoutes serves the path
+  // space and the bell lists `audit_notifications` rows. A read-all defined
+  // here was shadowed for the very list it was meant to clear: it updated the
+  // notificationHub table (0 rows), the dropdown never lost its unread dots,
+  // and "Mark all read" looked broken.
+  //
+  // The bulk clear belongs next to the list it clears. If someone re-adds it
+  // here, this fails and points them at triggerRoutes.ts.
+  const found = notificationRoutes.find(
+    (r: any) => r.path === "/api/notifications/read-all",
+  );
+  suite.expect(
+    found === undefined,
+    "read-all must live in triggerRoutes.ts (it wins the /api/notifications registration), not notificationRoutes.ts",
+  );
 });
 
 if (HAS_DB) {

@@ -8,6 +8,9 @@ import {
   hasValidAdminApiKey,
 } from "../../utils/rbacMiddleware";
 import type { UserRole } from "../../utils/rbacDatabase";
+// The /notifications page gate must match the GET /api/notifications feed it
+// renders, which triggerRoutes.ts gates on this same set.
+import { TRIGGER_REVIEWER_ROLES } from "./triggerRoles";
 
 import { logger } from "../../utils/logger";
 
@@ -657,6 +660,25 @@ export const staticPageRoutes = [
         GOVERNANCE_AND_EXECUTIVE,
         "Trigger Alerts Setup Required",
         `To access the trigger alerts feed, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
+  // /notifications → full notification history behind the top-bar bell's
+  // "View All". Backed by the same GET /api/notifications the bell uses, which
+  // is gated on TRIGGER_REVIEWER_ROLES, so the page gate matches that feed.
+  {
+    path: "/notifications",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "notifications.html",
+        // Deliberately TRIGGER_REVIEWER_ROLES and not GOVERNANCE_AND_EXECUTIVE:
+        // the bell that links here is in the top bar of every page, so anyone
+        // who can load the feed must be able to open the page that lists it.
+        // A narrower gate would hand auditors/team leads a setup screen for
+        // notifications they can already see in the dropdown.
+        TRIGGER_REVIEWER_ROLES,
+        "Notifications Setup Required",
+        `To access your notifications, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
       ),
   },
   // /pdpl → /api/pdpl/* — admin only (privacy inventory, incident history).

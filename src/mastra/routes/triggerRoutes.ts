@@ -1,20 +1,9 @@
 import { logger as safeLogger } from "../../utils/logger";
 import { redactSensitiveDeep } from "../../utils/sensitiveRedaction";
-// Roles that can see all triggers/notifications and action any trigger regardless of assigned_role
-const TRIGGER_ADMIN_ROLES = new Set(["admin", "head_of_operations_quality"]);
-
-// Roles permitted to participate in trigger review workflows
-const TRIGGER_REVIEWER_ROLES: import("../../utils/rbacMiddleware").UserRole[] = [
-  "admin",
-  "head_of_operations_quality",
-  "grc_manager",
-  "quality_manager",
-  "auditor",
-  "team_lead",
-  "executive",
-  "bu_owner",
-  "ai_specialist",
-];
+// Shared with notificationRoutes.ts, which totals the bell badge across both
+// notification feeds and must apply the same visibility rules. Kept in their
+// own module to avoid a route-module import cycle.
+import { TRIGGER_ADMIN_ROLES, TRIGGER_REVIEWER_ROLES } from "./triggerRoles";
 
 export const triggerRoutes = [
   {
@@ -368,8 +357,11 @@ export const triggerRoutes = [
       return async (c: any) => {
         try {
           const logger = mastra?.getLogger();
-          const { getUnreadNotifications, initAuditTriggerTables } =
-            await import("../../utils/auditTriggerDatabase");
+          const {
+            getUnreadNotifications,
+            getNotificationHistory,
+            initAuditTriggerTables,
+          } = await import("../../utils/auditTriggerDatabase");
           const { requireRole } = await import("../../utils/rbacMiddleware");
           await initAuditTriggerTables();
 
@@ -393,6 +385,28 @@ export const triggerRoutes = [
             effectiveRole,
           });
 
+          // Default response is UNCHANGED (every unread row, no paging):
+          // dashboard/qms.html and dashboard/triggers.html both consume this
+          // exact shape. The history view opts in with `include_read` or
+          // `limit`, and only then gets a bounded page plus `total`.
+          const includeRead = url.searchParams.get("include_read") === "true";
+          const limitParam = url.searchParams.get("limit");
+
+          if (includeRead || limitParam) {
+            const page = await getNotificationHistory({
+              role: effectiveRole,
+              unreadOnly: !includeRead,
+              limit: Number(limitParam) || 50,
+              offset: Number(url.searchParams.get("offset")) || 0,
+            });
+            return c.json({
+              success: true,
+              notifications: page.notifications,
+              count: page.notifications.length,
+              total: page.total,
+            });
+          }
+
           const notifications = await getUnreadNotifications(effectiveRole);
           return c.json({
             success: true,
@@ -405,6 +419,79 @@ export const triggerRoutes = [
             error,
           );
           return c.json({ error: "Failed to fetch notifications" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Bulk "Mark all as read" for the bell dropdown.
+    //
+    // LIVES HERE, NOT IN notificationRoutes.ts, ON PURPOSE. `/api/notifications`
+    // is registered in BOTH files and triggerRoutes is spread first in
+    // src/mastra/index.ts, so this file is what actually serves the path. The
+    // bell therefore lists `audit_notifications` rows, and a read-all that
+    // cleared only the notificationHub `notifications` table updated 0 rows and
+    // looked broken. Keeping the bulk write next to the list it clears is what
+    // stops the two from drifting apart again.
+    //
+    // Both feeds are cleared: audit notifications (what the bell shows) and the
+    // hub table (what /api/notifications/count also totals), so one click
+    // empties the badge instead of half of it.
+    path: "/api/notifications/read-all",
+    method: "POST" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const logger = mastra?.getLogger();
+          const { markAllNotificationsRead, initAuditTriggerTables } =
+            await import("../../utils/auditTriggerDatabase");
+          const { requireRole } = await import("../../utils/rbacMiddleware");
+
+          // Authorize BEFORE touching the database: an unauthenticated caller
+          // should not be able to make the process run table DDL.
+          const user = await requireRole(c, TRIGGER_REVIEWER_ROLES);
+          if (!user) return c.json({ error: "Insufficient permissions" }, 403);
+
+          await initAuditTriggerTables();
+
+          // Same scoping rule as the per-id handler: a non-admin reviewer may
+          // only clear their own role's queue.
+          const scopeRole = TRIGGER_ADMIN_ROLES.has(user.role)
+            ? undefined
+            : user.role;
+
+          const alerts = await markAllNotificationsRead(scopeRole);
+
+          // The hub feed has no role concept — it is scoped by recipient, and
+          // a NULL recipient is a broadcast everyone sees.
+          let inbox = 0;
+          try {
+            const { markAllAsRead } = await import(
+              "../../utils/notificationHub"
+            );
+            inbox = await markAllAsRead(
+              TRIGGER_ADMIN_ROLES.has(user.role) ? undefined : user.email,
+            );
+          } catch (hubError) {
+            // A hub failure must not lose the alert clear we already committed.
+            safeLogger.error(
+              "❌ [TriggerAPI] read-all: hub notifications failed:",
+              hubError,
+            );
+          }
+
+          logger?.info("📧 [TriggerAPI] POST /api/notifications/read-all", {
+            userRole: user.role,
+            alerts,
+            inbox,
+          });
+          return c.json({ success: true, updated: alerts + inbox });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [TriggerAPI] Error marking all notifications read:",
+            error,
+          );
+          return c.json({ error: "Failed to mark all as read" }, 500);
         }
       };
     },

@@ -25,6 +25,36 @@ await suite.test("every route exposes path, method and createHandler", async () 
   suite.expect(triggerRoutes.length >= 1, "at least 1 route registered");
 });
 
+await suite.test("POST /api/notifications/read-all is served from this file", async () => {
+  // This file wins the `/api/notifications` registration — it is spread BEFORE
+  // notificationRoutes in src/mastra/index.ts — so the bell lists
+  // `audit_notifications` rows from here. The bulk clear must therefore live
+  // here too: defined in notificationRoutes.ts it was shadowed, updated the
+  // wrong table, and "Mark all read" silently did nothing.
+  const found = triggerRoutes.find(
+    (r) => r.path === "/api/notifications/read-all" && r.method === "POST",
+  );
+  suite.expect(found !== undefined, "POST /api/notifications/read-all is registered in triggerRoutes");
+});
+
+await suite.test("read-all requires a trigger-reviewer session", async () => {
+  const handler = await buildHandler(
+    triggerRoutes,
+    "/api/notifications/read-all",
+    "POST",
+    { mastra: null },
+  );
+  const res = await handler(makeContext({ method: "POST", body: {} }));
+  // The invariant is "never succeeds without a session" — it must not fall
+  // through to the unscoped clear, which wipes every role's queue. The exact
+  // code is environment-dependent: 403 where a database is reachable, 500
+  // where requireRole's user lookup cannot reach one (as in bare CI).
+  suite.expect(
+    res.status >= 400,
+    `anonymous read-all must not succeed, got ${res.status}`,
+  );
+});
+
 const apiRoutes = triggerRoutes.filter((r) => r.path.startsWith("/api/"));
 
 for (const route of apiRoutes) {
