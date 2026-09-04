@@ -164,6 +164,11 @@ const ALLOWED_FIELDS: Record<string, Set<string>> = {
     'responsible_party', 'notes', 'tags', 'department',
     'capa_type', 'root_cause', 'corrective_action', 'preventive_action',
     'assigned_to', 'priority', 'target_date',
+    // Control flags for POST /api/compliance/non-compliance-findings/rejudge.
+    // Absent from this list they were silently stripped, so `estimate` never
+    // reached the handler: a dry-run request fell through to the live branch
+    // and spent a real batch of LLM votes instead of counting them.
+    'estimate', 'before', 'require_chunks',
   ]),
   users: new Set([
     'email', 'full_name', 'role', 'team', 'department', 'status',

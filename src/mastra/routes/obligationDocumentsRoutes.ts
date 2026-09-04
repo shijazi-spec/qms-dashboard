@@ -574,18 +574,34 @@ export const obligationDocumentsRoutes = [
           const {
             listFindingsToRejudge,
             countFindingsToRejudge,
+            rejudgeReadiness,
           } = await import("../../utils/complianceQualityDatabase");
 
+          // Only re-judge documents that have been chunked. judgeEvidence falls
+          // back to extracted_text.slice(0, 8000) without chunks, so re-judging
+          // an unchunked document spends three LLM votes to reproduce exactly
+          // the cover-page verdict the re-judge exists to correct. Opt out with
+          // {"require_chunks": false} to force the old whole-corpus behaviour.
+          const requireChunks = body.require_chunks !== false;
+
           if (body.estimate) {
+            const readiness = await rejudgeReadiness(before);
             return c.json({
               success: true,
               before,
-              remaining: await countFindingsToRejudge(before),
+              require_chunks: requireChunks,
+              // `remaining` keeps its old meaning for existing callers.
+              remaining: requireChunks ? readiness.ready : readiness.eligible,
+              ...readiness,
             });
           }
 
           const { judgeEvidence } = await import("../../utils/complianceJudge");
-          const batch = await listFindingsToRejudge({ before, limit: 6 });
+          const batch = await listFindingsToRejudge({
+            before,
+            limit: 6,
+            requireChunks,
+          });
           const votes = Number(process.env.DOCUMENT_MAPPING_JUDGE_VOTES) || 3;
           const by = g.user?.email || "ai-review";
           let processed = 0;
@@ -604,8 +620,15 @@ export const obligationDocumentsRoutes = [
               );
             }
           }
-          const remaining = await countFindingsToRejudge(before);
-          return c.json({ success: true, before, processed, remaining });
+          const readiness = await rejudgeReadiness(before);
+          return c.json({
+            success: true,
+            before,
+            processed,
+            require_chunks: requireChunks,
+            remaining: requireChunks ? readiness.ready : readiness.eligible,
+            ...readiness,
+          });
         } catch (error) {
           safeLogger.error("❌ [ObligationDocs] rejudge error:", error);
           return c.json({ error: "Failed to re-judge findings" }, 500);

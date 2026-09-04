@@ -218,34 +218,101 @@ export async function listLinksPendingJudgement(opts?: {
  * cutoff so a UI loop terminates: each re-judge stamps judged_at = NOW()
  * (> before), so the row drops out of the next batch.
  */
+/**
+ * Does the chunk-embedding table exist yet?
+ *
+ * Referenced conditionally rather than unconditionally: PostgreSQL resolves
+ * table names at parse time, so a query naming a missing table fails outright
+ * (42P01) instead of degrading. On a deployment that has never enabled
+ * embeddings the table is simply absent, and re-judging must still work there.
+ */
+async function chunkTableExists(): Promise<boolean> {
+  try {
+    const r = await pool.query(
+      `SELECT to_regclass('public.document_chunk_embeddings') IS NOT NULL AS ok`,
+    );
+    return Boolean(r.rows[0]?.ok);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `requireChunks` restricts the batch to findings whose document has current
+ * chunk embeddings.
+ *
+ * This is what stops a bulk re-judge from being pure waste. judgeEvidence falls
+ * back to extracted_text.slice(0, 8000) when a document has no chunks, so
+ * re-judging one costs three LLM votes to reproduce the SAME cover-page verdict
+ * that made the re-judge necessary. Findings simply wait for the backfill to
+ * reach their document, and a later pass picks them up.
+ */
 export async function listFindingsToRejudge(opts: {
   before: string;
   limit?: number;
+  requireChunks?: boolean;
 }): Promise<{ obligation_id: number; document_id: number }[]> {
   await initEvidenceQualityTable();
   const limit = Math.min(40, Math.max(1, opts.limit ?? 8));
+  const gate =
+    opts.requireChunks && (await chunkTableExists())
+      ? `AND EXISTS (SELECT 1 FROM document_chunk_embeddings c
+                      WHERE c.document_id = q.document_id)`
+      : "";
   const result = await pool.query(
-    `SELECT obligation_id, document_id
-       FROM obligation_evidence_quality
-      WHERE status IN ('partial','missing_topic','needs_review')
-        AND judged_at < $1
-   ORDER BY judged_at ASC
+    `SELECT q.obligation_id, q.document_id
+       FROM obligation_evidence_quality q
+      WHERE q.status IN ('partial','missing_topic','needs_review')
+        AND q.judged_at < $1
+        ${gate}
+   ORDER BY q.judged_at ASC
       LIMIT $2`,
     [opts.before, limit],
   );
   return result.rows as { obligation_id: number; document_id: number }[];
 }
 
-export async function countFindingsToRejudge(before: string): Promise<number> {
+export async function countFindingsToRejudge(
+  before: string,
+  requireChunks = false,
+): Promise<number> {
   await initEvidenceQualityTable();
+  const gate =
+    requireChunks && (await chunkTableExists())
+      ? `AND EXISTS (SELECT 1 FROM document_chunk_embeddings c
+                      WHERE c.document_id = q.document_id)`
+      : "";
   const r = await pool.query(
     `SELECT COUNT(*)::int AS n
-       FROM obligation_evidence_quality
-      WHERE status IN ('partial','missing_topic','needs_review')
-        AND judged_at < $1`,
+       FROM obligation_evidence_quality q
+      WHERE q.status IN ('partial','missing_topic','needs_review')
+        AND q.judged_at < $1
+        ${gate}`,
     [before],
   );
   return r.rows[0]?.n || 0;
+}
+
+/**
+ * Scope the job before spending anything: how many findings are eligible, how
+ * many of their documents are chunked and therefore worth re-judging NOW, and
+ * how many are still waiting on the backfill.
+ */
+export async function rejudgeReadiness(before: string): Promise<{
+  eligible: number;
+  ready: number;
+  awaiting_chunks: number;
+  chunk_table: boolean;
+}> {
+  const eligible = await countFindingsToRejudge(before, false);
+  const hasTable = await chunkTableExists();
+  const ready = hasTable ? await countFindingsToRejudge(before, true) : 0;
+  return {
+    eligible,
+    ready,
+    awaiting_chunks: Math.max(0, eligible - ready),
+    chunk_table: hasTable,
+  };
 }
 
 export async function logLlmCall(input: {
