@@ -53,7 +53,7 @@ const checkInlineScripts = args.has("--check-inline-scripts");
 // CANNOT live in the source HTML — so under `--check-inline-scripts` these
 // pages would otherwise produce false positives.
 //
-// All 38 of the current dashboard pages are served by routes that flow
+// All current allowlisted dashboard pages are served by routes that flow
 // through `globalMiddleware`, so they are listed here. The allowlist
 // deliberately does NOT use a glob — adding a new HTML page is a conscious
 // act and must be paired with a deliberate add here, which is exactly the
@@ -99,6 +99,7 @@ const INLINE_SCRIPT_NONCE_ALLOWLIST = new Set([
   "dashboard/logs.html",
   "dashboard/migration.html",
   "dashboard/northstar-data.html",
+  "dashboard/notifications.html",
   "dashboard/okrs.html",
   "dashboard/onboarding.html",
   "dashboard/pdpl.html",

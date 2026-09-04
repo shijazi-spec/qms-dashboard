@@ -1,6 +1,7 @@
 import { sharedPool as pool } from "../../utils/sharedPool";
 import { PLAN_VERSION, SOURCE_DOC } from "../../utils/seeds/certificationMilestonePlan";
 import { logger as safeLogger } from "../../utils/logger";
+import { redactSensitiveDeep } from "../../utils/sensitiveRedaction";
 import {
   orderChain,
   milestoneState,
@@ -643,6 +644,9 @@ export const certificationMilestoneRoutes = [
           }
 
           const willBeDone = current.done_at === null;
+          const safeDoneBy = willBeDone
+            ? redactSensitiveDeep(user.email, "done_by")
+            : null;
           const updated = await client.query(
             `UPDATE certification_actions
                 SET done_at = CASE WHEN $2 THEN NOW() ELSE NULL END,
@@ -653,7 +657,7 @@ export const certificationMilestoneRoutes = [
                     verification_mode, evidence_source,
                     TO_CHAR(done_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS done_at,
                     done_by, evidence_policy_id, note, plan_version, source_doc`,
-            [actionKey, willBeDone, willBeDone ? user.email : null],
+            [actionKey, willBeDone, safeDoneBy],
           );
 
           // Derived completion (design spec §4.3): recompute the owning
