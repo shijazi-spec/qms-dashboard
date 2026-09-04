@@ -27,7 +27,7 @@
  * ways a dashboard link does not.
  */
 import type { DealComplianceReportRow } from "./duplicateRadarDatabase";
-import { ownerBreakdown, stageSummary, pct } from "./dealComplianceReportExport";
+import { ownerBreakdown, stageSummary, pct, REPORT_STAGES, sameStage } from "./dealComplianceReportExport";
 import { QUALITY_REPORT_RECIPIENTS } from "./resendMail";
 
 /** Owners worse than this are named individually in the email body. */
@@ -78,9 +78,17 @@ export interface MonthlyMissingDocsEmail {
 }
 
 export function buildMonthlyMissingDocsEmail(
-  rows: DealComplianceReportRow[],
+  allRows: DealComplianceReportRow[],
   opts: { periodLabel: string; inScope: number; dashboardUrl?: string },
 ): MonthlyMissingDocsEmail {
+  // Paid deals are owned by Customer Success, not Sales, once a deal is won
+  // (Sarah, 2026-09-03 — see REPORT_STAGES in dealComplianceReportExport.ts).
+  // They are out of scope for this Sales document-compliance email and must
+  // not appear in ANY figure it reports. Filter ONCE, here, before a single
+  // number is computed, so the subject line, the coverage line, the value at
+  // risk, the owner breakdown and the stage table all derive from the same
+  // in-scope set and can never disagree with each other.
+  const rows = allRows.filter((r) => REPORT_STAGES.some((s) => sameStage(s, r.stage)));
   const missing = rows.filter((r) => !r.compliant);
   const overallPct = pct(missing.length, rows.length);
   const atRisk = missing.reduce((n, r) => n + (r.amount || 0), 0);

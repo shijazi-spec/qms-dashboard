@@ -124,6 +124,10 @@ describe("the period key is the send-once guard", () => {
 });
 
 describe("the email content", () => {
+  // Paid is now OUT OF SCOPE (Customer Success owns those deals, not Sales —
+  // see REPORT_STAGES in dealComplianceReportExport.ts), so both "bad Paid"
+  // rows below are excluded from every figure. Only the Proposal (compliant)
+  // and Agreement Signed (missing) rows remain in scope.
   const rows = [
     deal({ stage: "Proposal", owner: "Clean Rep" }),
     bad({ stage: "Paid", owner: "Busy Rep", amount: 500000 }),
@@ -137,18 +141,19 @@ describe("the email content", () => {
   });
 
   it("puts the count and the rate in the subject", () => {
+    // In scope: 1 compliant Proposal + 1 missing Agreement Signed = 2 checked,
+    // 1 missing => 50%.
     expect(mail.subject).toContain("August 2026");
-    expect(mail.subject).toContain("3 deals missing documents");
-    expect(mail.subject).toContain("75%");
+    expect(mail.subject).toContain("1 deals missing documents");
+    expect(mail.subject).toContain("50%");
   });
 
   it("states the coverage, so the percentage cannot be read as the whole pipeline", () => {
-    expect(mail.text).toContain("4 of 10 in-scope deals had been checked");
-    expect(mail.html).toContain("4 of 10 in-scope deals had been checked");
+    expect(mail.text).toContain("2 of 10 in-scope deals had been checked");
+    expect(mail.html).toContain("2 of 10 in-scope deals had been checked");
   });
 
   it("names the owners and their incomplete counts", () => {
-    expect(mail.text).toContain("Busy Rep: 2 missing");
     expect(mail.text).toContain("Other Rep: 1 missing");
   });
 
@@ -156,13 +161,50 @@ describe("the email content", () => {
     expect(mail.text).not.toContain("Clean Rep");
   });
 
-  it("breaks the figures down by stage", () => {
-    expect(mail.text).toContain("Paid: 2/2 missing");
-    expect(mail.text).toContain("Agreement Signed: 1/1 missing");
+  it("does not name an owner whose only deals are out of scope (Paid)", () => {
+    expect(mail.text).not.toContain("Busy Rep");
+    expect(mail.html).not.toContain("Busy Rep");
   });
 
-  it("carries the value at risk", () => {
-    expect(mail.text).toContain("751,000");
+  it("breaks the figures down by stage, excluding Paid entirely", () => {
+    expect(mail.text).toContain("Agreement Signed: 1/1 missing");
+    expect(mail.text).not.toContain("Paid:");
+    expect(mail.html).not.toContain(">Paid<");
+  });
+
+  it("carries the value at risk, excluding the out-of-scope Paid amounts", () => {
+    // Only the Agreement Signed deal (SAR 1,000) is in scope; the two Paid
+    // deals (SAR 500,000 + SAR 250,000) must not be counted.
+    expect(mail.text).toContain("1,000");
+    expect(mail.text).not.toContain("751,000");
+  });
+
+  it("keeps the total and the per-stage breakdown in agreement — the bug this fix closes", () => {
+    // Before this fix, the totals were computed from ALL rows (including
+    // out-of-scope Paid deals) while the stage table was filtered to
+    // REPORT_STAGES, so the value at risk in the headline could not be
+    // reconstructed from the stage rows underneath it. Assert the invariant
+    // directly from the numbers embedded in the email text rather than
+    // hardcoding both sides, so this catches a regression from either end.
+    const totalMatch = mail.text.match(
+      /missing required documents \(\d+%\), covering SAR ([\d,]+)\./,
+    );
+    expect(totalMatch).not.toBeNull();
+    const total = Number(totalMatch![1].replace(/,/g, ""));
+
+    // Isolate the "By stage" block only — "By owner" lines use the same
+    // "— SAR N" suffix and would double-count if included.
+    const stageBlockMatch = mail.text.match(/By stage:\n([\s\S]*?)\n\nBy owner:/);
+    expect(stageBlockMatch).not.toBeNull();
+    const stageLines = [...stageBlockMatch![1].matchAll(/— SAR ([\d,]+)$/gm)];
+    expect(stageLines.length).toBeGreaterThan(0);
+    const stageSum = stageLines.reduce(
+      (n, m) => n + Number(m[1].replace(/,/g, "")),
+      0,
+    );
+
+    expect(total).toBe(stageSum);
+    expect(total).toBe(1000);
   });
 
   it("links to the dashboard instead of attaching per-deal detail", () => {
@@ -175,10 +217,12 @@ describe("the email content", () => {
   });
 
   it("escapes owner names into the HTML", () => {
-    const m = buildMonthlyMissingDocsEmail([bad({ owner: '<script>x</script>' })], {
-      periodLabel: "August 2026",
-      inScope: 1,
-    });
+    // stage must be in scope (Paid, the deal()/bad() default, is now filtered
+    // out) or this deal never reaches the owner table at all.
+    const m = buildMonthlyMissingDocsEmail(
+      [bad({ owner: "<script>x</script>", stage: "Proposal" })],
+      { periodLabel: "August 2026", inScope: 1 },
+    );
     expect(m.html).not.toContain("<script>x</script>");
     expect(m.html).toContain("&lt;script&gt;");
   });
@@ -192,12 +236,15 @@ describe("the email content", () => {
   });
 
   it("omits the link section entirely when no dashboard URL is configured", () => {
-    const m = buildMonthlyMissingDocsEmail(rows, { periodLabel: "August 2026", inScope: 4 });
+    const m = buildMonthlyMissingDocsEmail(rows, { periodLabel: "August 2026", inScope: 2 });
     expect(m.html).not.toContain("Open Deal Compliance");
   });
 
   it("says all deals were checked once coverage is complete", () => {
-    const m = buildMonthlyMissingDocsEmail(rows, { periodLabel: "August 2026", inScope: 4 });
-    expect(m.text).toContain("All 4 in-scope deals had been checked");
+    // Only 2 of the 4 fixture rows are in scope (Paid is excluded), so
+    // inScope must match that in-scope count, not the raw row count, for
+    // the "fully checked" branch to be the one under test.
+    const m = buildMonthlyMissingDocsEmail(rows, { periodLabel: "August 2026", inScope: 2 });
+    expect(m.text).toContain("All 2 in-scope deals had been checked");
   });
 });
