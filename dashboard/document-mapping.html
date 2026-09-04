@@ -557,7 +557,12 @@
                     const safeTitle = escAttr(s.title || '');
                     const safeExcerpt = (s.excerpt || '').replace(/</g, '&lt;');
                     const status = s.extraction_status || '—';
-                    const score = s.score != null ? (' · score ' + s.score) : '';
+                    // Say WHY this document surfaced: how many of the clause's
+                    // own terms were found in its body. A bare score tells the
+                    // reviewer nothing they can check.
+                    const score = (s.terms_matched != null && s.terms_total)
+                        ? (' · matched ' + s.terms_matched + ' of ' + s.terms_total + ' clause terms')
+                        : (s.score != null ? (' · score ' + s.score) : '');
                     return ''
                         + '<div class="border border-gray-200 rounded-lg p-3 fade-in" data-testid="suggestion-' + idx + '">'
                             + '<div class="flex items-start justify-between gap-3">'

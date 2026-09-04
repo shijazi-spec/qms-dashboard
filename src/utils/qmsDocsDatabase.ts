@@ -115,6 +115,20 @@ export async function initQmsDocsTable(): Promise<void> {
        ON qms_uploaded_documents (extraction_status)`,
   );
 
+  // Full-text search over the WHOLE extracted body, for the Mapping Console's
+  // clause -> document search. Before this, that search read only the first
+  // 1500 chars of the 25 most recently uploaded documents, so it could not see
+  // what a document actually says further down — which is exactly the question
+  // it is asked. The expression must match the one in the query verbatim or
+  // Postgres will not use the index. 'english' gives stemming (processing ->
+  // process); Arabic text is still tokenised and exact-matchable, just
+  // unstemmed, which is why the Console also keeps a literal-substring pass.
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_qms_uploaded_documents_fts
+       ON qms_uploaded_documents
+    USING GIN (to_tsvector('english', COALESCE(extracted_text, '')))`,
+  );
+
   initialized = true;
   logger.info("✅ [QmsDocsDB] qms_uploaded_documents table ready");
 }

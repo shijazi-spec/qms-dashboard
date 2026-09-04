@@ -639,76 +639,121 @@ export const obligationDocumentsRoutes = [
             return c.json({ error: "Obligation not found" }, 404);
           const ob = obRes.rows[0];
 
-          // Candidate documents: those tagged with the same regulation_code
-          // OR (fallback) any document that has real extracted text.
+          // Full-corpus, full-body search. The previous implementation read
+          // LEFT(extracted_text, 1500) from the 25 most recently uploaded rows,
+          // so it judged every clause of every framework against a cover page
+          // from the same fixed 25-document window. It now ranks EVERY document
+          // that has extracted text, against its whole body, over the GIN
+          // full-text index created in qmsDocsDatabase (the to_tsvector
+          // expression here must stay identical to the indexed one).
           //
-          // `extraction_status <> 'placeholder'` is load-bearing. Register
+          // `extraction_status <> 'placeholder'` is still load-bearing. Register
           // entries awaiting their file upload project a row whose only text is
-          // the register's own blurb ("Controlled document (WP-…) — pending file
-          // upload"). Those matched every framework here, scored 0 against every
-          // clause, and — because an all-zero sort is a no-op — were returned in
-          // `uploaded_at DESC` order, i.e. the SAME list for every clause in
-          // every framework, presented as if it were a relevance ranking.
-          const docsRes = await sharedPool.query(
-            `SELECT id, title, mime_type, regulation_codes,
-                    LEFT(COALESCE(extracted_text,''), 1500) AS excerpt,
-                    extraction_status
-               FROM qms_uploaded_documents
-              WHERE COALESCE(extraction_status, '') <> 'placeholder'
-                AND (
-                     regulation_codes && ARRAY[$1]::text[]
-                  OR (regulation_codes IS NULL AND extracted_text IS NOT NULL)
-                )
-              ORDER BY uploaded_at DESC
-              LIMIT 25`,
-            [ob.regulation_code],
+          // the register's own blurb ("Controlled document (WP-...) - pending
+          // file upload"). Those matched every framework, scored 0 against every
+          // clause, and — an all-zero sort being a no-op — came back in
+          // uploaded_at order, i.e. the SAME list every time, dressed up as a
+          // relevance ranking.
+          const STOP_WORDS = new Set([
+            "the", "and", "for", "with", "that", "this", "from", "shall",
+            "must", "are", "its", "their", "other", "within", "into", "upon",
+            "been", "such", "any", "all", "which", "when", "where", "should",
+          ]);
+          const obKeywords: string[] = Array.from(
+            new Set(
+              String(ob.title || "")
+                .toLowerCase()
+                .split(/[^a-z0-9]+/)
+                .filter((w: string) => w.length >= 4 && !STOP_WORDS.has(w)),
+            ),
           );
 
-          // Cheap heuristic: keyword overlap between the obligation title and
-          // the document excerpt.
-          const obKeywords = String(ob.title || "")
-            .toLowerCase()
-            .split(/[^a-z0-9]+/)
-            .filter((w: string) => w.length >= 4);
+          // The real size of the searched corpus. Reported to the user so
+          // "N document(s) were checked" states what was actually examined —
+          // the old number was `LIMIT 25` wearing a disguise.
+          const consideredRes = await sharedPool.query(
+            `SELECT COUNT(*)::int AS n
+               FROM qms_uploaded_documents
+              WHERE COALESCE(extraction_status, '') <> 'placeholder'
+                AND extracted_text IS NOT NULL
+                AND extracted_text <> ''`,
+          );
+          const consideredCount: number = consideredRes.rows[0]?.n ?? 0;
 
-          // A candidate must actually match something. Scoring zero means "no
-          // evidence of relevance", which is a result worth reporting honestly —
-          // never a ranked suggestion. Framework tagging alone (+5) is not
-          // relevance either, so the bar sits above it.
-          const MIN_SUGGEST_SCORE = 10;
+          // OR-joined tsquery. plainto_tsquery ANDs its terms, which returns
+          // nothing for all but the shortest clause titles; ranking is what
+          // separates a document matching four terms from one matching one.
+          const tsQuery = obKeywords.join(" | ");
 
-          const scored = docsRes.rows.map((d: any) => {
-            const ex = String(d.excerpt || "").toLowerCase();
-            let score = 0;
-            for (const k of obKeywords) {
-              if (ex.includes(k)) score += 10;
-            }
-            if (
-              Array.isArray(d.regulation_codes) &&
-              d.regulation_codes.includes(ob.regulation_code)
-            ) {
-              score += 5;
-            }
-            return {
-              document_id: d.id,
-              title: d.title,
-              excerpt: d.excerpt,
-              extraction_status: d.extraction_status,
-              score,
-            };
-          });
+          let scored: any[] = [];
+          if (tsQuery && consideredCount > 0) {
+            const docsRes = await sharedPool.query(
+              `WITH q AS (SELECT to_tsquery('english', $1) AS tsq)
+               SELECT d.id, d.title, d.mime_type, d.regulation_codes,
+                      d.extraction_status,
+                      ts_rank_cd(
+                        to_tsvector('english', COALESCE(d.extracted_text, '')),
+                        q.tsq
+                      ) AS fts_rank,
+                      -- How many DISTINCT clause terms appear in the body.
+                      -- Plain containment, not a second tsvector pass: building
+                      -- a tsvector of a 50k-char body once per term per row is
+                      -- the expensive way to ask a cheap question, and this
+                      -- also works for the Arabic documents, which 'english'
+                      -- does not stem.
+                      (SELECT COUNT(*)::int
+                         FROM unnest($2::text[]) AS w
+                        WHERE d.extracted_text ILIKE '%' || w || '%') AS terms_matched,
+                      ts_headline(
+                        'english', COALESCE(d.extracted_text, ''), q.tsq,
+                        'MaxFragments=3, MinWords=8, MaxWords=26, FragmentDelimiter=" ... ", StartSel="<<", StopSel=">>"'
+                      ) AS snippet
+                 FROM qms_uploaded_documents d, q
+                WHERE COALESCE(d.extraction_status, '') <> 'placeholder'
+                  AND d.extracted_text IS NOT NULL
+                  AND to_tsvector('english', COALESCE(d.extracted_text, '')) @@ q.tsq
+                ORDER BY terms_matched DESC, fts_rank DESC
+                LIMIT 10`,
+              [tsQuery, obKeywords],
+            );
 
-          const ranked = scored
-            .filter((d: any) => d.score >= MIN_SUGGEST_SCORE)
-            .sort((a: any, b: any) => b.score - a.score)
-            .slice(0, 10);
+            // Every row here matched at least one clause term in the body, so
+            // the score reports evidence rather than manufacturing a ranking:
+            // how many DISTINCT clause terms the document actually contains,
+            // plus a small nudge for carrying the framework tag.
+            scored = docsRes.rows.map((d: any) => {
+              const termsMatched = Number(d.terms_matched) || 0;
+              let score = termsMatched * 10;
+              if (
+                Array.isArray(d.regulation_codes) &&
+                d.regulation_codes.includes(ob.regulation_code)
+              ) {
+                score += 5;
+              }
+              return {
+                document_id: d.id,
+                title: d.title,
+                // The passage that matched, not the first page — this is what
+                // makes the result reviewable rather than a bare filename.
+                excerpt: d.snippet,
+                extraction_status: d.extraction_status,
+                terms_matched: termsMatched,
+                terms_total: obKeywords.length,
+                score,
+              };
+            });
+          }
+
+          // Already ordered and capped by the query; the `@@` match is the
+          // relevance gate, so there is no arbitrary score floor to apply.
+          const ranked = scored;
 
           // Machine-readable reason so the UI can say something true rather
           // than rendering an empty list with no explanation.
           let empty_reason: string | null = null;
           if (ranked.length === 0) {
             empty_reason =
-              docsRes.rows.length === 0
+              consideredCount === 0
                 ? "no_documents_with_content"
                 : "no_relevant_match";
           }
@@ -718,7 +763,7 @@ export const obligationDocumentsRoutes = [
             obligation_id: obligationId,
             obligation_code: ob.obligation_code,
             candidates: ranked,
-            candidates_considered: docsRes.rows.length,
+            candidates_considered: consideredCount,
             empty_reason,
           });
         } catch (error) {
