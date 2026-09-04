@@ -32,8 +32,16 @@ function runNpm(args) {
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
   if (result.status !== 0) {
-    throw new Error(`npm ${args.join(' ')} failed with exit code ${result.status}`);
+    const error = new Error(`npm ${args.join(' ')} failed with exit code ${result.status}`);
+    error.npmOutput = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+    throw error;
   }
+}
+
+export function isInvalidPackageTreeAuditError(error) {
+  return /invalid package tree|rebuild your package-lock\.json/i.test(
+    `${error?.message ?? ''}\n${error?.npmOutput ?? ''}`,
+  );
 }
 
 export function assertNoLegacyProviderUtils(lockfile) {
@@ -119,7 +127,21 @@ async function main() {
   assertEnginesSupportRuntimeNode(lockfile);
 
   console.log('[harden-mastra-output] auditing generated production dependencies');
-  runNpm(['audit', '--omit=dev']);
+  try {
+    runNpm(['audit', '--omit=dev']);
+  } catch (error) {
+    if (!isInvalidPackageTreeAuditError(error)) throw error;
+    console.warn(
+      '[harden-mastra-output] audit rejected a stale package tree; rebuilding it once and retrying',
+    );
+    runNpm(['install', '--omit=dev', '--no-audit']);
+    const rebuiltLockfile = JSON.parse(
+      await readFile(resolve(outputDir, 'package-lock.json'), 'utf8'),
+    );
+    assertNoLegacyProviderUtils(rebuiltLockfile);
+    assertEnginesSupportRuntimeNode(rebuiltLockfile);
+    runNpm(['audit', '--omit=dev']);
+  }
   console.log('[harden-mastra-output] deployment dependency tree is clean');
 }
 
