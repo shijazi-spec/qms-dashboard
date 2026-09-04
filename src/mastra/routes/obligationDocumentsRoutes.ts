@@ -629,7 +629,7 @@ export const obligationDocumentsRoutes = [
 
           const { sharedPool } = await import("../../utils/sharedPool");
           const obRes = await sharedPool.query(
-            `SELECT o.id, o.obligation_code, o.title, r.regulation_code
+            `SELECT o.id, o.obligation_code, o.title, o.description, r.regulation_code
                FROM obligations o
                JOIN regulations r ON o.regulation_id = r.id
               WHERE o.id = $1`,
@@ -744,9 +744,87 @@ export const obligationDocumentsRoutes = [
             });
           }
 
-          // Already ordered and capped by the query; the `@@` match is the
-          // relevance gate, so there is no arbitrary score floor to apply.
-          const ranked = scored;
+          // Stage 2 — semantic pass. Full-text finds documents that use the
+          // clause's WORDS; this finds ones that satisfy it in different words,
+          // which is most of them: a clause saying "nonconformity and
+          // corrective action" is answered by a procedure that says "raising
+          // and closing a CAPA" and shares not one search term with it.
+          //
+          // Additive and best-effort. Every failure path returns [] and leaves
+          // the full-text ranking exactly as it was, so the Console degrades to
+          // Stage 1 rather than breaking when embeddings are off or OpenAI is
+          // unreachable.
+          const byId = new Map<number, any>();
+          for (const s of scored) {
+            byId.set(s.document_id, { ...s, match_via: "text" });
+          }
+
+          try {
+            const { semanticDocumentCandidates } = await import(
+              "../../utils/documentChunkEmbeddings"
+            );
+            const clauseText = [ob.obligation_code, ob.title, ob.description]
+              .filter(Boolean)
+              .join(" — ");
+            const semantic = await semanticDocumentCandidates(clauseText, {
+              limit: 10,
+            });
+
+            if (semantic.length > 0) {
+              // Titles for documents the text pass never surfaced.
+              const unseen = semantic
+                .map((s: any) => s.document_id)
+                .filter((id: number) => !byId.has(id));
+              const titles = new Map<number, any>();
+              if (unseen.length > 0) {
+                const tRes = await sharedPool.query(
+                  `SELECT id, title, extraction_status, regulation_codes
+                     FROM qms_uploaded_documents WHERE id = ANY($1::int[])`,
+                  [unseen],
+                );
+                for (const r of tRes.rows) titles.set(r.id, r);
+              }
+
+              for (const hit of semantic) {
+                const sim = Number(hit.best_similarity) || 0;
+                const existing = byId.get(hit.document_id);
+                if (existing) {
+                  // Both passes agree — the strongest signal available here.
+                  existing.match_via = "both";
+                  existing.semantic_similarity = Number(sim.toFixed(3));
+                  existing.score += Math.round(sim * 20);
+                  if (hit.chunks?.[0]?.chunk_text) {
+                    existing.matched_passage = hit.chunks[0].chunk_text;
+                  }
+                  continue;
+                }
+                const meta = titles.get(hit.document_id);
+                if (!meta) continue;
+                byId.set(hit.document_id, {
+                  document_id: hit.document_id,
+                  title: meta.title,
+                  // The passage itself: for a semantic-only hit there is no
+                  // keyword to highlight, so the passage IS the justification.
+                  excerpt: hit.chunks?.[0]?.chunk_text || "",
+                  matched_passage: hit.chunks?.[0]?.chunk_text || "",
+                  extraction_status: meta.extraction_status,
+                  terms_matched: 0,
+                  terms_total: obKeywords.length,
+                  semantic_similarity: Number(sim.toFixed(3)),
+                  match_via: "semantic",
+                  score: Math.round(sim * 100),
+                });
+              }
+            }
+          } catch (err) {
+            safeLogger.warn(
+              `[ObligationDocs] semantic pass unavailable: ${(err as Error).message}`,
+            );
+          }
+
+          const ranked = Array.from(byId.values())
+            .sort((a: any, b: any) => b.score - a.score)
+            .slice(0, 10);
 
           // Machine-readable reason so the UI can say something true rather
           // than rendering an empty list with no explanation.

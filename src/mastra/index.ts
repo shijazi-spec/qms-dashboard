@@ -575,6 +575,22 @@ export const mastra = new Mastra({
         { name: "QualityAudit", fn: () => runQualityAuditIfStale() },
         { name: "KPIAutoCalc", fn: () => runKPIAutoCalcIfStale() },
         { name: "CsOverlapScan", fn: () => runCsOverlapScanIfStale() },
+        // Chunk-embedding backfill behind the Mapping Console's semantic pass
+        // and the evidence judge's retrieve-then-verify excerpt. Deliberately
+        // bounded to a few documents per tick: 14 modules share one OpenAI key
+        // on this deployment, so the corpus embeds gradually over several hours
+        // rather than in one burst that starves everything else. Hard no-op
+        // unless DOCUMENT_MAPPING_EMBEDDINGS=true.
+        {
+          name: "DocumentChunkEmbeddings",
+          fn: async () => {
+            const { backfillDocumentChunks } = await import(
+              "../utils/documentChunkEmbeddings"
+            );
+            const r = await backfillDocumentChunks(5);
+            return { ran: r.processed > 0, ageHours: 0 };
+          },
+        },
         // Deletion-feed sweep — sync-independent (~every 3h). Prunes records
         // Zoho deleted from the mirror + pending-delete ledger, so stuck syncs
         // no longer leave deleted data lingering (Sarah 2026-07-23).

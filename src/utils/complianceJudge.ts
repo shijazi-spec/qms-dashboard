@@ -280,6 +280,44 @@ export async function judgeEvidence(
     /* best-effort guard; fall through to LLM */
   }
 
+  // Retrieve-then-verify: hand the judge the passages that relate to THIS
+  // clause, not the opening of the file.
+  //
+  // buildJudgePrompt slices text.slice(0, JUDGE_MAX_DOC_CHARS), so a 40-page
+  // policy was judged on its cover page and table of contents. Every clause it
+  // satisfies from page 9 onward came back "missing_topic" — a verdict about
+  // the document's front matter, presented as a verdict about the document.
+  //
+  // Best-effort by design: no embeddings, no OpenAI key, no chunks yet, or
+  // nothing above the similarity floor all fall through to the original full
+  // text, so behaviour is unchanged wherever this is not switched on.
+  let judgeText: string = doc.extracted_text;
+  let excerptSource = "full_text";
+  try {
+    const { relevantExcerptFor } = await import("./documentChunkEmbeddings");
+    const clauseText = [ob.obligation_code, ob.title, ob.description]
+      .filter(Boolean)
+      .join(" — ");
+    const rel = await relevantExcerptFor(
+      clauseText,
+      documentId,
+      JUDGE_MAX_DOC_CHARS,
+    );
+    if (rel && rel.text.trim().length >= 50) {
+      judgeText = rel.text;
+      excerptSource = `chunks:${rel.chunks.length}`;
+    }
+  } catch (err) {
+    logger.warn(
+      `[complianceJudge] chunk retrieval unavailable, judging on full text: ${(err as Error).message}`,
+    );
+  }
+  if (excerptSource !== "full_text") {
+    logger.info(
+      `[complianceJudge] obligation ${obligationId} / document ${documentId}: judging on ${excerptSource}`,
+    );
+  }
+
   const prompt = buildJudgePrompt({
     obligation: {
       code: ob.obligation_code,
@@ -287,7 +325,7 @@ export async function judgeEvidence(
       description: ob.description,
       evidence_requirements: ob.evidence_requirements,
     },
-    document: { title: doc.title, text: doc.extracted_text },
+    document: { title: doc.title, text: judgeText },
   });
 
   const start = Date.now();

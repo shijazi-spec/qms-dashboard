@@ -557,12 +557,27 @@
                     const safeTitle = escAttr(s.title || '');
                     const safeExcerpt = (s.excerpt || '').replace(/</g, '&lt;');
                     const status = s.extraction_status || '—';
-                    // Say WHY this document surfaced: how many of the clause's
-                    // own terms were found in its body. A bare score tells the
-                    // reviewer nothing they can check.
-                    const score = (s.terms_matched != null && s.terms_total)
-                        ? (' · matched ' + s.terms_matched + ' of ' + s.terms_total + ' clause terms')
-                        : (s.score != null ? (' · score ' + s.score) : '');
+                    // Say WHY this document surfaced, in terms the reviewer can
+                    // check: how many of the clause's own words are in its body,
+                    // and whether the AI matched it on meaning rather than
+                    // wording. A bare score is not auditable.
+                    var terms = (s.terms_matched != null && s.terms_total)
+                        ? (s.terms_matched + ' of ' + s.terms_total + ' clause terms')
+                        : null;
+                    var sim = s.semantic_similarity != null
+                        ? ('AI semantic match ' + s.semantic_similarity)
+                        : null;
+                    var why;
+                    if (s.match_via === 'semantic') {
+                        why = sim + ' · wording differs from the clause';
+                    } else if (s.match_via === 'both') {
+                        why = terms + ' · ' + sim;
+                    } else if (terms) {
+                        why = terms;
+                    } else {
+                        why = (s.score != null ? ('score ' + s.score) : '');
+                    }
+                    const score = why ? (' · ' + why) : '';
                     return ''
                         + '<div class="border border-gray-200 rounded-lg p-3 fade-in" data-testid="suggestion-' + idx + '">'
                             + '<div class="flex items-start justify-between gap-3">'
