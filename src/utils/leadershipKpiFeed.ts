@@ -1131,7 +1131,7 @@ const KPI_ENTRY: Record<string, { where: string; route: string }> = {
   },
   "GRC-KPI-008": {
     where: "QMS → Compliance: ensure each applicable obligation has a linked control or policy.",
-    route: "/compliance",
+    route: "/certification-milestones",
   },
   "GRC-KPI-003": {
     where: "QMS → Audit Readiness: compile evidence packs and mark them reviewed/submitted.",
@@ -1155,7 +1155,7 @@ const KPI_ENTRY: Record<string, { where: string; route: string }> = {
   },
   "GRC-KPI-007": {
     where: "QMS → Compliance: record compliance assessments as 'compliant', or mark obligations exempt/accepted.",
-    route: "/compliance",
+    route: "/certification-milestones",
   },
   "QM-KPI-008": {
     where: "QMS → Policies: publish at least one governance policy per business unit (the 13 BUs are pre-seeded).",

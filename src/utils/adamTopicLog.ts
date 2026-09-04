@@ -37,7 +37,7 @@ export const PLATFORM_SECTIONS: SectionDef[] = [
     keywords: ["quality report", "quality reports", "business unit", "bu report", "per bu"] },
   { key: "audits", label: "Internal Audits — audit programme and findings", href: "/audits",
     keywords: ["audit", "audits", "internal audit", "finding", "findings", "nonconformity", "nonconformance"] },
-  { key: "compliance", label: "Compliance — obligations and audit readiness", href: "/compliance",
+  { key: "compliance", label: "Compliance — obligations and audit readiness", href: "/certification-milestones",
     keywords: ["compliance", "obligation", "obligations", "pdpl", "iso", "regulation", "regulatory"] },
   { key: "risks", label: "Risk Management — the risk register", href: "/risks",
     keywords: ["risk", "risks", "risk register", "mitigation"] },

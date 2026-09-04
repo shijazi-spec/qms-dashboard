@@ -449,21 +449,36 @@ export const staticPageRoutes = [
         `To access the Audits dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
       ),
   },
-  // /compliance → /api/compliance GET — governance + executive.
+  // /certification-milestones → /api/compliance GET — governance + executive.
+  // Page was renamed from "Compliance" to "Certification Milestones"; the
+  // backing API keeps its original /api/compliance path.
   {
-    path: "/compliance",
+    path: "/certification-milestones",
     method: "GET",
     createHandler: async () =>
       serveDashboardPageWithRoleGate(
         "compliance.html",
         GOVERNANCE_AND_EXECUTIVE,
-        "Compliance Setup Required",
-        `To access the Compliance dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+        "Certification Milestones Setup Required",
+        `To access the Certification Milestones dashboard, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
       ),
+  },
+  // /compliance → legacy alias. The page was renamed to "Certification
+  // Milestones" and its canonical URL is now /certification-milestones.
+  // This path permanently redirects (301) so old bookmarks / deep links
+  // land on the new URL and the address bar reflects the new name. The
+  // role gate lives on the /certification-milestones target — a redirect
+  // leaks nothing, so no gating here. Mirrors the /policies →
+  // /integrated-qms redirect below.
+  {
+    path: "/compliance",
+    method: "GET",
+    createHandler: async () => async (c: any) =>
+      c.redirect("/certification-milestones", 301),
   },
   // /document-mapping → AI-assisted document/clause mapping workspace
   // (coverage, suggest, judge, audit-readiness PDFs). Same role gate as
-  // /compliance because it talks to the same /api/compliance/* endpoints.
+  // /certification-milestones because it talks to the same /api/compliance/* endpoints.
   {
     path: "/document-mapping",
     method: "GET",
@@ -478,7 +493,7 @@ export const staticPageRoutes = [
   // /documentation-tracker → Documentation Live Tracker. Shows the true state
   // of the controlled documentation library on the file server (what exists,
   // whether codes are valid, how far review has progressed). Same role gate as
-  // /compliance; the drift test below asserts the page gate and the backing API
+  // /certification-milestones; the drift test below asserts the page gate and the backing API
   // rule never diverge.
   {
     path: "/documentation-tracker",
@@ -494,7 +509,7 @@ export const staticPageRoutes = [
   // /audit-readiness → Compliance v2 Audit Run engine. Reuses the
   // existing audits + grc_audit_findings infrastructure but is scoped
   // to compliance audits (audit_kind='compliance'). Role-gated to the
-  // same governance/executive set as /compliance.
+  // same governance/executive set as /certification-milestones.
   {
     path: "/audit-readiness",
     method: "GET",
@@ -509,7 +524,7 @@ export const staticPageRoutes = [
   // /import-review → Compliance v2 Ingest Standard from Document
   // review screen. Walks the user through editing the AI-extracted
   // draft of a regulation's clauses before bulk-inserting them. Same
-  // role gate as /compliance.
+  // role gate as /certification-milestones.
   {
     path: "/import-review",
     method: "GET",
@@ -921,7 +936,7 @@ export const ROLE_GATED_DASHBOARD_ROUTES: ReadonlyArray<{
     backingApiPath: "/api/audits",
   },
   {
-    path: "/compliance",
+    path: "/certification-milestones",
     allowedRoles: GOVERNANCE_AND_EXECUTIVE,
     backingApiPath: "/api/compliance",
   },
@@ -986,7 +1001,7 @@ export const ROLE_GATED_DASHBOARD_ROUTES: ReadonlyArray<{
   // /grc aggregates audits + compliance + risks + reviews; all share the
   // same governance+executive read allowlist, so /api/audits is a faithful
   // representative and any divergence in any of those rules will be
-  // caught individually by /audits, /compliance, /risks, /reviews.
+  // caught individually by /audits, /certification-milestones, /risks, /reviews.
   {
     path: "/grc",
     allowedRoles: GOVERNANCE_AND_EXECUTIVE,

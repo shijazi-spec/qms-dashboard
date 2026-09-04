@@ -242,11 +242,11 @@ export const PLATFORM_QC_MANIFEST: QCTestCase[] = [
     path: "/api/policies/summary",
     expectedStatus: 200,
   },
-  // --- Compliance Tracker (/compliance)
+  // --- Compliance Tracker (/certification-milestones)
   {
     id: "compliance-regulations",
     screenName: "Compliance Tracker",
-    screenRoute: "/compliance",
+    screenRoute: "/certification-milestones",
     functionalityName: "List regulations",
     method: "GET",
     path: "/api/compliance/regulations",
@@ -255,7 +255,7 @@ export const PLATFORM_QC_MANIFEST: QCTestCase[] = [
   {
     id: "compliance-obligations",
     screenName: "Compliance Tracker",
-    screenRoute: "/compliance",
+    screenRoute: "/certification-milestones",
     functionalityName: "List obligations",
     method: "GET",
     path: "/api/compliance/obligations",
@@ -264,7 +264,7 @@ export const PLATFORM_QC_MANIFEST: QCTestCase[] = [
   {
     id: "compliance-summary",
     screenName: "Compliance Tracker",
-    screenRoute: "/compliance",
+    screenRoute: "/certification-milestones",
     functionalityName: "Compliance summary",
     method: "GET",
     path: "/api/compliance/summary",

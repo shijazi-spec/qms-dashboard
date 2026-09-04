@@ -169,7 +169,7 @@ export const ROUTE_MANIFEST = {
 
   pages: [
     '/', '/dashboard', '/dashboard/:name', '/login', '/admin', '/users', '/accept-invite',
-    '/qms', '/sandbox', '/crm', '/audits', '/compliance', '/document-mapping',
+    '/qms', '/sandbox', '/crm', '/audits', '/certification-milestones', '/document-mapping',
     '/audit-readiness', '/import-review',
     '/integrated-qms', '/policies', '/reviews', '/risks', '/grc', '/pdpl', '/feedback', '/guide',
     '/migration', '/logs', '/ai-approvals', '/intake', '/external-audits',

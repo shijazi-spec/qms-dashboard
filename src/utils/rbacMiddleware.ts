@@ -725,8 +725,8 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
 
-  // Certification Milestones — powers the /compliance page's Certification
-  // Milestones section. Exact-path match (no subtree) since the endpoint has
+  // Certification Milestones — powers the /certification-milestones page's
+  // Certification Milestones section. Exact-path match (no subtree) since the endpoint has
   // no sub-resources today; mirrors the handler's own requireRole list.
   {
     pattern: /^\/api\/certification-milestones$/,

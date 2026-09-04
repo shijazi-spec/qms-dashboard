@@ -3,7 +3,7 @@
  * Task #461 (extended in Task #471) in
  * `src/mastra/routes/staticPageRoutes.ts`:
  *
- *   /sandbox, /audits, /compliance, /integrated-qms, /reviews, /risks,
+ *   /sandbox, /audits, /certification-milestones, /integrated-qms, /reviews, /risks,
  *   /grc, /pdpl, /feedback, /guide, /migration, /logs, /ai-approvals,
  *   /intake, /external-audits, /vendors, /tablef, /infographic,
  *   /executive.html, /grc.html, /consultant.html
@@ -180,7 +180,7 @@ await suite.test("matrix includes every route named by Task #461 + Task #471", (
   // a 301 redirect to /integrated-qms (covered by its own test below), so it
   // is no longer a gated page shell and must NOT appear in this matrix.
   const required = [
-    "/sandbox", "/audits", "/compliance", "/integrated-qms", "/reviews",
+    "/sandbox", "/audits", "/certification-milestones", "/integrated-qms", "/reviews",
     "/risks", "/grc", "/pdpl", "/feedback", "/guide", "/migration",
     "/logs", "/ai-approvals", "/intake", "/external-audits", "/vendors",
     "/tablef", "/infographic", "/executive.html", "/grc.html",
