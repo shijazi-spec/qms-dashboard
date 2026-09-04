@@ -4110,11 +4110,14 @@ export const duplicateRadarRoutes = [
   },
 
   {
-    // Document-compliance report for the Head of Sales: missing-document rate,
-    // which owner it sits with, and one sheet per stage (Proposal / Agreement
-    // Signed / Paid). Reads the STORED checks kept current by the background
-    // sweep, so it makes no Zoho calls and is instant.
-    // GET /api/duplicates/deal-compliance.xlsx?segment=
+    // JSON preview for the covering EMAIL that goes out with the workbook
+    // download (Sarah 2026-09-04: "prepare the email that will be sent...").
+    // NOT the monthly cron email (missingDocsMonthlyReport.ts) and it sends
+    // nothing itself — the dashboard turns this JSON into email text the user
+    // copies by hand. Scoped to REPORT_STAGES (Sales-only, Proposal +
+    // Agreement Signed), same as the monthly email: Paid deals are Customer
+    // Success's and must not appear in an email addressed to Sales, even
+    // though the XLSX download below covers Paid too.
     path: "/api/duplicates/deal-compliance/email",
     method: "GET" as const,
     createHandler: async () => async (c: any) => {
@@ -4147,7 +4150,12 @@ export const duplicateRadarRoutes = [
             (s) => (s || "").trim().toLowerCase() === (r.stage || "").trim().toLowerCase(),
           ),
         );
-        const neverChecked = await countNeverChecked();
+        // Scoped to REPORT_STAGES, matching `rows` above and the monthly-email
+        // pattern in scheduledJobs.ts / missing-docs-report/preview: `rows` is
+        // already Sales-only, so the never-checked count that pads in_scope
+        // must exclude never-checked Paid deals too, or in_scope would count
+        // Paid deals this endpoint's own numerator never mentions.
+        const neverChecked = await countNeverChecked(REPORT_STAGES);
         const missing = rows.filter((r: any) => !r.compliant);
         // Deals carrying NO Amount (Sarah 2026-09-03: "it doesn't make any
         // sense that I have been in the agreement signed or proposal without
@@ -4225,6 +4233,10 @@ export const duplicateRadarRoutes = [
           periodYear: Number.isFinite(xYear) ? xYear : undefined,
           periodQuarter: Number.isFinite(xQuarter) ? xQuarter : undefined,
         });
+        // Unscoped (defaults to DEAL_COMPLIANCE_STAGES / EXPORT_STAGES — all
+        // three stages including Paid), matching what buildDealComplianceReportSheets
+        // itself now covers below — unlike /deal-compliance/email and the
+        // monthly email, which are Sales-only and must pass REPORT_STAGES.
         const neverChecked = await countNeverChecked();
         const sheets = buildDealComplianceReportSheets(rows, {
           segment: String(segment),

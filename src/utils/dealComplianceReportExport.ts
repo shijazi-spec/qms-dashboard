@@ -22,21 +22,43 @@
  */
 import type { SheetSpec } from "./excelExport";
 import type { DealComplianceReportRow } from "./duplicateRadarDatabase";
+import { DEAL_COMPLIANCE_STAGES } from "./dealComplianceCheck";
 
 /**
- * Sheet per stage, in pipeline order — the order Sales thinks in.
+ * The Sales-only scope: Proposal + Agreement Signed. Feeds the monthly EMAIL
+ * (missingDocsMonthlyReport.ts) and the /deal-compliance/email covering-email
+ * preview — every figure either one reports derives from this list.
  *
  * "Paid" was REMOVED on Sarah's instruction (2026-09-03): "skip the paid from
  * the excel sheet itself, as it will be handled by the CS team." Paid deals are
- * past the sales motion, so chasing their documents through a Sales report puts
- * the follow-up on the wrong team. They are still visible on the Deal
- * Compliance tab — only this report drops them.
+ * past the sales motion, so chasing their documents through an EMAIL TO SALES
+ * puts the follow-up on the wrong team.
  *
- * Every sheet, the Summary totals and the email all derive from this list (the
- * rows are filtered to it in buildDealComplianceReportSheets), so a stage can be
- * added or removed here without leaving one surface disagreeing with another.
+ * The XLSX/CSV export and the in-app tab do NOT use this list — they cover
+ * Paid too, via EXPORT_STAGES below, because the platform owner reviews Paid
+ * deals jointly with Sales and CS. Widening REPORT_STAGES itself would pull
+ * Paid back into the email; add a stage here only if the EMAIL's scope is
+ * meant to change.
  */
 export const REPORT_STAGES = ["Proposal", "Agreement Signed"] as const;
+
+/**
+ * The wider scope for the XLSX/CSV EXPORT and the in-app Deal Compliance tab:
+ * Proposal + Agreement Signed + Paid.
+ *
+ * REPORT_STAGES above is Sales-only and feeds the monthly EMAIL to the Head
+ * of Sales — Paid deals are Customer Success's once a deal is won, so the
+ * email must not mention them (see REPORT_STAGES). But the platform owner
+ * still needs to review Paid deals missing documentation, jointly with Sales
+ * AND CS, so the download and the tab stay at all three stages even though
+ * the covering email that describes the download does not. Do not fold this
+ * back into REPORT_STAGES — that would pull Paid back into the email.
+ *
+ * Re-exported from dealComplianceCheck.ts (the single source for "what counts
+ * as a compliance-checked stage") so the export's scope and the tab's default
+ * filter can never drift apart.
+ */
+export const EXPORT_STAGES = DEAL_COMPLIANCE_STAGES;
 
 /** Below this, a percentage is noise rather than a signal. */
 const MIN_DEALS_FOR_RATE = 5;
@@ -128,8 +150,11 @@ export interface StageSummaryRow {
   missing_value: number;
 }
 
-export function stageSummary(rows: DealComplianceReportRow[]): StageSummaryRow[] {
-  return REPORT_STAGES.map((stage) => {
+export function stageSummary(
+  rows: DealComplianceReportRow[],
+  stages: readonly string[] = REPORT_STAGES,
+): StageSummaryRow[] {
+  return stages.map((stage) => {
     const inStage = rows.filter((r) => sameStage(r.stage, stage));
     const missing = inStage.filter((r) => !r.compliant);
     return {
@@ -152,16 +177,21 @@ export function buildDealComplianceReportSheets(
   allRows: DealComplianceReportRow[],
   opts: { segment: string; inScope?: number; pipeline?: string },
 ): SheetSpec[] {
-  // Scope EVERY sheet to the reported stages, so the Summary totals, the
-  // per-owner ranking and the per-stage sheets can never disagree. Before this,
-  // dropping a stage from REPORT_STAGES removed its sheet but left its deals
-  // inside "ALL STAGES" and the owner counts — the report would have said one
-  // thing in the summary and another in the tabs.
+  // Scope EVERY sheet to EXPORT_STAGES (Proposal, Agreement Signed AND Paid —
+  // wider than the Sales-only REPORT_STAGES the monthly email uses; see
+  // EXPORT_STAGES above for why), so the Summary totals, the per-owner ranking
+  // and the per-stage sheets can never disagree with each other. Before this
+  // scoping was added, dropping a stage from the list removed its sheet but
+  // left its deals inside "ALL STAGES" and the owner counts — the report would
+  // have said one thing in the summary and another in the tabs. Paid stays in
+  // THIS scope because the platform owner reviews it jointly with Sales and
+  // CS; it is still excluded from the covering email (REPORT_STAGES /
+  // buildReportNotes / buildMonthlyMissingDocsEmail).
   const rows = allRows.filter((r) =>
-    REPORT_STAGES.some((s) => sameStage(s, r.stage)),
+    EXPORT_STAGES.some((s) => sameStage(s, r.stage)),
   );
   const missingAll = rows.filter((r) => !r.compliant);
-  const stages = stageSummary(rows);
+  const stages = stageSummary(rows, EXPORT_STAGES);
   const owners = ownerBreakdown(rows);
   const inScope = opts.inScope ?? rows.length;
 
@@ -216,8 +246,10 @@ export function buildDealComplianceReportSheets(
   ];
 
   // One sheet per stage — the ask. Every checked deal in that stage, incomplete
-  // FIRST and by value, so the sheet opens on what matters.
-  for (const stage of REPORT_STAGES) {
+  // FIRST and by value, so the sheet opens on what matters. EXPORT_STAGES, not
+  // REPORT_STAGES: Paid gets its own sheet here even though the email never
+  // mentions it.
+  for (const stage of EXPORT_STAGES) {
     const inStage = rows
       .filter((r) => sameStage(r.stage, stage))
       .sort(

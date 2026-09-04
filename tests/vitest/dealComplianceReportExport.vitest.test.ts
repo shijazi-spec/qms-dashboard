@@ -17,6 +17,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildDealComplianceReportSheets,
+  buildReportNotes,
   ownerBreakdown,
   stageSummary,
   pct,
@@ -25,8 +26,17 @@ import {
   FMT_PERCENT,
   FMT_SAR,
   REPORT_STAGES,
+  EXPORT_STAGES,
 } from "../../src/utils/dealComplianceReportExport";
+import { buildMonthlyMissingDocsEmail } from "../../src/utils/missingDocsMonthlyReport";
 import type { DealComplianceReportRow } from "../../src/utils/duplicateRadarDatabase";
+
+// The workbook's "How to read this" sheet was removed (commit 344ad5ce): the
+// same notes now come straight from buildReportNotes(), not from a sheet a
+// test could find by position OR by name. Centralising the `.join(" ")` here
+// means a future change to how the notes are joined only needs updating once.
+const notesOf = (opts: Parameters<typeof buildReportNotes>[0]) =>
+  buildReportNotes(opts).join(" ");
 
 let n = 0;
 const deal = (o: Partial<DealComplianceReportRow> = {}): DealComplianceReportRow => ({
@@ -74,20 +84,33 @@ describe("stage matching", () => {
 
 describe("stage summary", () => {
   it("counts and prices the incomplete deals per stage", () => {
+    // Paid is not one of the DEFAULT stages any more (REPORT_STAGES dropped
+    // it, see dealComplianceReportExport.ts) — use the other REPORT_STAGES
+    // member, Agreement Signed, to exercise the same "two stages, two totals"
+    // arithmetic without relying on a stage the default no longer covers.
     const s = stageSummary([
       deal({ stage: "Proposal" }),
       bad({ stage: "Proposal", amount: 500 }),
-      bad({ stage: "Paid", amount: 250 }),
+      bad({ stage: "Agreement Signed", amount: 250 }),
     ]);
     const proposal = s.find((x) => x.stage === "Proposal")!;
     expect(proposal).toMatchObject({ checked: 2, compliant: 1, missing: 1, missing_pct: 50, missing_value: 500 });
-    expect(s.find((x) => x.stage === "Paid")!.missing_value).toBe(250);
+    expect(s.find((x) => x.stage === "Agreement Signed")!.missing_value).toBe(250);
   });
 
   it("reports every stage even when one has nothing checked yet", () => {
     const s = stageSummary([deal({ stage: "Proposal" })]);
     expect(s.map((x) => x.stage)).toEqual([...REPORT_STAGES]);
-    expect(s.find((x) => x.stage === "Paid")!.missing_pct).toBeNull();
+    expect(s.find((x) => x.stage === "Agreement Signed")!.missing_pct).toBeNull();
+  });
+
+  it("takes an explicit stage list, e.g. the wider export scope with Paid", () => {
+    const s = stageSummary(
+      [deal({ stage: "Proposal" }), bad({ stage: "Paid", amount: 250 })],
+      EXPORT_STAGES,
+    );
+    expect(s.map((x) => x.stage)).toEqual([...EXPORT_STAGES]);
+    expect(s.find((x) => x.stage === "Paid")!.missing_value).toBe(250);
   });
 });
 
@@ -142,13 +165,15 @@ describe("workbook shape", () => {
   const sheets = buildDealComplianceReportSheets(rows, { segment: "walaplus", inScope: 10 });
 
   it("has a sheet per stage, in pipeline order, plus summary and owners", () => {
+    // No "How to read this" sheet: it was deliberately removed (Sarah
+    // 2026-09-03) and its text now lives in buildReportNotes() for the
+    // covering email instead — see the notesOf() tests below.
     expect(sheets.map((s) => s.name)).toEqual([
       "Summary",
       "By owner",
       "Proposal",
       "Agreement Signed",
       "Paid",
-      "How to read this",
     ]);
   });
 
@@ -184,19 +209,18 @@ describe("workbook shape", () => {
   });
 
   it("states coverage honestly when the sweep has not finished", () => {
-    const notes = (sheets.at(-1)!.rows as any[]).map((r) => r.note).join(" ");
-    expect(notes).toContain("4 of 10 in-scope deals have been checked");
+    const notes = notesOf({ segment: "walaplus", checked: rows.length, inScope: 10 });
+    expect(notes).toContain(`${rows.length} of 10 in-scope deals have been checked`);
     expect(notes).toContain("Percentages are of deals that have been CHECKED");
   });
 
   it("says so when everything has been checked", () => {
-    const done = buildDealComplianceReportSheets(rows, { segment: "all", inScope: 4 });
-    const notes = (done.at(-1)!.rows as any[]).map((r) => r.note).join(" ");
-    expect(notes).toContain("All 4 in-scope deals have been checked");
+    const notes = notesOf({ segment: "all", checked: rows.length, inScope: rows.length });
+    expect(notes).toContain(`All ${rows.length} in-scope deals have been checked`);
   });
 
   it("records that nothing was changed in the CRM", () => {
-    const notes = (sheets.at(-1)!.rows as any[]).map((r) => r.note).join(" ");
+    const notes = notesOf({ segment: "walaplus", checked: rows.length, inScope: 10 });
     expect(notes).toContain("Nothing in this workbook has been changed in the CRM");
   });
 });
@@ -243,7 +267,9 @@ describe("the formatting Sarah applied by hand, now built in", () => {
   });
 
   it("carries Layout, Pipeline and Product on every stage sheet", () => {
-    for (const stage of REPORT_STAGES) {
+    // EXPORT_STAGES, not REPORT_STAGES: the export covers Paid too, and its
+    // sheet needs the same columns as every other stage sheet.
+    for (const stage of EXPORT_STAGES) {
       const keys = sheets.find((s) => s.name === stage)!.columns.map((c) => c.key);
       expect(keys).toContain("layout");
       expect(keys).toContain("pipeline");
@@ -252,15 +278,47 @@ describe("the formatting Sarah applied by hand, now built in", () => {
   });
 
   it("states the layout AND pipeline it was scoped to", () => {
-    const notes = (sheets.at(-1)!.rows as any[]).map((r) => r.note).join(" ");
+    const notes = notesOf({ segment: "walaplus", checked: 2, pipeline: "Standard" });
     expect(notes).toContain("layout walaplus");
     expect(notes).toContain("pipeline Standard");
   });
 
   it("says 'all pipelines' rather than going silent when unscoped", () => {
-    // A filtered sheet that does not say so reads as covering everything.
-    const wide = buildDealComplianceReportSheets([deal()], { segment: "all" });
-    expect((wide.at(-1)!.rows as any[]).map((r) => r.note).join(" ")).toContain("all pipelines");
+    // A filtered report that does not say so reads as covering everything.
+    const notes = notesOf({ segment: "all", checked: 1 });
+    expect(notes).toContain("all pipelines");
+  });
+});
+
+describe("export vs monthly email — the two surfaces deliberately cover different stages", () => {
+  // "Paid" deals are Customer Success's, not Sales's, once a deal is won.
+  // The XLSX/CSV export and the in-app tab review them jointly with Sales and
+  // CS (EXPORT_STAGES); the monthly email to the Head of Sales must not, or
+  // Sales would be chased for documents CS owns (REPORT_STAGES). Same input
+  // rows, deliberately different output — this pins that the two surfaces
+  // never converge on Paid by accident.
+  const rows = [
+    deal({ stage: "Proposal", owner: "Owner A" }),
+    bad({ stage: "Paid", owner: "Owner Paid Only", name: "Paid deal", amount: 9000 }),
+  ];
+
+  it("the export gives the Paid deal its own sheet", () => {
+    const sheets = buildDealComplianceReportSheets(rows, { segment: "all" });
+    const paidSheet = sheets.find((s) => s.name === "Paid")!;
+    expect((paidSheet.rows as any[]).map((r) => r.deal)).toContain("Paid deal");
+  });
+
+  it("the monthly email excludes the Paid deal from every figure", () => {
+    const mail = buildMonthlyMissingDocsEmail(rows, {
+      periodLabel: "September 2026",
+      inScope: rows.length,
+    });
+    // Only the Proposal deal (compliant) is in scope: 0 of 1 checked deals
+    // missing, not 1 of 2 — the Paid deal must not pad either side.
+    expect(mail.text).toContain("0 of 1 checked deals are missing required documents");
+    // Neither the Paid stage nor its owner appears anywhere in the email.
+    expect(mail.text).not.toContain("Paid");
+    expect(mail.html).not.toContain("Paid");
   });
 });
 
