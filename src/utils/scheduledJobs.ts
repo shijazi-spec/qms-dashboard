@@ -505,11 +505,19 @@ export async function runMonthlyMissingDocsReportIfDue(): Promise<{
     if (!claim.rows.length) return { ran: false, ageHours: 0 };
 
     const { countNeverChecked } = await import("./dealDocComplianceSweep");
+    const { REPORT_STAGES, sameStage } = await import("./dealComplianceReportExport");
     const rows = await getDealComplianceReportRows("all");
-    const neverChecked = await countNeverChecked();
+    // Paid deals are Customer Success's, not Sales's, and buildMonthlyMissingDocsEmail
+    // already excludes them from every figure it reports (REPORT_STAGES). The
+    // denominator here must be scoped the same way — Paid deals excluded from
+    // BOTH the numerator and the denominator — or the coverage line quotes a
+    // percentage of a smaller set against a total that includes deals it never
+    // mentions.
+    const inScopeRows = rows.filter((r) => REPORT_STAGES.some((s) => sameStage(s, r.stage)));
+    const neverChecked = await countNeverChecked(REPORT_STAGES);
     const mail = buildMonthlyMissingDocsEmail(rows, {
       periodLabel: periodLabel(covered),
-      inScope: rows.length + neverChecked,
+      inScope: inScopeRows.length + neverChecked,
       dashboardUrl: process.env.MISSING_DOCS_REPORT_LINK,
     });
 

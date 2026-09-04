@@ -20,6 +20,7 @@ import {
   periodLabel,
 } from "../../src/utils/missingDocsMonthlyReport";
 import type { DealComplianceReportRow } from "../../src/utils/duplicateRadarDatabase";
+import { REPORT_STAGES, sameStage } from "../../src/utils/dealComplianceReportExport";
 
 let n = 0;
 const deal = (o: Partial<DealComplianceReportRow> = {}): DealComplianceReportRow => ({
@@ -246,5 +247,46 @@ describe("the email content", () => {
     // the "fully checked" branch to be the one under test.
     const m = buildMonthlyMissingDocsEmail(rows, { periodLabel: "August 2026", inScope: 2 });
     expect(m.text).toContain("All 2 in-scope deals had been checked");
+  });
+});
+
+describe("the in-scope denominator counts only the stages the email breaks down", () => {
+  // Regression test for the bug this fix closes: buildMonthlyMissingDocsEmail
+  // filters its ROWS to REPORT_STAGES (Paid is Customer Success's, not
+  // Sales's), but a caller that built `opts.inScope` by counting every
+  // DEAL_COMPLIANCE_STAGES deal (including Paid) would hand it a denominator
+  // wider than the universe the email actually reports on. Callers must
+  // filter with the same REPORT_STAGES/sameStage pattern the email uses
+  // internally — see src/utils/scheduledJobs.ts and
+  // src/mastra/routes/duplicateRadarRoutes.ts (missing-docs-report/preview).
+  it("a REPORT_STAGES-filtered denominator excludes Paid; an unfiltered one does not", () => {
+    const mixed = [
+      deal({ stage: "Proposal" }),
+      deal({ stage: "Agreement Signed" }),
+      deal({ stage: "Paid" }),
+      deal({ stage: "Paid" }),
+    ];
+    // Stand-in for countNeverChecked(REPORT_STAGES): a handful of in-scope
+    // deals the sweep has not reached yet.
+    const neverCheckedInScope = 3;
+
+    const correctInScope =
+      mixed.filter((r) => REPORT_STAGES.some((s) => sameStage(s, r.stage))).length +
+      neverCheckedInScope;
+    // What the old, buggy call sites computed: every row regardless of stage.
+    const buggyInScope = mixed.length + neverCheckedInScope;
+
+    expect(correctInScope).toBe(5); // 2 in-scope rows + 3 never-checked
+    expect(buggyInScope).toBe(7);
+    expect(correctInScope).toBeLessThan(buggyInScope);
+
+    const mail = buildMonthlyMissingDocsEmail(mixed, {
+      periodLabel: "August 2026",
+      inScope: correctInScope,
+    });
+    // The email reports 2 checked deals (Proposal + Agreement Signed); the
+    // denominator it quotes must be the REPORT_STAGES-scoped figure, never
+    // one inflated by never-checked Paid deals.
+    expect(mail.text).toContain("2 of 5 in-scope deals had been checked");
   });
 });

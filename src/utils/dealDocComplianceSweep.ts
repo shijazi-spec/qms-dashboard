@@ -179,16 +179,29 @@ export async function runDealDocComplianceSweep(
   return out;
 }
 
-/** In-scope deals with no compliance row at all — the "not yet checked" tile. */
-export async function countNeverChecked(): Promise<number> {
+/**
+ * In-scope deals with no compliance row at all — the "not yet checked" tile.
+ *
+ * `stages` defaults to every DEAL_COMPLIANCE_STAGES stage (Proposal /
+ * Agreement Signed / Paid), matching every existing caller (the sweep's own
+ * "remaining" tally, and the in-app Deal Compliance tab/export, which keep
+ * Paid visible). A caller that reports on a NARROWER stage set — e.g. the
+ * Sales monthly-email's REPORT_STAGES, which excludes Paid because that's
+ * Customer Success's — must pass that same narrower list, or this count
+ * silently pads the denominator with never-checked Paid deals the caller
+ * never mentions.
+ */
+export async function countNeverChecked(
+  stages: readonly string[] = DEAL_COMPLIANCE_STAGES,
+): Promise<number> {
   try {
-    const stages = DEAL_COMPLIANCE_STAGES.map((s) => `'${s.toLowerCase()}'`).join(", ");
+    const stageList = stages.map((s) => `'${s.toLowerCase()}'`).join(", ");
     const res = await pool.query(
       `SELECT COUNT(*)::text AS n
          FROM duplicate_records r
          LEFT JOIN deal_doc_compliance d ON d.zoho_deal_id = r.zoho_record_id
         WHERE r.record_type = 'deal'
-          AND LOWER(BTRIM(COALESCE(NULLIF(BTRIM(r.stage), ''), r.raw_data->>'Stage', ''))) IN (${stages})
+          AND LOWER(BTRIM(COALESCE(NULLIF(BTRIM(r.stage), ''), r.raw_data->>'Stage', ''))) IN (${stageList})
           AND d.zoho_deal_id IS NULL`,
     );
     return Number(res.rows[0]?.n) || 0;

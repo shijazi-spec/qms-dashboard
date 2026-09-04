@@ -4063,6 +4063,9 @@ export const duplicateRadarRoutes = [
         const { countNeverChecked } = await import(
           "../../utils/dealDocComplianceSweep"
         );
+        const { REPORT_STAGES, sameStage } = await import(
+          "../../utils/dealComplianceReportExport"
+        );
         const {
           buildMonthlyMissingDocsEmail,
           monthlyMissingDocsRecipients,
@@ -4070,7 +4073,14 @@ export const duplicateRadarRoutes = [
           periodLabel,
         } = await import("../../utils/missingDocsMonthlyReport");
         const rows = await getDealComplianceReportRows("all");
-        const neverChecked = await countNeverChecked();
+        // Paid deals are Customer Success's, not Sales's, and
+        // buildMonthlyMissingDocsEmail already excludes them from every figure
+        // the email reports (REPORT_STAGES). This endpoint previews that exact
+        // email, so its own "checked"/"in_scope" figures must be scoped the
+        // same way — Paid excluded from BOTH numerator and denominator — or
+        // this JSON would disagree with the email body it is previewing.
+        const inScopeRows = rows.filter((r) => REPORT_STAGES.some((s) => sameStage(s, r.stage)));
+        const neverChecked = await countNeverChecked(REPORT_STAGES);
         // Preview the month that just ended, matching what the job would send.
         const nowKsa = new Date(Date.now() + 3 * 3600_000);
         const covered = new Date(
@@ -4078,7 +4088,7 @@ export const duplicateRadarRoutes = [
         );
         const mail = buildMonthlyMissingDocsEmail(rows, {
           periodLabel: periodLabel(covered),
-          inScope: rows.length + neverChecked,
+          inScope: inScopeRows.length + neverChecked,
           dashboardUrl: process.env.MISSING_DOCS_REPORT_LINK,
         });
         return c.json({
@@ -4086,8 +4096,8 @@ export const duplicateRadarRoutes = [
           enabled: isMonthlyMissingDocsEnabled(),
           recipient_count: monthlyMissingDocsRecipients().length,
           period: periodLabel(covered),
-          checked: rows.length,
-          in_scope: rows.length + neverChecked,
+          checked: inScopeRows.length,
+          in_scope: inScopeRows.length + neverChecked,
           subject: mail.subject,
           html: mail.html,
           text: mail.text,
