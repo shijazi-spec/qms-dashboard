@@ -823,7 +823,14 @@
 
             async function loadControls() {
                 try {
-                    const response = await fetch("/api/handoff/controls");
+                    // The control register is now controls/control_clause_mappings
+                    // (the crosswalk), not the control_mappings demo seed this
+                    // used to read. That seed was five rows — CTRL-001 "Access
+                    // Control Policy" … CTRL-005 — with no link to any clause,
+                    // so it sat permanently "Not tested" and could not say which
+                    // obligations a control satisfies. The crosswalk can, which
+                    // is the whole reason a control register exists.
+                    const response = await fetch("/api/compliance/controls");
                     const data = await response.json();
                     renderControlsTable(data.controls || []);
                 } catch (error) {
@@ -891,7 +898,16 @@
                 <tr class="hover:bg-gray-50">
                     <td class="px-4 py-3">
                         <div class="text-sm font-medium text-gray-900">${c.control_name}</div>
-                        <div class="text-xs text-gray-500">${c.control_id}</div>
+                        <div class="text-xs text-gray-500">${c.control_id}${
+                            // Clause coverage is the point of the crosswalk: a
+                            // control earns its place by satisfying obligations.
+                            // "0 clauses" is shown deliberately — an unmapped
+                            // control should not look like a mapped one.
+                            c.clause_count === undefined || c.clause_count === null
+                                ? ""
+                                : ` · ${c.clause_count} clause${c.clause_count === 1 ? "" : "s"}` +
+                                  (c.framework_count > 1 ? ` across ${c.framework_count} frameworks` : "")
+                        }</div>
                     </td>
                     <td class="px-4 py-3 text-center">
                         <span class="text-xs px-2 py-1 rounded-full ${

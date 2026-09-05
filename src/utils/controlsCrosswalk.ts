@@ -51,15 +51,38 @@ export async function initControlsCrosswalk(): Promise<void> {
   if (initialized) return;
   await pool.query(`
     CREATE TABLE IF NOT EXISTS controls (
-      id           SERIAL PRIMARY KEY,
-      control_code VARCHAR(100) UNIQUE NOT NULL,
-      title        VARCHAR(512) NOT NULL,
-      description  TEXT,
-      domain       VARCHAR(128),
-      source       VARCHAR(64) DEFAULT 'custom',
-      created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      id             SERIAL PRIMARY KEY,
+      control_code   VARCHAR(100) UNIQUE NOT NULL,
+      title          VARCHAR(512) NOT NULL,
+      description    TEXT,
+      domain         VARCHAR(128),
+      source         VARCHAR(64) DEFAULT 'custom',
+      -- Effectiveness testing. The retired control_mappings seed carried these
+      -- and this table did not, which was the one real gap in adopting the
+      -- crosswalk as the single control register: without them the Control
+      -- Tower's "Control Effectiveness" panel had nothing to show.
+      control_type   VARCHAR(32),
+      owner          VARCHAR(200),
+      test_frequency VARCHAR(32),
+      last_tested_at TIMESTAMP,
+      effectiveness_score INTEGER,
+      created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  // Idempotent ALTERs for databases created before the effectiveness columns
+  // existed. Each one is mirrored in the CREATE TABLE above; check:schema-parity
+  // fails the build if the two ever drift.
+  for (const col of [
+    "control_type VARCHAR(32)",
+    "owner VARCHAR(200)",
+    "test_frequency VARCHAR(32)",
+    "last_tested_at TIMESTAMP",
+    "effectiveness_score INTEGER",
+  ]) {
+    await pool.query(
+      `ALTER TABLE controls ADD COLUMN IF NOT EXISTS ${col}`,
+    );
+  }
   await pool.query(`
     CREATE TABLE IF NOT EXISTS control_clause_mappings (
       id                SERIAL PRIMARY KEY,
@@ -140,6 +163,43 @@ export async function clausesForControl(controlId: number): Promise<any[]> {
 }
 
 /** Crosswalk coverage stats — how much of the taxonomy is populated yet. */
+/**
+ * Controls for the Control Tower's "Control Effectiveness" panel, aliased to
+ * the column names that panel already renders (control_id / control_name /
+ * source_domain) so adopting this table needed no rewrite of the table markup.
+ *
+ * clause_count and framework_count are what justify this table replacing the
+ * old control_mappings seed: that register was a flat list with no relationship
+ * to any clause, so it could never answer the only question worth asking of a
+ * control — which obligations does it satisfy, across how many frameworks.
+ * A control mapped to nothing is visible here as "0 clauses" rather than
+ * looking identical to a well-mapped one.
+ */
+export async function listControlsWithCoverage(limit = 50): Promise<any[]> {
+  await initControlsCrosswalk();
+  const r = await pool.query(
+    `SELECT c.control_code            AS control_id,
+            c.title                   AS control_name,
+            c.domain                  AS source_domain,
+            c.control_type,
+            c.owner,
+            c.test_frequency,
+            c.last_tested_at,
+            c.effectiveness_score,
+            c.source,
+            COUNT(m.obligation_id)::int              AS clause_count,
+            COUNT(DISTINCT o.regulation_id)::int     AS framework_count
+       FROM controls c
+       LEFT JOIN control_clause_mappings m ON m.control_id = c.id
+       LEFT JOIN obligations o             ON o.id = m.obligation_id
+      GROUP BY c.id
+      ORDER BY clause_count DESC, c.control_code
+      LIMIT $1`,
+    [limit],
+  );
+  return r.rows;
+}
+
 export async function crosswalkStats(): Promise<{
   controls: number;
   mappings: number;

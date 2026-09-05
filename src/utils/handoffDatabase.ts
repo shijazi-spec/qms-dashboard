@@ -229,69 +229,25 @@ async function seedHandoffRules(): Promise<void> {
 }
 
 async function seedControlMappings(): Promise<void> {
-  const existing = await pool.query("SELECT COUNT(*) FROM control_mappings");
-  if (parseInt(existing.rows[0].count) > 0) return;
-
-  logger.info("📝 [HandoffDB] Seeding control mappings...");
-
-  const controls = [
-    {
-      control_id: "CTRL-001",
-      control_name: "Access Control Policy",
-      control_type: "preventive",
-      source_domain: "Information Security",
-      test_frequency: "quarterly",
-    },
-    {
-      control_id: "CTRL-002",
-      control_name: "Change Management Review",
-      control_type: "detective",
-      source_domain: "IT Operations",
-      test_frequency: "monthly",
-    },
-    {
-      control_id: "CTRL-003",
-      control_name: "Incident Response Procedure",
-      control_type: "corrective",
-      source_domain: "Security Operations",
-      test_frequency: "semi-annual",
-    },
-    {
-      control_id: "CTRL-004",
-      control_name: "Vendor Due Diligence",
-      control_type: "preventive",
-      source_domain: "Third Party Risk",
-      test_frequency: "annual",
-    },
-    {
-      control_id: "CTRL-005",
-      control_name: "Data Classification Standard",
-      control_type: "preventive",
-      source_domain: "Data Governance",
-      test_frequency: "annual",
-    },
-    {
-      control_id: "CTRL-006",
-      control_name: "Quality Audit Review",
-      control_type: "detective",
-      source_domain: "Quality Management",
-      test_frequency: "quarterly",
-    },
-  ];
-
-  for (const control of controls) {
-    await pool.query(
-      `INSERT INTO control_mappings (control_id, control_name, control_type, source_domain, test_frequency)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [
-        control.control_id,
-        control.control_name,
-        control.control_type,
-        control.source_domain,
-        control.test_frequency,
-      ],
-    );
-  }
+  // RETIRED - no longer seeds anything.
+  //
+  // control_mappings was a five-row demo seed (CTRL-001 "Access Control Policy"
+  // through CTRL-005) with no relationship to any framework clause, so it could
+  // not answer the only question a control register exists to answer: which
+  // obligations does this control satisfy. It rendered on the Control Tower as
+  // five permanently "Not tested" rows and produced no compliance signal
+  // anywhere on the page.
+  //
+  // `controls` + `control_clause_mappings` (controlsCrosswalk.ts) is now the
+  // single control register. It maps a control to clauses across frameworks,
+  // which is what lets one control be evidenced once and inherited by ISO
+  // 27001, NCA ECC and SOC 2 together.
+  //
+  // Deliberately a no-op rather than a DELETE: rows already in a deployed
+  // database are left untouched. Nothing reads them now that the panel reads
+  // the crosswalk, so they are inert - and dropping real rows from a production
+  // table is not something a function called "seed" should do. The previous
+  // body is in git history if the data is ever wanted.
 }
 
 export async function createHandoffRule(

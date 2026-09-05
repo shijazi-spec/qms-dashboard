@@ -760,6 +760,33 @@ export const complianceRoutes = [
     },
   },
   {
+    // Control register for the Control Tower's "Control Effectiveness" panel.
+    // Reads the controls/control_clause_mappings crosswalk, which replaced the
+    // control_mappings demo seed (CTRL-001..005) as the single control
+    // register — see the retirement note in handoffDatabase.seedControlMappings.
+    path: "/api/compliance/controls",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const logger = mastra?.getLogger();
+          const { listControlsWithCoverage, crosswalkStats } = await import(
+            "../../utils/controlsCrosswalk"
+          );
+          logger?.info("🛡️ [ComplianceAPI] GET /api/compliance/controls");
+          const [controls, stats] = await Promise.all([
+            listControlsWithCoverage(50),
+            crosswalkStats(),
+          ]);
+          return c.json({ controls, stats });
+        } catch (error) {
+          safeLogger.error("❌ [ComplianceAPI] Error fetching controls:", error);
+          return c.json({ error: "Failed to fetch controls" }, 500);
+        }
+      };
+    },
+  },
+  {
     path: "/api/compliance/summary",
     method: "GET" as const,
     createHandler: async ({ mastra }: any) => {
