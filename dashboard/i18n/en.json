@@ -2482,7 +2482,7 @@
     "btn_create": "Create"
   },
   "policies": {
-    "doc_register": "Document Register",
+    "doc_register": "Document Master List",
     "create_doc": "Create New Document",
     "doc_details": "Document Details",
     "create_btn": "Create Document",

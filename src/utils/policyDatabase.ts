@@ -523,6 +523,14 @@ export async function getAllPolicies(filters?: {
     whereConditions.push(`status = $${paramCount}`);
     values.push(filters.status);
     paramCount++;
+  } else {
+    // Default the register to the ACTIVE population, matching
+    // getPolicySummaryStats' total_policies and getDocumentsByTypeSummary. The
+    // table's "Showing 1-15 of N" sits directly under those cards, so the two
+    // must count the same rows or the page contradicts itself. Asking for
+    // status='archived' explicitly still returns archived documents - this
+    // only applies when no status is requested.
+    whereConditions.push(`status NOT IN ('archived', 'retired')`);
   }
   if (filters?.category) {
     whereConditions.push(`category = $${paramCount}`);
@@ -612,8 +620,14 @@ export async function getPolicySummaryStats(
 
   const stats = await pool.query(
     `
-    SELECT 
-      COUNT(*) as total_policies,
+    SELECT
+      -- Active register only. The dashboard shows this as "Total Documents"
+      -- directly above Draft / In Review / Pending Approval / Published, so a
+      -- plain COUNT(*) made the row stop adding up the moment anything was
+      -- archived: the total counted archived documents that no stage beneath
+      -- it displayed. Archived is reported separately below.
+      COUNT(*) FILTER (WHERE status NOT IN ('archived', 'retired')) as total_policies,
+      COUNT(*) as total_including_archived,
       COUNT(*) FILTER (WHERE status = 'draft') as draft_count,
       COUNT(*) FILTER (WHERE status = 'review') as in_review,
       COUNT(*) FILTER (WHERE status = 'approval') as pending_approval,
@@ -897,18 +911,23 @@ export async function linkPolicyToEntities(
 export async function getDocumentsByTypeSummary(
   allowedConfidentiality?: string[],
 ): Promise<any[]> {
-  const confFilter =
-    allowedConfidentiality && allowedConfidentiality.length > 0
-      ? `WHERE COALESCE(confidentiality, 'internal') = ANY($1::text[])`
-      : "";
-  const confParams =
-    allowedConfidentiality && allowedConfidentiality.length > 0
-      ? [allowedConfidentiality]
-      : [];
+  // Same active-register scope as getPolicySummaryStats' total_policies. These
+  // five category counts are shown on the same screen as that total and are
+  // expected to sum to it; counting archived documents here (and not there, or
+  // vice versa) is what makes a dashboard quietly stop reconciling.
+  const conditions: string[] = ["status NOT IN ('archived', 'retired')"];
+  const confParams: any[] = [];
+  if (allowedConfidentiality && allowedConfidentiality.length > 0) {
+    confParams.push(allowedConfidentiality);
+    conditions.push(
+      `COALESCE(confidentiality, 'internal') = ANY($${confParams.length}::text[])`,
+    );
+  }
+  const whereClause = `WHERE ${conditions.join(" AND ")}`;
 
   const result = await pool.query(
     `
-    SELECT 
+    SELECT
       COALESCE(document_type, 'policy') as document_type,
       COUNT(*) as count,
       COUNT(*) FILTER (WHERE status = 'published') as published,
@@ -916,7 +935,7 @@ export async function getDocumentsByTypeSummary(
       COUNT(*) FILTER (WHERE status = 'review') as in_review,
       COUNT(*) FILTER (WHERE status = 'approval') as pending_approval
     FROM policies
-    ${confFilter}
+    ${whereClause}
     GROUP BY COALESCE(document_type, 'policy')
     ORDER BY count DESC
   `,

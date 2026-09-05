@@ -709,11 +709,17 @@
                 try {
                     const response = await fetch("/api/policies/summary");
                     const data = await response.json();
+                    // /api/policies/summary returns getPolicySummaryStats' object
+                    // FLAT — { total_policies, draft_count, ... }. Reading it as
+                    // data.policies.* found nothing on every load, and the `|| 0`
+                    // rendered that as a confident "0" rather than an error, so
+                    // this panel has been reporting zero policies regardless of
+                    // how many exist. The draft field is draft_count, not draft.
                     setTextById("totalPolicies",
-                        data.policies?.total_policies || 0,
+                        data.total_policies || 0,
                         "loadPolicySummary");
                     setTextById("draftPolicies",
-                        (data.policies?.draft || 0) + " " + _gt('grc.in_draft'),
+                        (data.draft_count || 0) + " " + _gt('grc.in_draft'),
                         "loadPolicySummary");
                 } catch (error) {
                     console.error("Error loading policy summary:", error);
