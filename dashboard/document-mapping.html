@@ -83,8 +83,14 @@
         <section class="bg-white rounded-lg shadow mb-6" data-testid="section-coverage-grid">
             <div class="p-4 border-b border-gray-200 flex items-center justify-between gap-3 flex-wrap">
                 <div>
-                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="docmap.per_framework_title">Coverage by Framework</h2>
-                    <p class="text-xs text-gray-500" data-i18n="docmap.per_framework_subtitle">% of clauses with at least one linked document. Click a tile to drill into unmapped clauses, or download an Audit-Readiness PDF for that framework.</p>
+                    <!-- One of four framework panels across the platform, each
+                         measuring something different. This one answers "do we
+                         have a DOCUMENT for the clause" - not whether an auditor
+                         accepted it. See grc.html (assessed compliance),
+                         audit-readiness.html (audit conformity) and
+                         compliance.html (plan progress). -->
+                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="docmap.per_framework_title">Document Coverage by Framework</h2>
+                    <p class="text-xs text-gray-500" data-i18n="docmap.per_framework_subtitle">% of clauses with at least one linked document. Coverage is not conformity — a mapped clause has evidence to show, not a passed audit. Click a tile to drill into unmapped clauses.</p>
                 </div>
                 <div class="flex items-center gap-2 flex-wrap">
                     <span id="embedStatus" class="text-[11px] text-gray-500" title="Semantic shortlist (retrieve-then-verify). Build the clause-embedding cache, then enable DOCUMENT_MAPPING_EMBEDDINGS=true."></span>

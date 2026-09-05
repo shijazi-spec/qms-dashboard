@@ -68,8 +68,14 @@
         <!-- Per-framework readiness tiles -->
         <section class="bg-white rounded-lg shadow mb-6">
             <div class="p-4 border-b border-gray-200">
-                <h2 class="text-base font-semibold text-gray-900" data-i18n="audit_readiness.tiles_title">Framework Readiness</h2>
-                <p class="text-xs text-gray-500" data-i18n="audit_readiness.tiles_subtitle">Latest finalised audit run per framework — % conformant, NC counts, open CARs.</p>
+                <!-- Measures AUDIT CONFORMITY - what an audit actually found -
+                     not document coverage (document-mapping.html), assessed
+                     compliance (grc.html) or plan progress (compliance.html).
+                     Its old title, "Framework Readiness", was word-for-word the
+                     same as the certification plan's panel, and in Arabic both
+                     rendered the identical string. -->
+                <h2 class="text-base font-semibold text-gray-900" data-i18n="audit_readiness.tiles_title">Audit Conformity by Framework</h2>
+                <p class="text-xs text-gray-500" data-i18n="audit_readiness.tiles_subtitle">Latest finalised audit run per framework — % conformant, NC counts, open CARs. This is what an audit found, not what documents exist.</p>
             </div>
             <div id="readinessTiles" class="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div class="text-sm text-gray-400 col-span-full text-center py-6">Loading…</div>

@@ -262,7 +262,7 @@
     "risk_crit": "Crit",
     "likelihood_x_impact": "Likelihood (L) x Impact (I)",
     "module_status": "GRC Module Status",
-    "compliance_by_framework": "Compliance by Framework",
+    "compliance_by_framework": "Assessed Compliance by Framework",
     "quality_grc_integration": "Quality-GRC Integration",
     "col_rule": "Rule",
     "col_source": "Source",
@@ -299,7 +299,8 @@
     "status_failed": "Failed",
     "status_pending": "Pending",
     "status_running": "Running",
-    "status_skipped": "Skipped"
+    "status_skipped": "Skipped",
+    "compliance_by_framework_subtitle": "From completed compliance assessments. A framework nobody has assessed yet shows \"not assessed\" rather than 0%."
   },
   "consultant": {
     "resolve_note_prompt": "Optional: add a resolution note (why/how this alert was closed). Leave blank to skip.",
@@ -1983,8 +1984,8 @@
     "overall_coverage": "Overall Document-Mapping Coverage",
     "clauses_with_evidence": "clauses with linked evidence",
     "coverage_legend": "Green ≥ 80% · Yellow ≥ 50% · Amber ≥ 25% · Red < 25%",
-    "per_framework_title": "Coverage by Framework",
-    "per_framework_subtitle": "% of clauses with at least one linked document. Click a tile to drill into unmapped clauses, or download an Audit-Readiness PDF for that framework.",
+    "per_framework_title": "Document Coverage by Framework",
+    "per_framework_subtitle": "% of clauses with at least one linked document. Coverage is not conformity — a mapped clause has evidence to show, not a passed audit. Click a tile to drill into unmapped clauses.",
     "tile_drill": "View unmapped",
     "tile_pdf": "Audit PDF",
     "unmapped_title": "Unmapped Clauses",
@@ -2197,7 +2198,7 @@
     "ms_load_error": "Could not load milestones.",
     "roadmap_title": "Certification Milestone Plan",
     "roadmap_print": "Print / PDF",
-    "roadmap_readiness": "Framework readiness",
+    "roadmap_readiness": "Certification Plan Progress",
     "roadmap_gap_unreachable": "No milestone in the plan delivers this.",
     "roadmap_gap_no_date": "No target date set in plan v3.0.",
     "roadmap_owner_label": "Owner",
@@ -2249,14 +2250,15 @@
     "import_save_draft": "Save Draft",
     "import_apply": "Apply to Obligations",
     "select_regulation": "Select regulation",
-    "total_obligations": "Total Obligations"
+    "total_obligations": "Total Obligations",
+    "roadmap_readiness_subtitle": "Milestones delivered against the target dates in this plan. Progress here is delivery against the plan, not a compliance score."
   },
   "audit_readiness": {
     "title": "Audit Readiness",
     "subtitle": "Run a real audit against any framework. Each clause becomes a checklist item; outcomes flow into findings, per-clause assessments, and corrective actions.",
     "new_run": "New Audit Run",
-    "tiles_title": "Framework Readiness",
-    "tiles_subtitle": "Latest finalised audit run per framework — % conformant, NC counts, open CARs.",
+    "tiles_title": "Audit Conformity by Framework",
+    "tiles_subtitle": "Latest finalised audit run per framework — % conformant, NC counts, open CARs. This is what an audit found, not what documents exist.",
     "runs_title": "Audit Runs",
     "all_frameworks": "All Frameworks",
     "no_run_yet": "No audit run yet.",

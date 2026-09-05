@@ -447,9 +447,17 @@
                 </div>
 
                 <div class="bg-white rounded-lg shadow p-6">
-                    <h2 class="text-lg font-semibold text-gray-900 mb-4" data-i18n="grc.compliance_by_framework">
-                        Compliance by Framework
+                    <!-- Measures ASSESSED compliance (compliance_assessments),
+                         not document coverage (document-mapping.html) or audit
+                         conformity (audit-readiness.html). All four framework
+                         panels once read "coverage"/"readiness" and looked like
+                         four answers to one question. -->
+                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="grc.compliance_by_framework">
+                        Assessed Compliance by Framework
                     </h2>
+                    <p class="text-xs text-gray-500 mb-4" data-i18n="grc.compliance_by_framework_subtitle">
+                        From completed compliance assessments. A framework nobody has assessed yet shows "not assessed" rather than 0%.
+                    </p>
                     <div id="frameworkCompliance" class="space-y-3">
                         <div class="text-gray-400 text-center py-4" data-i18n="grc.loading">
                             Loading...

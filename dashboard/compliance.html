@@ -198,7 +198,13 @@
                      SOC 2 has no target date in v3.0) are always rendered,
                      never hidden. -->
                 <div class="mb-5">
-                    <h3 class="text-sm font-semibold text-gray-800 mb-2" data-i18n="compliance.roadmap_readiness">Framework readiness</h3>
+                    <!-- Measures PLAN PROGRESS - milestones delivered against
+                         their target dates - not audit conformity
+                         (audit-readiness.html), document coverage
+                         (document-mapping.html) or assessed compliance
+                         (grc.html). -->
+                    <h3 class="text-sm font-semibold text-gray-800" data-i18n="compliance.roadmap_readiness">Certification Plan Progress</h3>
+                    <p class="text-xs text-gray-500 mb-2" data-i18n="compliance.roadmap_readiness_subtitle">Milestones delivered against the target dates in this plan. Progress here is delivery against the plan, not a compliance score.</p>
                     <div id="certFrameworkCards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" data-testid="cert-framework-cards">
                         <div class="text-sm text-gray-400 py-6 text-center" data-i18n="compliance.roadmap_no_readiness">No framework targets.</div>
                     </div>
