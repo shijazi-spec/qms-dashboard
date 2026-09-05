@@ -730,11 +730,19 @@
                 try {
                     const response = await fetch("/api/compliance/summary");
                     const data = await response.json();
+                    // FLAT payload — { overall_compliance_score,
+                    // total_obligations, by_regulation, ... }. This read
+                    // `data.compliance_score` and `data.summary.total_obligations`;
+                    // neither key exists, so `|| 0` reported "0% · 0 obligations"
+                    // on every load while Document Mapping counted 675 clauses
+                    // from the same database. Same fault as the Active Policies
+                    // tile: the payload shape was assumed, and the fallback made
+                    // a missing key indistinguishable from a real zero.
                     setTextById("complianceScore",
-                        (data.compliance_score || 0) + "%",
+                        (data.overall_compliance_score || 0) + "%",
                         "loadComplianceSummary");
                     setTextById("openObligations",
-                        (data.summary?.total_obligations || 0) + " " + _gt('grc.obligations_count'),
+                        (data.total_obligations || 0) + " " + _gt('grc.obligations_count'),
                         "loadComplianceSummary");
 
                     renderFrameworkCompliance(data.by_regulation || []);
@@ -954,16 +962,42 @@
                     return;
                 }
 
+                // No slice: there are nine active frameworks and this showed
+                // five, so four were absent with nothing on screen saying so.
+                // A panel that silently drops frameworks is worse than a long
+                // panel on a page whose job is telling you where you stand.
                 container.innerHTML = frameworks
-                    .slice(0, 5)
                     .map((f) => {
-                        const total = parseInt(f.total) || 1;
-                        const compliant = parseInt(f.compliant) || 0;
-                        const score = Math.round((compliant / total) * 100);
+                        // The API returns assessed_count / compliant_count.
+                        // This read f.total and f.compliant — neither is in the
+                        // payload — so total fell back to 1 and compliant to 0,
+                        // rendering a hardcoded 0% dressed up as a measurement.
+                        const assessed = parseInt(f.assessed_count) || 0;
+                        const compliant = parseInt(f.compliant_count) || 0;
+                        const obligations = parseInt(f.obligation_count) || 0;
+                        const score = assessed > 0
+                            ? Math.round((compliant / assessed) * 100)
+                            : null;
+                        // The row's own name is `name` (r.name). Reading
+                        // `regulation_name` matched nothing, so every framework
+                        // rendered as "Unknown" — five identical rows that named
+                        // none of the nine frameworks they stood for.
+                        const label = f.name || f.regulation_code || _gt("grc.unknown");
+                        if (score === null) {
+                            // Never assessed. Showing 0% here would assert
+                            // non-compliance we have not measured.
+                            return `
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-gray-700">${label}</span>
+                        <span class="text-xs text-gray-400">${obligations} clauses · not assessed</span>
+                    </div>
+                `;
+                        }
                         return `
                     <div class="flex items-center justify-between">
-                        <span class="text-sm font-medium text-gray-700">${f.regulation_name || _gt("grc.unknown")}</span>
+                        <span class="text-sm font-medium text-gray-700">${label}</span>
                         <div class="flex items-center gap-2">
+                            <span class="text-xs text-gray-400">${compliant}/${assessed}</span>
                             <div class="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
                                 <div class="${score >= 80 ? "bg-green-500" : score >= 60 ? "bg-amber-500" : "bg-red-500"} h-full rounded-full" data-style="width: ${score}%"></div>
                             </div>

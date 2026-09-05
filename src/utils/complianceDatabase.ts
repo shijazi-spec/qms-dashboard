@@ -1012,10 +1012,30 @@ export async function getComplianceSummary(): Promise<any> {
     GROUP BY priority
   `);
 
+  // Per-framework compliance for the Control Tower's "Compliance by Framework"
+  // panel. It previously returned only obligation_count, so the panel — which
+  // exists to show compliance — had nothing to compute a percentage from and
+  // rendered 0% for every framework whatever the real state was.
+  //
+  // assessed_count is returned alongside compliant_count so the UI can tell
+  // "assessed and non-compliant" (a real 0%) apart from "never assessed" (no
+  // number to show). Those look identical once collapsed to a percentage, and
+  // showing an unassessed framework as 0% compliant is a claim we cannot make.
   const byRegulation = await pool.query(`
-    SELECT r.name, r.regulation_code, COUNT(o.id) as obligation_count
+    SELECT r.name, r.regulation_code,
+           COUNT(o.id) as obligation_count,
+           COUNT(latest.compliance_status) as assessed_count,
+           COUNT(*) FILTER (WHERE latest.compliance_status = 'compliant')
+             as compliant_count
     FROM regulations r
     LEFT JOIN obligations o ON r.id = o.regulation_id
+    LEFT JOIN LATERAL (
+      SELECT ca.compliance_status
+        FROM compliance_assessments ca
+       WHERE ca.obligation_id = o.id
+       ORDER BY ca.assessment_date DESC
+       LIMIT 1
+    ) latest ON TRUE
     WHERE r.status = 'active'
     GROUP BY r.id, r.name, r.regulation_code
     ORDER BY obligation_count DESC
