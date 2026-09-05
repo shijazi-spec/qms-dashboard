@@ -46,6 +46,67 @@ let bridgeReady = false;
  * partial unique index so each Integrated QMS document maps to at most one
  * projection row.
  */
+/**
+ * Re-derive `category` on every projected row from its source policy's
+ * document_type.
+ *
+ * The projection only started setting a real category once
+ * qmsCategoryForDocType existed; everything mirrored before that was written as
+ * "policies". That is why /qms-docs showed "Policies 154, Forms 0, Security
+ * Controls 0" while its OWN master list, on the same screen, listed
+ * WP-FORM-001…057 and WP-CTL-001…007 — the page contradicting itself. It is
+ * stale data, not broken logic, so it needs a backfill rather than a fix.
+ *
+ * Driven from qmsCategoryForDocType rather than a CASE in SQL, so the bucketing
+ * has exactly one definition. A second copy in SQL would drift from the first
+ * the next time a document type is added, and the symptom would be this same
+ * silent mis-filing.
+ *
+ * Idempotent and cheap: each UPDATE is guarded by IS DISTINCT FROM, so a
+ * correct row is never rewritten and a settled database does no work.
+ */
+export async function backfillMappingCategories(): Promise<{
+  updated: number;
+  buckets: Record<string, number>;
+}> {
+  const typesRes = await pool.query(
+    `SELECT DISTINCT COALESCE(document_type, '') AS document_type FROM policies`,
+  );
+
+  const byCategory = new Map<string, string[]>();
+  for (const row of typesRes.rows) {
+    const docType = String(row.document_type || "");
+    const category = qmsCategoryForDocType(docType);
+    const list = byCategory.get(category) || [];
+    list.push(docType);
+    byCategory.set(category, list);
+  }
+
+  let updated = 0;
+  const buckets: Record<string, number> = {};
+  for (const [category, docTypes] of byCategory) {
+    const res = await pool.query(
+      `UPDATE qms_uploaded_documents d
+          SET category = $1
+         FROM policies p
+        WHERE d.source_policy_id = p.id
+          AND COALESCE(p.document_type, '') = ANY($2::text[])
+          AND d.category IS DISTINCT FROM $1`,
+      [category, docTypes],
+    );
+    const n = res.rowCount || 0;
+    if (n > 0) buckets[category] = n;
+    updated += n;
+  }
+
+  if (updated > 0) {
+    logger.info(
+      `[policyMappingBridge] re-filed ${updated} projected document(s): ${JSON.stringify(buckets)}`,
+    );
+  }
+  return { updated, buckets };
+}
+
 export async function initPolicyMappingBridge(): Promise<void> {
   if (bridgeReady) return;
   await initQmsDocsTable();
@@ -68,6 +129,21 @@ export async function initPolicyMappingBridge(): Promise<void> {
       PRIMARY KEY (document_id, regulation_id)
     )
   `);
+
+  // Re-file any row still carrying the pre-qmsCategoryForDocType category.
+  // Best-effort: a failure here must never stop the bridge from initialising,
+  // because everything else on this path (projection, mapping, the Documents
+  // Library itself) works fine with a stale category — it just displays the
+  // document in the wrong box. Runs once per process; a settled database
+  // updates nothing.
+  try {
+    await backfillMappingCategories();
+  } catch (err) {
+    logger.warn(
+      `[policyMappingBridge] category backfill skipped: ${(err as Error).message}`,
+    );
+  }
+
   bridgeReady = true;
 }
 
@@ -409,16 +485,33 @@ export function mappingFingerprint(text: string, regCodes: string[] | null): str
  * round-trips to the bucket the user chose.
  */
 export function qmsCategoryForDocType(docType: string | null | undefined): string {
+  // These buckets MUST match MASTER_GROUPS in dashboard/policies.html, so the
+  // Documents Library cards and the Integrated QMS "Browse by Category" boxes
+  // describe the same document the same way. Previously only 4 of the 11
+  // document types were listed and everything else fell through to "policies",
+  // so a procedure, work instruction, manual, guideline, template or security
+  // control was filed as a policy on /qms-docs while Integrated QMS showed it
+  // correctly — two screens disagreeing about the same row.
   switch (String(docType || "").toLowerCase()) {
     case "control":
+    case "security_control":
       return "security_controls";
     case "sop":
+    case "procedure":
+    case "work_instruction":
       return "sops";
     case "form":
+    case "template":
       return "forms";
     case "document":
+    case "guideline":
+    case "manual":
       return "documents";
+    case "policy":
+      return "policies";
     default:
+      // Unknown/empty type. "policies" stays the fallback because that is what
+      // an untyped governance artefact has always been filed as here.
       return "policies";
   }
 }
