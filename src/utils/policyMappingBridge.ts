@@ -134,22 +134,46 @@ export async function backfillMappingCategories(): Promise<{
  * Idempotent and self-reversing: attaching the approved file re-runs the
  * projection, which flips the row back to 'extracted' on its own.
  */
-export async function backfillPlaceholderStatus(): Promise<number> {
-  const res = await pool.query(
+export async function backfillPlaceholderStatus(): Promise<{
+  marked: number;
+  restored: number;
+}> {
+  // Test the PROJECTION's own file, not the source policy's.
+  //
+  // The first version of this keyed on policies.file_path and over-matched:
+  // "Customer Success Management Process" has a real 4.6MB file on the
+  // projection (/data/documents/...) while its policy row carries no
+  // file_path, so a genuine document with genuine extracted text was flipped
+  // to placeholder. file_size is the honest test — a projection with no file
+  // has 0, and the seeded register entries all do.
+  const marked = await pool.query(
     `UPDATE qms_uploaded_documents d
         SET extraction_status = 'placeholder'
-       FROM policies p
-      WHERE d.source_policy_id = p.id
-        AND COALESCE(p.file_path, '') = ''
+      WHERE COALESCE(d.file_size, 0) = 0
         AND COALESCE(d.extraction_status, '') = 'extracted'`,
   );
-  const n = res.rowCount || 0;
-  if (n > 0) {
+
+  // Undo that over-match. Safe in this direction because a legitimate
+  // placeholder has no file at all: anything with a real file AND real text
+  // was extracted from something, whatever a previous pass decided. A document
+  // whose extraction is merely unfinished sits at 'pending'/'failed', never
+  // 'placeholder', so this cannot promote one of those by accident.
+  const restored = await pool.query(
+    `UPDATE qms_uploaded_documents d
+        SET extraction_status = 'extracted'
+      WHERE COALESCE(d.file_size, 0) > 0
+        AND COALESCE(d.extracted_text, '') <> ''
+        AND COALESCE(d.extraction_status, '') = 'placeholder'`,
+  );
+
+  const m = marked.rowCount || 0;
+  const r = restored.rowCount || 0;
+  if (m > 0 || r > 0) {
     logger.info(
-      `[policyMappingBridge] re-marked ${n} fileless projection(s) as placeholder`,
+      `[policyMappingBridge] extraction_status backfill: ${m} marked placeholder, ${r} restored to extracted`,
     );
   }
-  return n;
+  return { marked: m, restored: r };
 }
 
 export async function initPolicyMappingBridge(): Promise<void> {

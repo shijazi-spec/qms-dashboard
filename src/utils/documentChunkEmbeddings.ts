@@ -327,16 +327,31 @@ async function loadChunks(): Promise<CachedChunk[]> {
   const fp = await pool.query(
     `SELECT COUNT(*)::int AS n,
             COALESCE(MAX(id), 0) AS max_id,
-            COALESCE(MAX(created_at), TIMESTAMP 'epoch') AS max_created
+            COALESCE(MAX(created_at), TIMESTAMP 'epoch') AS max_created,
+            -- Eligible-document count is part of the fingerprint because the
+            -- query below now filters on extraction_status, which lives in a
+            -- DIFFERENT table. Without this, marking a document placeholder
+            -- changes what should be returned while the chunk table is
+            -- untouched, so the cache would keep serving the excluded chunks
+            -- until the process restarted.
+            (SELECT COUNT(*)::int FROM qms_uploaded_documents
+              WHERE COALESCE(extraction_status, '') <> 'placeholder') AS eligible
        FROM document_chunk_embeddings`,
   );
   const f = fp.rows[0];
-  const fingerprint = `${f.n}:${f.max_id}:${new Date(f.max_created).getTime()}`;
+  const fingerprint = `${f.n}:${f.max_id}:${new Date(f.max_created).getTime()}:${f.eligible}`;
   if (cache && cache.fingerprint === fingerprint) return cache.rows;
 
+  // Exclude placeholders. A register entry awaiting its file holds only the
+  // seeder's 170-character line, and chunks built from that matched every
+  // clause at a uniform ~0.28 similarity — noise presented as ranked results.
+  // Filtering at load rather than at each call site means every consumer of
+  // the vector cache inherits it.
   const res = await pool.query(
-    `SELECT document_id, chunk_index, chunk_text, embedding
-       FROM document_chunk_embeddings`,
+    `SELECT c.document_id, c.chunk_index, c.chunk_text, c.embedding
+       FROM document_chunk_embeddings c
+       JOIN qms_uploaded_documents d ON d.id = c.document_id
+      WHERE COALESCE(d.extraction_status, '') <> 'placeholder'`,
   );
   const rows: CachedChunk[] = res.rows.map((r: any) => ({
     document_id: r.document_id,
