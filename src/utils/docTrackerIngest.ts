@@ -104,6 +104,8 @@ export interface IngestResult {
     soft_deleted: number;
     orphans: number;
     uncoded: number;
+    /** Rows whose register entry appeared since the last ingest. */
+    relinked: number;
   };
   warnings: string[];
 }
@@ -184,6 +186,39 @@ export function computeSnapshotHash(documents: IncomingDocument[]): string {
   return createHash("sha256").update(rows.join("\n")).digest("hex");
 }
 
+/**
+ * Attach tracker rows to register entries that have appeared since they were
+ * last ingested.
+ *
+ * Guarded by `policy_id IS NULL`, so a row already linked is never touched and
+ * a settled library does no work. Matches on register_code, which for Arabic
+ * carries the -AR suffix — so an Arabic document links only to a real -AR
+ * register entry, never to its English parent. Linking those to the English row
+ * would silently claim a translation IS the controlled document.
+ *
+ * Deliberately NOT the inverse: nothing here clears a policy_id when a register
+ * entry disappears. Un-linking is destructive and belongs with the soft-delete
+ * path and its mass-deletion guard, not in a repair that runs on every push.
+ */
+export async function relinkResolvedOrphans(): Promise<number> {
+  const res = await pool.query(
+    `UPDATE doc_tracker_documents d
+        SET policy_id = p.id
+       FROM policies p
+      WHERE d.policy_id IS NULL
+        AND d.deleted = FALSE
+        AND d.register_code IS NOT NULL
+        AND p.policy_number = d.register_code`,
+  );
+  const n = res.rowCount || 0;
+  if (n > 0) {
+    logger.info(
+      `[DocTrackerIngest] re-linked ${n} document(s) to newly registered codes`,
+    );
+  }
+  return n;
+}
+
 /** Merge a snapshot. Serialised, idempotent, soft-delete only. */
 export async function ingestSnapshot(payload: IngestPayload): Promise<IngestResult> {
   await initDocTrackerTables();
@@ -201,7 +236,25 @@ export async function ingestSnapshot(payload: IngestPayload): Promise<IngestResu
     soft_deleted: 0,
     orphans: 0,
     uncoded: 0,
+    relinked: 0,
   };
+
+  // Re-link rows whose register entry has appeared since the last ingest, and
+  // do it BEFORE the duplicate check so a re-run repairs links even when the
+  // library has not changed.
+  //
+  // policy_id is stored, not derived, so `orphan` (policy_id IS NULL) went
+  // stale the moment a code was added to the register: the library was
+  // byte-identical, every ingest short-circuited as a duplicate, and the row
+  // stayed orphaned forever. WP-FORM-058 showed exactly that — the overview
+  // tile read the stored NULL and said 25 orphans while the orphans panel, which
+  // additionally checks `NOT EXISTS (... policies ...)` live, said 24. Two
+  // numbers for one question on one page, and the stored one was wrong.
+  //
+  // Fixing the data rather than the display: making the tile do the live check
+  // too would have agreed with the panel while leaving policy_id NULL for
+  // everything else that reads it (projection, attach, promotion).
+  counts.relinked = await relinkResolvedOrphans();
 
   // Duplicate check BEFORE taking the lock — the common case on a watcher
   // cadence is "nothing changed", and that path must be cheap.
