@@ -84,6 +84,42 @@ type Check = {
   >;
 };
 
+/** Hours without a new audit event before the trail is treated as suspect. */
+export const AUDIT_WRITE_WARN_HOURS = 72;
+/** Hours without a new audit event before it is treated as stopped. */
+export const AUDIT_WRITE_FAIL_HOURS = 168;
+
+/**
+ * Grade the age of the newest `event_logs` row.
+ *
+ * Exported and pure so the thresholds are testable without a database — the
+ * boundaries are the only judgement in this check, and getting them wrong is
+ * either alert spam or another silent outage.
+ *
+ * 72h absorbs a long weekend on a quiet platform. 168h does not: the 2026-08
+ * outage ran to eighteen days, so it trips `fail` on day seven and reaches
+ * Slack, rather than sitting unseen.
+ */
+export function classifyAuditWriteRecency(hoursOld: number): {
+  status: "pass" | "warn" | "fail";
+  message?: string;
+} {
+  const days = (hoursOld / 24).toFixed(1);
+  if (hoursOld > AUDIT_WRITE_FAIL_HOURS) {
+    return {
+      status: "fail",
+      message: `No audit event recorded for ${days} days — the audit trail has almost certainly stopped`,
+    };
+  }
+  if (hoursOld > AUDIT_WRITE_WARN_HOURS) {
+    return {
+      status: "warn",
+      message: `Newest audit event is ${days} days old`,
+    };
+  }
+  return { status: "pass" };
+}
+
 const CHECKS: Check[] = [
   {
     id: "db_connectivity",
@@ -94,6 +130,62 @@ const CHECKS: Check[] = [
       return r.rows[0]?.ok === 1
         ? { status: "pass" }
         : { status: "fail", message: "DB returned unexpected result" };
+    },
+  },
+  {
+    // The AUDIT TRAIL itself (event_logs), not the quality audits below.
+    //
+    // logEvent() catches every write error, records it, and returns null — the
+    // action still succeeds, so a caller sees 200 whether or not the event was
+    // recorded. That state was only visible by manually opening
+    // /api/logs/stats, which is how eighteen days of audit history went missing
+    // before anyone noticed (see the comments in eventLogsDatabase.ts).
+    //
+    // Reports `fail`, never `warn`, when writes are broken: only a failing
+    // check makes the run "critical", and only a critical run is dispatched at
+    // `high` priority — which is the sole path that reaches Slack/email.
+    // A "degraded" run notifies in-app only, and the in-app hub feed currently
+    // has no reachable reader.
+    //
+    // Two independent signals, because neither alone is sufficient:
+    //   in-process — exact error, but only for THIS instance and only since
+    //                the last restart.
+    //   recency    — survives restarts and covers every instance, and is what
+    //                would actually have caught the eighteen-day gap.
+    id: "audit_write_health",
+    label: "Audit trail writes succeeding (event_logs)",
+    category: "infrastructure",
+    run: async () => {
+      const { getAuditWriteHealth } = await import("./eventLogsDatabase");
+      const health = getAuditWriteHealth();
+      if (!health.healthy && health.lastFailure) {
+        return {
+          status: "fail",
+          message:
+            `Audit writes are FAILING (since ${health.lastFailure.at}): ` +
+            `${health.lastFailure.message}. Actions are still being applied but ` +
+            `are not being recorded.`,
+          details: health.lastFailure,
+        };
+      }
+
+      // Uses idx_event_logs_created_at (DESC) — a single index read per
+      // partition, not a scan.
+      const r = await pool.query(
+        `SELECT EXTRACT(EPOCH FROM (NOW() - created_at))/3600 AS hours_old
+           FROM event_logs ORDER BY created_at DESC LIMIT 1`,
+      );
+      if (r.rows.length === 0) {
+        return {
+          status: "fail",
+          message: "event_logs is EMPTY — no audit event has ever been recorded",
+        };
+      }
+      const hours = parseFloat(r.rows[0].hours_old);
+      return {
+        ...classifyAuditWriteRecency(hours),
+        details: { hoursOld: hours },
+      };
     },
   },
   {
