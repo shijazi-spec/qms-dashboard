@@ -344,7 +344,14 @@
                 // 2) Also kick off the DEFINITIVE full reconcile (all modules, every
                 //    tab, background) so records outside this view get cleaned too.
                 //    Reuses the cached admin key — no second prompt.
-                erAdminPost('/api/duplicates/reconcile-deleted-full', {}).catch(function () {});
+                erAdminPost('/api/duplicates/reconcile-deleted-full', {}).catch(function (bgErr) {
+                    // The message below tells the user a platform-wide reconcile
+                    // is running. If the kickoff itself failed, saying so anyway is
+                    // a false promise — they would wait for a cleanup that never
+                    // started. Say what actually happened instead.
+                    rrToast('The visible clusters were checked, but the full background reconcile could NOT be started'
+                        + (bgErr && bgErr.message ? ' (' + bgErr.message + ')' : '') + '. Re-run Verify to try again.');
+                });
                 rrToast('🧹 Checked ' + (j.checked || 0) + ' record(s) in the visible clusters — pruned ' + (j.pruned || 0) + ' deleted'
                     + (j.converted ? ' + ' + j.converted + ' converted lead(s)' : '') + '.\n\n'
                     + 'A full background reconcile (ALL tabs/modules) is also running to clear the rest — click Refresh in a few minutes.');
@@ -378,7 +385,14 @@
                 if (!j) { if (out) out.textContent = 'Cancelled.'; return; }
                 if (!j.success) { if (out) out.textContent = 'Verify failed: ' + (j.error || 'unknown'); rrToast('Verify failed: ' + (j.error || 'unknown')); return; }
                 // 2) Definitive platform-wide reconcile in the background.
-                erAdminPost('/api/duplicates/reconcile-deleted-full', {}).catch(function () {});
+                erAdminPost('/api/duplicates/reconcile-deleted-full', {}).catch(function (bgErr) {
+                    // The message below tells the user a platform-wide reconcile
+                    // is running. If the kickoff itself failed, saying so anyway is
+                    // a false promise — they would wait for a cleanup that never
+                    // started. Say what actually happened instead.
+                    rrToast('The visible clusters were checked, but the full background reconcile could NOT be started'
+                        + (bgErr && bgErr.message ? ' (' + bgErr.message + ')' : '') + '. Re-run Verify to try again.');
+                });
                 const msg = '🧹 Checked ' + (j.checked || 0) + ' record(s) across open clusters — pruned ' + (j.pruned || 0) + ' deleted'
                     + (j.converted ? ' + ' + j.converted + ' converted lead(s)' : '') + '. '
                     + 'A full background reconcile (ALL tabs/modules) is also running — this view refreshes now and will keep clearing over the next few minutes.';

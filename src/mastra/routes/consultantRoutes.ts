@@ -727,7 +727,21 @@ export const consultantRoutes = [
           if (thread && thread.resourceId && thread.resourceId !== resourceId) {
             return c.json({ error: "Not found" }, 404);
           }
-          await memory.deleteThread(threadId).catch(() => {});
+
+          // Deleting an id that no longer exists is a SUCCESS — the client's ✕
+          // is idempotent and a double-click must not surface an error.
+          if (!thread) return c.json({ ok: true });
+
+          // A real delete failure is NOT success. This used to be
+          // `.catch(() => {})` followed by `{ ok: true }`, so the ✕ removed the
+          // chat from the UI while the thread survived on the server and came
+          // back on the next load, with nothing logged either.
+          try {
+            await memory.deleteThread(threadId);
+          } catch (deleteError) {
+            logger.error("[Consultant] Thread delete failed:", deleteError);
+            return c.json({ error: "Failed to delete thread" }, 500);
+          }
           return c.json({ ok: true });
         } catch (error) {
           logger.error("[Consultant] Thread delete error:", error);

@@ -24,7 +24,8 @@
     "new-feature": "bash scripts/new-feature.sh",
     "ship": "bash scripts/ship-feature.sh",
     "postinstall": "node scripts/patch-lazystream.mjs && node scripts/patch-mastra-provider-types.mjs && node scripts/patch-provider-utils-v3-compat.mjs",
-    "check:routes": "node scripts/check-route-collisions.mjs"
+    "check:routes": "node scripts/check-route-collisions.mjs",
+    "audit:swallowed": "node scripts/audit-swallowed-errors.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.65",

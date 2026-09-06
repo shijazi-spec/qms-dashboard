@@ -517,7 +517,23 @@ export async function executeMergePlan(
       actionType: "module_resolved",
       performedBy,
       notes: `Agentic ${closeCluster ? "merge" : "module merge"} into ${masterId} — AI-Applied, pending Verify-in-CRM`,
-    }).catch(() => {});
+    }).catch((ledgerError) => {
+      // Still best-effort: the Zoho merge has ALREADY happened, so throwing
+      // here would fail an operation that actually succeeded. But it must not
+      // be silent — this ledger is the source of truth for the Data Cleaning
+      // Progress headline, so a dropped write undercounts real work forever
+      // and the only evidence was nothing at all.
+      logger.error(
+        "[MergeExecutor] Resolution-ledger write FAILED — merge applied but not credited",
+        {
+          module,
+          masterZohoId: masterId,
+          duplicateCount: dups.length,
+          performedBy,
+          error: (ledgerError as any)?.message ?? String(ledgerError),
+        },
+      );
+    });
   }
 
   if (report.staleDropped.length > 0) {
