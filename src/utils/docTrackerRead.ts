@@ -34,6 +34,7 @@
 
 import { sharedPool as pool } from "./sharedPool";
 import { initDocTrackerTables, TERMINAL_REVIEW_STATES } from "./docTrackerDatabase";
+import { baseCodeOf, docFamilyOf } from "./docTrackerCodes";
 
 /** SQL fragment computing link_status live rather than trusting a cached column. */
 const LINK_STATUS_SQL = `
@@ -389,9 +390,32 @@ export async function getOrphans(): Promise<{
    ORDER BY p.policy_number`,
   );
 
+  // Keep only codes the controlled register actually claims.
+  //
+  // The SQL asks for policy_number LIKE 'WP-%', which is too wide: it catches
+  // anything authored in Integrated QMS whose number happens to start with WP-.
+  // WP-BU-CS-SOP-003 ("Customer Success Management Process") was showing here
+  // as missing from disk, but it was written in the platform and never lived in
+  // the file library at all — it is not missing, it was never expected. Left
+  // alone, every future WP-prefixed SOP anyone writes joins this list forever,
+  // and a panel meant to be a to-do fills with items nobody can action.
+  //
+  // Filtered here rather than as a regex in the WHERE clause so the definition
+  // of "a controlled-document code" keeps exactly one home: a second copy in
+  // SQL would drift from docTrackerCodes the first time the shape changes. The
+  // result set is a handful of rows, so filtering after the query costs
+  // nothing.
+  //
+  // baseCodeOf() first because WP_CODE does not admit the -AR suffix: testing
+  // the raw code would silently drop Arabic register entries the day Maram adds
+  // them, which is precisely the decision still open on the 24 Arabic orphans.
+  const claimedByRegister = missingFromDisk.rows.filter(
+    (r: any) => docFamilyOf(baseCodeOf(r.policy_number)) !== null,
+  );
+
   return {
     missingFromMaster: missingFromMaster.rows,
-    missingFromDisk: missingFromDisk.rows,
+    missingFromDisk: claimedByRegister,
   };
 }
 
