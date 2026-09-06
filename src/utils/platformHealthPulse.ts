@@ -636,25 +636,73 @@ export async function runHealthPulse(): Promise<PulseRun> {
  * Fire a notification for a degraded/critical pulse run. Suppresses repeated
  * alerts: only fires when the most recent prior run had a different status.
  */
+/**
+ * Stable identity for "what is currently wrong", used to decide whether a pulse
+ * is worth announcing.
+ *
+ * Sorted so check ordering cannot manufacture a spurious change, and scoped to
+ * fail/warn ids only: a check flipping pass→pass is not news, and the message
+ * text is deliberately excluded because counts drift ("281 pending" vs "280")
+ * without the situation actually changing.
+ */
+export function problemSignature(
+  checks: Array<{ id?: string; status?: string }> | null | undefined,
+): string {
+  if (!Array.isArray(checks)) return "";
+  return checks
+    .filter((c) => c && (c.status === "fail" || c.status === "warn"))
+    .map((c) => `${c.status}:${c.id ?? "?"}`)
+    .sort()
+    .join(",");
+}
+
+/** `checks` comes back as jsonb (already an array) or as text, depending on the driver. */
+function parsePersistedChecks(raw: unknown): Array<{ id?: string; status?: string }> {
+  if (Array.isArray(raw)) return raw as Array<{ id?: string; status?: string }>;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 export async function maybeNotifyOnPulse(run: PulseRun): Promise<void> {
   if (run.overall_status === "healthy") return;
 
-  // De-duplicate: only fire when status transitions. If persistence failed
-  // (run.id is null), fall back to comparing against the most recent persisted
-  // run by run_at to avoid alert spam.
+  // De-duplicate on the overall status AND on WHICH checks are unhappy.
+  //
+  // Comparing the status alone was not enough. A platform that stays
+  // "critical" — which is exactly what a queue nobody drains or a cron that
+  // stopped produces — matches its predecessor on every subsequent run, so it
+  // alerts once and then goes quiet forever, including for a completely
+  // different failure appearing later. The louder the platform's problems, the
+  // more thoroughly it would hide new ones.
+  //
+  // Comparing the SET of failing/warning check ids as well means a steady state
+  // stays silent (no spam) while anything newly broken still gets announced.
   try {
     const prev = run.id
       ? await pool.query(
-          `SELECT overall_status FROM health_pulse_runs
+          `SELECT overall_status, checks FROM health_pulse_runs
            WHERE id < $1 ORDER BY id DESC LIMIT 1`,
           [run.id],
         )
       : await pool.query(
-          `SELECT overall_status FROM health_pulse_runs
+          `SELECT overall_status, checks FROM health_pulse_runs
            ORDER BY id DESC LIMIT 1`,
         );
-    const prevStatus = prev.rows[0]?.overall_status;
-    if (prevStatus === run.overall_status) return;
+    const prevRow = prev.rows[0];
+    if (
+      prevRow?.overall_status === run.overall_status &&
+      problemSignature(parsePersistedChecks(prevRow.checks)) ===
+        problemSignature(run.checks)
+    ) {
+      return;
+    }
   } catch {}
 
   const failedChecks = run.checks.filter((c) => c.status === "fail");

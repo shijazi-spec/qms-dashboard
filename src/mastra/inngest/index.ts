@@ -841,6 +841,68 @@ const aiApprovalExpiryFunction = inngest.createFunction(
 inngestFunctions.push(aiApprovalExpiryFunction);
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Platform health pulse.
+//
+// THIS CRON IS THE WHOLE POINT: runHealthPulse() was previously reachable ONLY
+// from POST /api/health/pulse/run, a manual endpoint, so it last ran on
+// 2026-04-18 and every check had been frozen on that snapshot for months.
+// /api/health/pulse kept serving the April run, which reported "healthy" with
+// 10/10 passing — so the monitoring looked fine precisely because it was dead.
+//
+// Concretely, what those stale passes were hiding by 2026-09:
+//   ai_approval_queue_depth  reported pass on April's small queue; the real
+//                            figure was 280 pending, well past its own
+//                            fail threshold of 100.
+//   ai_approval_stale        reported pass; the oldest pending approval was
+//                            from 2026-07-22, against a 4h threshold.
+//
+// Hourly, not daily: these checks exist to catch things that stop — a frozen
+// cron, a queue nobody drains, an audit trail that quit writing. A day of
+// silence before anyone hears about it defeats that.
+//
+// maybeNotifyOnPulse only fires on a status TRANSITION, so an hourly cadence
+// does not mean hourly alerts: a platform that stays degraded notifies once,
+// not every hour.
+// ──────────────────────────────────────────────────────────────────────────────
+const healthPulseFunction = inngest.createFunction(
+  { id: "platform-health-pulse" },
+  { cron: process.env.HEALTH_PULSE_CRON || "10 * * * *" }, // hourly @ :10
+  async ({ step }) => {
+    return await step.run("run-health-pulse", async () => {
+      const { runHealthPulse, maybeNotifyOnPulse } =
+        await import("../../utils/platformHealthPulse");
+
+      const run = await runHealthPulse();
+
+      // Notification failures must not lose the run itself — it is already
+      // persisted, and the dashboard reads it whether or not Slack accepted
+      // the alert.
+      try {
+        await maybeNotifyOnPulse(run);
+      } catch (notifyErr) {
+        logger.error(
+          "[HealthPulse] Pulse recorded but alert dispatch failed:",
+          notifyErr,
+        );
+      }
+
+      if (run.overall_status !== "healthy") {
+        logger.warn(
+          `[HealthPulse] ${run.overall_status}: ${run.fail_count} fail, ${run.warn_count} warn`,
+        );
+      }
+      return {
+        overall: run.overall_status,
+        pass: run.pass_count,
+        warn: run.warn_count,
+        fail: run.fail_count,
+      };
+    });
+  },
+);
+inngestFunctions.push(healthPulseFunction);
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Daily AI cost summary + pruning cron
 // Emits a Slack/email alert when the trailing-24h cost exceeds
 // AI_DAILY_COST_ALERT_USD (default $10.00).
