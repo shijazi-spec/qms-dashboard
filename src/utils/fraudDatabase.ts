@@ -1369,24 +1369,88 @@ export async function dispatchEscalationForIncident(
     }
   }
 
-  const { createNotification } = await import("./notificationHub");
+  const { createNotification, getNotificationById } =
+    await import("./notificationHub");
+
+  // DELIVERY IS PER-RECIPIENT EMAIL, deliberately not Slack.
+  //
+  // Every notification here used to be written with channel "in_app", and
+  // createNotification only delivers on the channel it is given — so nothing
+  // was ever sent anywhere, including the P1 "critical" immediate escalations.
+  // The rows simply accumulated in a table with no reachable reader.
+  //
+  // Slack is the wrong fix for THIS path. The matrix addresses named people,
+  // and the ESC-AML guard above exists to keep the circle of knowledge closed
+  // (no tipping off). A shared channel would widen exactly the audience that
+  // guard narrows. Email preserves the addressing the matrix specifies.
+  //
+  // The in-app row is still written: it is the local record of what was
+  // escalated, and it becomes visible once the hub feed has a reader.
+  const emailConfigured = Boolean(process.env.RESEND_API_KEY);
+  if (!emailConfigured) {
+    logger.error(
+      `[FraudDispatch] RESEND_API_KEY is NOT set — escalation email for ${incident.incident_code} (${triggerId}) CANNOT be delivered. ` +
+        `In-app records will still be written, but no recipient will be told. This is a compliance-relevant delivery failure.`,
+    );
+  }
 
   let enqueued = 0;
   let skipped = 0;
+
+  /**
+   * Record the escalation in-app AND email the named recipient.
+   *
+   * Returns false when the recipient was not actually reached, so the caller's
+   * `skipped` count reflects DELIVERY rather than merely "we called a
+   * function". Confirmation is read back from `sent_at`, which the hub stamps
+   * only after Resend accepts the message — a failed send is caught and logged
+   * inside the hub and would otherwise be invisible here.
+   */
+  const escalateTo = async (
+    recipient: string,
+    fields: {
+      title: string;
+      message: string;
+      priority: "critical" | "high" | "medium" | "low";
+    },
+  ): Promise<boolean> => {
+    const common = {
+      title: fields.title,
+      message: fields.message,
+      module: "fraud",
+      priority: fields.priority,
+      recipient,
+      related_entity_type: "fraud_incident",
+      related_entity_id: String(incident.id),
+      action_url: "/fraud-incidents",
+    } as const;
+
+    // Local record first — it must exist even if delivery fails.
+    await createNotification({ ...common, channel: "in_app" });
+
+    if (!emailConfigured) return false;
+
+    const emailRow = await createNotification({ ...common, channel: "email" });
+    const confirmed = emailRow?.id
+      ? await getNotificationById(emailRow.id)
+      : null;
+    if (confirmed?.sent_at) return true;
+
+    logger.error(
+      `[FraudDispatch] Escalation email to ${recipient} for ${incident.incident_code} (${triggerId}) was NOT delivered — the row was written but never sent.`,
+    );
+    return false;
+  };
+
   for (const recipient of row.notify_immediately || []) {
     try {
-      await createNotification({
+      const delivered = await escalateTo(recipient, {
         title: `Fraud incident ${incident.incident_code} — immediate escalation (${triggerId})`,
         message: `${incident.severity ? `[${incident.severity}] ` : ""}${incident.incident_type} detected. SLA: ${row.response_sla}. ${row.external_party ? `External: ${row.external_party}.` : ""}`,
-        module: "fraud",
         priority: incident.severity === "P1" ? "critical" : "high",
-        channel: "in_app",
-        recipient,
-        related_entity_type: "fraud_incident",
-        related_entity_id: String(incident.id),
-        action_url: "/fraud-incidents",
       });
-      enqueued++;
+      if (delivered) enqueued++;
+      else skipped++;
     } catch (err) {
       skipped++;
       logger.error(
@@ -1397,21 +1461,17 @@ export async function dispatchEscalationForIncident(
   }
   for (const recipient of row.notify_within_4h || []) {
     try {
-      // Within-4h notifications still go through the notification hub now.
-      // A scheduled-delivery channel would be a future enhancement; the
-      // priority differentiation already lets recipients filter.
-      await createNotification({
+      // Still dispatched immediately — "within 4h" is the RESPONSE SLA, not a
+      // send delay. It stays at medium so recipients can filter it apart from
+      // the immediate tier; that no longer costs delivery, because the email
+      // channel is explicit here rather than inferred from priority.
+      const delivered = await escalateTo(recipient, {
         title: `Fraud incident ${incident.incident_code} — escalation (${triggerId})`,
         message: `${incident.severity ? `[${incident.severity}] ` : ""}${incident.incident_type} — review within 4 hours. SLA: ${row.response_sla}.`,
-        module: "fraud",
         priority: "medium",
-        channel: "in_app",
-        recipient,
-        related_entity_type: "fraud_incident",
-        related_entity_id: String(incident.id),
-        action_url: "/fraud-incidents",
       });
-      enqueued++;
+      if (delivered) enqueued++;
+      else skipped++;
     } catch (err) {
       skipped++;
       logger.error(
