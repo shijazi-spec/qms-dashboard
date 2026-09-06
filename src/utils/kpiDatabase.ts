@@ -1937,16 +1937,40 @@ export interface CatalogKpiWithValue {
 export const SEEDED_KPI_EXPECTATIONS: ReadonlyArray<{
   ownerName: string;
   minimum: number;
+  /** kpi_code prefix, so the diagnostic can find the rows whatever state
+   *  they are in — including states that make them invisible. */
+  codePrefix: string;
 }> = [
-  { ownerName: "SDR Team", minimum: 11 },
-  { ownerName: "Sales Team", minimum: 9 },
-  { ownerName: "CS Team", minimum: 33 },
+  { ownerName: "SDR Team", minimum: 11, codePrefix: "SDR-KPI-" },
+  { ownerName: "Sales Team", minimum: 9, codePrefix: "SALES-KPI-" },
+  { ownerName: "CS Team", minimum: 33, codePrefix: "CS-KPI-" },
 ];
+
+/**
+ * What the rows for a code prefix ACTUALLY look like, ignoring every filter.
+ *
+ * "Not visible" has several distinct causes that all present identically on
+ * screen, and guessing between them has cost days: is_active NULL, is_active
+ * false, or an owner_name the page does not look up. This reports all three so
+ * the next person reads the answer instead of inferring it.
+ */
+export interface SeededKpiForensics {
+  /** Rows carrying this prefix, whatever their state. */
+  total: number;
+  active: number;
+  inactive: number;
+  /** NULL is neither: it hides the row while blocking re-insert. */
+  nullActive: number;
+  /** Distinct owner_name values found, with counts. */
+  owners: Array<{ owner_name: string | null; count: number }>;
+}
 
 export interface SeededKpiVisibility {
   ownerName: string;
   expected: number;
   visible: number;
+  /** Present when visible < expected — why the rows cannot be seen. */
+  forensics?: SeededKpiForensics;
   ok: boolean;
 }
 
@@ -1971,7 +1995,7 @@ export interface SeededKpiVisibility {
  */
 export async function verifySeededKpiVisibility(): Promise<SeededKpiVisibility[]> {
   const results: SeededKpiVisibility[] = [];
-  for (const { ownerName, minimum } of SEEDED_KPI_EXPECTATIONS) {
+  for (const { ownerName, minimum, codePrefix } of SEEDED_KPI_EXPECTATIONS) {
     let visible = 0;
     try {
       visible = (await getKPIsByOwnerName(ownerName)).length;
@@ -1981,15 +2005,55 @@ export async function verifySeededKpiVisibility(): Promise<SeededKpiVisibility[]
       continue;
     }
     const ok = visible >= minimum;
-    results.push({ ownerName, expected: minimum, visible, ok });
-    if (!ok) {
-      // ERROR, not warn: a business unit silently losing its KPIs is the exact
-      // condition that went unnoticed for days.
-      logger.error(
-        `❌ [KPIDB] "${ownerName}" should show at least ${minimum} KPIs but the page can see ${visible}. ` +
-          `The rows may exist while being unreadable — check is_active for NULL, and the owner_name spelling.`,
-      );
+    if (ok) {
+      results.push({ ownerName, expected: minimum, visible, ok });
+      continue;
     }
+    // Not visible — say WHY. Every cause below looks identical on screen, and
+    // guessing between them is what turned a one-line fix into days of work.
+    let forensics: SeededKpiForensics | undefined;
+    try {
+      const f = await pool.query(
+        `SELECT COUNT(*)::int AS total,
+                COUNT(*) FILTER (WHERE is_active IS TRUE)::int  AS active,
+                COUNT(*) FILTER (WHERE is_active IS FALSE)::int AS inactive,
+                COUNT(*) FILTER (WHERE is_active IS NULL)::int  AS null_active
+           FROM kpi_definitions
+          WHERE kpi_code LIKE $1 || '%'`,
+        [codePrefix],
+      );
+      const o = await pool.query(
+        `SELECT owner_name, COUNT(*)::int AS count
+           FROM kpi_definitions
+          WHERE kpi_code LIKE $1 || '%'
+          GROUP BY owner_name
+          ORDER BY count DESC`,
+        [codePrefix],
+      );
+      forensics = {
+        total: f.rows[0]?.total ?? 0,
+        active: f.rows[0]?.active ?? 0,
+        inactive: f.rows[0]?.inactive ?? 0,
+        nullActive: f.rows[0]?.null_active ?? 0,
+        owners: o.rows as SeededKpiForensics["owners"],
+      };
+    } catch (err) {
+      logger.error(`[KPIDB] forensics failed for "${ownerName}"`, err);
+    }
+    results.push({ ownerName, expected: minimum, visible, ok, forensics });
+    // ERROR, not warn: a business unit silently losing its KPIs is the exact
+    // condition that went unnoticed for days.
+    logger.error(
+      `❌ [KPIDB] "${ownerName}" should show at least ${minimum} KPIs but the page can see ${visible}.` +
+        (forensics
+          ? ` Rows with prefix ${codePrefix}: ${forensics.total} total — ` +
+            `${forensics.active} active, ${forensics.inactive} inactive, ${forensics.nullActive} NULL. ` +
+            `owner_name values: ${forensics.owners
+              .map((x) => `${JSON.stringify(x.owner_name)}×${x.count}`)
+              .join(", ") || "none"}. ` +
+            `The page looks up owner_name = ${JSON.stringify(ownerName)} AND is_active = true.`
+          : ""),
+    );
   }
   const broken = results.filter((r) => !r.ok);
   if (!broken.length) {

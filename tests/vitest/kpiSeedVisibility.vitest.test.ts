@@ -71,9 +71,31 @@ describe("the check tests visibility, not existence", () => {
     expect(fn).toContain("getKPIsByOwnerName");
   });
 
-  it("never counts rows directly, which would have reported all clear", () => {
-    expect(fn).not.toContain("SELECT COUNT");
-    expect(fn).not.toContain("FROM kpi_definitions");
+  it("decides visibility from the read path, never from a row count", () => {
+    // The forensics below DO count rows — that is their job, and they run only
+    // after the verdict. What must never happen is the verdict itself coming
+    // from a COUNT, because a COUNT reported every team healthy throughout the
+    // outage. So: the visible figure is assigned from getKPIsByOwnerName, and
+    // no SQL appears before `ok` is decided.
+    expect(fn).toMatch(/visible\s*=\s*\(await getKPIsByOwnerName\([^)]*\)\)\.length/);
+    const beforeVerdict = fn.slice(0, fn.indexOf("const ok ="));
+    expect(beforeVerdict).not.toContain("SELECT");
+  });
+
+  it("reports WHY when a team is short, not just that it is", () => {
+    // Every cause presents identically on screen — is_active NULL, is_active
+    // false, or an owner_name the page does not look up. Naming which one is
+    // the difference between a one-line fix and days of guessing.
+    expect(fn).toContain("is_active IS NULL");
+    expect(fn).toContain("is_active IS FALSE");
+    expect(fn).toContain("owner_name");
+    expect(fn).toContain("forensics");
+  });
+
+  it("only runs the forensics for teams that are actually short", () => {
+    // A healthy team must not pay for three extra queries on every boot.
+    const healthyPath = fn.slice(fn.indexOf("if (ok) {"), fn.indexOf("let forensics"));
+    expect(healthyPath).toContain("continue;");
   });
 
   it("logs at ERROR, so a team losing its KPIs is not a quiet warning", () => {
