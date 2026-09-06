@@ -197,6 +197,55 @@ async function runVerifyPass(
   }
 }
 
+/**
+ * Background-run state for the manual trigger.
+ *
+ * The sweep pages three whole activity modules and cannot finish inside an
+ * HTTP request: the first live run on 70,534 contacts died at ~191s with a 504
+ * while the work carried on server-side, so the caller learned nothing and the
+ * UI reported failure for a sweep that was actually progressing. The route now
+ * starts it and returns immediately; progress is read from the coverage query.
+ */
+let _sweepRunning = false;
+let _sweepStartedAt: number | null = null;
+let _sweepLast: { finishedAt: string; result: ContactActivitySweepResult } | null = null;
+
+export function getContactActivitySweepStatus(): {
+  running: boolean;
+  startedAt: string | null;
+  elapsedSec: number | null;
+  last: { finishedAt: string; result: ContactActivitySweepResult } | null;
+} {
+  return {
+    running: _sweepRunning,
+    startedAt: _sweepStartedAt ? new Date(_sweepStartedAt).toISOString() : null,
+    elapsedSec: _sweepStartedAt ? Math.round((Date.now() - _sweepStartedAt) / 1000) : null,
+    last: _sweepLast,
+  };
+}
+
+/**
+ * Start the sweep in the background if one is not already running. Returns
+ * whether THIS call started it, so a double-click cannot launch two passes over
+ * the Zoho activity modules at once.
+ */
+export function startContactActivitySweep(): { started: boolean; alreadyRunning: boolean } {
+  if (_sweepRunning) return { started: false, alreadyRunning: true };
+  _sweepRunning = true;
+  _sweepStartedAt = Date.now();
+  void runContactActivitySweep()
+    .then((result) => {
+      _sweepLast = { finishedAt: new Date().toISOString(), result };
+    })
+    .catch((e) => {
+      logger.error("[contact-activity] background sweep failed:", e?.message || e);
+    })
+    .finally(() => {
+      _sweepRunning = false;
+    });
+  return { started: true, alreadyRunning: false };
+}
+
 export async function runContactActivitySweep(): Promise<ContactActivitySweepResult> {
   const result: ContactActivitySweepResult = {
     bulkModules: {},

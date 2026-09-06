@@ -4168,13 +4168,51 @@ export const duplicateRadarRoutes = [
         );
         const sessionUser = await requireAdminOrKey(c);
         if (!sessionUser) return unauthorizedResponse(c);
-        const { runContactActivitySweep } = await import(
-          "../../utils/contactActivitySweep"
+        // START it and return. Awaiting the sweep here is what produced a 504
+        // on the first live run: it pages three whole activity modules over
+        // 70,534 contacts and cannot finish inside a request, so the caller saw
+        // a gateway timeout while the work carried on server-side. Progress is
+        // read from GET /contacts/no-activity (coverage) and the status below.
+        const { startContactActivitySweep, getContactActivitySweepStatus } =
+          await import("../../utils/contactActivitySweep");
+        const { started, alreadyRunning } = startContactActivitySweep();
+        return c.json(
+          {
+            success: true,
+            started,
+            already_running: alreadyRunning,
+            message: alreadyRunning
+              ? "A contact activity check is already running — watch the coverage line rather than starting another."
+              : "Contact activity check started. It pages the Calls/Tasks/Events modules first, then verifies the remainder in batches; the coverage line updates as it goes.",
+            status: getContactActivitySweepStatus(),
+          },
+          202,
         );
-        const result = await runContactActivitySweep();
-        return c.json({ success: true, ...result });
       } catch (e: any) {
         logger.error("contacts/activity-sweep failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+
+  {
+    // Progress for the background contact activity check.
+    // GET /api/duplicates/contacts/activity-sweep/status
+    path: "/api/duplicates/contacts/activity-sweep/status",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const { getContactActivitySweepStatus, getContactActivityCoverage } =
+          await import("../../utils/contactActivitySweep");
+        const [status, coverage] = await Promise.all([
+          Promise.resolve(getContactActivitySweepStatus()),
+          getContactActivityCoverage(),
+        ]);
+        return c.json({ success: true, status, coverage });
+      } catch (e: any) {
+        logger.error("contacts/activity-sweep/status failed", e);
         return c.json({ error: "An internal error occurred" }, 500);
       }
     },

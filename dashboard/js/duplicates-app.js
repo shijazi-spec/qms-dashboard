@@ -8843,24 +8843,51 @@
             }).join('');
         }
 
+        // Starts the check and POLLS. It cannot be awaited: the sweep pages
+        // three whole activity modules over ~70k contacts and the first live run
+        // died at 191s with a 504 while the work carried on server-side — the
+        // browser reported failure for a sweep that was actually progressing.
+        // The button now reflects real progress instead of a request's lifetime.
         async function runContactActivitySweepNow() {
             const btn = document.getElementById('naSweepBtn');
             const restore = btn ? btn.innerHTML : '';
             try {
-                if (btn) { btn.disabled = true; btn.innerHTML = 'Checking…'; }
+                if (btn) { btn.disabled = true; btn.innerHTML = 'Starting…'; }
                 const res = await fetch('/api/duplicates/contacts/activity-sweep', {
                     method: 'POST', credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' }, body: '{}'
                 });
                 const d = await res.json().catch(function () { return {}; });
-                if (!res.ok || d.error) { rrToast('Check failed: ' + (d.error || ('HTTP ' + res.status))); return; }
-                rrToast('✓ ' + _fn(d.contactsWithActivity || 0) + ' contact(s) have activity · '
-                    + _fn(d.provenEmpty || 0) + ' proven empty'
-                    + (d.truncated ? ' (activity scan hit its page cap — run again to continue)' : ''));
-                await loadNoActivityContacts();
+                if (!res.ok || d.error) { rrToast('Could not start: ' + (d.error || ('HTTP ' + res.status))); return; }
+                rrToast(d.already_running
+                    ? 'A check is already running — watching its progress.'
+                    : 'Activity check started. This runs for several minutes; the coverage line updates as it goes.');
+                if (window._naPoll) clearInterval(window._naPoll);
+                window._naPoll = setInterval(async function () {
+                    let st;
+                    try {
+                        st = await fetch('/api/duplicates/contacts/activity-sweep/status',
+                            { credentials: 'same-origin' }).then(r => r.json());
+                    } catch (e) { return; }
+                    const cvg = (st && st.coverage) || {};
+                    const checked = (cvg.verified || 0) + (cvg.with_activity || 0);
+                    if (btn) {
+                        btn.innerHTML = (st.status && st.status.running)
+                            ? 'Checking… ' + _fn(checked) + '/' + _fn(cvg.contacts || 0)
+                            : restore;
+                    }
+                    if (!st.status || !st.status.running) {
+                        clearInterval(window._naPoll);
+                        window._naPoll = null;
+                        if (btn) btn.disabled = false;
+                        await loadNoActivityContacts();
+                        rrToast('✓ Activity check finished — ' + _fn(cvg.proven_empty || 0) + ' contact(s) proven empty.');
+                    } else {
+                        await loadNoActivityContacts();
+                    }
+                }, 15000);
             } catch (e) {
-                rrToast('Check failed: ' + (e && e.message ? e.message : e));
-            } finally {
+                rrToast('Could not start: ' + (e && e.message ? e.message : e));
                 if (btn) { btn.disabled = false; btn.innerHTML = restore; }
             }
         }
