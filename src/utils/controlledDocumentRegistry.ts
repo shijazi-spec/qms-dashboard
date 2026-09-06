@@ -1101,6 +1101,21 @@ const SEED_DOCUMENTS: SeedDoc[] = [
     documentType: "form",
     owner: "GRC",
   },
+  // Found by the Documentation Tracker's first real ingest: the file has been
+  // in the library since 2025-05-21 (last revised 2026-07-13) but had no
+  // register entry, so the platform did not know it was a controlled document
+  // — no owner, no review date, and invisible to the mapping and the milestone
+  // counts. It is a signable Arabic NDA (اتفاقية الخصوصية) naming شركة ثورة
+  // العلم لتقنية المعلومات ("ولاء بلس"), not a template: confidentiality
+  // obligation, non-compete, permitted and legally-compelled disclosure, four
+  // carve-outs, and return of information on termination.
+  {
+    code: "WP-FORM-058",
+    title: "Non-Disclosure Agreement — Employees, Consultants and Contractors",
+    category: "compliance",
+    documentType: "form",
+    owner: "GRC",
+  },
 
   // ---------- Security Controls (WP-CTL) ----------
   {
