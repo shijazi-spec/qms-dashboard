@@ -4504,7 +4504,7 @@
                                 Agentic Resolution — ${escapeHtml(am.label)}
                                 <span class="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-medium">${_fn(_typeCounts[am.type])} ${escapeHtml(am.label.toLowerCase())}</span>
                             </h4>
-                            <p class="text-xs text-gray-500">Proposes a survivor, migrates winning fields, reparents related records + notes, and flags duplicates with <code class="bg-gray-100 px-1 rounded">Duplicate-Delete</code> for the admin. Preview first — then dry-run or apply. The platform never deletes.</p>
+                            <p class="text-xs text-gray-500">Proposes a survivor, migrates winning fields, reparents related records + notes, then tags each duplicate by what it still holds: <code class="bg-gray-100 px-1 rounded">Duplicate-Delete</code> only when it has NO activities, emails or attachments, and <code class="bg-gray-100 px-1 rounded">Merge-In-Zoho</code> when it does — those must be merged inside Zoho, which carries the history onto the survivor, never deleted. Preview first — then dry-run or apply. The platform never deletes.</p>
                         </div>
                         <div class="flex items-center gap-2 flex-wrap">
                             <button data-on-click="recheckCluster" data-args='[${cluster.id}]' data-testid="button-recheck-cluster-${cluster.id}" class="px-3 py-2 bg-white border border-blue-300 text-blue-700 hover:bg-blue-50 rounded-lg text-sm font-medium" title="Re-fetch every record in this cluster from Zoho fresh — confirms the post-merge state (Account_Name, Duplicate-Delete tag, still-alive vs. deleted) without waiting for the next 6h scan.">🔁 Re-check cluster</button>

@@ -69,7 +69,14 @@ export interface ExecuteReport {
   /** Account the survivor was linked to via Account_Name (Contacts/Deals), or null. */
   linkedToAccount: string | null;
   leftOnDuplicate: { activities: number; attachments: number };
+  /** Duplicates tagged for the admin to DELETE — verified to hold no activities
+   *  or attachments, so deleting them destroys nothing. */
   taggedRecordIds: string[];
+  /** Duplicates that still hold activities or attachments. Tagged
+   *  MERGE_IN_ZOHO_TAG instead of the delete tag, so the admin merges them
+   *  natively in Zoho (which moves the history to the master) rather than
+   *  deleting them here and losing it. */
+  taggedForMergeInZoho: string[];
   notesStamped: number;
   clusterResolved: boolean;
   warnings: string[];
@@ -118,7 +125,29 @@ export function makeProgressThrottle(everyN: number, emit: (n: number) => void):
   return (n: number) => { if (n - last >= everyN) { last = n; emit(n); } };
 }
 
-const ACTIVITY_LISTS = ["Tasks", "Calls", "Events"];
+// Emails count as activity (Sarah 2026-09-06). The point of this list is to
+// decide whether deleting a record would destroy work the team is measured on,
+// and a logged email thread is exactly that.
+const ACTIVITY_LISTS = ["Tasks", "Calls", "Events", "Emails"];
+
+/**
+ * Tag applied INSTEAD of the delete tag when a duplicate still holds activities
+ * or attachments (Sarah 2026-09-06).
+ *
+ * Why this exists: Zoho's v2 API has no reliable "move activity" call, so this
+ * executor reparents Deals and copies Notes but LEAVES activities and
+ * attachments on the duplicate. It used to tag that duplicate Duplicate-Delete
+ * anyway and merely warn. An admin working the tag queue then deleted a contact
+ * that still carried its calls and emails — which is how a previous clean-up
+ * wiped activity history the Sales team is measured on.
+ *
+ * Zoho's NATIVE merge does move activities to the master. So a record with
+ * history is routed to that path instead: the admin merges it inside Zoho
+ * rather than deleting it here. Records with nothing attached keep the normal
+ * delete tag, because there is nothing to lose.
+ */
+const MERGE_IN_ZOHO_TAG =
+  process.env.DUPLICATE_RADAR_MERGE_IN_ZOHO_TAG?.trim() || "Merge-In-Zoho";
 
 // Per-module reparenting: which related lists to repoint onto the survivor and
 // via which lookup field. Notes are always copied (handled separately);
@@ -169,6 +198,7 @@ export async function executeMergePlan(
     reparented: { deals: 0, contacts: 0, notes: 0 },
     linkedToAccount: null,
     leftOnDuplicate: { activities: 0, attachments: 0 },
+    taggedForMergeInZoho: [],
     taggedRecordIds: [],
     notesStamped: 0,
     clusterResolved: false,
@@ -181,6 +211,13 @@ export async function executeMergePlan(
   // subsequent op against the same id is skipped silently and the id is
   // tagged stale_pending in our DB so the next sync cleanup purges it.
   const ghostIds = new Set<string>();
+  /** Per-duplicate history held in Zoho, used to decide delete-vs-merge below.
+   *  `unknown` means a related list could not be read — treated as "has
+   *  history", because an unreadable list is not an empty one. */
+  const heldByDup = new Map<
+    string,
+    { activities: number; attachments: number; unknown: boolean }
+  >();
   const markGhost = (recordId: string) => {
     if (ghostIds.has(recordId)) return;
     ghostIds.add(recordId);
@@ -345,26 +382,44 @@ export async function executeMergePlan(
 
     // Activities + Attachments — enumerate only; left on the duplicate for the
     // admin (no reliable Zoho v2 move). Surfaced so nothing is silently lost.
+    // Counted PER DUPLICATE, not just as a running total: the total tells you
+    // something was left behind, but only the per-record count can decide
+    // whether THIS id is safe to delete.
+    let heldActivities = 0;
+    let heldAttachments = 0;
+    let countFailed = false;
     for (const list of ACTIVITY_LISTS) {
       try {
         const acts = await fetchZohoRelatedRecords(module, dupId, list, { perPage: 200 });
-        report.leftOnDuplicate.activities += acts.length;
+        heldActivities += acts.length;
       } catch {
-        /* related list may not exist — ignore */
+        // A missing related list is normal; a FAILED one is not the same as an
+        // empty one. If we could not read it we must not conclude "no history".
+        countFailed = true;
       }
     }
     try {
       const atts = await fetchZohoRelatedRecords(module, dupId, "Attachments", { perPage: 200 });
-      report.leftOnDuplicate.attachments += atts.length;
+      heldAttachments += atts.length;
     } catch {
-      /* ignore */
+      countFailed = true;
     }
+    report.leftOnDuplicate.activities += heldActivities;
+    report.leftOnDuplicate.attachments += heldAttachments;
+    // Fail SAFE: an unreadable related list routes the record to the merge path
+    // too. The cost of being wrong here is one extra manual merge; the cost the
+    // other way is deleted call history.
+    heldByDup.set(dupId, {
+      activities: heldActivities,
+      attachments: heldAttachments,
+      unknown: countFailed,
+    });
     fire(++processed);
   }
 
   if (report.leftOnDuplicate.activities > 0 || report.leftOnDuplicate.attachments > 0) {
     report.warnings.push(
-      `${report.leftOnDuplicate.activities} activity(ies) and ${report.leftOnDuplicate.attachments} attachment(s) remain on the tagged duplicate(s) — Zoho v2 has no reliable move; the admin should review them before deleting.`,
+      `${report.leftOnDuplicate.activities} activity(ies) and ${report.leftOnDuplicate.attachments} attachment(s) remain on the duplicate(s). Zoho v2 has no reliable move, so those records are tagged "${MERGE_IN_ZOHO_TAG}" instead of the delete tag — merge them inside Zoho, which carries the history onto the master. Do NOT delete them.`,
     );
   }
 
@@ -373,7 +428,37 @@ export async function executeMergePlan(
   //    — Zoho's add_tags 400s on a deleted record id, which otherwise surfaces
   //    as a spurious "Applied with 1 error" even though there was nothing left
   //    to tag. Those ids are handled as stale_pending instead.
-  const liveDups = dups.filter((d) => !ghostIds.has(d));
+  const allLiveDups = dups.filter((d) => !ghostIds.has(d));
+
+  // SPLIT BY WHAT WOULD BE LOST (Sarah 2026-09-06). A duplicate still holding
+  // activities, emails or attachments must NOT carry the delete tag: this
+  // executor could not move that history (Zoho v2 has no reliable move), so
+  // deleting the record destroys it. Those go to the admin as "merge this
+  // inside Zoho" instead, where Zoho's native merge carries the history onto
+  // the master. Only records verified to hold nothing keep the delete tag.
+  const holdsHistory = (id: string) => {
+    const h = heldByDup.get(id);
+    if (!h) return true; // never counted ⇒ cannot claim it is empty
+    return h.unknown || h.activities > 0 || h.attachments > 0;
+  };
+  const mergeInZoho = allLiveDups.filter(holdsHistory);
+  const liveDups = allLiveDups.filter((d) => !holdsHistory(d));
+
+  if (mergeInZoho.length > 0 && !dryRun) {
+    try {
+      await addZohoTags(module, mergeInZoho, [MERGE_IN_ZOHO_TAG]);
+      report.taggedForMergeInZoho = [...mergeInZoho];
+    } catch (e) {
+      // Tagging the merge group is best-effort: failing to APPLY this tag is
+      // not dangerous (nothing gets deleted as a result), so it is reported and
+      // the delete-tag path below still runs for the genuinely empty records.
+      fail("tag-merge-in-zoho", e);
+    }
+  } else if (mergeInZoho.length > 0) {
+    // Dry run: report what WOULD be routed away from deletion.
+    report.taggedForMergeInZoho = [...mergeInZoho];
+  }
+
   if (liveDups.length > 0 && !dryRun) {
     try {
       await addZohoTags(module, liveDups, [plan.tagName]);
@@ -550,7 +635,8 @@ export async function executeMergePlan(
   logger.info(
     `[merge-executor] ${dryRun ? "DRY-RUN" : "APPLIED"} cluster ${plan.clusterId}: ` +
       `${report.fieldsMigrated.length} field(s), reparented ${report.reparented.deals}D/${report.reparented.contacts}C/${report.reparented.notes}N, ` +
-      `tagged ${report.taggedRecordIds.length}, errors ${report.errors.length}, stale-dropped ${report.staleDropped.length}`,
+      `tagged-for-delete ${report.taggedRecordIds.length}, tagged-merge-in-zoho ${report.taggedForMergeInZoho.length}, ` +
+      `errors ${report.errors.length}, stale-dropped ${report.staleDropped.length}`,
   );
 
   // Final, unconditional progress flush so a background-job caller always
