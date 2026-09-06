@@ -4848,7 +4848,20 @@
             try { data = await res.json(); } catch (_) { data = null; }
             if (!res.ok || !data || !data.plan) {
                 const msg = (data && data.error) ? data.error : ('Server returned ' + (res ? res.status : '—'));
-                panel.innerHTML = '<div class="py-3 text-amber-700 text-sm">' + escapeHtml(msg) + '</div>';
+                // A 5xx here is usually transient (the deployment hits its host
+                // connection cap under load), and the cluster is fine on the
+                // next attempt. Showing a bare "Server returned 500" left the
+                // operator with nothing to do but assume the row was broken, so
+                // a 5xx now offers the retry directly.
+                const transient = !!res && res.status >= 500;
+                panel.innerHTML =
+                    '<div class="py-3 text-amber-700 text-sm">' + escapeHtml(msg) +
+                    (transient
+                        ? ' <button type="button" data-on-click="previewMergePlan" data-args="' +
+                          escapeHtml(JSON.stringify([module, clusterId])) +
+                          '" class="ms-2 underline font-medium">Retry</button>'
+                        : '') +
+                    '</div>';
                 return;
             }
             // Sync selection state to what the plan actually included, so the

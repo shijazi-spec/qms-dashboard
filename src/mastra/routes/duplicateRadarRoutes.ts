@@ -4792,8 +4792,26 @@ export const duplicateRadarRoutes = [
 
           return c.json({ success: true, plan });
         } catch (error: any) {
-          logger.error("Error building merge plan:", error);
-          return c.json({ error: "An internal error occurred" }, 500);
+          // Identify WHICH cluster and module failed. buildMergePlan's own
+          // failures return 400 above, so anything landing here is the DB reads
+          // or serialisation — and those are usually transient (this deployment
+          // runs into its host connection cap under load). Without the ids the
+          // log line was unsearchable, so a one-off 500 could never be traced
+          // back to the row the operator was looking at.
+          // NB: the request body has already been consumed above, so it is not
+          // re-read here — the param is enough to find the row.
+          logger.error(
+            `Error building merge plan (cluster ${c.req.param("id")}):`,
+            error,
+          );
+          return c.json(
+            {
+              error:
+                "Could not build the plan — this is usually a temporary server error. Retry in a moment; if it repeats on the same cluster, it is a real fault.",
+              retryable: true,
+            },
+            500,
+          );
         }
       };
     },
