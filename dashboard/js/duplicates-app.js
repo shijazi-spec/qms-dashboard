@@ -8781,6 +8781,92 @@
             }
             await Promise.all([erLoad('deals', 'erDealsBody'), erLoad('accounts', 'erAccountsBody'), erLoad('contacts', 'erContactsBody')]);
             erLoadTaggedStatus();
+            loadNoActivityContacts();
+        }
+
+        // ── Contacts with no activity (Sarah 2026-09-06) ─────────────────────
+        //
+        // Deleting a contact in Zoho deletes its calls, meetings and emails with
+        // it. This list is the ONLY set that is safe to delete, and a row
+        // reaches it only after the activity census positively verified the
+        // record holds nothing — a contact that has not been checked yet is
+        // absent from the list, never assumed empty.
+        async function loadNoActivityContacts() {
+            const body = document.getElementById('naBody');
+            const cov = document.getElementById('naCoverage');
+            const cnt = document.getElementById('naCount');
+            if (!body) return;
+            body.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-gray-400">Loading…</td></tr>';
+            let d;
+            try {
+                d = await fetch('/api/duplicates/contacts/no-activity?limit=5000', { credentials: 'same-origin' }).then(r => r.json());
+            } catch (e) {
+                body.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-red-600">Could not load: ' + escapeHtml(String(e && e.message || e)) + '</td></tr>';
+                return;
+            }
+            if (!d || d.error) {
+                body.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-red-600">' + escapeHtml((d && d.error) || 'Failed to load') + '</td></tr>';
+                return;
+            }
+            const rows = d.contacts || [];
+            if (cnt) cnt.textContent = _fn(rows.length);
+            // Coverage is stated plainly because a SHORT list here usually means
+            // "the sweep has not finished", not "only these are empty" — and
+            // acting on it as though it were complete is the mistake that costs
+            // activity history.
+            if (cov) {
+                const cvg = d.coverage || {};
+                const checked = (cvg.verified || 0) + (cvg.with_activity || 0);
+                const pct = cvg.contacts ? Math.round((checked / cvg.contacts) * 100) : 0;
+                cov.innerHTML =
+                    'Checked <strong>' + _fn(checked) + '</strong> of ' + _fn(cvg.contacts || 0) + ' contacts (' + pct + '%) · '
+                    + '<strong>' + _fn(cvg.with_activity || 0) + '</strong> have activity · '
+                    + '<strong class="text-emerald-700">' + _fn(cvg.proven_empty || 0) + '</strong> proven empty'
+                    + (pct < 100
+                        ? ' <span class="text-amber-700">— the check is still running, so this list will grow. A contact that has not been checked yet is not shown.</span>'
+                        : '');
+            }
+            if (!rows.length) {
+                body.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-gray-500">No contacts have been verified as activity-free yet. Run the activity check above.</td></tr>';
+                return;
+            }
+            body.innerHTML = rows.map(function (r) {
+                const url = 'https://crm.zoho.com/crm/org766568398/tab/Contacts/' + encodeURIComponent(r.zoho_contact_id);
+                return '<tr>'
+                    + '<td>' + escapeHtml(r.name || '—') + (r.email ? '<div class="text-xs text-gray-500">' + escapeHtml(r.email) + '</div>' : '') + '</td>'
+                    + '<td>' + escapeHtml(r.account || '—') + '</td>'
+                    + '<td>' + escapeHtml(r.owner || '—') + '</td>'
+                    + '<td>' + escapeHtml(r.created_date ? String(r.created_date).slice(0, 10) : '—') + '</td>'
+                    + '<td><span class="rr-badge rr-good">✓ no activity</span></td>'
+                    + '<td><a href="' + url + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline">Open in Zoho ↗</a></td>'
+                    + '</tr>';
+            }).join('');
+        }
+
+        async function runContactActivitySweepNow() {
+            const btn = document.getElementById('naSweepBtn');
+            const restore = btn ? btn.innerHTML : '';
+            try {
+                if (btn) { btn.disabled = true; btn.innerHTML = 'Checking…'; }
+                const res = await fetch('/api/duplicates/contacts/activity-sweep', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' }, body: '{}'
+                });
+                const d = await res.json().catch(function () { return {}; });
+                if (!res.ok || d.error) { rrToast('Check failed: ' + (d.error || ('HTTP ' + res.status))); return; }
+                rrToast('✓ ' + _fn(d.contactsWithActivity || 0) + ' contact(s) have activity · '
+                    + _fn(d.provenEmpty || 0) + ' proven empty'
+                    + (d.truncated ? ' (activity scan hit its page cap — run again to continue)' : ''));
+                await loadNoActivityContacts();
+            } catch (e) {
+                rrToast('Check failed: ' + (e && e.message ? e.message : e));
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = restore; }
+            }
+        }
+
+        function downloadNoActivityCsv() {
+            window.location.href = '/api/duplicates/contacts/no-activity?format=csv&limit=20000';
         }
         function erReload(kind) {
             const map = { deals: 'erDealsBody', accounts: 'erAccountsBody', contacts: 'erContactsBody' };
