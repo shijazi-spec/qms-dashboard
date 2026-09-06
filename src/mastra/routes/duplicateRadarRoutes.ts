@@ -4159,6 +4159,13 @@ export const duplicateRadarRoutes = [
     method: "POST" as const,
     createHandler: async () => async (c: any) => {
       try {
+        // Dynamic import, matching the other 55 handlers in this file —
+        // requireAdminOrKey is NOT a module-level import here (unlike
+        // unauthorizedResponse on line 5), so calling it directly does not
+        // compile.
+        const { requireAdminOrKey } = await import(
+          "../../utils/rbacMiddleware"
+        );
         const sessionUser = await requireAdminOrKey(c);
         if (!sessionUser) return unauthorizedResponse(c);
         const { runContactActivitySweep } = await import(
