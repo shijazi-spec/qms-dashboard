@@ -667,8 +667,10 @@ export const obligationDocumentsRoutes = [
           // so it judged every clause of every framework against a cover page
           // from the same fixed 25-document window. It now ranks EVERY document
           // that has extracted text, against its whole body, over the GIN
-          // full-text index created in qmsDocsDatabase (the to_tsvector
-          // expression here must stay identical to the indexed one).
+          // index on qms_uploaded_documents.extracted_tsv (a STORED generated
+          // column defined in qmsDocsDatabase). Query the column, never
+          // to_tsvector(...) inline: an inline expression stops using the index
+          // and recomputes a vector of the whole body on every row.
           //
           // `extraction_status <> 'placeholder'` is still load-bearing. Register
           // entries awaiting their file upload project a row whose only text is
@@ -714,10 +716,10 @@ export const obligationDocumentsRoutes = [
               `WITH q AS (SELECT to_tsquery('english', $1) AS tsq)
                SELECT d.id, d.title, d.mime_type, d.regulation_codes,
                       d.extraction_status,
-                      ts_rank_cd(
-                        to_tsvector('english', COALESCE(d.extracted_text, '')),
-                        q.tsq
-                      ) AS fts_rank,
+                      -- extracted_tsv is a STORED generated column, so the
+                      -- vector is precomputed and this both hits the GIN index
+                      -- and skips rebuilding a tsvector per row per query.
+                      ts_rank_cd(d.extracted_tsv, q.tsq) AS fts_rank,
                       -- How many DISTINCT clause terms appear in the body.
                       -- Plain containment, not a second tsvector pass: building
                       -- a tsvector of a 50k-char body once per term per row is
@@ -734,7 +736,7 @@ export const obligationDocumentsRoutes = [
                  FROM qms_uploaded_documents d, q
                 WHERE COALESCE(d.extraction_status, '') <> 'placeholder'
                   AND d.extracted_text IS NOT NULL
-                  AND to_tsvector('english', COALESCE(d.extracted_text, '')) @@ q.tsq
+                  AND d.extracted_tsv @@ q.tsq
                 ORDER BY terms_matched DESC, fts_rank DESC
                 LIMIT 10`,
               [tsQuery, obKeywords],

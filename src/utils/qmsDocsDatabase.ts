@@ -86,7 +86,23 @@ export async function initQmsDocsTable(): Promise<void> {
       extracted_text  TEXT,
       extraction_status VARCHAR(20) DEFAULT 'pending',
       extracted_at    TIMESTAMP,
-      extracted_hash  VARCHAR(64)
+      extracted_hash  VARCHAR(64),
+      -- Precomputed search vector for the Mapping Console's clause -> document
+      -- search. This was an EXPRESSION index on to_tsvector(...) instead, and
+      -- Replit's deploy schema-diff could not round-trip it: it read the
+      -- expression back out of the dev database and emitted
+      --   USING gin (to_tsvector('english'::regconfig, COALESCE(...)):: tsvector_ops);
+      -- with unbalanced parens and the operator class written as a cast, which
+      -- failed migration validation and blocked the whole publish. A generated
+      -- column with a plain column index expresses the same thing in a form any
+      -- differ can round-trip.
+      --
+      -- STORED (not VIRTUAL) because GIN must index materialised values, and
+      -- the expression is IMMUTABLE only because the 'english' config is named
+      -- explicitly — to_tsvector(text) without a config depends on a session
+      -- GUC and Postgres will refuse it here.
+      extracted_tsv   TSVECTOR GENERATED ALWAYS AS
+                        (to_tsvector('english', COALESCE(extracted_text, ''))) STORED
     );
   `);
   await pool.query(`
@@ -115,34 +131,68 @@ export async function initQmsDocsTable(): Promise<void> {
        ON qms_uploaded_documents (extraction_status)`,
   );
 
+  // Idempotent ALTER for databases created before extracted_tsv existed.
+  // Mirrored in the CREATE TABLE above (see the note there on why this is a
+  // generated column rather than an expression index).
+  await pool.query(
+    `ALTER TABLE qms_uploaded_documents
+       ADD COLUMN IF NOT EXISTS extracted_tsv TSVECTOR
+       GENERATED ALWAYS AS (to_tsvector('english', COALESCE(extracted_text, ''))) STORED`,
+  );
+
+  // Drop the previous EXPRESSION index first. It is the one whose definition
+  // Replit's deploy schema-diff could not round-trip, so leaving it in place
+  // would fail migration validation again no matter what we add alongside it.
+  // Dropping an index destroys no data - it is derived, and the CREATE below
+  // replaces it - so this is safe to run unconditionally on every boot.
+  //
+  // It also has to go before the CREATE rather than after: the old index owns
+  // this exact name, and CREATE INDEX IF NOT EXISTS would find the name taken,
+  // skip silently, and leave the search running unindexed with nothing logged.
+  await pool.query(
+    `DROP INDEX IF EXISTS idx_qms_uploaded_documents_fts`,
+  );
   // Full-text search over the WHOLE extracted body, for the Mapping Console's
   // clause -> document search. Before this, that search read only the first
   // 1500 chars of the 25 most recently uploaded documents, so it could not see
   // what a document actually says further down — which is exactly the question
-  // it is asked. The expression must match the one in the query verbatim or
-  // Postgres will not use the index. 'english' gives stemming (processing ->
-  // process); Arabic text is still tokenised and exact-matchable, just
-  // unstemmed, which is why the Console also keeps a literal-substring pass.
+  // it is asked. 'english' gives stemming (processing -> process); Arabic text
+  // is still tokenised and exact-matchable, just unstemmed, which is why the
+  // Console also keeps a literal-substring pass.
   await pool.query(
-    `CREATE INDEX IF NOT EXISTS idx_qms_uploaded_documents_fts
-       ON qms_uploaded_documents
-    USING GIN (to_tsvector('english', COALESCE(extracted_text, '')))`,
+    `CREATE INDEX IF NOT EXISTS idx_qms_uploaded_documents_tsv
+       ON qms_uploaded_documents USING GIN (extracted_tsv)`,
   );
 
   initialized = true;
   logger.info("✅ [QmsDocsDB] qms_uploaded_documents table ready");
 }
 
+// Every column EXCEPT extracted_tsv. That column is a STORED generated tsvector
+// of the whole body, so `SELECT *` would ship a large blob per row on the
+// Documents Library list queries to no purpose - nothing outside the search
+// predicate ever reads it. Listing the columns explicitly keeps those responses
+// exactly the size they were before the column existed.
+//
+// (Note: extracted_text - up to 50k chars - IS still returned by these list
+// queries. That predates the tsvector column and is left as-is here rather than
+// changed silently under an unrelated fix.)
+const DOC_COLUMNS = `id, category, title, file_path, file_name, file_size,
+    mime_type, notes, regulation_codes, uploaded_by, uploaded_at,
+    source_policy_id, extracted_text, extraction_status, extracted_at,
+    extracted_hash`;
+
 /**
  * Phase 2.1 — list documents that still need text extraction. Used by
  * the Inngest backfill cron and by tests.
  */
+
 export async function listDocumentsPendingExtraction(
   limit: number = 25,
 ): Promise<QmsUploadedDocument[]> {
   await initQmsDocsTable();
   const result = await pool.query(
-    `SELECT * FROM qms_uploaded_documents
+    `SELECT ${DOC_COLUMNS} FROM qms_uploaded_documents
       WHERE extraction_status = 'pending' OR extraction_status IS NULL
       ORDER BY uploaded_at ASC
       LIMIT $1`,
@@ -184,12 +234,12 @@ export async function listDocumentsByCategory(
   await initQmsDocsTable();
   const result = category
     ? await pool.query(
-        `SELECT * FROM qms_uploaded_documents WHERE category = $1
+        `SELECT ${DOC_COLUMNS} FROM qms_uploaded_documents WHERE category = $1
          ORDER BY uploaded_at DESC`,
         [category],
       )
     : await pool.query(
-        `SELECT * FROM qms_uploaded_documents ORDER BY uploaded_at DESC`,
+        `SELECT ${DOC_COLUMNS} FROM qms_uploaded_documents ORDER BY uploaded_at DESC`,
       );
   return result.rows as QmsUploadedDocument[];
 }
@@ -241,7 +291,7 @@ export async function createDocument(input: {
 export async function getDocumentById(id: number): Promise<QmsUploadedDocument | null> {
   await initQmsDocsTable();
   const result = await pool.query(
-    `SELECT * FROM qms_uploaded_documents WHERE id = $1 LIMIT 1`,
+    `SELECT ${DOC_COLUMNS} FROM qms_uploaded_documents WHERE id = $1 LIMIT 1`,
     [id],
   );
   return (result.rows[0] as QmsUploadedDocument) || null;
