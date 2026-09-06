@@ -112,7 +112,13 @@
             _t: function (key, fallback) {
                 var i18n = window.WalaPlusI18n;
                 var v = (i18n && i18n.t) ? i18n.t(key) : null;
-                return (v && v !== key) ? v : fallback;
+                // On a miss, i18n.t returns the key's LAST SEGMENT, not the
+                // whole key (see t() in js/i18n.js). Comparing against the full
+                // key therefore never detected a miss, and cells rendered the
+                // raw segment — the State column read "state_read" instead of
+                // "Read". Compare against the segment, as navigation.js and
+                // login.html already do.
+                return (v && v !== key.split('.').pop()) ? v : fallback;
             },
 
             esc: function (s) {
@@ -281,16 +287,27 @@
             if (window.SafeActions && window.SafeActions.register) {
                 window.SafeActions.register('NotificationsPage', window.NotificationsPage);
             }
-            window.NotificationsPage.load();
+
+            // Load AFTER i18n resolves. Rows are built in JS and call _t() at
+            // render time, so rendering first meant every lookup missed and
+            // fell back to English even for an Arabic reader. The static
+            // data-i18n attributes did not show this — applyToDOM() rewrites
+            // those afterwards, which is why the headers looked translated
+            // while the cells did not. Failure still renders: a rejected or
+            // absent i18n must not leave the table stuck on "Loading...".
+            // Spelled out as window.WalaPlusI18n rather than a local alias:
+            // scripts/check-i18n.cjs matches this wiring TEXTUALLY, looking for
+            // `WalaPlusI18n.init(...).then(` with applyToDOM inside the first
+            // .then. An alias compiles and runs identically but fails that check.
+            if (window.WalaPlusI18n && window.WalaPlusI18n.init) {
+                window.WalaPlusI18n.init()
+                    .then(function () { window.WalaPlusI18n.applyToDOM(); })
+                    .catch(function () { /* fall through to English */ })
+                    .then(function () { window.NotificationsPage.load(); });
+            } else {
+                window.NotificationsPage.load();
+            }
         });
-    </script>
-    <script>
-        // i18n bootstrap — translates every data-i18n attribute on the page
-        // (matches the pattern used by every other dashboard page; required
-        // by scripts/check-i18n.cjs "Page wiring" check).
-        if (window.WalaPlusI18n) {
-            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
-        }
     </script>
 </body>
 </html>
