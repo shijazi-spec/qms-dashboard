@@ -4096,6 +4096,84 @@ export const duplicateRadarRoutes = [
     // Agreement Signed), same as the monthly email: Paid deals are Customer
     // Success's and must not appear in an email addressed to Sales, even
     // though the XLSX download below covers Paid too.
+    // CONTACTS WITH NO ACTIVITY (Sarah 2026-09-06) — the only contacts that are
+    // safe to delete, because deleting a contact in Zoho takes its calls,
+    // meetings and emails with it. A record appears here ONLY when the sweep
+    // has positively verified it holds nothing; "not checked yet" is absent,
+    // never assumed empty.
+    // GET /api/duplicates/contacts/no-activity[?format=csv&limit=]
+    path: "/api/duplicates/contacts/no-activity",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const url = new URL(c.req.url);
+        const limitRaw = parseInt(url.searchParams.get("limit") || "", 10);
+        const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 20000) : 5000;
+        const { getContactsWithNoActivity, getContactActivityCoverage } =
+          await import("../../utils/contactActivitySweep");
+        const [rows, coverage] = await Promise.all([
+          getContactsWithNoActivity(limit),
+          getContactActivityCoverage(),
+        ]);
+        if ((url.searchParams.get("format") || "").toLowerCase() === "csv") {
+          const esc = (v: any) => {
+            const s = v == null ? "" : String(v);
+            return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+          };
+          const header = [
+            "Contact", "Account", "Email", "Phone", "Owner", "Created", "Verified empty at", "Zoho ID", "Open in Zoho",
+          ];
+          const body = rows.map((r: any) =>
+            [
+              r.name, r.account, r.email, r.phone, r.owner,
+              r.created_date ? String(r.created_date).slice(0, 10) : "",
+              r.verified_at ? String(r.verified_at).slice(0, 19).replace("T", " ") : "",
+              r.zoho_contact_id,
+              `https://crm.zoho.com/crm/org766568398/tab/Contacts/${r.zoho_contact_id}`,
+            ].map(esc).join(","),
+          );
+          // BOM so Excel reads the Arabic names correctly.
+          const csv = "﻿" + [header.join(","), ...body].join("\r\n");
+          return new Response(csv, {
+            headers: {
+              "Content-Type": "text/csv; charset=utf-8",
+              "Content-Disposition": `attachment; filename="contacts-no-activity-${rows.length}.csv"`,
+            },
+          });
+        }
+        return c.json({ success: true, coverage, total: rows.length, contacts: rows });
+      } catch (e: any) {
+        logger.error("contacts/no-activity failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+
+  {
+    // Run the contact activity census on demand (ADMIN). The scheduled sweep
+    // covers a slice per tick; this is for "I want the answer now".
+    // POST /api/duplicates/contacts/activity-sweep
+    path: "/api/duplicates/contacts/activity-sweep",
+    method: "POST" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const sessionUser = await requireAdminOrKey(c);
+        if (!sessionUser) return unauthorizedResponse(c);
+        const { runContactActivitySweep } = await import(
+          "../../utils/contactActivitySweep"
+        );
+        const result = await runContactActivitySweep();
+        return c.json({ success: true, ...result });
+      } catch (e: any) {
+        logger.error("contacts/activity-sweep failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+
+  {
     path: "/api/duplicates/deal-compliance/email",
     method: "GET" as const,
     createHandler: async () => async (c: any) => {
@@ -13298,16 +13376,59 @@ export const duplicateRadarRoutes = [
         const { markEmptyDeleteTagged } = await import(
           "../../utils/emptyRecordsDatabase"
         );
+
+        // CONTACTS: refuse any id the activity census has not PROVEN empty
+        // (Sarah 2026-09-06). Deleting a contact in Zoho deletes its calls,
+        // meetings and emails with it, and a previous clean-up cost the Sales
+        // team activity history exactly that way. "Looks empty in the mirror"
+        // is not evidence — the mirror does not hold activities at all.
+        // Unverified ids are reported back, not silently dropped, so the
+        // operator can see WHY a row was skipped rather than assuming it
+        // worked. Set EMPTY_DELETE_REQUIRE_ACTIVITY_CHECK=false only to
+        // deliberately bypass this.
+        let skippedUnverified: string[] = [];
+        let workingIds = zohoIds;
+        if (
+          module === "Contacts" &&
+          process.env.EMPTY_DELETE_REQUIRE_ACTIVITY_CHECK !== "false"
+        ) {
+          const { isContactProvenEmpty } = await import(
+            "../../utils/contactActivitySweep"
+          );
+          const allowed: string[] = [];
+          for (const id of zohoIds) {
+            if (await isContactProvenEmpty(id)) allowed.push(id);
+            else skippedUnverified.push(id);
+          }
+          workingIds = allowed;
+          if (!workingIds.length) {
+            return c.json(
+              {
+                error:
+                  "None of these contacts have been verified as activity-free yet, so none were tagged. Deleting a contact removes its calls, meetings and emails with it. Run the contact activity check first — the Contacts with no activity list only shows records proven to hold nothing.",
+                skipped_unverified: skippedUnverified,
+              },
+              409,
+            );
+          }
+        }
+
         let tagged = 0;
-        for (let i = 0; i < zohoIds.length; i += 100) {
-          const batch = zohoIds.slice(i, i + 100);
+        for (let i = 0; i < workingIds.length; i += 100) {
+          const batch = workingIds.slice(i, i + 100);
           await addZohoTags(module, batch, [tag]);
           // Record locally so the cleanup list drops them on the NEXT refresh,
           // without waiting for the slow full sync to re-pull the Zoho tag.
           await markEmptyDeleteTagged(module, batch, su?.email || null);
           tagged += batch.length;
         }
-        return c.json({ success: true, tagged, tag });
+        return c.json({
+          success: true,
+          tagged,
+          tag,
+          skipped_unverified: skippedUnverified.length,
+          skipped_unverified_ids: skippedUnverified,
+        });
       } catch (e: any) {
         logger.error("empty-records/tag failed", e);
         return c.json({ error: "An internal error occurred" }, 500);

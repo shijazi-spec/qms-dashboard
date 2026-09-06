@@ -640,6 +640,20 @@ export const mastra = new Mastra({
             return runDealDocComplianceSweepIfDue();
           },
         },
+        // Contact activity census — proves which contacts hold NO activity, so
+        // the Empty/Junk tab can only offer a contact for deletion once the
+        // platform has verified there is nothing to lose (Sarah 2026-09-06).
+        // Deleting a contact in Zoho takes its calls with it, and that has
+        // already cost the Sales team activity history once.
+        {
+          name: "ContactActivitySweep",
+          fn: async () => {
+            const { runContactActivitySweepIfDue } = await import(
+              "../utils/scheduledJobs"
+            );
+            return runContactActivitySweepIfDue();
+          },
+        },
         // Autonomous Duplicate Resolution — 6h fallback. Internally gated by
         // AUTONOMOUS_RESOLUTION_ENABLED/_MODE (default shadow → no Zoho writes).
         { name: "AutonomousResolution", fn: () => runAutonomousResolutionIfStale() },

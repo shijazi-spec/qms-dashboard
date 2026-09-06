@@ -1252,6 +1252,40 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
     );
   `);
 
+  // Per-contact ACTIVITY census (Sarah 2026-09-06). Deleting a contact in Zoho
+  // takes its activities with it, and a previous clean-up wiped call history
+  // the Sales team is measured on. Nothing may be proposed for deletion until
+  // this table can prove the record holds nothing.
+  //
+  // `bulk_*` come from paging the Calls/Tasks/Events modules once and counting
+  // Who_Id — O(activities) instead of O(contacts x related-lists), which is the
+  // only shape that finishes on a corpus this size. Emails/Attachments/Notes
+  // have no bulk equivalent in Zoho v2, so they are checked per record and ONLY
+  // for contacts the bulk pass found nothing for — a far smaller set.
+  //
+  // `verified_at` is the gate: NULL means "not proven empty", never "empty".
+  // Boot-created in dev & prod so Replit's schema-diff won't propose dropping it.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS contact_activity_counts (
+      zoho_contact_id VARCHAR(64) PRIMARY KEY,
+      bulk_calls INTEGER NOT NULL DEFAULT 0,
+      bulk_tasks INTEGER NOT NULL DEFAULT 0,
+      bulk_events INTEGER NOT NULL DEFAULT 0,
+      emails INTEGER NOT NULL DEFAULT 0,
+      attachments INTEGER NOT NULL DEFAULT 0,
+      notes INTEGER NOT NULL DEFAULT 0,
+      total INTEGER NOT NULL DEFAULT 0,
+      bulk_at TIMESTAMP,
+      verified_at TIMESTAMP,
+      checked_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+  await pool
+    .query(
+      `CREATE INDEX IF NOT EXISTS idx_contact_activity_total ON contact_activity_counts(total, verified_at);`,
+    )
+    .catch(() => {});
+
   // Scheduled-report send log — the idempotency guard for reports that must go
   // out exactly ONCE per period. The primary key IS the guard: the sender
   // inserts (report, period) before sending and treats a conflict as "already

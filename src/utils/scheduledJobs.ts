@@ -405,6 +405,37 @@ export async function runDeletionFeedSweepIfStale(
 // deployment has already shown it falls over under that kind of load. ~60
 // deals per 45-minute tick is ~1,900 checks a day, so every in-scope deal is
 // re-checked daily with the load spread thin.
+// CONTACT ACTIVITY CENSUS — proves which contacts hold no activity, so nothing
+// is ever proposed for deletion on the strength of "we did not look"
+// (Sarah 2026-09-06). Runs less often than the doc sweep: the bulk pass reads
+// whole activity modules, and the answer only changes when someone logs a call.
+// Disable with CONTACT_ACTIVITY_SWEEP_ENABLED=false.
+let _lastContactActivitySweepMs = 0;
+export async function runContactActivitySweepIfDue(
+  minIntervalMinutes = Number(process.env.CONTACT_ACTIVITY_SWEEP_INTERVAL_MINUTES || 240),
+): Promise<{ ran: boolean; ageHours: number; result?: any }> {
+  if (process.env.CONTACT_ACTIVITY_SWEEP_ENABLED === "false") {
+    return { ran: false, ageHours: 0 };
+  }
+  const ageHours =
+    _lastContactActivitySweepMs === 0
+      ? Infinity
+      : (Date.now() - _lastContactActivitySweepMs) / 3600000;
+  if (ageHours * 60 < minIntervalMinutes) return { ran: false, ageHours };
+  try {
+    const { runContactActivitySweep } = await import("./contactActivitySweep");
+    const result = await runContactActivitySweep();
+    _lastContactActivitySweepMs = Date.now();
+    return { ran: true, ageHours, result };
+  } catch (e: any) {
+    // Stamp the clock even on failure so a persistent error cannot turn into a
+    // hot loop against the Zoho API on every housekeeping tick.
+    _lastContactActivitySweepMs = Date.now();
+    logger.error("[ContactActivitySweep] failed:", e?.message || e);
+    return { ran: false, ageHours };
+  }
+}
+
 let _lastDealDocSweepMs = 0;
 export async function runDealDocComplianceSweepIfDue(
   minIntervalMinutes = Number(process.env.DEAL_DOC_SWEEP_INTERVAL_MINUTES || 45),
