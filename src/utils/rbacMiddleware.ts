@@ -865,7 +865,18 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
 
-  { pattern: /^\/api\/event-logs/, methods: ["DELETE"], roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"] },
+  // ADMIN ONLY — deliberately narrower than the bulk-permission block above.
+  //
+  // This rule previously granted DELETE to all twelve roles while the matching
+  // GET (see `/api/event-logs` above) is admin-only: any role could destroy the
+  // audit trail but not read it. No `/api/event-logs` handler exists today, so
+  // nothing was exploitable — but the rule would have silently authorised the
+  // first DELETE handler anyone added, and rbacRouteCoverage.test.ts only
+  // asserts a route HAS a rule, never that the rule is appropriately narrow.
+  //
+  // Audit logs are append-only evidence for ISO/SACS certification. Deleting
+  // them is an admin action.
+  { pattern: /^\/api\/event-logs/, methods: ["DELETE"], roles: ["admin"] },
 
   {
     pattern: /^\/api\/audit\/trigger$/,

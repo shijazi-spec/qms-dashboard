@@ -3964,31 +3964,7 @@ export const duplicateRadarRoutes = [
           } catch (e: any) {
             return c.json({ error: `Zoho attachments fetch failed: ${e?.message || e}` }, 502);
           }
-          // Company documents (VAT, CR, National Address) live on the Account,
-          // so the Account's attachments are consulted for those. Without this
-          // a manual re-check would contradict the background sweep on the same
-          // deal, which is worse than either answer on its own.
-          let acctAtts: any[] | undefined;
-          let acctIdUsed: string | null = null;
-          try {
-            const { pool } = await import("../../utils/duplicateRadarDatabase");
-            const q = await pool.query(
-              `SELECT NULLIF(BTRIM(raw_data->'Account_Name'->>'id'), '') AS account_id
-                 FROM duplicate_records
-                WHERE record_type = 'deal' AND zoho_record_id = $1
-                LIMIT 1`,
-              [String(id)],
-            );
-            const accountId = q.rows[0]?.account_id;
-            acctIdUsed = accountId ? String(accountId) : null;
-            if (accountId) acctAtts = await fetchRecordAttachments("Accounts", String(accountId));
-          } catch (acctErr) {
-            logger.warn(
-              `[DealCompliance] account attachments unavailable for deal ${id} — deal documents still checked`,
-              { error: acctErr instanceof Error ? acctErr.message : String(acctErr) },
-            );
-          }
-          const result = evaluateDocCompliance(stage, atts, acctAtts);
+          const result = evaluateDocCompliance(stage, atts);
           // The file NAMES of what is actually attached.
           //
           // Without these, "missing 5 documents" is unfalsifiable: the operator
@@ -4028,26 +4004,9 @@ export const duplicateRadarRoutes = [
           // reviewer hitting Refresh will see the same attribution.
           const checkedBy =
             user.email || user.userId ? String(user.email || user.userId) : null;
-          // The ACCOUNT side of the same diagnostic, and the account id we
-          // asked Zoho about.
-          //
-          // Every Account sampled on 2026-09-06 returned zero attachments
-          // while its deals returned one to three — eight different accounts,
-          // all zero. That is either true (company documents are not filed at
-          // Account level) or our Account read is broken, and the two are
-          // indistinguishable from the outside. Returning the id and the names
-          // makes it checkable in one click: open that Account in Zoho and
-          // compare. If Zoho shows files and this shows none, the read is
-          // wrong and the 96% figure is overstated.
-          const accountAttachmentNames = (acctAtts || [])
-            .map((a: any) => String(a?.fileName || "").trim())
-            .filter(Boolean)
-            .slice(0, 25);
           return c.json({
             ...result,
             attachmentNames,
-            accountId: acctIdUsed,
-            accountAttachmentNames,
             checkedBy,
             checkedAt: new Date().toISOString(),
           });
@@ -4320,37 +4279,6 @@ export const duplicateRadarRoutes = [
             user.email || user.userId ? String(user.email || user.userId) : null;
           const nowIso = new Date().toISOString();
           const results: any[] = new Array(deals.length);
-          // Account ids for the batch, in ONE query — company documents (VAT,
-          // CR, National Address) are checked against the Account, and this
-          // path must agree with the background sweep on the same deal.
-          const acctByDeal = new Map<string, string>();
-          try {
-            const { pool } = await import("../../utils/duplicateRadarDatabase");
-            const q = await pool.query(
-              `SELECT zoho_record_id AS id,
-                      NULLIF(BTRIM(raw_data->'Account_Name'->>'id'), '') AS account_id
-                 FROM duplicate_records
-                WHERE record_type = 'deal' AND zoho_record_id = ANY($1::text[])`,
-              [deals.map((d: any) => d.id)],
-            );
-            for (const row of q.rows as any[]) {
-              if (row.account_id) acctByDeal.set(String(row.id), String(row.account_id));
-            }
-          } catch {
-            /* deal documents are still checked without it */
-          }
-          // Cache the PROMISE: the workers below run concurrently and several
-          // deals in a batch commonly share one Account.
-          const acctCache = new Map<string, Promise<any[]>>();
-          const acctAttsFor = (dealId: string): Promise<any[]> | undefined => {
-            const accountId = acctByDeal.get(dealId);
-            if (!accountId) return undefined;
-            const hit = acctCache.get(accountId);
-            if (hit) return hit;
-            const p = fetchRecordAttachments("Accounts", accountId).catch(() => [] as any[]);
-            acctCache.set(accountId, p);
-            return p;
-          };
           // Bounded concurrency keeps us under Zoho's attachment rate limit
           // while still finishing a batch in a few seconds.
           const CONC = 3;
@@ -4361,7 +4289,7 @@ export const duplicateRadarRoutes = [
               const d = deals[my];
               try {
                 const atts = await fetchRecordAttachments("Deals", d.id);
-                const r = evaluateDocCompliance(d.stage, atts, await acctAttsFor(d.id));
+                const r = evaluateDocCompliance(d.stage, atts);
                 try {
                   await upsertDealDocCompliance({
                     zohoDealId: d.id,

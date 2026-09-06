@@ -347,6 +347,44 @@ export const auditRoutes = [
       };
     },
   },
+  // MUST stay ABOVE `/api/audits/:id`. Routes match in registration order and
+  // `:id` carries no numeric constraint, so when this block sat after it the
+  // literal path was swallowed: the request became a lookup for an audit with
+  // id "evidence-packs" and every call returned 404. Verified against
+  // production before the move. Adding a literal /api/audits/<word> route
+  // below `:id` will break it the same way — scripts/check-route-collisions.mjs
+  // now fails the build on exactly this.
+  {
+    path: "/api/audits/evidence-packs",
+    method: "GET" as const,
+    createHandler: async ({ mastra }: any) => {
+      return async (c: any) => {
+        try {
+          const logger = mastra?.getLogger();
+          const { getEvidencePacks, initAuditTables } =
+            await import("../../utils/auditDatabase");
+          await initAuditTables();
+
+          const url = new URL(c.req.url);
+          const audit_id = url.searchParams.get("audit_id")
+            ? parseInt(url.searchParams.get("audit_id")!)
+            : undefined;
+          const status = url.searchParams.get("status") || undefined;
+
+          logger?.info("📋 [AuditAPI] GET /api/audits/evidence-packs");
+
+          const packs = await getEvidencePacks({ audit_id, status });
+          return c.json({ evidence_packs: packs });
+        } catch (error) {
+          safeLogger.error(
+            "❌ [AuditAPI] Error fetching evidence packs:",
+            error,
+          );
+          return c.json({ error: "Failed to fetch evidence packs" }, 500);
+        }
+      };
+    },
+  },
   {
     path: "/api/audits/:id",
     method: "GET" as const,
@@ -633,37 +671,6 @@ export const auditRoutes = [
         } catch (error) {
           safeLogger.error("❌ [AuditAPI] Error updating finding:", error);
           return c.json({ error: "Failed to update finding" }, 500);
-        }
-      };
-    },
-  },
-  {
-    path: "/api/audits/evidence-packs",
-    method: "GET" as const,
-    createHandler: async ({ mastra }: any) => {
-      return async (c: any) => {
-        try {
-          const logger = mastra?.getLogger();
-          const { getEvidencePacks, initAuditTables } =
-            await import("../../utils/auditDatabase");
-          await initAuditTables();
-
-          const url = new URL(c.req.url);
-          const audit_id = url.searchParams.get("audit_id")
-            ? parseInt(url.searchParams.get("audit_id")!)
-            : undefined;
-          const status = url.searchParams.get("status") || undefined;
-
-          logger?.info("📋 [AuditAPI] GET /api/audits/evidence-packs");
-
-          const packs = await getEvidencePacks({ audit_id, status });
-          return c.json({ evidence_packs: packs });
-        } catch (error) {
-          safeLogger.error(
-            "❌ [AuditAPI] Error fetching evidence packs:",
-            error,
-          );
-          return c.json({ error: "Failed to fetch evidence packs" }, 500);
         }
       };
     },

@@ -20,111 +20,15 @@ const CALL_READ_ROLES = [
  * - Import channels: Five9 (partial), bulk upload (live), Google Drive (stub).
  */
 export const mcpCallEvaluationRoutes = [
-  {
-    path: "/api/calls/evaluation/import-sources",
-    method: "GET" as const,
-    createHandler: async () => {
-      return async (c: any) => {
-        const user = await requireRoleOrKey(c, [...CALL_READ_ROLES]);
-        if (!user) return unauthorizedResponse(c);
+  // Three route objects were removed here: GET import-sources,
+  // GET reconciliation/:id and POST leads/match-phone. All three were
+  // UNREACHABLE — callIntelligenceRoutes.ts defines the same three paths and
+  // is spread earlier in src/mastra/index.ts, so its handlers always won.
+  // dashboard/calls.html calls all three and gets the callIntelligence
+  // versions; deleting these changes no behaviour. The copies here returned
+  // an extra `success`/`mcp_evaluation_framework` envelope that no caller
+  // ever saw. The routes below this point are live and unique to this module.
 
-        const { getCallImportSourcesCatalog } =
-          await import("../../utils/callMcpImportSources");
-
-        return c.json({
-          success: true,
-          mcp_evaluation_framework: "programmatic_v1",
-          ...getCallImportSourcesCatalog(),
-        });
-      };
-    },
-  },
-  {
-    path: "/api/calls/evaluation/reconciliation/:id",
-    method: "GET" as const,
-    createHandler: async () => {
-      return async (c: any) => {
-        const user = await requireRoleOrKey(c, [...CALL_READ_ROLES]);
-        if (!user) return unauthorizedResponse(c);
-
-        const id = Number.parseInt(String(c.req.param("id") || ""), 10);
-        if (!Number.isFinite(id) || id <= 0) {
-          return c.json({ error: "Invalid call record id" }, 400);
-        }
-
-        const { initCallIntelligenceTables, getCallWithFullAnalysis } =
-          await import("../../utils/callIntelligenceDb");
-        const { buildTranscriptVsEvaluationReport } =
-          await import("../../utils/callMcpReconciliation");
-
-        await initCallIntelligenceTables();
-        const bundle = await getCallWithFullAnalysis(id);
-        if (!bundle.record) {
-          return c.json({ error: "Call record not found" }, 404);
-        }
-
-        const report = buildTranscriptVsEvaluationReport({
-          call_record_id: id,
-          lead_id: bundle.record.lead_id,
-          agent_email: bundle.record.agent_email,
-          transcript_text: bundle.transcript?.transcript_text ?? null,
-          talk_ratio: bundle.analysis?.talk_ratio ?? null,
-          sentiment_label: bundle.analysis?.sentiment_label ?? null,
-          qa_score_percentage: bundle.qaScore?.score_percentage ?? null,
-          improvements: bundle.qaScore?.improvements ?? null,
-        });
-
-        const { getSdrProcessScopeForApi } = await import("../../utils/sdrProcessScope");
-
-        return c.json({
-          success: true,
-          mcp_evaluation_framework: "programmatic_v1",
-          sdr_process_scope: getSdrProcessScopeForApi(),
-          report,
-        });
-      };
-    },
-  },
-  {
-    path: "/api/calls/evaluation/leads/match-phone",
-    method: "POST" as const,
-    createHandler: async () => {
-      return async (c: any) => {
-        const user = await requireRoleOrKey(c, [...CALL_READ_ROLES]);
-        if (!user) return unauthorizedResponse(c);
-
-        let body: { phone?: string; max_records?: number } = {};
-        try {
-          body = (await c.req.json()) || {};
-        } catch {
-          body = {};
-        }
-        const phone = String(body.phone || "").trim();
-        if (!phone) {
-          return c.json({ error: "phone is required" }, 400);
-        }
-
-        const { findLeadsByPhoneMatch } = await import("../../utils/callLeadPhoneMatch");
-        const result = await findLeadsByPhoneMatch(phone, {
-          maxRecords: body.max_records,
-        });
-
-        const { CRM_PHONE_MATCH_SCOPE, CRM_PHONE_MATCH_SCOPE_DESCRIPTION } =
-          await import("../../utils/callMcpImportSources");
-
-        return c.json({
-          success: true,
-          crm_phone_match_scope: CRM_PHONE_MATCH_SCOPE,
-          crm_phone_match_scope_description: CRM_PHONE_MATCH_SCOPE_DESCRIPTION,
-          ...result,
-          note:
-            result.scanned === 0 && result.matches.length === 0
-              ? "No Zoho credentials or no Leads fetched — configure Zoho and retry."
-              : undefined,
-        });
-      };
-    },
-  },
   {
     path: "/api/calls/evaluation/drive-import",
     method: "POST" as const,

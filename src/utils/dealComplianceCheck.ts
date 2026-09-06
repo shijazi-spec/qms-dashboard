@@ -107,31 +107,22 @@ export function requiredDocsForStage(stage: string): RequiredDoc[] {
 }
 
 /**
- * Documents that belong to the CLIENT COMPANY, not to an individual deal.
+ * DEAL-ONLY, deliberately.
  *
- * A VAT certificate, a Commercial Registration and a National Address do not
- * change from one deal to the next, so the business files them once on the
- * Account rather than re-attaching them to every deal. Measured 2026-09-02:
- * of 1,077 deals marked non-compliant, 813 were missing National Address, 805
- * the CR and 795 the VAT certificate — and 513 of those deals DID carry
- * attachments. Riyad Bank was flagged non-compliant while holding 18 files
- * including the MSA, the SOW, the PO and the invoice.
+ * Between 2026-09-03 and 09-06 this module also accepted the three company
+ * certificates (VAT, Commercial Registration, National Address) from the
+ * linked ACCOUNT, on the theory that documents which do not change per deal
+ * would be filed once at Account level. The data said otherwise: every Account
+ * sampled returned ZERO attachments while its deals returned files, and Rawabi
+ * Holding and مؤسسة الاسكان both had VAT, CR and National Address attached to
+ * the DEAL itself.
  *
- * Checking these against the deal alone therefore measured filing convention,
- * not compliance, and produced a 96-100% failure rate that would not have
- * survived its first meeting. They are now satisfied by an attachment on the
- * deal OR on its Account (Sarah 2026-09-03).
+ * Sarah settled it on 2026-09-06: "Deals is the place that will have the
+ * documents, not the accounts." So the Account lookup is gone — it cost an
+ * extra Zoho call per account and never once found a document.
+ *
+ * Do not reintroduce it without evidence that Accounts actually carry files.
  */
-export const COMPANY_LEVEL_DOC_KEYS = new Set([
-  "vat",
-  "commercial_registration",
-  "national_address",
-]);
-
-export function isCompanyLevelDoc(key: string): boolean {
-  return COMPANY_LEVEL_DOC_KEYS.has(key);
-}
-
 export interface DocComplianceResult {
   stage: string;
   required: number;
@@ -139,13 +130,9 @@ export interface DocComplianceResult {
     key: string;
     label: string;
     fileName: string;
-    /** Where the file was found. Company documents may live on the Account. */
-    source?: "deal" | "account";
   }>;
   missingDocs: Array<{ key: string; label: string }>;
   attachmentCount: number;
-  /** Attachments on the linked Account, when they were consulted. */
-  accountAttachmentCount?: number;
   compliant: boolean;
 }
 
@@ -153,57 +140,29 @@ export interface DocComplianceResult {
  * Match a deal's attachments against the documents its stage requires.
  *
  * A required doc is "present" if ANY attachment file name matches its keywords.
- *
- * `accountAttachments` is optional and, when supplied, is consulted ONLY for
- * the company-level documents (VAT, CR, National Address) — see
- * COMPANY_LEVEL_DOC_KEYS. Deal documents stay strictly on the deal: a proposal
- * or a signed contract belongs to the deal it was written for, and accepting a
- * different deal's contract from the shared Account would let one signed file
- * mark an entire company's pipeline compliant.
- *
- * The deal is always searched first, so a company document attached directly to
- * the deal still counts and is still reported as coming from the deal.
+ * Only the DEAL's own attachments count — see the note above DocComplianceResult.
  */
 export function evaluateDocCompliance(
   stage: string,
   attachments: ZohoAttachmentLike[],
-  accountAttachments?: ZohoAttachmentLike[],
 ): DocComplianceResult {
   const required = requiredDocsForStage(stage);
-  const nameList = (list?: ZohoAttachmentLike[]) =>
-    (list || [])
-      .map((a) => (a && a.fileName ? String(a.fileName) : ""))
-      .filter(Boolean);
-  const names = nameList(attachments);
-  const accountNames = accountAttachments ? nameList(accountAttachments) : null;
+  const names = (attachments || [])
+    .map((a) => (a && a.fileName ? String(a.fileName) : ""))
+    .filter(Boolean);
   const present: DocComplianceResult["presentDocs"] = [];
   const missing: DocComplianceResult["missingDocs"] = [];
   for (const doc of required) {
-    const onDeal = names.find((n) => doc.match.test(n));
-    if (onDeal) {
-      present.push({ key: doc.key, label: doc.label, fileName: onDeal, source: "deal" });
-      continue;
-    }
-    const onAccount =
-      accountNames && isCompanyLevelDoc(doc.key)
-        ? accountNames.find((n) => doc.match.test(n))
-        : undefined;
-    if (onAccount) {
-      present.push({ key: doc.key, label: doc.label, fileName: onAccount, source: "account" });
-      continue;
-    }
-    missing.push({ key: doc.key, label: doc.label });
+    const hit = names.find((n) => doc.match.test(n));
+    if (hit) present.push({ key: doc.key, label: doc.label, fileName: hit });
+    else missing.push({ key: doc.key, label: doc.label });
   }
   return {
     stage,
     required: required.length,
     presentDocs: present,
     missingDocs: missing,
-    // The headline count stays the DEAL's own attachments — that is what the
-    // operator sees on the record. The Account's is reported separately so a
-    // pass earned on the Account is never mistaken for files on the deal.
     attachmentCount: names.length,
-    ...(accountNames ? { accountAttachmentCount: accountNames.length } : {}),
     compliant: required.length > 0 && missing.length === 0,
   };
 }

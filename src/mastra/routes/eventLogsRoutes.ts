@@ -464,41 +464,18 @@ export const eventLogsRoutes = [
     },
   },
 
-  {
-    path: "/logs",
-    method: "GET" as const,
-    createHandler: async () => {
-      const { readFileSync, existsSync } = await import("fs");
-      const { join } = await import("path");
-
-      return async (c: any) => {
-        try {
-          const possiblePaths = [
-            join(process.cwd(), "dashboard", "logs.html"),
-            join(process.cwd(), "..", "dashboard", "logs.html"),
-            "/home/runner/workspace/dashboard/logs.html",
-          ];
-
-          for (const logsPath of possiblePaths) {
-            if (existsSync(logsPath)) {
-              const html = readFileSync(logsPath, "utf-8");
-              return c.html(html);
-            }
-          }
-
-          safeLogger.error(
-            "📋 [EventLogs] Logs dashboard not found in any path:",
-            possiblePaths,
-          );
-          return c.text("Event Logs dashboard not found", 404);
-        } catch (error) {
-          safeLogger.error(
-            "📋 [EventLogs] Error serving Logs dashboard:",
-            error,
-          );
-          return c.text("Error loading Event Logs dashboard", 500);
-        }
-      };
-    },
-  },
+  // NOTE: the `GET /logs` PAGE route deliberately lives in staticPageRoutes.ts,
+  // not here.
+  //
+  // This module used to define it too, and because eventLogsRoutes is spread
+  // BEFORE staticPageRoutes in src/mastra/index.ts, this copy won — it read
+  // dashboard/logs.html off disk and returned it with NO role check, which
+  // silently disabled the ADMIN_ONLY gate the staticPageRoutes version
+  // applies. The audit-log DATA stayed protected (GET /api/logs and
+  // /api/event-logs are admin-only in ROUTE_PERMISSION_MAP), so this exposed
+  // the page shell rather than any log content — but the declared access
+  // policy was not the one being enforced, which is not acceptable in a GRC
+  // platform whose own access model is auditable.
+  //
+  // Removed so the gated registration is the one that serves the page.
 ];
