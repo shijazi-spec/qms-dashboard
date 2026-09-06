@@ -117,6 +117,32 @@ isValidation = true
 [userenv]
 
 [userenv.shared]
+# Stops @mastra/core's GatewayRegistry refreshing the provider/model list over
+# the network and writing the regenerated
+#   node_modules/@mastra/core/dist/llm/model/provider-types.generated.d.ts
+# back into node_modules. That file contains model ids like
+# 'claude-3.5-sonnet-...' whose numeric prefix TypeScript's parser cannot
+# tokenise, so every refresh reintroduced ~77 parse errors and broke
+# `npm run check`. It kept coming back after being patched, and kept growing
+# (212454 -> 213092 -> 213344 -> 213591 -> 213853 bytes) while @mastra/core
+# stayed pinned at 0.24.9 - the app was rewriting a file inside its own
+# node_modules.
+#
+# The refresh defaults ON whenever MASTRA_DEV is set, which Replit sets:
+#   autoRefreshEnabled = MASTRA_AUTO_REFRESH_PROVIDERS === "true"
+#                     || (MASTRA_AUTO_REFRESH_PROVIDERS !== "false" && isDev)
+# so only the literal string "false" disables it.
+#
+# Safe for us: our agents build providers explicitly via createOpenAI() from
+# @ai-sdk/openai-v5 rather than Mastra's model-router strings, so the dynamic
+# registry is never on our path. Set in shared (not just development) because
+# the deployed app has no use for it either.
+#
+# Belt and braces, not a replacement for the patch: scripts/patch-mastra-
+# provider-types.mjs still runs at precheck, and
+# scripts/check-mastra-provider-regeneration.mjs reports if this ever stops
+# working.
+MASTRA_AUTO_REFRESH_PROVIDERS = "false"
 ZOHO_ACCOUNTS_URL = "https://accounts.zoho.com"
 ZOHO_API_DOMAIN = "https://www.zohoapis.com"
 DATA_MODE = "REAL"
