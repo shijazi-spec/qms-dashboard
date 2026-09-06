@@ -570,11 +570,18 @@ export const mastra = new Mastra({
         runResolutionDigestIfDue,
         runWeeklyExecBriefIfDue,
         runLeadershipPushIfDue,
+        runHealthPulseIfStale,
       } = await import("../utils/scheduledJobs");
       const helpers: Array<{
         name: string;
         fn: () => Promise<{ ran: boolean; ageHours: number }>;
       }> = [
+        // FIRST, and deliberately: the pulse reports on whether scheduled work
+        // is still happening, so it must not depend on the same scheduler it
+        // is watching. There is also an Inngest cron for it; whichever fires
+        // first wins, and the freshness check makes the other a no-op. Cheap
+        // when healthy — one MAX(run_at) query per tick.
+        { name: "HealthPulse", fn: () => runHealthPulseIfStale() },
         { name: "RateLimit429Pruner", fn: () => runPruneRateLimit429IfStale() },
         { name: "DuplicateRadar", fn: () => runDuplicateScanIfStale() },
         { name: "ConsultantScanner", fn: () => runConsultantScannerIfStale() },

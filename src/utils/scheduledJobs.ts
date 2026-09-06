@@ -1001,3 +1001,74 @@ export async function runLeadershipPushIfDue(): Promise<{ ran: boolean; ageHours
   }
 }
 
+
+/**
+ * Run the platform health pulse if the last recorded run is stale.
+ *
+ * WHY THIS IS A FALLBACK HELPER AND NOT ONLY AN INNGEST CRON:
+ * the pulse's whole job is to notice when scheduled work stops, so hanging it
+ * off the same scheduler that stops is circular. This module's own header says
+ * production runners have missed cron fires for days at a time, and the
+ * evidence agreed — `ai-approval-expiry` is registered every 15 minutes with a
+ * one-line UPDATE, and as of 2026-09-07 not a single row had EVER been expired
+ * while 275 sat eligible. A monitor must not share a single point of failure
+ * with the thing it monitors.
+ *
+ * Freshness is read from health_pulse_runs rather than tracked in memory, so a
+ * restart does not re-trigger a run and multiple instances do not duplicate it.
+ */
+export async function runHealthPulseIfStale(
+  maxAgeHours = 1,
+): Promise<{ ran: boolean; ageHours: number; result?: any }> {
+  let ageHours = Infinity;
+  try {
+    const r = await sharedPool.query<{ hours: number | null }>(
+      `SELECT EXTRACT(EPOCH FROM (NOW() - MAX(run_at)))/3600 AS hours
+         FROM health_pulse_runs`,
+    );
+    const raw = r.rows[0]?.hours;
+    ageHours = raw === null || raw === undefined ? Infinity : Number(raw);
+  } catch (err) {
+    // Table absent on a fresh deployment — runHealthPulse creates it.
+    logger.info(
+      "[HealthPulse Fallback] Could not read last run age; treating as stale.",
+      { error: err instanceof Error ? err.message : String(err) },
+    );
+  }
+
+  if (ageHours < maxAgeHours) return { ran: false, ageHours };
+
+  logger.info(
+    `[HealthPulse Fallback] Last pulse ${
+      ageHours === Infinity ? "never recorded" : ageHours.toFixed(1) + "h ago"
+    } (threshold ${maxAgeHours}h); running pulse.`,
+  );
+
+  try {
+    const { runHealthPulse, maybeNotifyOnPulse } = await import(
+      "./platformHealthPulse"
+    );
+    const run = await runHealthPulse();
+    // The run is already persisted; a failed alert must not discard it.
+    try {
+      await maybeNotifyOnPulse(run);
+    } catch (notifyErr) {
+      logger.error(
+        "[HealthPulse Fallback] Pulse recorded but alert dispatch failed:",
+        notifyErr,
+      );
+    }
+    return {
+      ran: true,
+      ageHours,
+      result: {
+        overall: run.overall_status,
+        fail: run.fail_count,
+        warn: run.warn_count,
+      },
+    };
+  } catch (err) {
+    logger.error("[HealthPulse Fallback] Pulse failed:", err);
+    return { ran: false, ageHours };
+  }
+}
