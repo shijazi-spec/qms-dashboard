@@ -16,14 +16,15 @@
     "check:schema-parity": "node scripts/check-schema-parity.mjs --strict",
     "check:lockfile": "node scripts/check-lockfile-registry.mjs",
     "check:rbac": "npx tsx tests/rbacRouteCoverage.test.ts",
-    "check:all": "npm run check && npm run check:tests && npm run check:html-js && npm run check:schema-parity && npm run check:rbac && npm run check:lockfile",
+    "check:all": "npm run check && npm run check:tests && npm run check:html-js && npm run check:schema-parity && npm run check:rbac && npm run check:routes && npm run check:lockfile",
     "format": "prettier --write '**/*.ts'",
     "test": "npx tsx tests/runIntegrationTests.ts",
     "qc": "npx tsx tests/qc/run-platform-qc.ts",
     "mcp-eval": "npx tsx tests/mcp-eval/runMcpEval.ts",
     "new-feature": "bash scripts/new-feature.sh",
     "ship": "bash scripts/ship-feature.sh",
-    "postinstall": "node scripts/patch-lazystream.mjs && node scripts/patch-mastra-provider-types.mjs && node scripts/patch-provider-utils-v3-compat.mjs"
+    "postinstall": "node scripts/patch-lazystream.mjs && node scripts/patch-mastra-provider-types.mjs && node scripts/patch-provider-utils-v3-compat.mjs",
+    "check:routes": "node scripts/check-route-collisions.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.65",

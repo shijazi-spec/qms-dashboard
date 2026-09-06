@@ -86,3 +86,14 @@ jobs:
       - name: schema canonical-source parity (warning)
         run: node scripts/check-schema-parity.mjs
         continue-on-error: true
+
+      # Blocking gate: unreachable route registrations. Routes are matched in
+      # registration order, so a duplicate (path, method) or a literal path
+      # sitting below a parameterised one is dead code that tsc and the test
+      # suite cannot see. Two of these shipped to production — the bell's
+      # "Mark all read" writing to a shadowed handler, and
+      # GET /api/audits/evidence-packs returning 404 because it sat under
+      # /api/audits/:id. Known-and-accepted collisions live in the script's
+      # BASELINE map; anything new fails here.
+      - name: route collisions (unreachable registrations)
+        run: node scripts/check-route-collisions.mjs

@@ -369,11 +369,17 @@ export const mastra = new Mastra({
       // ── Accessibility ─────────────────────────────────────────────────────
       ...a11yRoutes,
 
+      // ── Static Assets (CSS / JS) ──────────────────────────────────────────
+      // MUST precede staticPageRoutes. That module ends with the catch-all
+      // `/dashboard/:name`, which matches any asset filename too — so while
+      // assets were registered second, the dedicated per-asset routes never
+      // ran. /dashboard/tailwind.css (630KB) was being served by the catch-all
+      // with `Cache-Control: no-cache`, costing a revalidation round-trip on
+      // every page load, instead of the 1-hour cache its own route sets.
+      ...staticAssetRoutes,
+
       // ── HTML Page Shells ─────────────────────────────────────────────────
       ...staticPageRoutes,
-
-      // ── Static Assets (CSS / JS) ──────────────────────────────────────────
-      ...staticAssetRoutes,
 
       // ── i18n / Language API ──────────────────────────────────────────────
       ...i18nRoutes,
