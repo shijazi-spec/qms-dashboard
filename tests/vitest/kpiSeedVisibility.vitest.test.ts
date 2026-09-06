@@ -62,6 +62,56 @@ describe("the expectations match what the seeders write", () => {
   });
 });
 
+describe("the repair can run outside boot", () => {
+  // Boot-only was the gap that let all 33 CS KPIs stay invisible for days: the
+  // GRQ sweep can deactivate them at any time, and a repair that only ran at
+  // startup left them missing for as long as the process stayed up.
+  it("is exported so the housekeeping loop can call it too", () => {
+    expect(/export async function restoreDepartmentKpis/.test(SRC)).toBe(true);
+  });
+
+  it("only touches department framework codes under their own team", () => {
+    const fn = /export async function restoreDepartmentKpis[\s\S]*?\n\}/.exec(SRC)![0];
+    for (const pair of [
+      ["CS-KPI-%", "CS Team"],
+      ["SDR-KPI-%", "SDR Team"],
+      ["SALES-KPI-%", "Sales Team"],
+    ]) {
+      expect(fn).toContain(pair[0]);
+      expect(fn).toContain(pair[1]);
+    }
+  });
+
+  it("cannot revive a KPI somebody deliberately retired", () => {
+    // The owner_name + code-prefix pairing is what keeps this safe: a retired
+    // GRQ or ad-hoc KPI matches neither, so a blanket reactivation is
+    // impossible however often the watchdog runs.
+    const fn = /export async function restoreDepartmentKpis[\s\S]*?\n\}/.exec(SRC)![0];
+    expect(fn).toContain("owner_name =");
+    expect(fn).not.toMatch(/WHERE\s+is_active\s+IS\s+DISTINCT\s+FROM\s+true\s*`/);
+  });
+});
+
+describe("the sweep can no longer reach department KPIs", () => {
+  const SWEEP = readFileSync(
+    join(__dirname, "../../src/utils/finalGrqKpiSeed.ts"),
+    "utf8",
+  );
+
+  it("exempts every seeded team by code prefix", () => {
+    // A prefix cannot fail open. The owner_name exemption can, and did:
+    // getDepartmentKpiOwnerNames returns [] when the BU registry is
+    // unreadable, and an empty list exempts nobody.
+    for (const p of ["'SDR-KPI-%'", "'SALES-KPI-%'", "'CS-KPI-%'"]) {
+      expect(SWEEP).toContain(`kpi_code NOT LIKE ${p}`);
+    }
+  });
+
+  it("keeps the owner_name exemption as well, not instead", () => {
+    expect(SWEEP).toContain("owner_name <> ALL($2::text[])");
+  });
+});
+
 describe("the check tests visibility, not existence", () => {
   const fn = /export async function verifySeededKpiVisibility[\s\S]*?\n\}/.exec(SRC)![0];
 

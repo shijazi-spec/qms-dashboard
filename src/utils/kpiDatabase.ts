@@ -364,27 +364,7 @@ export async function initKPITables(): Promise<void> {
   // AFTER the sweep and after every seeder, so a single boot both repairs and
   // verifies. Narrow by construction: only department framework codes, only
   // under their own team's owner_name.
-  const restored = await pool.query(
-    `UPDATE kpi_definitions
-        SET is_active = true,
-            owner_type = CASE
-              WHEN kpi_code LIKE 'CS-KPI-%'    THEN 'cs_team'
-              WHEN kpi_code LIKE 'SDR-KPI-%'   THEN 'sdr_team'
-              WHEN kpi_code LIKE 'SALES-KPI-%' THEN 'sales_team'
-              ELSE owner_type END,
-            updated_at = NOW()
-      WHERE (
-              (kpi_code LIKE 'CS-KPI-%'    AND owner_name = 'CS Team')
-           OR (kpi_code LIKE 'SDR-KPI-%'   AND owner_name = 'SDR Team')
-           OR (kpi_code LIKE 'SALES-KPI-%' AND owner_name = 'Sales Team')
-            )
-        AND (is_active IS DISTINCT FROM true OR owner_type NOT IN ('cs_team','sdr_team','sales_team'))`,
-  );
-  if (restored.rowCount && restored.rowCount > 0) {
-    logger.info(
-      `🔧 [KPIDB] Restored ${restored.rowCount} department KPI(s) deactivated by the GRQ sweep`,
-    );
-  }
+  await restoreDepartmentKpis();
 
   // Prove the seeded KPIs are actually VISIBLE, not merely inserted.
   await verifySeededKpiVisibility();
@@ -1964,6 +1944,45 @@ export interface CatalogKpiWithValue {
  * Reports BU registry maps to the human-facing team name, which is what the
  * /kpis "KPI Catalog" dropdown shows.
  */
+/**
+ * Reactivate department framework KPIs that something switched off.
+ *
+ * Extracted so it can run BOTH at boot and on the housekeeping loop. Boot-only
+ * was not enough: the GRQ sweep runs on every boot and its owner_name exemption
+ * fails open, so a repair that only ran once per restart left the KPIs missing
+ * for however long the process stayed up. All 33 Customer Success KPIs were
+ * invisible for days that way (2026-09-06).
+ *
+ * Narrow by construction — only department framework code prefixes, only under
+ * their own team's owner_name — so it can never revive a KPI somebody
+ * deliberately retired.
+ */
+export async function restoreDepartmentKpis(): Promise<number> {
+  const restored = await pool.query(
+    `UPDATE kpi_definitions
+        SET is_active = true,
+            owner_type = CASE
+              WHEN kpi_code LIKE 'CS-KPI-%'    THEN 'cs_team'
+              WHEN kpi_code LIKE 'SDR-KPI-%'   THEN 'sdr_team'
+              WHEN kpi_code LIKE 'SALES-KPI-%' THEN 'sales_team'
+              ELSE owner_type END,
+            updated_at = NOW()
+      WHERE (
+              (kpi_code LIKE 'CS-KPI-%'    AND owner_name = 'CS Team')
+           OR (kpi_code LIKE 'SDR-KPI-%'   AND owner_name = 'SDR Team')
+           OR (kpi_code LIKE 'SALES-KPI-%' AND owner_name = 'Sales Team')
+            )
+        AND (is_active IS DISTINCT FROM true OR owner_type NOT IN ('cs_team','sdr_team','sales_team'))`,
+  );
+  const n = restored.rowCount ?? 0;
+  if (n > 0) {
+    logger.info(
+      `🔧 [KPIDB] Restored ${n} department KPI(s) that had been deactivated`,
+    );
+  }
+  return n;
+}
+
 /**
  * Teams whose KPIs are seeded in code, and how many rows each seeder writes.
  *

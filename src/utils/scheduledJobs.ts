@@ -543,6 +543,61 @@ export async function runMonthlyMissingDocsReportIfDue(): Promise<{
   }
 }
 
+// KPI VISIBILITY WATCHDOG — every housekeeping tick (Sarah 2026-09-06:
+// "make sure this issue is not done again").
+//
+// The boot-time repair was not enough on its own. The GRQ final-seed sweep
+// deactivates by owner_type and its owner_name exemption FAILS OPEN — an
+// unreadable BU registry exempts nobody — so department KPIs can be switched
+// off at any time, not just during startup. A boot-only repair leaves them
+// missing for as long as the process happens to stay up, which is how all 33
+// Customer Success KPIs stayed invisible for days while every page reported
+// "No active KPIs found" and nothing anywhere raised a word.
+//
+// So: re-check on the loop, repair if needed, and re-verify that the repair
+// actually worked. Cheap when healthy — three indexed reads and no writes.
+export async function runKpiVisibilityWatchdog(): Promise<{
+  ran: boolean;
+  ageHours: number;
+  result?: any;
+}> {
+  try {
+    const { verifySeededKpiVisibility, restoreDepartmentKpis } = await import(
+      "./kpiDatabase"
+    );
+    const before = await verifySeededKpiVisibility();
+    const broken = before.filter((t) => !t.ok);
+    if (!broken.length) return { ran: true, ageHours: 0, result: { healthy: true } };
+
+    const restored = await restoreDepartmentKpis();
+    const after = await verifySeededKpiVisibility();
+    const stillBroken = after.filter((t) => !t.ok);
+    if (stillBroken.length) {
+      // The repair could not fix it, so the cause is something new. Say so
+      // loudly rather than silently retrying every 45 minutes forever.
+      logger.error(
+        "❌ [KpiWatchdog] KPIs still not visible after the repair — cause is NOT the known sweep. " +
+          `Check /api/kpis/seed-health forensics: ${stillBroken
+            .map((t) => `${t.ownerName} ${t.visible}/${t.expected}`)
+            .join(", ")}`,
+      );
+    } else {
+      logger.warn(
+        `⚠️ [KpiWatchdog] ${broken.map((t) => t.ownerName).join(", ")} had lost their KPIs; ` +
+          `restored ${restored} row(s) and re-verified.`,
+      );
+    }
+    return {
+      ran: true,
+      ageHours: 0,
+      result: { repaired: restored, stillBroken: stillBroken.map((t) => t.ownerName) },
+    };
+  } catch (err) {
+    logger.error("[KpiWatchdog] failed:", err);
+    return { ran: false, ageHours: 0 };
+  }
+}
+
 /**
  * Returns hours since the last successful Quality Audit.
  */

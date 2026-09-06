@@ -599,6 +599,20 @@ export const mastra = new Mastra({
         // every tick, so the Deal Compliance tab reads stored results instead
         // of making the operator's browser do hundreds of live calls
         // (Sarah 2026-08-25). Disable with DEAL_DOC_SWEEP_ENABLED=false.
+        // KPI visibility watchdog — re-checks every tick that each seeded team's
+        // KPIs are still readable, repairs them if a sweep switched them off,
+        // and shouts if the repair does not work. Boot-only was not enough:
+        // department KPIs can be deactivated at any time, and stayed invisible
+        // for days because nothing watched between restarts.
+        {
+          name: "KpiVisibilityWatchdog",
+          fn: async () => {
+            const { runKpiVisibilityWatchdog } = await import(
+              "../utils/scheduledJobs"
+            );
+            return runKpiVisibilityWatchdog();
+          },
+        },
         // Monthly missing-documents report to the Head of Sales. Off unless
         // MISSING_DOCS_REPORT_ENABLED=true; sends once per month, enforced by
         // a primary key rather than an in-memory stamp.
