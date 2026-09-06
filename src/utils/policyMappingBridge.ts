@@ -107,6 +107,51 @@ export async function backfillMappingCategories(): Promise<{
   return { updated, buckets };
 }
 
+/**
+ * Re-derive extraction_status for projections that predate the placeholder rule.
+ *
+ * resolvePolicyText() already returns 'placeholder' for a register entry whose
+ * only text is its own one-line description and which has no file attached. But
+ * syncPolicyToMapping only re-runs when a policy CHANGES, so every row projected
+ * before that rule existed kept extraction_status='extracted' — 154 of them,
+ * each holding the 170-character seeder blurb:
+ *
+ *   "Controlled document (WP-...) - pending file upload. Seeded from ..."
+ *
+ * The damage was not cosmetic. Those rows are the corpus the Mapping Console
+ * searches, so:
+ *   - full-text search found nothing (a blurb contains no clause terminology),
+ *   - every semantic hit landed in a 0.26-0.31 similarity band, which is the
+ *     signature of noise rather than of any real match, and
+ *   - "155 document(s) were checked" was true and useless.
+ * Stage 1 and Stage 2 both worked correctly against content that does not exist.
+ *
+ * Mirrors the forward rule rather than pattern-matching the blurb text: a
+ * projection whose SOURCE POLICY has no file has nothing extracted, whatever its
+ * description happens to say. Matching on the blurb string would miss any
+ * fileless entry someone gave a hand-written description.
+ *
+ * Idempotent and self-reversing: attaching the approved file re-runs the
+ * projection, which flips the row back to 'extracted' on its own.
+ */
+export async function backfillPlaceholderStatus(): Promise<number> {
+  const res = await pool.query(
+    `UPDATE qms_uploaded_documents d
+        SET extraction_status = 'placeholder'
+       FROM policies p
+      WHERE d.source_policy_id = p.id
+        AND COALESCE(p.file_path, '') = ''
+        AND COALESCE(d.extraction_status, '') = 'extracted'`,
+  );
+  const n = res.rowCount || 0;
+  if (n > 0) {
+    logger.info(
+      `[policyMappingBridge] re-marked ${n} fileless projection(s) as placeholder`,
+    );
+  }
+  return n;
+}
+
 export async function initPolicyMappingBridge(): Promise<void> {
   if (bridgeReady) return;
   await initQmsDocsTable();
@@ -141,6 +186,17 @@ export async function initPolicyMappingBridge(): Promise<void> {
   } catch (err) {
     logger.warn(
       `[policyMappingBridge] category backfill skipped: ${(err as Error).message}`,
+    );
+  }
+
+  // Same best-effort contract: a stale extraction_status makes the Mapping
+  // Console search blurbs, which is bad, but not a reason to stop the bridge
+  // from initialising at all.
+  try {
+    await backfillPlaceholderStatus();
+  } catch (err) {
+    logger.warn(
+      `[policyMappingBridge] placeholder backfill skipped: ${(err as Error).message}`,
     );
   }
 
