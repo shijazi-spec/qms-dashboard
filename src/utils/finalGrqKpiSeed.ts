@@ -162,9 +162,28 @@ export async function seedFinalGrqKpis(): Promise<void> {
   const { getDepartmentKpiOwnerNames } = await import("./qualityReportsDepartments");
   const deptOwnerNames = await getDepartmentKpiOwnerNames();
   const res = await pool.query(
+    // The `kpi_code NOT LIKE` clauses are a second, independent exemption for
+    // department-seeded KPIs, and they are the load-bearing one.
+    //
+    // The owner_name exemption above depends on getDepartmentKpiOwnerNames(),
+    // which degrades to an EMPTY list whenever the BU registry cannot be read —
+    // and an empty list exempts nobody, so every 'shared'-typed row gets
+    // deactivated. That is how all 33 Customer Success KPIs came to sit at
+    // is_active = false with a perfectly correct owner_name of "CS Team"
+    // (2026-09-06): seeded active by seedCSKPIs, swept on a later boot,
+    // invisible ever since, and indistinguishable on screen from "never
+    // seeded".
+    //
+    // A code prefix cannot fail open the way a database lookup can. SDR-KPI-,
+    // SALES-KPI- and CS-KPI- are department frameworks by definition and are
+    // never GRQ scorecard KPIs, so this sweep must never touch them whatever
+    // their owner_type says.
     `UPDATE kpi_definitions SET is_active = false, updated_at = NOW()
       WHERE owner_type IN ('quality_manager','grc_manager','grq_specialist','legal_specialist','shared','governance_officer')
         AND kpi_code <> ALL($1::text[])
+        AND kpi_code NOT LIKE 'SDR-KPI-%'
+        AND kpi_code NOT LIKE 'SALES-KPI-%'
+        AND kpi_code NOT LIKE 'CS-KPI-%'
         AND (owner_name IS NULL OR owner_name <> ALL($2::text[]))
         AND is_active = true`,
     [FINAL_CODES, deptOwnerNames],

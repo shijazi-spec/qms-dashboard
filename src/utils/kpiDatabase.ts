@@ -349,6 +349,43 @@ export async function initKPITables(): Promise<void> {
     );
   }
 
+  // Undo any sweep damage to the department frameworks.
+  //
+  // seedFinalGrqKpis() runs ABOVE this (line ~322) and deactivates by
+  // owner_type. Its owner_name exemption fails open — getDepartmentKpiOwnerNames
+  // returns an empty list whenever the BU registry cannot be read, and an empty
+  // list exempts nobody — so a boot with a slow or unavailable registry
+  // deactivates every 'shared'-typed row. That is how all 33 Customer Success
+  // KPIs ended up at is_active = false with a correct owner_name of "CS Team".
+  //
+  // The sweep now also exempts these code prefixes, which prevents recurrence.
+  // This repair brings back the ones already deactivated, and normalises any
+  // owner_type drift so they stop matching the sweep's IN list at all. It runs
+  // AFTER the sweep and after every seeder, so a single boot both repairs and
+  // verifies. Narrow by construction: only department framework codes, only
+  // under their own team's owner_name.
+  const restored = await pool.query(
+    `UPDATE kpi_definitions
+        SET is_active = true,
+            owner_type = CASE
+              WHEN kpi_code LIKE 'CS-KPI-%'    THEN 'cs_team'
+              WHEN kpi_code LIKE 'SDR-KPI-%'   THEN 'sdr_team'
+              WHEN kpi_code LIKE 'SALES-KPI-%' THEN 'sales_team'
+              ELSE owner_type END,
+            updated_at = NOW()
+      WHERE (
+              (kpi_code LIKE 'CS-KPI-%'    AND owner_name = 'CS Team')
+           OR (kpi_code LIKE 'SDR-KPI-%'   AND owner_name = 'SDR Team')
+           OR (kpi_code LIKE 'SALES-KPI-%' AND owner_name = 'Sales Team')
+            )
+        AND (is_active IS DISTINCT FROM true OR owner_type NOT IN ('cs_team','sdr_team','sales_team'))`,
+  );
+  if (restored.rowCount && restored.rowCount > 0) {
+    logger.info(
+      `🔧 [KPIDB] Restored ${restored.rowCount} department KPI(s) deactivated by the GRQ sweep`,
+    );
+  }
+
   // Prove the seeded KPIs are actually VISIBLE, not merely inserted.
   await verifySeededKpiVisibility();
 
@@ -1963,6 +2000,8 @@ export interface SeededKpiForensics {
   nullActive: number;
   /** Distinct owner_name values found, with counts. */
   owners: Array<{ owner_name: string | null; count: number }>;
+  /** Distinct owner_type values — the field the GRQ sweep deactivates by. */
+  ownerTypes?: Array<{ owner_type: string | null; count: number }>;
 }
 
 export interface SeededKpiVisibility {
@@ -2030,12 +2069,26 @@ export async function verifySeededKpiVisibility(): Promise<SeededKpiVisibility[]
           ORDER BY count DESC`,
         [codePrefix],
       );
+      // owner_type matters as much as owner_name: the GRQ sweep deactivates BY
+      // owner_type, so a row that drifted to 'shared' gets swept while one on
+      // 'cs_team' does not. Omitting it from the first version of this report
+      // left the cause ambiguous even after the forensics landed — the counts
+      // proved the rows were inactive but not which sweep could reach them.
+      const t = await pool.query(
+        `SELECT owner_type, COUNT(*)::int AS count
+           FROM kpi_definitions
+          WHERE kpi_code LIKE $1 || '%'
+          GROUP BY owner_type
+          ORDER BY count DESC`,
+        [codePrefix],
+      );
       forensics = {
         total: f.rows[0]?.total ?? 0,
         active: f.rows[0]?.active ?? 0,
         inactive: f.rows[0]?.inactive ?? 0,
         nullActive: f.rows[0]?.null_active ?? 0,
         owners: o.rows as SeededKpiForensics["owners"],
+        ownerTypes: t.rows as SeededKpiForensics["ownerTypes"],
       };
     } catch (err) {
       logger.error(`[KPIDB] forensics failed for "${ownerName}"`, err);
