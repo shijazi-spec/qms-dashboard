@@ -1090,14 +1090,21 @@ const aiCostSummaryFunction = inngest.createFunction(
         logger.warn("[AI-Cost] Threshold exceeded:", msg);
 
         try {
-          const { createNotification } =
+          // notifyEvent, NOT createNotification. createNotification only
+          // reaches Slack/email when the CALLER sets `channel`, and it ignores
+          // `severity` entirely (it reads `priority`) — so the previous
+          // `severity: "high"` call stored priority 'medium', sent nothing
+          // anywhere, and this threshold was being exceeded in total silence.
+          // notifyEvent is the one that fans out by priority.
+          const { notifyEvent } =
             await import("../../utils/notificationHub");
-          await createNotification({
-            type: "alert",
+          await notifyEvent({
+            type: "ai_cost_threshold_exceeded",
+            module: "ai_ops",
             title: "AI Daily Cost Threshold Exceeded",
             message: msg.replace(/\*/g, ""),
-            link: "/ai-ops",
-            severity: "high",
+            priority: "high",
+            actionUrl: "/ai-ops",
           });
         } catch (notifErr) {
           logger.warn("[AI-Cost] Failed to create notification:", notifErr);

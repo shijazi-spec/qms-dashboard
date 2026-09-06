@@ -62,6 +62,22 @@ export async function initNotificationTables(): Promise<void> {
   );
 }
 
+/**
+ * Insert a notification row, and deliver it ONLY on the channel the caller asks
+ * for.
+ *
+ * READ THIS BEFORE USING IT. This function does NOT fan out. It sends to Slack
+ * or email only when `channel` is explicitly set to "slack"/"email"; the
+ * default channel is "in_app", which today means the row is stored and nobody
+ * sees it — the in-app feed has no reachable reader, because triggerRoutes
+ * shadows the hub's GET /api/notifications.
+ *
+ * So `createNotification({ ..., priority: "critical" })` with no `channel`
+ * delivers NOTHING, however urgent it looks. If you want an event to reach
+ * people, call `notifyEvent` instead — that is the one that maps priority to
+ * channels. Use this function directly only when you are deliberately
+ * addressing ONE channel or ONE recipient.
+ */
 export async function createNotification(
   notif: Omit<Notification, "id" | "created_at">,
 ): Promise<Notification> {
@@ -72,7 +88,12 @@ export async function createNotification(
       notif.title,
       notif.message,
       notif.module,
-      notif.priority || "medium",
+      // `severity` is the documented alias for `priority` (see the interface),
+      // but it used to be dropped on the floor: callers writing
+      // `severity: "high"` silently stored 'medium'. Honour it as a fallback so
+      // the documented behaviour is the real one. This affects the STORED value
+      // and list ordering only — delivery is decided by `channel` above.
+      notif.priority || notif.severity || "medium",
       notif.channel || "in_app",
       notif.status || "unread",
       notif.recipient || null,
@@ -252,11 +273,30 @@ async function sendSlackNotification(notif: Notification): Promise<void> {
   }
 }
 
+/**
+ * Announce an event to whoever should hear about it, fanning out by priority.
+ *
+ * PRIORITY DECIDES DELIVERY, and the default does not deliver:
+ *
+ *   critical | high  → in-app + Slack + email (when those are configured)
+ *   medium   | low   → in-app ONLY
+ *
+ * `priority` is OPTIONAL and defaults to "medium" downstream, so omitting it
+ * means in-app only — and the in-app feed currently has no reachable reader
+ * (triggerRoutes shadows the hub's GET /api/notifications). An omitted
+ * priority is therefore equivalent to discarding the event. Ten call sites
+ * took that default; assume it was not deliberate.
+ *
+ * Pick the level by whether someone must ACT, not by how bad the news sounds.
+ * Digests, "ready" and "recovered" notices belong at medium: routing routine
+ * traffic to Slack is what got the weekly digest switched off.
+ */
 export async function notifyEvent(event: {
   type: string;
   module: string;
   title: string;
   message: string;
+  /** Omitting this means in-app only — see the note above. */
   priority?: NotificationPriority;
   entityType?: string;
   entityId?: string;

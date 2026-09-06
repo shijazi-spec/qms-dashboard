@@ -681,7 +681,15 @@ export async function maybeNotifyOnPulse(run: PulseRun): Promise<void> {
       module: "platform",
       title: `Platform Health: ${run.overall_status.toUpperCase()} (${run.fail_count} fail, ${run.warn_count} warn)`,
       message: summaryLines.join("\n"),
-      priority: run.overall_status === "critical" ? "high" : "medium",
+      // "high" for BOTH states, not just critical. notifyEvent only extends to
+      // Slack/email at critical|high; a "degraded" run sent at "medium" went
+      // in-app only, and the in-app hub feed has no reachable reader — so every
+      // warning this pulse has ever raised was discarded silently.
+      //
+      // This function already fires only on a status TRANSITION (see the
+      // de-duplication above), so raising the level cannot turn into repeat
+      // alert spam on a persistently degraded platform.
+      priority: "high",
       entityType: "health_pulse_run",
       entityId: String(run.id || ""),
       actionUrl: "/api/health/pulse",
