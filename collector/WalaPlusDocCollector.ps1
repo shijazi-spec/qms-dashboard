@@ -362,7 +362,14 @@ function Send-Snapshot {
     try {
         $resp = Invoke-RestMethod -Uri $uri -Method Post -Headers $headers -Body $bytes -TimeoutSec 120
         $status = $resp.status
-        Write-Log "Server accepted snapshot: status=$status inserted=$($resp.counts.inserted) updated=$($resp.counts.updated) removed=$($resp.counts.soft_deleted) orphans=$($resp.counts.orphans)"
+        # relinked = rows the server attached to a register entry that appeared
+        # since the last ingest. Worth printing precisely because it is the one
+        # count that moves on a status=duplicate run: the library is unchanged,
+        # so every other number is zero and a repair would otherwise be
+        # invisible. Defaulted so an older server that does not send the field
+        # logs 0 rather than an empty string.
+        $relinked = if ($null -ne $resp.counts.relinked) { $resp.counts.relinked } else { 0 }
+        Write-Log "Server accepted snapshot: status=$status inserted=$($resp.counts.inserted) updated=$($resp.counts.updated) removed=$($resp.counts.soft_deleted) relinked=$relinked orphans=$($resp.counts.orphans)"
         if ($status -eq 'partial') {
             # The server refused the delete sweep because the payload collapsed
             # the active set. Almost always an unmounted share or renamed folder.
