@@ -8703,6 +8703,9 @@
                 // Only a LIVE check knows the filenames; the stored row keeps
                 // the verdict, not the file list.
                 attachmentNames: data.attachmentNames || null,
+                // Account side — only a LIVE re-check knows these.
+                accountId: data.accountId || null,
+                accountAttachmentNames: data.accountAttachmentNames || null,
                 stage: stage,
                 // Prefer the server's checkedAt/checkedBy when present so the
                 // row matches the persisted attribution; fall back to "now"
@@ -9629,6 +9632,22 @@
                     '</div>';
             } else if (rec.attachmentNames && !rec.attachmentNames.length) {
                 files = '<div class="text-[10px] text-gray-500 mt-0.5">no files attached in Zoho</div>';
+            }
+            // The ACCOUNT side. VAT, CR and National Address are accepted from
+            // the Account, so when they show as missing the operator needs to
+            // see what we actually read there — and a link to check it against
+            // Zoho. Every Account sampled returned zero files while its deals
+            // returned some; that is either true or our read is wrong, and
+            // this line is what makes the difference visible.
+            if (rec.accountId) {
+                var acctNames = rec.accountAttachmentNames || [];
+                files += '<div class="text-[10px] text-gray-500 mt-0.5">' +
+                    'account: ' +
+                    (acctNames.length
+                        ? acctNames.map(function (f) { return escapeHtml(String(f)); }).join(', ')
+                        : '<span title="We asked Zoho for this Account’s attachments and it returned none. Open the Account and compare — if files are there, tell Quality: the check is reading the wrong place.">no files on the Account</span>') +
+                    ' <a href="https://crm.zoho.com/crm/org766568398/tab/Accounts/' + encodeURIComponent(String(rec.accountId)) +
+                    '" target="_blank" rel="noopener" class="text-blue-600 hover:underline">open ↗</a></div>';
             }
             return head + present + missing + files + when + recheck;
         }

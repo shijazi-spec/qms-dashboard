@@ -3969,6 +3969,7 @@ export const duplicateRadarRoutes = [
           // a manual re-check would contradict the background sweep on the same
           // deal, which is worse than either answer on its own.
           let acctAtts: any[] | undefined;
+          let acctIdUsed: string | null = null;
           try {
             const { pool } = await import("../../utils/duplicateRadarDatabase");
             const q = await pool.query(
@@ -3979,6 +3980,7 @@ export const duplicateRadarRoutes = [
               [String(id)],
             );
             const accountId = q.rows[0]?.account_id;
+            acctIdUsed = accountId ? String(accountId) : null;
             if (accountId) acctAtts = await fetchRecordAttachments("Accounts", String(accountId));
           } catch (acctErr) {
             logger.warn(
@@ -4026,9 +4028,26 @@ export const duplicateRadarRoutes = [
           // reviewer hitting Refresh will see the same attribution.
           const checkedBy =
             user.email || user.userId ? String(user.email || user.userId) : null;
+          // The ACCOUNT side of the same diagnostic, and the account id we
+          // asked Zoho about.
+          //
+          // Every Account sampled on 2026-09-06 returned zero attachments
+          // while its deals returned one to three — eight different accounts,
+          // all zero. That is either true (company documents are not filed at
+          // Account level) or our Account read is broken, and the two are
+          // indistinguishable from the outside. Returning the id and the names
+          // makes it checkable in one click: open that Account in Zoho and
+          // compare. If Zoho shows files and this shows none, the read is
+          // wrong and the 96% figure is overstated.
+          const accountAttachmentNames = (acctAtts || [])
+            .map((a: any) => String(a?.fileName || "").trim())
+            .filter(Boolean)
+            .slice(0, 25);
           return c.json({
             ...result,
             attachmentNames,
+            accountId: acctIdUsed,
+            accountAttachmentNames,
             checkedBy,
             checkedAt: new Date().toISOString(),
           });
