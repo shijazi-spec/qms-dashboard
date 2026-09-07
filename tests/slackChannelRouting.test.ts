@@ -22,7 +22,7 @@ console.log("\n=== Slack channel routing ===\n");
 
 const ENV = {
   SLACK_CHANNEL_PLATFORM: "C_PLATFORM",
-  SLACK_CHANNEL_SALES_SDR: "C_SALES",
+  SLACK_CHANNEL_SDR_SALES: "C_SALES",
   SLACK_CHANNEL_CS: "C_CS",
   SLACK_CHANNEL_MARKETPLACE: "C_MARKET",
   SLACK_CHANNEL_ID: "C_LEGACY",
@@ -115,6 +115,34 @@ await suite.test("SLACK_DEFAULT_CHANNEL is honoured as a last resort", async () 
 await suite.test("every audience has a distinct env var", async () => {
   const vars = Object.values(AUDIENCE_ENV_VAR);
   suite.expectEqual(new Set(vars).size, vars.length, "no duplicate env var names");
+});
+
+await suite.test("the env var names PRODUCTION actually has are the ones read", async () => {
+  // Pinned deliberately. A transposed name (SDR_SALES vs SALES_SDR) does not
+  // fail loudly — it falls through to SLACK_CHANNEL_ID and the messages quietly
+  // keep going to the old shared channel. This caught exactly that on
+  // 2026-09-07, after the secrets had already been created.
+  const configured = {
+    SLACK_CHANNEL_PLATFORM: "C_P",
+    SLACK_CHANNEL_SDR_SALES: "C_S",
+    SLACK_CHANNEL_CS: "C_C",
+    SLACK_CHANNEL_MARKETPLACE: "C_M",
+    SLACK_CHANNEL_ID: "C_FALLBACK",
+  } as NodeJS.ProcessEnv;
+  suite.expectEqual(resolveSlackChannel("platform", null, configured).channel, "C_P", "platform");
+  suite.expectEqual(resolveSlackChannel("calls", null, configured).channel, "C_S", "sdr/sales");
+  suite.expectEqual(resolveSlackChannel("cs", null, configured).channel, "C_C", "cs");
+  suite.expectEqual(resolveSlackChannel("marketplace", null, configured).channel, "C_M", "marketplace");
+});
+
+await suite.test("the legacy SALES_SDR spelling still resolves", async () => {
+  // Kept working so a deployment configured against the original name does not
+  // silently regress to the fallback channel.
+  const legacy = {
+    SLACK_CHANNEL_SALES_SDR: "C_OLDNAME",
+    SLACK_CHANNEL_ID: "C_FALLBACK",
+  } as NodeJS.ProcessEnv;
+  suite.expectEqual(resolveSlackChannel("calls", null, legacy).channel, "C_OLDNAME", "alias honoured");
 });
 
 suite.finishOrExit();

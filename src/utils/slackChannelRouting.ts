@@ -28,12 +28,29 @@
 
 export type SlackAudience = "platform" | "sales_sdr" | "cs" | "marketplace";
 
-/** Env var holding each audience's channel id. */
+/**
+ * Env var(s) holding each audience's channel id, in priority order.
+ *
+ * sales_sdr accepts two spellings. SLACK_CHANNEL_SDR_SALES is the one actually
+ * configured in production (it reads in the same order as the team name and the
+ * channel wp-sdr-sales-audits); SLACK_CHANNEL_SALES_SDR was this file's original
+ * name and is kept so a deployment set up against it keeps working. Getting this
+ * wrong is invisible — a mismatched name silently falls through to
+ * SLACK_CHANNEL_ID and the messages land in the old shared channel.
+ */
+export const AUDIENCE_ENV_VARS: Record<SlackAudience, string[]> = {
+  platform: ["SLACK_CHANNEL_PLATFORM"],
+  sales_sdr: ["SLACK_CHANNEL_SDR_SALES", "SLACK_CHANNEL_SALES_SDR"],
+  cs: ["SLACK_CHANNEL_CS"],
+  marketplace: ["SLACK_CHANNEL_MARKETPLACE"],
+};
+
+/** Primary env var name per audience — the one to document and set. */
 export const AUDIENCE_ENV_VAR: Record<SlackAudience, string> = {
-  platform: "SLACK_CHANNEL_PLATFORM",
-  sales_sdr: "SLACK_CHANNEL_SALES_SDR",
-  cs: "SLACK_CHANNEL_CS",
-  marketplace: "SLACK_CHANNEL_MARKETPLACE",
+  platform: AUDIENCE_ENV_VARS.platform[0],
+  sales_sdr: AUDIENCE_ENV_VARS.sales_sdr[0],
+  cs: AUDIENCE_ENV_VARS.cs[0],
+  marketplace: AUDIENCE_ENV_VARS.marketplace[0],
 };
 
 /**
@@ -129,7 +146,9 @@ export function resolveSlackChannel(
   env: NodeJS.ProcessEnv = process.env,
 ): { channel: string | null; audience: SlackAudience } {
   const audience = resolveSlackAudience(module, segment);
-  const specific = (env[AUDIENCE_ENV_VAR[audience]] || "").trim();
+  const specific = AUDIENCE_ENV_VARS[audience]
+    .map((name) => (env[name] || "").trim())
+    .find((v) => v.length > 0);
   const fallback =
     (env.SLACK_CHANNEL_ID || "").trim() ||
     (env.SLACK_DEFAULT_CHANNEL || "").trim();
