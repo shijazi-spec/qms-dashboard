@@ -7,6 +7,88 @@ import {
 import { logger } from "../../utils/logger";
 export const adminApiRoutes = [
   {
+    /**
+     * Where THIS RUNNING PROCESS will send each audience's Slack notifications.
+     *
+     * scripts/slack-routing-doctor.mjs answers the same question, but it runs in
+     * the Replit SHELL and therefore reads the WORKSPACE (dev) secrets. A
+     * deployment can carry its own values, so the shell answer can disagree with
+     * what production actually does — and the difference is invisible until a
+     * message lands in the wrong channel.
+     *
+     * Returns channel IDs, never secret values. A channel id is not a
+     * credential (it appears in every Slack permalink); the token is never read
+     * or echoed here. Admin-gated like the rest of /api/admin/*.
+     */
+    path: "/api/admin/slack-routing",
+    method: "GET",
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          if (!hasValidAdminApiKey(c) && !isAdminAuthorized(c)) {
+            return c.json({ error: "Authentication required" }, 401);
+          }
+          const { AUDIENCE_ENV_VARS, resolveSlackChannel } = await import(
+            "../../utils/slackChannelRouting"
+          );
+
+          const audiences: Record<string, unknown> = {};
+          for (const [audience, vars] of Object.entries(AUDIENCE_ENV_VARS)) {
+            const setVar = (vars as string[]).find((v) =>
+              (process.env[v] || "").trim(),
+            );
+            const { channel } = resolveSlackChannel(
+              audience === "sales_sdr"
+                ? "calls"
+                : audience === "cs"
+                  ? "cs"
+                  : audience === "marketplace"
+                    ? "marketplace"
+                    : "platform",
+            );
+            audiences[audience] = {
+              channel: channel || null,
+              resolvedVia: setVar || "FALLBACK",
+              fallingBack: !setVar,
+            };
+          }
+
+          const fallback =
+            (process.env.SLACK_CHANNEL_ID || "").trim() ||
+            (process.env.SLACK_DEFAULT_CHANNEL || "").trim() ||
+            null;
+
+          // These pick their own channel and never consult the router.
+          const overrides: Record<string, string | null> = {};
+          for (const v of [
+            "DIRECT_AUDIT_SLACK_CHANNEL",
+            "AUTONOMOUS_RESOLUTION_SLACK_CHANNEL",
+            "DIGEST_SLACK_CHANNEL",
+            "SLACK_QMS_CHANNEL",
+          ]) {
+            overrides[v] = (process.env[v] || "").trim() || null;
+          }
+
+          return c.json({
+            note: "Values as seen by the RUNNING process — compare against scripts/slack-routing-doctor.mjs, which reads the dev workspace.",
+            slackTokenConfigured: Boolean(process.env.SLACK_BOT_TOKEN),
+            globalFallback: fallback,
+            // The one that silently drops messages: no audience channel AND no
+            // fallback means sendSlackNotification returns early with no error.
+            unroutedAlertsAreDropped:
+              !fallback &&
+              Object.values(audiences).some((a: any) => a.fallingBack),
+            audiences,
+            featureOverrides: overrides,
+          });
+        } catch (error) {
+          logger.error("[Admin] slack-routing failed:", error);
+          return c.json({ error: "Failed to resolve Slack routing" }, 500);
+        }
+      };
+    },
+  },
+  {
     // Security: this endpoint validates the raw ADMIN_API_KEY for server-to-server
     // tooling only. It no longer issues browser session cookies. Browser admin
     // access requires OIDC login with an admin platform role. Returning 200 on
