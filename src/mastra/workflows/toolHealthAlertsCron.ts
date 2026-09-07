@@ -563,8 +563,16 @@ export interface ToolHealthDeps {
    * Clears any time-boxed override row whose `expires_at` has passed and
    * writes a "system: override expired" audit entry (Task #191). Optional so
    * existing stubs need no churn — the production default delegates to
-   * {@link reapExpiredToolHealthOverrides}, and a test that doesn't care
-   * about the auto-revert path can leave it unstubbed.
+   * {@link reapExpiredToolHealthOverrides}.
+   *
+   * ⚠️ Tests calling {@link runToolHealthCheck} directly should ALWAYS stub
+   * this, including when they don't care about the auto-revert path. It is
+   * invoked unconditionally on every pass, and the default writes to the
+   * `tool_health_config_overrides` singleton (id=1) — a row shared by the
+   * whole suite. The advisory lock that guards it is held by
+   * {@link toolHealthAlertsCronFunction}, the Inngest wrapper, so a direct
+   * call to `runToolHealthCheck` bypasses the lock entirely and can reap
+   * another parallel worker's seeded row out from under it.
    */
   reapExpiredOverrides?: () => Promise<ReapExpiredToolHealthOverridesResult>;
   /**

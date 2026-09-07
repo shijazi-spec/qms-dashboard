@@ -180,6 +180,20 @@ function makeToolHealthDeps(opts: {
         description: "stub",
         status: "open",
       }) as AIAlert,
+    // Not asserted on here (these tests expect expiredOverridesReaped: 0), but
+    // it must be stubbed: unstubbed, `runToolHealthCheck` uses the REAL
+    // reapExpiredToolHealthOverrides, which mutates the global
+    // `tool_health_config_overrides` singleton (id=1) on every pass and races
+    // the seed in `tests/toolHealthConfigDatabase.test.ts` under the parallel
+    // runner. The advisory lock guarding that row sits on the Inngest wrapper,
+    // not on `runToolHealthCheck`, so a direct call slips straight past it.
+    reapExpiredOverrides: async () => ({
+      reaped: false,
+      cleared_overrides: {},
+      expired_at: null,
+      audit_id: null,
+      previous_updated_by: null,
+    }),
   };
   return { deps, resolves };
 }

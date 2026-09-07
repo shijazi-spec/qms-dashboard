@@ -237,6 +237,25 @@ function makeDeps(opts: {
         related_record_id: `${input.related_record_id}:notify_failure`,
       } as AIAlert;
     },
+    // Stub the reaper even though nothing here asserts on it. Left unstubbed,
+    // `runToolHealthCheck` falls through to DEFAULT_DEPS.reapExpiredOverrides
+    // — the REAL one — which claims and clears the `tool_health_config_overrides`
+    // singleton (id=1) on every single pass. This file drives ~40 unstubbed
+    // passes, so under the 4-worker runner it races
+    // `tests/toolHealthConfigDatabase.test.ts`: that test seeds the singleton
+    // as expired, and one of these passes reaps it first, leaving the test's
+    // own two concurrent calls to both see a non-expired row ("0 reaped,
+    // 2 not_reaped"). The advisory lock those tests take does NOT cover this,
+    // because the lock lives on the Inngest wrapper `toolHealthAlertsCronFunction`
+    // and calling `runToolHealthCheck` directly bypasses it. The tests that DO
+    // exercise the auto-revert path spread `...baseDeps` and override this.
+    reapExpiredOverrides: async () => ({
+      reaped: false,
+      cleared_overrides: {},
+      expired_at: null,
+      audit_id: null,
+      previous_updated_by: null,
+    }),
   };
 
   return {
