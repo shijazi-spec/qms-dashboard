@@ -1868,44 +1868,11 @@ const fraudRuleReviewReminderFunction = inngest.createFunction(
   { cron: process.env.FRAUD_RULE_REVIEW_REMINDER_CRON || "0 8 * * *" },
   async ({ step }) => {
     return await step.run("notify-rule-owners-of-upcoming-reviews", async () => {
-      const { getFraudRulesNeedingReviewSoon, initFraudTables } = await import(
-        "../../utils/fraudDatabase"
-      );
-      const { createNotification } = await import("../../utils/notificationHub");
-
-      await initFraudTables();
-      const due = await getFraudRulesNeedingReviewSoon(14);
-      if (due.length === 0) {
-        logger.info("[FraudRuleReviewReminder] No rules due for review in next 14 days");
-        return { notified: 0 };
-      }
-
-      let notified = 0;
-      for (const rule of due) {
-        try {
-          await createNotification({
-            title: `Fraud rule review due: ${rule.rule_id}`,
-            message: `Rule "${rule.rule_name}" (${rule.rule_id}) needs review by ${String(rule.next_review).slice(0, 10)}. Owner: ${rule.owner}.`,
-            module: "fraud",
-            priority: "medium",
-            channel: "in_app",
-            recipient: rule.owner,
-            related_entity_type: "fraud_rule",
-            related_entity_id: String(rule.id ?? rule.rule_id),
-            action_url: "/fraud-rules",
-          });
-          notified++;
-        } catch (err) {
-          logger.error(
-            `[FraudRuleReviewReminder] Failed to notify for rule ${rule.rule_id}:`,
-            err,
-          );
-        }
-      }
-      logger.info(
-        `[FraudRuleReviewReminder] Notified ${notified}/${due.length} rule owners`,
-      );
-      return { notified, total_due: due.length };
+      // Body extracted to src/utils/fraudScheduledChecks.ts so the
+      // in-process fallback can run the SAME code — Inngest crons do not
+      // fire on this deployment. Delivery is handled there.
+      const { runFraudRuleReviewReminder } = await import("../../utils/fraudScheduledChecks");
+      return await runFraudRuleReviewReminder();
     });
   },
 );
@@ -1925,50 +1892,11 @@ const fraudSamaDeadlineCheckFunction = inngest.createFunction(
   { cron: process.env.FRAUD_SAMA_DEADLINE_CRON || "5 * * * *" },
   async ({ step }) => {
     return await step.run("notify-on-sama-deadline-approaching", async () => {
-      const { getSamaDeadlineApproaching, initFraudTables } = await import(
-        "../../utils/fraudDatabase"
-      );
-      const { createNotification } = await import("../../utils/notificationHub");
-      await initFraudTables();
-      const candidates = await getSamaDeadlineApproaching(60);
-      if (candidates.length === 0) {
-        return { notified: 0 };
-      }
-      const recipients = (
-        process.env.FRAUD_SAMA_NOTIFY_EMAILS ||
-        "head.grq@walaplus.com,admin@walaplus.com"
-      )
-        .split(",")
-        .map((e) => e.trim())
-        .filter(Boolean);
-      let notified = 0;
-      for (const inc of candidates) {
-        for (const recipient of recipients) {
-          try {
-            await createNotification({
-              title: `URGENT — SAMA 72h deadline approaching: ${inc.incident_code}`,
-              message: `P1 incident ${inc.incident_code} detected ${String(inc.date_detected).slice(0, 10)} is not yet SAMA-reported. Take action within 12 hours.`,
-              module: "fraud",
-              priority: "critical",
-              channel: "in_app",
-              recipient,
-              related_entity_type: "fraud_incident",
-              related_entity_id: String(inc.id),
-              action_url: "/fraud-incidents",
-            });
-            notified++;
-          } catch (err) {
-            logger.error(
-              `[FraudSamaDeadline] Failed to notify ${recipient} for ${inc.incident_code}:`,
-              err,
-            );
-          }
-        }
-      }
-      logger.info(
-        `[FraudSamaDeadline] ${candidates.length} P1 incidents approaching deadline; ${notified} notifications dispatched`,
-      );
-      return { notified, candidates: candidates.length };
+      // Body extracted to src/utils/fraudScheduledChecks.ts so the
+      // in-process fallback can run the SAME code — Inngest crons do not
+      // fire on this deployment. Delivery is handled there.
+      const { runFraudSamaDeadlineCheck } = await import("../../utils/fraudScheduledChecks");
+      return await runFraudSamaDeadlineCheck();
     });
   },
 );
@@ -1986,43 +1914,11 @@ const fraudIncidentOverdueCheckFunction = inngest.createFunction(
   { cron: process.env.FRAUD_INCIDENT_OVERDUE_CRON || "0 9 * * *" },
   async ({ step }) => {
     return await step.run("notify-on-overdue-incidents", async () => {
-      const { getOverdueFraudIncidents, initFraudTables } = await import(
-        "../../utils/fraudDatabase"
-      );
-      const { createNotification } = await import("../../utils/notificationHub");
-      await initFraudTables();
-      const overdue = await getOverdueFraudIncidents(30);
-      if (overdue.length === 0) {
-        return { notified: 0 };
-      }
-      const recipient =
-        process.env.FRAUD_OVERDUE_NOTIFY_EMAIL || "head.grq@walaplus.com";
-      let notified = 0;
-      for (const inc of overdue) {
-        try {
-          await createNotification({
-            title: `Fraud incident overdue (>30 days): ${inc.incident_code}`,
-            message: `Incident ${inc.incident_code} (${inc.severity}) detected ${String(inc.date_detected).slice(0, 10)} has no resolution_date. Status: ${inc.status}.`,
-            module: "fraud",
-            priority: "high",
-            channel: "in_app",
-            recipient,
-            related_entity_type: "fraud_incident",
-            related_entity_id: String(inc.id),
-            action_url: "/fraud-incidents",
-          });
-          notified++;
-        } catch (err) {
-          logger.error(
-            `[FraudIncidentOverdue] Failed to notify for ${inc.incident_code}:`,
-            err,
-          );
-        }
-      }
-      logger.info(
-        `[FraudIncidentOverdue] ${overdue.length} overdue; ${notified} notifications dispatched`,
-      );
-      return { notified, overdue: overdue.length };
+      // Body extracted to src/utils/fraudScheduledChecks.ts so the
+      // in-process fallback can run the SAME code — Inngest crons do not
+      // fire on this deployment. Delivery is handled there.
+      const { runFraudIncidentOverdueCheck } = await import("../../utils/fraudScheduledChecks");
+      return await runFraudIncidentOverdueCheck();
     });
   },
 );
@@ -2042,58 +1938,11 @@ const fraudIncidentSlaCheckFunction = inngest.createFunction(
   { cron: process.env.FRAUD_INCIDENT_SLA_CRON || "10 * * * *" },
   async ({ step }) => {
     return await step.run("notify-on-sla-breach", async () => {
-      const { getOpenFraudIncidents, initFraudTables } = await import(
-        "../../utils/fraudDatabase"
-      );
-      const { createNotification } = await import("../../utils/notificationHub");
-      await initFraudTables();
-      const open = await getOpenFraudIncidents();
-
-      const SLA_HOURS: Record<string, number> = {
-        P1: 4,
-        P2: 24,
-        P3: 72,
-        P4: 168,
-      };
-      const now = Date.now();
-      const breaches = open.filter((inc: any) => {
-        if (inc.contained_at) return false;
-        const detected = new Date(inc.created_at ?? inc.date_detected).getTime();
-        const sla = SLA_HOURS[inc.severity] ?? 168;
-        return now - detected > sla * 3600 * 1000;
-      });
-
-      if (breaches.length === 0) {
-        return { notified: 0, open: open.length };
-      }
-      const recipient =
-        process.env.FRAUD_SLA_NOTIFY_EMAIL || "head.grq@walaplus.com";
-      let notified = 0;
-      for (const inc of breaches as any[]) {
-        try {
-          await createNotification({
-            title: `SLA breach — ${inc.severity} incident ${inc.incident_code}`,
-            message: `Incident ${inc.incident_code} (${inc.severity}) is open past its containment SLA. Status: ${inc.status}.`,
-            module: "fraud",
-            priority: inc.severity === "P1" ? "critical" : "high",
-            channel: "in_app",
-            recipient,
-            related_entity_type: "fraud_incident",
-            related_entity_id: String(inc.id),
-            action_url: "/fraud-incidents",
-          });
-          notified++;
-        } catch (err) {
-          logger.error(
-            `[FraudSlaCheck] Failed to notify for ${inc.incident_code}:`,
-            err,
-          );
-        }
-      }
-      logger.info(
-        `[FraudSlaCheck] ${breaches.length} SLA breaches; ${notified} notifications dispatched`,
-      );
-      return { notified, breaches: breaches.length, open: open.length };
+      // Body extracted to src/utils/fraudScheduledChecks.ts so the
+      // in-process fallback can run the SAME code — Inngest crons do not
+      // fire on this deployment. Delivery is handled there.
+      const { runFraudIncidentSlaCheck } = await import("../../utils/fraudScheduledChecks");
+      return await runFraudIncidentSlaCheck();
     });
   },
 );
@@ -2112,26 +1961,11 @@ const fraudCountryReviewReminderFunction = inngest.createFunction(
   { cron: process.env.FRAUD_COUNTRY_REVIEW_CRON || "0 9 1 2,10 *" },
   async ({ step }) => {
     return await step.run("notify-grq-of-country-review-due", async () => {
-      const { initFraudTables, getBlackListedCountryCount } = await import(
-        "../../utils/fraudDatabase"
-      );
-      const { createNotification } = await import("../../utils/notificationHub");
-      await initFraudTables();
-      const blacklisted = await getBlackListedCountryCount();
-      const recipient =
-        process.env.FRAUD_COUNTRY_NOTIFY_EMAIL || "head.grq@walaplus.com";
-      await createNotification({
-        title: "Country Risk Register — semi-annual review due",
-        message: `FATF publishes updates 3x/year. Refresh country-risk ratings against the latest plenary outcomes. Currently ${blacklisted} country/countries are on the FATF black-list.`,
-        module: "fraud",
-        priority: "medium",
-        channel: "in_app",
-        recipient,
-        related_entity_type: "fraud_country_risk",
-        related_entity_id: "review",
-        action_url: "/fraud-country-risk",
-      });
-      return { notified: 1, blacklisted };
+      // Body extracted to src/utils/fraudScheduledChecks.ts so the
+      // in-process fallback can run the SAME code — Inngest crons do not
+      // fire on this deployment. Delivery is handled there.
+      const { runFraudCountryReviewReminder } = await import("../../utils/fraudScheduledChecks");
+      return await runFraudCountryReviewReminder();
     });
   },
 );
@@ -2153,47 +1987,11 @@ const fraudKpiMonthlyReminderFunction = inngest.createFunction(
   { cron: process.env.FRAUD_KPI_MONTHLY_CRON || "0 9 1 * *" },
   async ({ step }) => {
     return await step.run("auto-calc-and-remind", async () => {
-      const { initFraudTables, autoCalculateKpisForMonth, upsertFraudKpi } =
-        await import("../../utils/fraudDatabase");
-      const { createNotification } = await import("../../utils/notificationHub");
-      await initFraudTables();
-
-      // Compute previous month YYYY-MM-01.
-      const today = new Date();
-      const prev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-      const prevMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}-01`;
-
-      let result: any = null;
-      try {
-        const calc = await autoCalculateKpisForMonth(prevMonth);
-        result = await upsertFraudKpi(prevMonth, calc, "system:monthly-cron");
-      } catch (err) {
-        logger.error(
-          `[FraudKpiMonthly] auto-calc failed for ${prevMonth}:`,
-          err,
-        );
-      }
-
-      const recipient =
-        process.env.FRAUD_KPI_NOTIFY_EMAIL || "head.grq@walaplus.com";
-      try {
-        await createNotification({
-          title: `Fraud KPI snapshot ready: ${prevMonth.slice(0, 7)}`,
-          message: `Previous-month KPIs auto-calculated from incidents data. Please fill in total_transactions, total_rejections, and customer_complaints in the dashboard.`,
-          module: "fraud",
-          priority: "medium",
-          channel: "in_app",
-          recipient,
-          related_entity_type: "fraud_kpi",
-          related_entity_id: prevMonth,
-          action_url: "/fraud-dashboard",
-        });
-      } catch (err) {
-        logger.error(`[FraudKpiMonthly] notify failed:`, err);
-      }
-
-      logger.info(`[FraudKpiMonthly] processed ${prevMonth}`);
-      return { month: prevMonth, kpi_id: result?.id ?? null };
+      // Body extracted to src/utils/fraudScheduledChecks.ts so the
+      // in-process fallback can run the SAME code — Inngest crons do not
+      // fire on this deployment. Delivery is handled there.
+      const { runFraudKpiMonthlyReminder } = await import("../../utils/fraudScheduledChecks");
+      return await runFraudKpiMonthlyReminder();
     });
   },
 );

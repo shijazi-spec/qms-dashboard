@@ -573,6 +573,12 @@ export const mastra = new Mastra({
         runHealthPulseIfStale,
         runApprovalExpiryIfDue,
         runOutboxDrainIfDue,
+        runFraudSamaDeadlineCheckIfDue,
+        runFraudIncidentSlaCheckIfDue,
+        runFraudIncidentOverdueCheckIfDue,
+        runFraudRuleReviewReminderIfDue,
+        runFraudCountryReviewReminderIfDue,
+        runFraudKpiMonthlyReminderIfDue,
       } = await import("../utils/scheduledJobs");
       const helpers: Array<{
         name: string;
@@ -592,6 +598,16 @@ export const mastra = new Mastra({
         // Expires HITL approvals past expires_at. Its Inngest cron has never
         // run — see runApprovalExpiryIfDue for the evidence.
         { name: "ApprovalExpiry", fn: () => runApprovalExpiryIfDue() },
+        // Fraud compliance checks. Their Inngest crons do not fire on this
+        // deployment, so before this the SAMA 72-hour deadline warning and the
+        // containment-SLA breach check had never run at all. Bodies live in
+        // utils/fraudScheduledChecks.ts; the crons call the same functions.
+        { name: "FraudSamaDeadline", fn: () => runFraudSamaDeadlineCheckIfDue() },
+        { name: "FraudIncidentSla", fn: () => runFraudIncidentSlaCheckIfDue() },
+        { name: "FraudIncidentOverdue", fn: () => runFraudIncidentOverdueCheckIfDue() },
+        { name: "FraudRuleReview", fn: () => runFraudRuleReviewReminderIfDue() },
+        { name: "FraudCountryReview", fn: () => runFraudCountryReviewReminderIfDue() },
+        { name: "FraudKpiMonthly", fn: () => runFraudKpiMonthlyReminderIfDue() },
         { name: "RateLimit429Pruner", fn: () => runPruneRateLimit429IfStale() },
         { name: "DuplicateRadar", fn: () => runDuplicateScanIfStale() },
         { name: "ConsultantScanner", fn: () => runConsultantScannerIfStale() },

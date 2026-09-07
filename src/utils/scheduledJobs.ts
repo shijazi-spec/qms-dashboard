@@ -1150,3 +1150,100 @@ export async function runOutboxDrainIfDue(
     return { ran: false, ageHours };
   }
 }
+
+/**
+ * The six fraud compliance checks, on the in-process fallback.
+ *
+ * Their Inngest crons do not fire on this deployment (see
+ * runApprovalExpiryIfDue for the proof), so without these the SAMA 72-hour
+ * deadline warning, the containment-SLA breach check and the four periodic
+ * reminders never ran at all. The bodies live in ./fraudScheduledChecks so the
+ * cron and this fallback execute identical code.
+ *
+ * Each self-throttles in memory against its own interval. The intervals are
+ * deliberately looser than the cron equivalents: the fallback tick is every 45
+ * minutes, so anything tighter than that would just run on every tick.
+ */
+const _lastFraudCheckMs: Record<string, number> = {};
+
+async function runFraudCheckIfDue(
+  key: string,
+  minIntervalMinutes: number,
+  fn: () => Promise<any>,
+): Promise<{ ran: boolean; ageHours: number; result?: any }> {
+  const last = _lastFraudCheckMs[key] || 0;
+  const ageHours = last ? (Date.now() - last) / 3_600_000 : Infinity;
+  if (ageHours * 60 < minIntervalMinutes) return { ran: false, ageHours };
+  try {
+    const result = await fn();
+    _lastFraudCheckMs[key] = Date.now();
+    return { ran: true, ageHours, result };
+  } catch (err) {
+    logger.error(`[FraudChecks Fallback] ${key} failed:`, err);
+    return { ran: false, ageHours };
+  }
+}
+
+/** Hourly in cron terms; incident-specific, emails named recipients. */
+export async function runFraudSamaDeadlineCheckIfDue() {
+  return runFraudCheckIfDue("sama-deadline", 60, async () => {
+    const { runFraudSamaDeadlineCheck } = await import("./fraudScheduledChecks");
+    return runFraudSamaDeadlineCheck();
+  });
+}
+
+/** Hourly in cron terms; incident-specific, emails named recipients. */
+export async function runFraudIncidentSlaCheckIfDue() {
+  return runFraudCheckIfDue("incident-sla", 60, async () => {
+    const { runFraudIncidentSlaCheck } = await import("./fraudScheduledChecks");
+    return runFraudIncidentSlaCheck();
+  });
+}
+
+/** Daily. Aggregated Slack summary. */
+export async function runFraudIncidentOverdueCheckIfDue() {
+  return runFraudCheckIfDue("incident-overdue", 24 * 60, async () => {
+    const { runFraudIncidentOverdueCheck } = await import(
+      "./fraudScheduledChecks"
+    );
+    return runFraudIncidentOverdueCheck();
+  });
+}
+
+/** Daily. Aggregated Slack summary. */
+export async function runFraudRuleReviewReminderIfDue() {
+  return runFraudCheckIfDue("rule-review", 24 * 60, async () => {
+    const { runFraudRuleReviewReminder } = await import(
+      "./fraudScheduledChecks"
+    );
+    return runFraudRuleReviewReminder();
+  });
+}
+
+/**
+ * Semi-annual (FATF plenary cadence). The 30-day floor only stops the fallback
+ * from re-firing after a restart; the real cadence is the operator acting on it.
+ */
+export async function runFraudCountryReviewReminderIfDue() {
+  return runFraudCheckIfDue("country-review", 30 * 24 * 60, async () => {
+    const { runFraudCountryReviewReminder } = await import(
+      "./fraudScheduledChecks"
+    );
+    return runFraudCountryReviewReminder();
+  });
+}
+
+/**
+ * Month-end KPI snapshot. Guarded to the first four days of the month so a
+ * fallback restart mid-month does not recompute and re-announce a month that
+ * has already been handled.
+ */
+export async function runFraudKpiMonthlyReminderIfDue() {
+  if (new Date().getUTCDate() > 4) return { ran: false, ageHours: 0 };
+  return runFraudCheckIfDue("kpi-monthly", 20 * 24 * 60, async () => {
+    const { runFraudKpiMonthlyReminder } = await import(
+      "./fraudScheduledChecks"
+    );
+    return runFraudKpiMonthlyReminder();
+  });
+}
