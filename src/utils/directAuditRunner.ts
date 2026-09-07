@@ -65,17 +65,195 @@ const MAX_RECORDS_PER_MODULE = 50000;
 // synthetic "summary_*" row. Total ceiling = MAX_DETAILED_PER_MODULE * 5 modules.
 const MAX_DETAILED_PER_MODULE = 200;
 
+/**
+ * Which department's channel a finding belongs to, decided by the Zoho layout.
+ *
+ * Same rule the Duplicate Radar uses (buildSegmentPredicate in
+ * duplicateRadarDatabase.ts): a layout naming marketplace or partner accounts
+ * is merchant traffic, everything else is corporate/WalaPlus. Kept as a literal
+ * copy of the two markers rather than an import so the audit does not take a
+ * dependency on the radar's query builder.
+ */
+export function auditSegmentForLayout(layout: string | null | undefined): "marketplace" | "corporate" {
+  const l = String(layout || "").toLowerCase().replace(/\s+/g, "");
+  return l.includes("marketplace") || l.includes("partneraccounts")
+    ? "marketplace"
+    : "corporate";
+}
+
+/** Per-segment finding tally, kept PARALLEL to issueTypeCounts. */
+export type SegmentFindingCounts = Record<
+  string,
+  { count: number; severity: string; module: string; segment: "marketplace" | "corporate"; issueType: string }
+>;
+
+/**
+ * Build the Slack lines for ONE department's findings, worst first.
+ *
+ * Pure so the grouping and ordering can be tested without Slack or a database.
+ * Returns null when the department has no findings — the caller uses that to
+ * stay silent rather than posting "0 issues", because a channel that receives a
+ * clean report every week teaches people to skim past it.
+ */
+export function buildDepartmentAuditLines(
+  counts: SegmentFindingCounts,
+  segment: "marketplace" | "corporate",
+  maxLines = 15,
+): { total: number; lines: string[] } | null {
+  const rows = Object.values(counts).filter((r) => r.segment === segment);
+  if (rows.length === 0) return null;
+  const total = rows.reduce((sum, r) => sum + r.count, 0);
+  if (total === 0) return null;
+
+  const rank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+  const lines = rows
+    .sort(
+      (a, b) =>
+        (rank[a.severity] ?? 9) - (rank[b.severity] ?? 9) || b.count - a.count,
+    )
+    .slice(0, maxLines)
+    .map((r) => `• ${r.module} / ${r.issueType}: ${r.count} (${r.severity})`);
+
+  if (rows.length > maxLines) {
+    lines.push(`• …and ${rows.length - maxLines} more finding type(s)`);
+  }
+  return { total, lines };
+}
+
+/**
+ * Post one audit summary per department, each to that department's channel.
+ *
+ * Sarah 2026-09-07: "I will make an audit for each department as per each
+ * channel as well." The full report still goes where it always did; this adds
+ * a scoped copy so a team sees only its own data.
+ *
+ * Channels are resolved through the shared audience router, so the mapping
+ * lives in ONE place: corporate findings follow the sales_sdr audience,
+ * marketplace findings follow the marketplace audience. A department whose
+ * channel is unconfigured resolves to the fallback, so nothing is lost.
+ *
+ * Silent when a department has no findings, and never throws — a Slack problem
+ * must not fail an audit that has already been saved.
+ */
+async function postPerDepartmentAuditSummaries(
+  counts: SegmentFindingCounts,
+  ctx: {
+    auditId: number | null;
+    score: number;
+    dashUrl: string;
+    enqueueSlackOutboxMessage: (input: any) => Promise<any>;
+    processOutboxMessageById: (id: number) => Promise<any>;
+  },
+  logger?: any,
+): Promise<void> {
+  const departments: Array<{
+    segment: "marketplace" | "corporate";
+    label: string;
+    routingModule: string;
+  }> = [
+    { segment: "corporate", label: "SDR & Sales (WalaPlus / corporate)", routingModule: "Deals" },
+    { segment: "marketplace", label: "Marketplace", routingModule: "Deals" },
+  ];
+
+  for (const dept of departments) {
+    try {
+      const built = buildDepartmentAuditLines(counts, dept.segment);
+      if (!built) {
+        logger?.info(
+          `ℹ️ [DirectAudit] No ${dept.segment} findings — skipping that department's Slack summary`,
+        );
+        continue;
+      }
+
+      const { resolveSlackChannel } = await import("./slackChannelRouting");
+      const { channel } = resolveSlackChannel(
+        dept.routingModule,
+        dept.segment === "marketplace" ? "marketplace" : "walaplus",
+      );
+      if (!channel) {
+        logger?.info(
+          `ℹ️ [DirectAudit] No Slack channel resolved for ${dept.segment} — skipping`,
+        );
+        continue;
+      }
+
+      const title = `📋 ${dept.label} — data quality audit: ${built.total} finding(s)`;
+      const entry = await ctx.enqueueSlackOutboxMessage({
+        source: "direct_audit_department",
+        destination: channel,
+        text: title,
+        blocks: [
+          { type: "section", text: { type: "mrkdwn", text: `*${title}*` } },
+          {
+            type: "section",
+            text: { type: "mrkdwn", text: built.lines.join("\n") },
+          },
+          {
+            type: "context",
+            elements: [
+              {
+                type: "mrkdwn",
+                text: `Overall platform audit score ${ctx.score.toFixed(1)}% · this summary covers ${dept.label} records only`,
+              },
+            ],
+          },
+          {
+            type: "actions",
+            elements: [
+              {
+                type: "button",
+                text: { type: "plain_text", text: "Open Dashboard" },
+                url: ctx.dashUrl,
+              },
+            ],
+          },
+        ],
+        // Keyed per audit AND per department so a retry cannot double-post and
+        // the two departments never collide on one key.
+        dedupeKey: ctx.auditId
+          ? `direct-audit:${ctx.auditId}:${dept.segment}`
+          : undefined,
+        metadata: { auditId: ctx.auditId, segment: dept.segment, findings: built.total },
+        maxAttempts: Number.parseInt(
+          process.env.DIRECT_AUDIT_OUTBOX_MAX_ATTEMPTS || "4",
+          10,
+        ),
+      });
+      await ctx.processOutboxMessageById(entry.id);
+      logger?.info(
+        `✅ [DirectAudit] ${dept.label} summary queued (${built.total} findings)`,
+      );
+    } catch (err) {
+      logger?.warn(
+        `⚠️ [DirectAudit] ${dept.segment} department summary failed (audit itself is unaffected):`,
+        err,
+      );
+    }
+  }
+}
+
 function analyzeRecordBatch(
   records: ZohoCRMRecord[],
   governanceRules: any[],
   issueTypeCounts: Record<string, { count: number; severity: string; module: string }>,
   detailedIssues?: Array<{ recordId: string; module: string; owner: string; layouts: string; products: string; createdBy: string; createdTime: string; stage?: string; pipeline?: string; leadStatus?: string; fieldName: string; issueType: string; description: string; severity: string; suggestedFix: string }>,
   detailedCountsByModule?: Map<string, number>,
-  recordIdsWithIssues?: Set<string>
+  recordIdsWithIssues?: Set<string>,
+  segmentCounts?: SegmentFindingCounts
 ): { issueCount: number; critical: number; high: number; medium: number; low: number; recordsWithIssues: number } {
   let issueCount = 0, critical = 0, high = 0, medium = 0, low = 0, recordsWithIssues = 0;
   for (const record of records) {
     const issues = analyzeRecordHygiene(record, governanceRules);
+    // Layout is a RECORD property, so resolve it once per record. It used to be
+    // computed only inside the detailed-issues branch, which is capped at
+    // MAX_DETAILED_PER_MODULE — deriving per-department counts from that sample
+    // would have understated every department's totals.
+    const recordLayoutData = record.data?.Layout;
+    const recordLayout =
+      (recordLayoutData
+        ? recordLayoutData.name || (typeof recordLayoutData === "string" ? recordLayoutData : "")
+        : "") || "Standard";
+    const recordSegment = auditSegmentForLayout(recordLayout);
     issueCount += issues.length;
     if (issues.length > 0) {
       recordsWithIssues++;
@@ -92,17 +270,35 @@ function analyzeRecordBatch(
       }
       issueTypeCounts[key].count++;
 
+      // Parallel per-department tally. Deliberately a SEPARATE structure with
+      // its own key rather than a wider key on issueTypeCounts: the existing
+      // report parses those keys, and splitting them would change the numbers
+      // the team already reads.
+      if (segmentCounts) {
+        const segKey = `${recordSegment}|${issue.module}|${issue.issueType}`;
+        if (!segmentCounts[segKey]) {
+          segmentCounts[segKey] = {
+            count: 0,
+            severity: issue.severity,
+            module: issue.module,
+            segment: recordSegment,
+            issueType: issue.issueType,
+          };
+        }
+        segmentCounts[segKey].count++;
+      }
+
       const moduleDetailedCount = detailedCountsByModule?.get(issue.module) ?? 0;
       if (detailedIssues && moduleDetailedCount < MAX_DETAILED_PER_MODULE) {
         const ownerData = record.data?.Owner;
         const ownerName = record.owner || (ownerData ? (ownerData.name || ownerData.id || '-') : '-');
         const createdByData = record.data?.Created_By;
         const createdByName = createdByData ? (createdByData.name || createdByData.id || '') : '';
-        const layoutData = record.data?.Layout;
-        // Zoho's REST API does not return a Layout field for Tasks records, so fall back
-        // to "Standard" (the default layout name in Zoho) whenever the value is missing.
-        // This keeps the dashboard's Issues by Layout view from showing a "(No Layout)" bucket.
-        const layoutName = (layoutData ? (layoutData.name || (typeof layoutData === 'string' ? layoutData : '')) : '') || 'Standard';
+        // Resolved once per record above as `recordLayout` (same fallback to
+        // "Standard", because Zoho's REST API returns no Layout for Tasks and
+        // the dashboard's Issues-by-Layout view must not grow a "(No Layout)"
+        // bucket). Aliased here so the detailed row keeps its field name.
+        const layoutName = recordLayout;
         const productsRaw = record.data?.Product_Details;
         const productsName = (Array.isArray(productsRaw) && productsRaw.length > 0)
           ? productsRaw.map((p: any) => p.product?.name || '').filter(Boolean).join(', ')
@@ -514,6 +710,10 @@ export async function runDirectAudit(
   // it regardless of which try-block populated it.
   const rulesByModule: Record<string, any[]> = {};
   let allFindingTypes: Array<{ module: string; issueType: string; count: number; severity: string }> = [];
+  // Per-department tally, filled alongside issueTypeCounts. Declared out here
+  // for the same reason allFindingTypes is: the Slack block that reads it sits
+  // outside the block where the counting happens.
+  const segmentCounts: SegmentFindingCounts = {};
   let auditSuccess = false;
   let skipReason = "";
   const detailedIssues: Array<{ recordId: string; module: string; owner: string; layouts: string; products: string; createdBy: string; createdTime: string; stage?: string; pipeline?: string; leadStatus?: string; fieldName: string; issueType: string; description: string; severity: string; suggestedFix: string }> = [];
@@ -612,7 +812,7 @@ export async function runDirectAudit(
 
           for (let i = 0; i < recordCount; i += BATCH_SIZE) {
             const batch = allRecords.slice(i, i + BATCH_SIZE);
-            const batchResult = analyzeRecordBatch(batch, governanceRules, issueTypeCounts, detailedIssues, detailedCountsByModule, recordIdsWithFieldIssues);
+            const batchResult = analyzeRecordBatch(batch, governanceRules, issueTypeCounts, detailedIssues, detailedCountsByModule, recordIdsWithFieldIssues, segmentCounts);
             moduleIssueCount += batchResult.issueCount;
             moduleCritical += batchResult.critical;
             moduleHigh += batchResult.high;
@@ -1021,6 +1221,20 @@ export async function runDirectAudit(
             lastError: delivered?.last_error || null,
           });
         }
+
+        // Per-department summaries, in ADDITION to the full report above.
+        // Each business unit gets only its own findings, in its own channel.
+        await postPerDepartmentAuditSummaries(
+          segmentCounts,
+          {
+            auditId: savedResult.id ?? null,
+            score,
+            dashUrl,
+            enqueueSlackOutboxMessage,
+            processOutboxMessageById,
+          },
+          logger,
+        );
       } else if (!directAuditSlackEnabled) {
         logger?.info("ℹ️ [DirectAudit] DIRECT_AUDIT_SLACK_NOTIFY=false — sending digest-format fallback notification");
         try {
