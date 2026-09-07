@@ -1058,13 +1058,21 @@ const KPI_DETAILS: Record<string, KpiDetail> = {
     plan_ref: "North Star 'TPRA (Vendor Risk) Turnaround SLA' (≥ 85%).",
   },
   "GRC-KPI-002": {
+    // Leadership tracks this KPI as a COUNT (unit: "count", target: 2 — see
+    // the GRC-KPI-002 FEED_KPIS entry above), NOT a percentage. The QMS
+    // dashboard's OWN /kpis card shows a % of plan milestones on time — that
+    // is a deliberate, separate presentation (calcCertMilestoneDelivery,
+    // MIRROR_DASHBOARD_CODES excludes this code on purpose) — but leadership
+    // must never read prose describing a percentage next to a count value;
+    // that mismatch is what produced a nonsense "995%" before this fix.
     description:
-      "Percentage of certification-roadmap milestones delivered on time.",
+      "Count of certification-roadmap milestones delivered on time this quarter (e.g. Q3 target: 2).",
     methodology:
-      "Milestones delivered on/before planned_date ÷ planned milestones (source: certification_milestones). Captured via POST /api/northstar/certification_milestones.",
+      "COUNT of milestones with delivered_date on/before planned_date, for milestones due this quarter (source: certification_milestones). Captured via POST /api/northstar/certification_milestones. (The QMS dashboard's own /kpis card shows this same source as a % of on-time delivery — a separate, intentional presentation; the leadership feed always sends the count.)",
     rationale:
       "Tracks on-time delivery of ISO 27001 / PDPL / PCI / NCA milestones — the certification roadmap.",
-    plan_ref: "North Star 'Certification Milestone Delivery' (≥ 90%).",
+    plan_ref:
+      "North Star 'Certification Milestone Delivery' — target: 2 on-time milestones this quarter (count, not the QMS dashboard's ≥90% completion rate).",
   },
   "GRC-KPI-007": {
     description:
@@ -1150,8 +1158,8 @@ const KPI_ENTRY: Record<string, { where: string; route: string }> = {
     route: "/leadership-kpis",
   },
   "GRC-KPI-002": {
-    where: "Capture API: POST /api/northstar/certification_milestones — log milestones with planned + delivered dates (no UI form yet).",
-    route: "/leadership-kpis",
+    where: "QMS → Certification Milestones (/certification-milestones): manage the 23-action certification plan with planned + delivered dates. Also editable via Capture API POST /api/northstar/certification_milestones, or /leadership-kpis/data.",
+    route: "/certification-milestones",
   },
   "GRC-KPI-007": {
     where: "QMS → Compliance: record compliance assessments as 'compliant', or mark obligations exempt/accepted.",
@@ -1302,12 +1310,43 @@ const MARAM_NORTH_STAR: Record<number, NsQuarter> = {
   },
 };
 
+/**
+ * Component KPI code -> its FEED_KPIS target, for components whose value is
+ * not a percentage (e.g. GRC-KPI-002 is a COUNT — see componentFraction).
+ * Sourced from FEED_KPIS itself so the North Star math can never drift from
+ * the feed's own definition of "on track" for that KPI.
+ */
+const FEED_KPI_TARGET_BY_CODE: Map<string, number> = new Map(
+  FEED_KPIS.map((k) => [k.code, k.target]),
+);
+
+/**
+ * Fraction of a COUNT-based KPI's target reached, clamped to [0,1]. Guarded
+ * separately from componentFraction() so the zero/absent-target case is
+ * directly testable: a missing or zero target (e.g. a future FEED_KPIS edit
+ * that drops the code) returns 0 instead of dividing by zero into NaN/Infinity.
+ */
+export function countFraction(value: number, target: number | undefined): number {
+  if (!target || target <= 0) return 0;
+  if (!value || value <= 0) return 0;
+  return Math.max(0, Math.min(1, value / target));
+}
+
 /** Convert a component KPI's value to a 0-1 fraction for the composite. */
-function componentFraction(code: string, value: number): number {
+export function componentFraction(code: string, value: number): number {
   if (code === "QM-KPI-006") {
     // Handoff cycle time in days; lower is better, target 5 days.
     if (!value || value <= 0) return 0;
     return Math.min(1, 5 / value);
+  }
+  if (code === "GRC-KPI-002") {
+    // Certification Milestones On Track is a COUNT (unit: "count", target: 2
+    // in FEED_KPIS above), not a percentage — folding it as value/100 like
+    // every other component turned a perfect quarter (3/3 on time) into
+    // ~1 point instead of ~35 of the 35-weight North Star. Score it against
+    // its own target instead, sourced from FEED_KPIS (single source of truth)
+    // so the two can never drift.
+    return countFraction(value, FEED_KPI_TARGET_BY_CODE.get("GRC-KPI-002"));
   }
   return Math.max(0, Math.min(1, value / 100));
 }
