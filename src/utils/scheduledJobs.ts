@@ -314,6 +314,13 @@ export async function hoursSinceLastCsOverlapScan(): Promise<number> {
  * hour of slack after the cron fire).
  *
  * Idempotent — safe to call on any interval.
+ *
+ * ALSO NOTIFIES. It did not until 2026-09-07, and that was the whole reason
+ * wp-cs-audits was empty: the notification lives in the Inngest cron's
+ * `notify-on-blocks` step, Inngest crons do not fire on this deployment, and
+ * this fallback ran the scan without it. So the BLOCKs were found, written to
+ * the database, and nobody was told — the scan looked healthy from every angle
+ * except the one that mattered.
  */
 export async function runCsOverlapScanIfStale(
   maxAgeHours = 25,
@@ -330,10 +337,103 @@ export async function runCsOverlapScanIfStale(
       await import("./duplicateRadarDatabase");
     await initDuplicateRadarTables();
     const result = await scanAllClustersForCsOverlap();
+    await notifyCsOverlapBlocks(result);
     return { ran: true, ageHours, result };
   } catch (err) {
     logger.error("[CsOverlap Fallback] Scan failed:", err);
     return { ran: false, ageHours };
+  }
+}
+
+/**
+ * Tell the CS channel about blocking overlaps.
+ *
+ * Mirrors the Inngest `notify-on-blocks` step deliberately — same event type,
+ * same wording, same "high" priority, same BLOCK>0 gate — so whichever driver
+ * runs, the CS team sees one consistent message rather than two dialects of the
+ * same alert.
+ *
+ * Threshold-gated: silent when nothing is blocking. A daily "0 blocking" post
+ * trains people to skim the channel, and then the day it is not zero gets
+ * skimmed too.
+ *
+ * priority "high" because notifyEvent only reaches Slack at critical|high, and
+ * a BLOCK is stopping a marketing push. module "cs_lifecycle" is what routes it
+ * to wp-cs-audits.
+ *
+ * Dedup is PERSISTENT, not an in-memory timer. The fraud reminders taught this:
+ * an in-process throttle resets on every restart, and a semi-annual reminder
+ * fired four times in one morning across three republishes. 20h rather than 24h
+ * so a scan arriving slightly early on its 25h cadence is never swallowed.
+ *
+ * Never throws. A notification failure must not turn a completed scan into a
+ * failed one — the scan's results are already committed by this point.
+ */
+async function notifyCsOverlapBlocks(result: any): Promise<void> {
+  try {
+    const blocks = Number(result?.block_count || 0);
+    if (blocks === 0) {
+      logger.info("[CsOverlap Fallback] 0 blocking overlap(s) — not posting");
+      return;
+    }
+    if (await notificationPostedWithinHours("cs_pipeline_overlap", 20)) {
+      logger.info(
+        "[CsOverlap Fallback] Overlap alert already posted in the last 20h — skipping",
+      );
+      return;
+    }
+
+    const arr = Number(result?.total_arr_exposure || 0);
+    const arrFmt = arr > 0 ? ` (SAR ${arr.toLocaleString()} ARR exposure)` : "";
+    const { notifyEvent } = await import("./notificationHub");
+    await notifyEvent({
+      type: "cs_pipeline_overlap_blocking",
+      module: "cs_lifecycle",
+      title: `Duplicate Radar: ${blocks} CS-pipeline overlap(s) blocking new pushes`,
+      message: `Nightly scan flagged ${blocks} BLOCK, ${Number(result?.review_count || 0)} REVIEW, ${Number(result?.warn_count || 0)} WARN${arrFmt}. Review on the Duplicates dashboard before approving any marketing batch.`,
+      entityType: "cs_pipeline_overlap",
+      actionUrl: "/duplicates",
+      priority: "high",
+    });
+    logger.info(
+      `[CsOverlap Fallback] Posted CS overlap alert: ${blocks} blocking`,
+    );
+  } catch (err) {
+    logger.error("[CsOverlap Fallback] Notification failed:", err);
+  }
+}
+
+/**
+ * Has a notification with this entity type been written in the last N hours?
+ *
+ * Hours rather than the days-based salesReportPostedWithinDays because the CS
+ * scan is daily; a whole-day window would round away the difference between
+ * "already sent" and "due again".
+ *
+ * Fails OPEN — a dedup lookup that errors must not silence the alert. A
+ * duplicate message is an annoyance; a missing BLOCK alert is a marketing push
+ * that should have been stopped.
+ */
+async function notificationPostedWithinHours(
+  entityType: string,
+  hours: number,
+): Promise<boolean> {
+  try {
+    const { notificationPool } = await import("./notificationHub");
+    const res = await notificationPool.query(
+      `SELECT 1 FROM notifications
+        WHERE related_entity_type = $1
+          AND created_at > NOW() - MAKE_INTERVAL(hours => $2)
+        LIMIT 1`,
+      [entityType, hours],
+    );
+    return (res.rowCount ?? 0) > 0;
+  } catch (err) {
+    logger.warn(
+      "[CsOverlap Fallback] Dedup lookup failed; posting anyway:",
+      err instanceof Error ? err.message : String(err),
+    );
+    return false;
   }
 }
 
