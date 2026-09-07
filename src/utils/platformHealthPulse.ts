@@ -396,8 +396,25 @@ const CHECKS: Check[] = [
     label: "KPI values calculated in last 26h",
     category: "kpis",
     run: async () => {
+      // updated_at, NOT created_at — this asks "when did a calculation last
+      // RUN", and created_at cannot answer that.
+      //
+      // recordKPIValue upserts on (kpi_id, period_start, period_end), and the
+      // auto-calc uses a MONTHLY period. So the first run of a month CREATES
+      // that month's rows and every run afterwards UPDATES them: updated_at
+      // advances, created_at never does. This check therefore reported "Last
+      // KPI calculation was 144.6h ago" on 2026-09-07 — exactly the age of the
+      // 1 September rows — while the calculations were running normally every
+      // day. It failed continuously and would have failed harder the further
+      // into each month it got, then silently "fixed itself" on the 1st.
+      //
+      // runKPIAutoCalcIfStale in scheduledJobs.ts already reads updated_at,
+      // which is why the fallback correctly skipped while this check screamed.
+      // COALESCE covers rows predating the updated_at column.
       const r = await pool.query(
-        `SELECT MAX(created_at) AS last_calc, COUNT(*) AS total FROM kpi_values`,
+        `SELECT MAX(COALESCE(updated_at, created_at)) AS last_calc,
+                COUNT(*) AS total
+           FROM kpi_values`,
       );
       const last: Date | null = r.rows[0]?.last_calc;
       const total = parseInt(r.rows[0]?.total || "0");
