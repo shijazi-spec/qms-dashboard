@@ -579,6 +579,8 @@ export const mastra = new Mastra({
         runFraudRuleReviewReminderIfDue,
         runFraudCountryReviewReminderIfDue,
         runFraudKpiMonthlyReminderIfDue,
+        runDealComplianceWeeklyIfDue,
+        runActiveDealConflictsWeeklyIfDue,
       } = await import("../utils/scheduledJobs");
       const helpers: Array<{
         name: string;
@@ -608,6 +610,11 @@ export const mastra = new Mastra({
         { name: "FraudRuleReview", fn: () => runFraudRuleReviewReminderIfDue() },
         { name: "FraudCountryReview", fn: () => runFraudCountryReviewReminderIfDue() },
         { name: "FraudKpiMonthly", fn: () => runFraudKpiMonthlyReminderIfDue() },
+        // Weekly Sales/SDR reports, walaplus/corporate only. Both post ONLY
+        // when there is something wrong, and both dedup against the
+        // notification row they write, so a republish cannot re-fire them.
+        { name: "DealComplianceWeekly", fn: () => runDealComplianceWeeklyIfDue() },
+        { name: "ActiveDealConflictsWeekly", fn: () => runActiveDealConflictsWeeklyIfDue() },
         { name: "RateLimit429Pruner", fn: () => runPruneRateLimit429IfStale() },
         { name: "DuplicateRadar", fn: () => runDuplicateScanIfStale() },
         { name: "ConsultantScanner", fn: () => runConsultantScannerIfStale() },

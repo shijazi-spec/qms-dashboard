@@ -1247,3 +1247,83 @@ export async function runFraudKpiMonthlyReminderIfDue() {
     return runFraudKpiMonthlyReminder();
   });
 }
+
+/**
+ * Weekly Sales/SDR reports — deal compliance and active deal conflicts.
+ *
+ * Weekly "with the audits" per Sarah 2026-09-07, and threshold-gated: each one
+ * stays silent when there is nothing wrong, so the channel keeps meaning
+ * something.
+ *
+ * Both are guarded by a PERSISTENT marker rather than an in-memory timer. The
+ * fraud reminders taught this the hard way — an in-process throttle resets on
+ * every restart, and a semi-annual reminder fired four times in one morning
+ * across three republishes. A weekly report on a platform that republishes
+ * several times a day would be far worse.
+ *
+ * The marker is the notification row the report itself writes, so there is no
+ * extra table and no state to keep in sync.
+ */
+async function salesReportPostedWithinDays(
+  entityType: string,
+  days: number,
+): Promise<boolean> {
+  try {
+    const { notificationPool } = await import("./notificationHub");
+    const res = await notificationPool.query(
+      `SELECT 1 FROM notifications
+        WHERE related_entity_type = $1
+          AND created_at > NOW() - MAKE_INTERVAL(days => $2)
+        LIMIT 1`,
+      [entityType, days],
+    );
+    return (res.rowCount ?? 0) > 0;
+  } catch (err) {
+    // Fail OPEN: a dedup lookup failing must not silence the report.
+    logger.warn(
+      "[SalesWeekly] Dedup lookup failed; posting anyway:",
+      err instanceof Error ? err.message : String(err),
+    );
+    return false;
+  }
+}
+
+export async function runDealComplianceWeeklyIfDue(): Promise<{
+  ran: boolean;
+  ageHours: number;
+  result?: any;
+}> {
+  if (await salesReportPostedWithinDays("deal_compliance", 6)) {
+    return { ran: false, ageHours: 0 };
+  }
+  try {
+    const { runDealComplianceWeeklyReport } = await import(
+      "./salesWeeklyReports"
+    );
+    const result = await runDealComplianceWeeklyReport();
+    return { ran: result.posted, ageHours: 0, result };
+  } catch (err) {
+    logger.error("[SalesWeekly] Deal compliance report failed:", err);
+    return { ran: false, ageHours: 0 };
+  }
+}
+
+export async function runActiveDealConflictsWeeklyIfDue(): Promise<{
+  ran: boolean;
+  ageHours: number;
+  result?: any;
+}> {
+  if (await salesReportPostedWithinDays("active_deal_conflicts", 6)) {
+    return { ran: false, ageHours: 0 };
+  }
+  try {
+    const { runActiveDealConflictsWeeklyReport } = await import(
+      "./salesWeeklyReports"
+    );
+    const result = await runActiveDealConflictsWeeklyReport();
+    return { ran: result.posted, ageHours: 0, result };
+  } catch (err) {
+    logger.error("[SalesWeekly] Active deal conflicts report failed:", err);
+    return { ran: false, ageHours: 0 };
+  }
+}
