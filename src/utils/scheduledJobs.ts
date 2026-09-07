@@ -1288,11 +1288,42 @@ async function salesReportPostedWithinDays(
   }
 }
 
+/**
+ * The weekly Sales/SDR Slack reports are OFF by default.
+ *
+ * Sarah 2026-09-07: hold delivery until she has reviewed the first report.
+ * These post to wp-sdr-sales-audits — a real team channel — and the only
+ * other guard is a 6-day dedup on `related_entity_type`. Both entity types
+ * are new, so that lookup finds nothing and the FIRST scheduler tick after a
+ * republish would post unannounced. The dedup also fails open by design, so
+ * it cannot be relied on to hold anything back.
+ *
+ * Nothing stops being measured: deal compliance and active deal conflicts are
+ * already visible in the app and in the exports. Only the Slack delivery, and
+ * the dedup-ledger row that goes with it, are withheld — gating here rather
+ * than at the send point means no ledger row is written while the reports are
+ * off, so the first run after enabling is a clean one rather than one the
+ * dedup thinks it has already sent.
+ *
+ * Set SALES_WEEKLY_SLACK_REPORTS=true to turn delivery on.
+ */
+function salesWeeklyReportsEnabled(): boolean {
+  return (
+    String(process.env.SALES_WEEKLY_SLACK_REPORTS || "").toLowerCase() === "true"
+  );
+}
+
 export async function runDealComplianceWeeklyIfDue(): Promise<{
   ran: boolean;
   ageHours: number;
   result?: any;
 }> {
+  if (!salesWeeklyReportsEnabled()) {
+    logger.info(
+      '[SalesWeekly] Deal compliance report skipped — delivery is off (SALES_WEEKLY_SLACK_REPORTS is not "true")',
+    );
+    return { ran: false, ageHours: 0 };
+  }
   if (await salesReportPostedWithinDays("deal_compliance", 6)) {
     return { ran: false, ageHours: 0 };
   }
@@ -1313,6 +1344,12 @@ export async function runActiveDealConflictsWeeklyIfDue(): Promise<{
   ageHours: number;
   result?: any;
 }> {
+  if (!salesWeeklyReportsEnabled()) {
+    logger.info(
+      '[SalesWeekly] Active deal conflicts report skipped — delivery is off (SALES_WEEKLY_SLACK_REPORTS is not "true")',
+    );
+    return { ran: false, ageHours: 0 };
+  }
   if (await salesReportPostedWithinDays("active_deal_conflicts", 6)) {
     return { ran: false, ageHours: 0 };
   }
