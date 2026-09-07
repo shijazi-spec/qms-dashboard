@@ -77,7 +77,8 @@
       "health": "مراقبة الأداء",
       "qms-docs": "مكتبة الوثائق",
       "triggers": "تنبيهات المؤشرات",
-      "documentation-tracker": "متتبّع الوثائق"
+      "documentation-tracker": "متتبّع الوثائق",
+      "connectors": "روابط جمع الأدلة"
     }
   },
   "login": {
@@ -3664,5 +3665,29 @@
     "depended_title": "الأكثر اعتمادًا عليه",
     "depended_hint": "عدد المستندات الأخرى التي تحيل إلى كل مستند. راجع هذا قبل تعديل أي مستند — فهو ما يوضّح مدى تأثير التغيير.",
     "not_in_library": "غير موجود في المكتبة"
+  },
+  "connectors": {
+    "title": "روابط جمع الأدلة",
+    "subtitle": "إجابات آلية مؤرّخة عن الأسئلة التي يطرحها المدقق الخارجي على فريق التقنية — تُجمع للقراءة فقط، وتُحفظ كسجل زمني لا كلقطة واحدة.",
+    "collect": "اجمع الآن",
+    "collecting": "جارٍ الجمع…",
+    "setup_title": "تطبيق GitHub غير مُهيأ — لم يُجمع أي دليل.",
+    "setup_body": "أنشئ تطبيق GitHub بصلاحيات قراءة فقط، ثم ثبّته على المستودع أدناه، واضبط GITHUB_APP_ID و GITHUB_APP_PRIVATE_KEY. جميع الفحوص هنا للقراءة فقط؛ لا يملك الرابط أي صلاحية كتابة على GitHub.",
+    "github_title": "GitHub",
+    "github_subtitle": "المستودع الخاضع لجمع الأدلة:",
+    "col_check": "الفحص",
+    "col_status": "الحالة",
+    "col_finding": "الملاحظة",
+    "col_clauses": "يُلبّي",
+    "col_observed": "وقت الرصد",
+    "state_unconfigured": "غير مُهيأ",
+    "state_never": "لم يُجمع بعد",
+    "state_clean": "جميع الفحوص ناجحة",
+    "state_findings": "توجد ملاحظات",
+    "state_incomplete": "غير مكتمل",
+    "state_error": "تعذر التحميل",
+    "empty_unconfigured": "هيّئ تطبيق GitHub أعلاه لبدء جمع الأدلة.",
+    "empty_never": "لم يُجمع أي دليل بعد. اضغط \"اجمع الآن\".",
+    "collect_failed": "فشل الجمع"
   }
 }

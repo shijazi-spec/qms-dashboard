@@ -80,6 +80,7 @@ const WalaPlusNav = {
       case 'qms-docs':        return this._t('nav.items.qms-docs');
       case 'compliance':      return this._t('nav.items.compliance');
       case 'external-audits': return this._t('nav.items.external-audits');
+      case 'connectors':      return this._t('nav.items.connectors');
       case 'vendors':         return this._t('nav.items.vendors');
       case 'reviews':         return this._t('nav.items.reviews');
       case 'kpis':            return this._t('nav.items.kpis');
@@ -192,6 +193,7 @@ const WalaPlusNav = {
         // order: define obligations -> run audits -> link evidence.
         { label: 'Audit Readiness', href: '/audit-readiness', icon: 'clipboard-check', id: 'audit-readiness' },
         { label: 'External Audits', href: '/external-audits', icon: 'clipboard-check', id: 'external-audits' },
+        { label: 'Evidence Connectors', href: '/connectors', icon: 'shield-check', id: 'connectors' },
         // ── Risk & Oversight sub-group ──
         { type: 'subheader', label: 'Risk & Oversight' },
         { label: 'Control Tower', href: '/grc', icon: 'shield-check', id: 'grc' },

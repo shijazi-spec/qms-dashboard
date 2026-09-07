@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>WalaPlus - Evidence Connectors</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="walaplus-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        html { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; min-height: 100vh; }
+
+        /* Status pill. Colour is always paired with a text label — an auditor
+           reading a printout, or anyone with a colour vision deficiency, must
+           get the same answer as someone looking at the screen. */
+        .conn-pill { display:inline-flex; align-items:center; gap:6px; font-size:11px;
+                     font-weight:600; padding:3px 10px; border-radius:9999px;
+                     border:1px solid transparent; white-space:nowrap; }
+        .conn-pass { background:#ecfdf5; color:#065f46; border-color:#a7f3d0; }
+        .conn-fail { background:#fef2f2; color:#991b1b; border-color:#fecaca; }
+        .conn-na   { background:#f8fafc; color:#475569; border-color:#e2e8f0; }
+        .conn-err  { background:#fffbeb; color:#92400e; border-color:#fde68a; }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.0"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="walaplus-nav"></div>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/navigation.js?v=5.9"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            WalaPlusNav.init('connectors');
+        });
+    </script>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        <div class="flex flex-wrap justify-between items-start gap-4 mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900" data-i18n="connectors.title">Evidence Connectors</h1>
+                <p class="text-sm text-gray-500 mt-1" data-i18n="connectors.subtitle">Automated, timestamped answers to the questions an external auditor asks the engineering team — collected read-only, and kept as a history rather than a snapshot.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+                <button type="button" data-on-click="connCollect" id="connCollectBtn" class="px-4 py-2 bg-emerald-700 text-white rounded-lg hover:bg-emerald-800 font-medium text-sm disabled:opacity-60" data-testid="button-connectors-collect" data-i18n="connectors.collect">Collect now</button>
+                <button type="button" data-on-click="connReload" class="px-4 py-2 border border-emerald-700 text-emerald-700 rounded-lg hover:bg-emerald-50 font-medium text-sm" data-testid="button-connectors-refresh" data-i18n="common.refresh">Refresh</button>
+            </div>
+        </div>
+
+        <!-- Setup guidance. Shown only when the App is not configured, because a
+             page of empty rows with no explanation is the thing this platform
+             keeps getting wrong. -->
+        <div id="connSetup" class="hidden mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+            <p class="font-semibold mb-2" data-i18n="connectors.setup_title">GitHub App not configured — nothing has been collected.</p>
+            <p class="mb-2" data-i18n="connectors.setup_body">Create a GitHub App with read-only repository permissions (Metadata, Contents, Administration, Dependabot alerts, Secret scanning alerts), install it on the repository below, then set GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY. Every check here is read-only; the connector has no write access to GitHub.</p>
+        </div>
+
+        <section class="bg-white rounded-lg shadow mb-6">
+            <div class="p-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900" data-i18n="connectors.github_title">GitHub</h2>
+                    <p class="text-xs text-gray-500">
+                        <span data-i18n="connectors.github_subtitle">Repository under evidence collection:</span>
+                        <code id="connRepo" class="bg-gray-100 px-1.5 py-0.5 rounded">—</code>
+                    </p>
+                </div>
+                <span id="connState" class="conn-pill conn-na" role="status" aria-live="polite">
+                    <!-- No data-i18n: connRender owns this text, and applyToDOM
+                         would otherwise overwrite the live state on every
+                         translation pass. Same trap as the tracker's pill. -->
+                    <span id="connStateLabel">Loading…</span>
+                </span>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="connectors.col_check">Check</th>
+                            <th scope="col" class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="connectors.col_status">Status</th>
+                            <th scope="col" class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="connectors.col_finding">Finding</th>
+                            <th scope="col" class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="connectors.col_clauses">Satisfies</th>
+                            <th scope="col" class="px-4 py-2 text-start text-xs font-medium text-gray-500 uppercase" data-i18n="connectors.col_observed">Observed</th>
+                        </tr>
+                    </thead>
+                    <tbody id="connBody" class="bg-white divide-y divide-gray-200">
+                        <tr><td colspan="5" class="px-4 py-6 text-center text-gray-400">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        // i18n init BEFORE the first render. Rendering first leaves raw keys on
+        // screen for a beat, and t() returns the last dot-segment rather than
+        // null when a key is missing, so the placeholder text looks deliberate.
+        var connT = function (key, fallback) {
+            return (window.WalaPlusI18n ? window.WalaPlusI18n.t(key) : null) || fallback;
+        };
+
+        function connEsc(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        var CONN_PILL = {
+            pass: 'conn-pass', fail: 'conn-fail',
+            not_applicable: 'conn-na', error: 'conn-err'
+        };
+        var CONN_LABEL = {
+            pass: 'Pass', fail: 'Finding',
+            not_applicable: 'Not applicable', error: 'Could not check'
+        };
+
+        var connClauseMap = {};
+
+        function connSetState(text, cls) {
+            var pill = document.getElementById('connState');
+            var label = document.getElementById('connStateLabel');
+            if (label) label.textContent = text;
+            if (pill) pill.className = 'conn-pill ' + cls;
+        }
+
+        function connRender(data) {
+            var body = document.getElementById('connBody');
+            if (!body) return;
+            var rows = data.observations || [];
+            connClauseMap = data.clause_map || {};
+
+            var repo = document.getElementById('connRepo');
+            if (repo) repo.textContent = data.repo || '—';
+
+            var setup = document.getElementById('connSetup');
+            if (setup) setup.classList.toggle('hidden', Boolean(data.configured));
+
+            if (!data.configured) {
+                connSetState(connT('connectors.state_unconfigured', 'Not configured'), 'conn-na');
+            } else if (data.never_collected) {
+                connSetState(connT('connectors.state_never', 'Never collected'), 'conn-na');
+            } else {
+                // Summarise by the worst status present. A single finding must
+                // not be averaged away by four passes.
+                var worst = 'pass';
+                for (var i = 0; i < rows.length; i++) {
+                    if (rows[i].status === 'fail') { worst = 'fail'; break; }
+                    if (rows[i].status === 'error') worst = 'error';
+                }
+                connSetState(
+                    worst === 'fail' ? connT('connectors.state_findings', 'Findings present')
+                        : worst === 'error' ? connT('connectors.state_incomplete', 'Incomplete')
+                            : connT('connectors.state_clean', 'All checks passing'),
+                    CONN_PILL[worst] || 'conn-na'
+                );
+            }
+
+            if (rows.length === 0) {
+                // Distinguish "never looked" from "looked and found nothing".
+                var msg = !data.configured
+                    ? connT('connectors.empty_unconfigured', 'Set up the GitHub App above to begin collecting evidence.')
+                    : connT('connectors.empty_never', 'No evidence collected yet. Click "Collect now".');
+                body.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-gray-500">' + connEsc(msg) + '</td></tr>';
+                return;
+            }
+
+            body.innerHTML = rows.map(function (r) {
+                var clauses = (connClauseMap[r.check_key] || []);
+                var when = r.observed_at ? new Date(r.observed_at).toLocaleString() : '—';
+                return ''
+                    + '<tr class="hover:bg-gray-50">'
+                    + '<td class="px-4 py-3 align-top"><code class="text-xs text-gray-700">' + connEsc(r.check_key) + '</code>'
+                    + '<div class="text-[11px] text-gray-400 mt-0.5">' + connEsc(r.subject) + '</div></td>'
+                    + '<td class="px-4 py-3 align-top"><span class="conn-pill ' + (CONN_PILL[r.status] || 'conn-na') + '">'
+                    + connEsc(CONN_LABEL[r.status] || r.status) + '</span></td>'
+                    + '<td class="px-4 py-3 align-top text-sm text-gray-700">' + connEsc(r.summary) + '</td>'
+                    + '<td class="px-4 py-3 align-top text-xs text-gray-600">'
+                    + (clauses.length ? clauses.map(connEsc).join('<br>') : '—') + '</td>'
+                    + '<td class="px-4 py-3 align-top text-xs text-gray-500 whitespace-nowrap">' + connEsc(when) + '</td>'
+                    + '</tr>';
+            }).join('');
+        }
+
+        async function connReload() {
+            try {
+                var res = await fetch('/api/connectors/github', { credentials: 'same-origin' });
+                if (!res.ok) {
+                    connSetState(connT('connectors.state_error', 'Could not load'), 'conn-err');
+                    return;
+                }
+                connRender(await res.json());
+            } catch (e) {
+                connSetState(connT('connectors.state_error', 'Could not load'), 'conn-err');
+            }
+        }
+
+        async function connCollect() {
+            var btn = document.getElementById('connCollectBtn');
+            if (btn) { btn.disabled = true; btn.textContent = connT('connectors.collecting', 'Collecting…'); }
+            try {
+                var res = await fetch('/api/connectors/github/collect', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' }, body: '{}'
+                });
+                var data = await res.json().catch(function () { return {}; });
+                if (!res.ok) {
+                    alert(connT('connectors.collect_failed', 'Collection failed') + (data.error ? ': ' + data.error : ''));
+                } else if (data.configured === false) {
+                    // Not an error — the App simply is not set up, and the
+                    // banner already explains it.
+                    alert(data.message || connT('connectors.setup_title', 'GitHub App not configured.'));
+                }
+                await connReload();
+            } catch (e) {
+                alert(connT('connectors.collect_failed', 'Collection failed'));
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = connT('connectors.collect', 'Collect now'); }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', async function () {
+            if (window.WalaPlusI18n && window.WalaPlusI18n.init) {
+                await window.WalaPlusI18n.init();
+                if (window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM();
+            }
+            await connReload();
+        });
+    </script>
+</body>
+</html>

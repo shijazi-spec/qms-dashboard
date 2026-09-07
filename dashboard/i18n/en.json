@@ -77,7 +77,8 @@
       "health": "Health Pulse",
       "qms-docs": "Documents Library",
       "triggers": "Trigger Alerts",
-      "documentation-tracker": "Documentation Tracker"
+      "documentation-tracker": "Documentation Tracker",
+      "connectors": "Evidence Connectors"
     }
   },
   "login": {
@@ -3664,5 +3665,29 @@
     "depended_title": "Most depended upon",
     "depended_hint": "How many other documents reference each one. Check this before revising a document — it is what tells you the blast radius of a change.",
     "not_in_library": "not in library"
+  },
+  "connectors": {
+    "title": "Evidence Connectors",
+    "subtitle": "Automated, timestamped answers to the questions an external auditor asks the engineering team — collected read-only, and kept as a history rather than a snapshot.",
+    "collect": "Collect now",
+    "collecting": "Collecting…",
+    "setup_title": "GitHub App not configured — nothing has been collected.",
+    "setup_body": "Create a GitHub App with read-only repository permissions (Metadata, Contents, Administration, Dependabot alerts, Secret scanning alerts), install it on the repository below, then set GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY. Every check here is read-only; the connector has no write access to GitHub.",
+    "github_title": "GitHub",
+    "github_subtitle": "Repository under evidence collection:",
+    "col_check": "Check",
+    "col_status": "Status",
+    "col_finding": "Finding",
+    "col_clauses": "Satisfies",
+    "col_observed": "Observed",
+    "state_unconfigured": "Not configured",
+    "state_never": "Never collected",
+    "state_clean": "All checks passing",
+    "state_findings": "Findings present",
+    "state_incomplete": "Incomplete",
+    "state_error": "Could not load",
+    "empty_unconfigured": "Set up the GitHub App above to begin collecting evidence.",
+    "empty_never": "No evidence collected yet. Click \"Collect now\".",
+    "collect_failed": "Collection failed"
   }
 }

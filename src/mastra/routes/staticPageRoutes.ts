@@ -496,6 +496,17 @@ export const staticPageRoutes = [
   // /certification-milestones; the drift test below asserts the page gate and the backing API
   // rule never diverge.
   {
+    path: "/connectors",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "connectors.html",
+        GOVERNANCE_AND_EXECUTIVE,
+        "Evidence Connectors Setup Required",
+        `To access the evidence connectors, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
+  {
     path: "/documentation-tracker",
     method: "GET",
     createHandler: async () =>
@@ -944,6 +955,11 @@ export const ROLE_GATED_DASHBOARD_ROUTES: ReadonlyArray<{
     path: "/document-mapping",
     allowedRoles: GOVERNANCE_AND_EXECUTIVE,
     backingApiPath: "/api/compliance",
+  },
+  {
+    path: "/connectors",
+    allowedRoles: GOVERNANCE_AND_EXECUTIVE,
+    backingApiPath: "/api/connectors",
   },
   {
     path: "/documentation-tracker",
