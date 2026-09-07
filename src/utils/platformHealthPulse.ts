@@ -735,7 +735,41 @@ function parsePersistedChecks(raw: unknown): Array<{ id?: string; status?: strin
   return [];
 }
 
+/**
+ * Slack delivery for health-pulse alerts is OFF by default.
+ *
+ * Sarah 2026-09-07: "stop these notifications please." They were repeatedly
+ * landing in wp-sdr-sales-audits — the Sales team's channel — rather than
+ * grq-platform-status, and an alert in the wrong channel is worse than no
+ * alert: it is noise for people who cannot act on it, and it trains them to
+ * ignore the channel.
+ *
+ * The pulse itself KEEPS RUNNING and keeps recording every result, so
+ * /api/health/pulse stays accurate and nothing stops being measured. Only the
+ * Slack message is suppressed.
+ *
+ * Set HEALTH_PULSE_SLACK_ALERTS=true to turn delivery back on — worth doing
+ * once /api/admin/slack-routing confirms the platform audience resolves to the
+ * platform channel in PRODUCTION, which is the thing that has never been
+ * verified.
+ */
+function pulseAlertsEnabled(): boolean {
+  return (
+    String(process.env.HEALTH_PULSE_SLACK_ALERTS || "").toLowerCase() === "true"
+  );
+}
+
 export async function maybeNotifyOnPulse(run: PulseRun): Promise<void> {
+  if (!pulseAlertsEnabled()) {
+    // Logged, not silent: the run still happened and its result is on
+    // /api/health/pulse. Only the Slack message is withheld.
+    if (run.overall_status !== "healthy") {
+      logger.warn(
+        `[HealthPulse] ${run.overall_status}: ${run.fail_count} fail, ${run.warn_count} warn — Slack alert suppressed (HEALTH_PULSE_SLACK_ALERTS is not "true")`,
+      );
+    }
+    return;
+  }
   // Announce only what is NEW or WORSE — see classifyPulseTransition. A steady
   // platform stays quiet, improvements stay quiet, and the end of an incident
   // gets exactly one message.
