@@ -596,9 +596,33 @@ export async function runKpiVisibilityWatchdog(): Promise<{
     const { verifySeededKpiVisibility, restoreDepartmentKpis } = await import(
       "./kpiDatabase"
     );
+    // Orphan auto-values FIRST, and deliberately before the healthy-exit
+    // below: an orphan only ever shows up while visibility is fine. CS-KPI-21
+    // was visible and green-lit by every other check while displaying a red
+    // 61% that no calculator had maintained since the day it was written.
+    let orphanCount = 0;
+    try {
+      const { findOrphanAutoValues } = await import("./kpiOrphanValues");
+      const orphans = await findOrphanAutoValues();
+      orphanCount = orphans.length;
+      if (orphanCount) {
+        logger.warn(
+          `⚠️ [KpiWatchdog] ${orphanCount} orphan auto-value(s) — a calculator wrote them, ` +
+            `the KPI is now manual, nothing maintains them: ` +
+            orphans
+              .map((o) => `${o.kpi_code}=${o.actual_value}`)
+              .join(", ") +
+            `. Suppressed from display; POST /api/kpis/orphan-values/purge to remove.`,
+        );
+      }
+    } catch (e) {
+      logger.error("[KpiWatchdog] orphan-value check failed:", e);
+    }
+
     const before = await verifySeededKpiVisibility();
     const broken = before.filter((t) => !t.ok);
-    if (!broken.length) return { ran: true, ageHours: 0, result: { healthy: true } };
+    if (!broken.length)
+      return { ran: true, ageHours: 0, result: { healthy: true, orphanCount } };
 
     const restored = await restoreDepartmentKpis();
     const after = await verifySeededKpiVisibility();
@@ -621,7 +645,11 @@ export async function runKpiVisibilityWatchdog(): Promise<{
     return {
       ran: true,
       ageHours: 0,
-      result: { repaired: restored, stillBroken: stillBroken.map((t) => t.ownerName) },
+      result: {
+        repaired: restored,
+        stillBroken: stillBroken.map((t) => t.ownerName),
+        orphanCount,
+      },
     };
   } catch (err) {
     logger.error("[KpiWatchdog] failed:", err);

@@ -1,5 +1,11 @@
 import { createRedactedPool } from "./redactedPool";
 import { logger } from "./logger";
+// Pure constants only — kpiOrphanValues reaches back for this module's `pool`
+// through a lazy import, so importing its SQL here does not close a cycle.
+import {
+  ORPHAN_VALUE_SQL,
+  orphanValueSqlForManualIds,
+} from "./kpiOrphanValues";
 
 export const pool = createRedactedPool({
   connectionString: process.env.DATABASE_URL,
@@ -2221,13 +2227,25 @@ export async function getKPIsWithValuesByOwnerName(
   const qEnd = quarter
     ? new Date(Date.UTC(quarter.year, quarter.quarter * 3, 1))
     : null;
+  // Orphan suppression, without a second join: the definitions are already in
+  // hand, so the manual ones' ids are enough to express the same predicate
+  // ORPHAN_VALUE_SQL spells for the single-KPI reads. Excluding the rows in
+  // SQL (rather than blanking them afterwards) means DISTINCT ON falls through
+  // to the last value a person actually recorded.
+  const manualIds = defs
+    .filter((d: any) => String(d.calc_mode ?? "") === "manual")
+    .map((d: any) => d.id);
+  const orphanIdx = qStart ? 4 : 2;
   const valsRes = await pool.query(
-    `SELECT DISTINCT ON (kpi_id) kpi_id, actual_value, period_end
-       FROM kpi_values
-      WHERE kpi_id = ANY($1::int[])
-        ${qStart ? "AND period_end >= $2 AND period_end < $3" : ""}
-      ORDER BY kpi_id, period_end DESC`,
-    qStart ? [ids, qStart.toISOString(), qEnd!.toISOString()] : [ids],
+    `SELECT DISTINCT ON (kv.kpi_id) kv.kpi_id, kv.actual_value, kv.period_end
+       FROM kpi_values kv
+      WHERE kv.kpi_id = ANY($1::int[])
+        ${qStart ? "AND kv.period_end >= $2 AND kv.period_end < $3" : ""}
+        AND NOT ${orphanValueSqlForManualIds(orphanIdx)}
+      ORDER BY kv.kpi_id, kv.period_end DESC`,
+    qStart
+      ? [ids, qStart.toISOString(), qEnd!.toISOString(), manualIds]
+      : [ids, manualIds],
   );
   const latest = new Map<number, { actual_value: any; period_end: any }>();
   for (const r of valsRes.rows) latest.set(Number(r.kpi_id), r);
@@ -2520,8 +2538,16 @@ export async function recordKPIValue(value: KPIValue): Promise<KPIValue> {
 export async function getLatestKPIValue(
   kpiId: number,
 ): Promise<KPIValue | null> {
+  // NOT (orphan) — a value a calculator wrote on a KPI that is now manual is
+  // maintained by nobody and must not be shown as the current figure. Skipping
+  // it here (rather than blanking it in the caller) lets the KPI fall back to
+  // the last legitimate value. See kpiOrphanValues.ts for how CS-KPI-21 came
+  // to display a red 61% that no person had entered.
   const result = await pool.query(
-    "SELECT * FROM kpi_values WHERE kpi_id = $1 ORDER BY period_end DESC LIMIT 1",
+    `SELECT kv.* FROM kpi_values kv
+       JOIN kpi_definitions kd ON kd.id = kv.kpi_id
+      WHERE kv.kpi_id = $1 AND NOT ${ORPHAN_VALUE_SQL}
+      ORDER BY kv.period_end DESC LIMIT 1`,
     [kpiId],
   );
   return result.rows[0] || null;
@@ -2540,9 +2566,11 @@ export async function getLatestKPIValueForQuarter(
   const qStart = new Date(Date.UTC(year, (quarter - 1) * 3, 1));
   const qEnd = new Date(Date.UTC(year, quarter * 3, 1));
   const result = await pool.query(
-    `SELECT * FROM kpi_values
-      WHERE kpi_id = $1 AND period_end >= $2 AND period_end < $3
-      ORDER BY period_end DESC, id DESC LIMIT 1`,
+    `SELECT kv.* FROM kpi_values kv
+       JOIN kpi_definitions kd ON kd.id = kv.kpi_id
+      WHERE kv.kpi_id = $1 AND kv.period_end >= $2 AND kv.period_end < $3
+        AND NOT ${ORPHAN_VALUE_SQL}
+      ORDER BY kv.period_end DESC, kv.id DESC LIMIT 1`,
     [kpiId, qStart, qEnd],
   );
   return result.rows[0] || null;

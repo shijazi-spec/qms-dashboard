@@ -1161,6 +1161,19 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["GET"],
     roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
   },
+  // Orphan auto-values: reading the sweep follows the seed-health read roles;
+  // deleting follows the KPI write roles. Listed BEFORE the generic
+  // /api/kpis(/\d+)? rules so the purge is never matched by a broader entry.
+  {
+    pattern: /^\/api\/kpis\/orphan-values$/,
+    methods: ["GET"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
+  },
+  {
+    pattern: /^\/api\/kpis\/orphan-values\/purge$/,
+    methods: ["POST"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality"],
+  },
   // KPI auto-calc recompute — governance write roles only.
   {
     pattern: /^\/api\/kpis\/recalc$/,

@@ -844,20 +844,110 @@ export const kpiRoutes = [
           );
           const teams = await verifySeededKpiVisibility();
           const broken = teams.filter((t) => !t.ok);
+          // Orphan auto-values belong in the same health answer: a KPI that is
+          // VISIBLE but showing a number nothing maintains is as wrong as one
+          // that is missing, and it is the failure mode that is invisible from
+          // the page itself. Best-effort — a KPI count is still worth
+          // returning if this query fails.
+          let orphans: any[] = [];
+          let orphanError: string | null = null;
+          try {
+            const { findOrphanAutoValues } = await import(
+              "../../utils/kpiOrphanValues"
+            );
+            orphans = await findOrphanAutoValues();
+          } catch (e) {
+            orphanError = e instanceof Error ? e.message : String(e);
+          }
+          const problems = [
+            broken.length
+              ? "A team is showing fewer KPIs than its seeder writes. The rows may exist but be unreadable — check is_active for NULL and the owner_name spelling."
+              : null,
+            orphans.length
+              ? `${orphans.length} value(s) written by a calculator sit on KPIs now marked manual. They are suppressed from display; POST /api/kpis/orphan-values/purge removes them for good.`
+              : null,
+          ].filter(Boolean);
           return c.json({
             success: true,
-            healthy: broken.length === 0,
+            healthy: broken.length === 0 && orphans.length === 0,
             teams,
-            ...(broken.length
-              ? {
-                  problem:
-                    "A team is showing fewer KPIs than its seeder writes. The rows may exist but be unreadable — check is_active for NULL and the owner_name spelling.",
-                }
-              : {}),
+            orphanValues: orphans.map((o) => ({
+              kpi_code: o.kpi_code,
+              kpi_name: o.kpi_name,
+              owner_name: o.owner_name,
+              value: o.actual_value,
+              period_end: o.period_end,
+              written_at: o.created_at,
+            })),
+            ...(orphanError ? { orphanError } : {}),
+            ...(problems.length ? { problem: problems.join(" ") } : {}),
           });
         } catch (error) {
           safeLogger.error("Error checking KPI seed health:", error);
           return c.json({ error: "Failed to check KPI seed health" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // The sweep. Every orphan auto-value on the platform, all owners at once —
+    // SDR and Sales are covered by the same call as CS, because the predicate
+    // is about calc_mode and calculated_by, not about a team.
+    path: "/api/kpis/orphan-values",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_READ_ROLES]);
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions for KPI data",
+            );
+          const { findOrphanAutoValues } = await import(
+            "../../utils/kpiOrphanValues"
+          );
+          const rows = await findOrphanAutoValues();
+          return c.json({ success: true, count: rows.length, rows });
+        } catch (error) {
+          safeLogger.error("Error listing orphan KPI values:", error);
+          return c.json({ error: "Failed to list orphan KPI values" }, 500);
+        }
+      };
+    },
+  },
+  {
+    // Deletes them. Explicit and admin-only: suppression already makes the
+    // display correct, so this exists for the paths that read kpi_values
+    // directly (the KPI export), and there is no hurry that justifies a job
+    // deleting recorded values on its own schedule.
+    //
+    // ?dryRun=1 lists what would go without touching anything.
+    path: "/api/kpis/orphan-values/purge",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const { requireRole, forbiddenResponse } =
+            await import("../../utils/rbacMiddleware");
+          const user = await requireRole(c, [...KPI_WRITE_ROLES]);
+          if (!user)
+            return forbiddenResponse(
+              c,
+              "Insufficient permissions to purge KPI values",
+            );
+          const dryRun =
+            c.req.query("dryRun") === "1" || c.req.query("dryRun") === "true";
+          const { purgeOrphanAutoValues } = await import(
+            "../../utils/kpiOrphanValues"
+          );
+          const result = await purgeOrphanAutoValues({ dryRun });
+          return c.json({ success: true, ...result });
+        } catch (error) {
+          safeLogger.error("Error purging orphan KPI values:", error);
+          return c.json({ error: "Failed to purge orphan KPI values" }, 500);
         }
       };
     },
