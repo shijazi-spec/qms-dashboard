@@ -94,8 +94,14 @@ describe("direction — a lower-is-better KPI graded upward inverts its own mean
 });
 
 describe("which ones compute", () => {
-  it("marks exactly the three with calculators as auto", () => {
+  // CS-KPI-11 (onboarding exit) and CS-KPI-19 (renewal outreach) gained
+  // calculators after this test was first written, so "exactly three" became
+  // wrong while the seed was right. Keep this list and the registry list below
+  // in step with calc_mode: "auto" in kpiDatabase.ts.
+  it("marks exactly the five with calculators as auto", () => {
     expect(ROWS.filter((r) => r.mode === "auto").map((r) => r.code)).toEqual([
+      "CS-KPI-11",
+      "CS-KPI-19",
       "CS-KPI-23",
       "CS-KPI-25",
       "CS-KPI-30",
@@ -104,7 +110,7 @@ describe("which ones compute", () => {
 
   it("matches the calculator registry in kpiProcessCalc", () => {
     const calc = readFileSync(join(process.cwd(), "src/utils/kpiProcessCalc.ts"), "utf8");
-    for (const code of ["CS-KPI-23", "CS-KPI-25", "CS-KPI-30"]) {
+    for (const code of ["CS-KPI-11", "CS-KPI-19", "CS-KPI-23", "CS-KPI-25", "CS-KPI-30"]) {
       expect(calc).toContain(`"${code}": calc`);
     }
     // The registry must NOT claim a CS KPI the seed marks manual — that pairing
