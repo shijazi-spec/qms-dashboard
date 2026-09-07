@@ -3509,7 +3509,20 @@ export function streamCallRecordAudioBlobRange(
 }
 
 let integrationConfigTableReady: Promise<void> | null = null;
-async function ensureIntegrationConfigTable(): Promise<void> {
+/**
+ * Exported so the boot sequence can create the table in EVERY environment.
+ *
+ * NOT covered by initCallIntelligenceTables, despite living in this file — that
+ * one builds the call_* schema and never touches this table. The boot sequence
+ * originally called initCallIntelligenceTables expecting it to cover
+ * integration_config; check:lazy-tables caught the gap by still reporting the
+ * table missing after a restart that had created the other four.
+ *
+ * Reached only from the Five9 config read/write paths, so it exists only where
+ * someone has configured Five9 — the same prod/dev asymmetry Replit's publish
+ * diff reads as a deletion. Pure DDL, idempotent, memoized.
+ */
+export async function ensureIntegrationConfigTable(): Promise<void> {
   if (integrationConfigTableReady) return integrationConfigTableReady;
   integrationConfigTableReady = pool
     .query(`

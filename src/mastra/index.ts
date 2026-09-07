@@ -805,14 +805,26 @@ export const mastra = new Mastra({
         ),
     },
     {
-      // integration_config rides along with the call-intelligence schema. This
-      // init logs a warning above 2s and can take 5-15s on a genuinely cold
-      // database; on a warm one every statement is an IF NOT EXISTS no-op, and
-      // it is memoized, so a later call-intelligence request pays nothing.
-      label: "integration_config (call intelligence)",
+      // The call_* schema. Logs a warning above 2s and can take 5-15s on a
+      // genuinely cold database; on a warm one every statement is an IF NOT
+      // EXISTS no-op, and it is memoized, so a later call-intelligence request
+      // pays nothing.
+      label: "call intelligence schema",
       run: () =>
         import("../utils/callIntelligenceDb").then((m) =>
           m.initCallIntelligenceTables(),
+        ),
+    },
+    {
+      // SEPARATE from the init above, despite living in the same file. That
+      // assumption is exactly what this entry fixes: the first version of this
+      // list called only initCallIntelligenceTables and integration_config was
+      // still missing after a restart that created the other four.
+      // check:lazy-tables caught it.
+      label: "integration_config",
+      run: () =>
+        import("../utils/callIntelligenceDb").then((m) =>
+          m.ensureIntegrationConfigTable(),
         ),
     },
     {
