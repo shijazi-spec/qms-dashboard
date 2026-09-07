@@ -667,6 +667,60 @@ export function problemSignature(
     .join(",");
 }
 
+/** How bad a single check is. Anything not warn/fail counts as fine. */
+function severityRank(status?: string): number {
+  return status === "fail" ? 2 : status === "warn" ? 1 : 0;
+}
+
+/**
+ * Decide whether a pulse run is worth announcing.
+ *
+ * Announcing on ANY change to the problem set — the first version of this —
+ * was too eager. On 2026-09-07 two alerts arrived 83 minutes apart in which the
+ * platform had barely moved: the approval queue had RESOLVED and the stale
+ * check had improved from fail to warn. Two of the three changes were things
+ * getting BETTER, and they still paged. Combined with checks that sit on their
+ * thresholds (the pruner hovering at 24-26h against a 25h limit), that produces
+ * an alert roughly every 90 minutes about a steady platform — which is how a
+ * channel gets muted, and then the real alert gets muted with it.
+ *
+ * So: announce only when something APPEARS or gets WORSE. A check clearing, or
+ * dropping fail → warn, is not news. When the last problem clears, one
+ * "recovered" message is sent so the end of an incident is still visible.
+ *
+ * Pure, so the rule can be tested without a database.
+ */
+export function classifyPulseTransition(
+  prev: Array<{ id?: string; status?: string }> | null | undefined,
+  curr: Array<{ id?: string; status?: string }> | null | undefined,
+): { announce: boolean; reason: "worsened" | "recovered" | null; worsened: string[] } {
+  const prevRank = new Map<string, number>();
+  for (const c of Array.isArray(prev) ? prev : []) {
+    if (c?.id) prevRank.set(c.id, severityRank(c.status));
+  }
+
+  const worsened: string[] = [];
+  let currHasProblems = false;
+  for (const c of Array.isArray(curr) ? curr : []) {
+    const rank = severityRank(c?.status);
+    if (rank > 0) currHasProblems = true;
+    // A check absent from the previous run counts as previously fine, so a
+    // newly added check that fails is treated as newly broken.
+    if (c?.id && rank > (prevRank.get(c.id) ?? 0)) worsened.push(c.id);
+  }
+
+  if (worsened.length > 0) {
+    return { announce: true, reason: "worsened", worsened: worsened.sort() };
+  }
+
+  const prevHadProblems = [...prevRank.values()].some((r) => r > 0);
+  if (prevHadProblems && !currHasProblems) {
+    return { announce: true, reason: "recovered", worsened: [] };
+  }
+
+  return { announce: false, reason: null, worsened: [] };
+}
+
 /** `checks` comes back as jsonb (already an array) or as text, depending on the driver. */
 function parsePersistedChecks(raw: unknown): Array<{ id?: string; status?: string }> {
   if (Array.isArray(raw)) return raw as Array<{ id?: string; status?: string }>;
@@ -682,19 +736,14 @@ function parsePersistedChecks(raw: unknown): Array<{ id?: string; status?: strin
 }
 
 export async function maybeNotifyOnPulse(run: PulseRun): Promise<void> {
-  if (run.overall_status === "healthy") return;
-
-  // De-duplicate on the overall status AND on WHICH checks are unhappy.
-  //
-  // Comparing the status alone was not enough. A platform that stays
-  // "critical" — which is exactly what a queue nobody drains or a cron that
-  // stopped produces — matches its predecessor on every subsequent run, so it
-  // alerts once and then goes quiet forever, including for a completely
-  // different failure appearing later. The louder the platform's problems, the
-  // more thoroughly it would hide new ones.
-  //
-  // Comparing the SET of failing/warning check ids as well means a steady state
-  // stays silent (no spam) while anything newly broken still gets announced.
+  // Announce only what is NEW or WORSE — see classifyPulseTransition. A steady
+  // platform stays quiet, improvements stay quiet, and the end of an incident
+  // gets exactly one message.
+  let transition: ReturnType<typeof classifyPulseTransition> = {
+    announce: run.overall_status !== "healthy",
+    reason: "worsened",
+    worsened: [],
+  };
   try {
     const prev = run.id
       ? await pool.query(
@@ -706,20 +755,54 @@ export async function maybeNotifyOnPulse(run: PulseRun): Promise<void> {
           `SELECT overall_status, checks FROM health_pulse_runs
            ORDER BY id DESC LIMIT 1`,
         );
-    const prevRow = prev.rows[0];
-    if (
-      prevRow?.overall_status === run.overall_status &&
-      problemSignature(parsePersistedChecks(prevRow.checks)) ===
-        problemSignature(run.checks)
-    ) {
-      return;
+    transition = classifyPulseTransition(
+      parsePersistedChecks(prev.rows[0]?.checks),
+      run.checks,
+    );
+  } catch {
+    // No history to compare against — fall back to announcing any unhealthy
+    // run rather than going silent on a platform that might be broken.
+  }
+  if (!transition.announce) return;
+
+  if (transition.reason === "recovered") {
+    try {
+      const { notifyEvent } = await import("./notificationHub");
+      await notifyEvent({
+        type: "platform_health_recovered",
+        module: "platform",
+        title: "Platform Health: RECOVERED — all checks passing",
+        message:
+          "Every health check is passing again. This is the only message sent on recovery.",
+        priority: "high",
+        entityType: "health_pulse_run",
+        entityId: String(run.id || ""),
+        actionUrl: "/api/health/pulse",
+      });
+    } catch (err: any) {
+      logger.error("[HealthPulse] Recovery notification failed:", err?.message);
     }
-  } catch {}
+    return;
+  }
 
   const failedChecks = run.checks.filter((c) => c.status === "fail");
   const warnedChecks = run.checks.filter((c) => c.status === "warn");
 
   const summaryLines: string[] = [];
+  // Lead with what actually triggered this message. Without it the reader has
+  // to diff two alerts by eye to work out what changed — and the whole point of
+  // the dampening is that everything else here is unchanged from last time.
+  if (transition.worsened.length > 0) {
+    const byId = new Map(run.checks.map((c) => [c.id, c]));
+    summaryLines.push("NEW OR WORSE SINCE THE LAST ALERT:");
+    for (const id of transition.worsened) {
+      const c = byId.get(id);
+      summaryLines.push(
+        `  - ${c?.label ?? id}: ${c?.message || `(now ${c?.status ?? "?"})`}`,
+      );
+    }
+    summaryLines.push("");
+  }
   if (failedChecks.length > 0) {
     summaryLines.push("FAILING:");
     for (const c of failedChecks) {
