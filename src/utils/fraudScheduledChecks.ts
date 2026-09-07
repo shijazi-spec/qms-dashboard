@@ -141,6 +141,46 @@ async function record(fields: {
   }
 }
 
+/**
+ * Has this check already been announced recently?
+ *
+ * The in-process throttles in scheduledJobs.ts reset on every restart, so a
+ * semi-annual reminder fired three times in thirty minutes across three
+ * republishes on 2026-09-07. Anything that runs less often than the deploy
+ * cadence needs a check that OUTLIVES the process, so this asks the
+ * notifications table — the same rows these checks already write — whether an
+ * announcement for this entity exists inside the window.
+ *
+ * Fails OPEN (returns false) on error: a dedup lookup failing must not silence
+ * a compliance reminder.
+ */
+async function announcedWithinDays(
+  relatedEntityType: string,
+  relatedEntityId: string,
+  days: number,
+): Promise<boolean> {
+  try {
+    const { notificationPool } = await import("./notificationHub");
+    const res = await notificationPool.query(
+      `SELECT 1
+         FROM notifications
+        WHERE related_entity_type = $1
+          AND related_entity_id = $2
+          AND module = 'fraud'
+          AND created_at > NOW() - MAKE_INTERVAL(days => $3)
+        LIMIT 1`,
+      [relatedEntityType, relatedEntityId, days],
+    );
+    return (res.rowCount ?? 0) > 0;
+  } catch (err) {
+    logger.warn(
+      "[FraudChecks] Dedup lookup failed; announcing anyway:",
+      err instanceof Error ? err.message : String(err),
+    );
+    return false;
+  }
+}
+
 function envRecipients(varName: string, fallback: string): string[] {
   return (process.env[varName] || fallback)
     .split(",")
@@ -253,6 +293,16 @@ export async function runFraudCountryReviewReminder(): Promise<{
   notified: number;
   blacklisted: number;
 }> {
+  // Semi-annual, so it must survive restarts: the in-process throttle resets on
+  // every republish, which fired this three times in thirty minutes.
+  // 150 days ≈ one gap in the Feb/Oct cadence, so a genuine cycle still lands.
+  if (await announcedWithinDays("fraud_country_risk", "review", 150)) {
+    logger.info(
+      "[FraudCountryReview] Already announced within 150 days — skipping",
+    );
+    return { notified: 0, blacklisted: 0 };
+  }
+
   const { initFraudTables, getBlackListedCountryCount } = await import(
     "./fraudDatabase"
   );
@@ -297,6 +347,16 @@ export async function runFraudKpiMonthlyReminder(): Promise<{
   const today = new Date();
   const prev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
   const prevMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}-01`;
+
+  // Monthly, and keyed by the month itself — so a restart inside the same month
+  // cannot re-announce it. Same restart-resets-the-throttle problem as the
+  // country review above.
+  if (await announcedWithinDays("fraud_kpi", prevMonth, 20)) {
+    logger.info(
+      `[FraudKpiMonthly] ${prevMonth} already announced — skipping`,
+    );
+    return { month: prevMonth, kpi_id: null };
+  }
 
   let result: any = null;
   try {

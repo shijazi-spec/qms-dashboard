@@ -6,6 +6,14 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
+/**
+ * Exported for callers that need to ask what has already been announced —
+ * scheduled checks that run less often than the deploy cadence use these rows
+ * as a restart-proof dedup marker, because an in-process throttle resets on
+ * every republish.
+ */
+export { pool as notificationPool };
+
 export type NotificationChannel = "in_app" | "email" | "slack";
 export type NotificationPriority = "critical" | "high" | "medium" | "low";
 export type NotificationStatus = "unread" | "read" | "dismissed";
