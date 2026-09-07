@@ -43,10 +43,13 @@ export async function runDealComplianceWeeklyReport(): Promise<{
     return { posted: false, checked: summary.checked, missing: 0 };
   }
 
+  // compliant_rate is ALREADY a percentage — shapeDealCompliance returns
+  // Math.round(100 * compliant / checked). Multiplying again printed
+  // "compliant 1800.0%" in the first real report, on a figure that was
+  // actually 18%. A wrong number in a compliance report is worse than no
+  // report, so this is used verbatim.
   const rate =
-    summary.compliant_rate !== null
-      ? `${(summary.compliant_rate * 100).toFixed(1)}%`
-      : "n/a";
+    summary.compliant_rate !== null ? `${summary.compliant_rate}%` : "n/a";
   const atRisk = Number(summary.at_risk_sar) || 0;
 
   const lines: string[] = [
