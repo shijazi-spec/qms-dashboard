@@ -77,7 +77,18 @@ export const FINAL_KPIS: FinalKpi[] = [
 
   // ───────────── GRQ Specialist — AlHanouf (3) ─────────────
   { code: "SPEC-KPI-01", name: "Governance Operations Readiness Index", owner_type: "grq_specialist", owner_name: "AlHanouf", category: "governance", unit: "%", target: 95, weight: 100, direction: "higher_is_better", frequency: "quarterly", calc_mode: "auto", north_star: true, description: "Measures the overall operational readiness of GRQ support activities across document control, executive reporting, and CAPA follow-up discipline", formula: "Equal-weighted average of achievement % of supporting KPIs #2–#3 in this sheet (each weighted 1/2)", data_source: "KPI Dashboard" },
-  { code: "SPEC-KPI-02", name: "Documentation Lifecycle Compliance", owner_type: "grq_specialist", owner_name: "AlHanouf", category: "governance", unit: "%", target: 95, weight: 50, direction: "higher_is_better", frequency: "monthly", calc_mode: "manual", description: "Measures the percentage of controlled governance documents reviewed on time according to the approved lifecycle schedule", formula: "Documents Reviewed On Time ÷ Documents Due × 100", data_source: "Document Master List" },
+  // RELABELLED 2026-09-07 (Sarah, option A). This row said "Documentation
+  // Lifecycle Compliance", manual, sourced from the Document Master List —
+  // but calcComplianceObligationTracking has been registered under SPEC-KPI-02
+  // in kpiProcessCalc.ts all along and writing to it every recalc, so the
+  // figure on AlHanouf's page was applicable obligations carrying a
+  // responsible department (675/675 = 100% since June), not documents reviewed
+  // on time. The rest of the platform already calls this metric KPI 2
+  // (scorecardDatabase, inngest, scheduledJobs), and Documentation Lifecycle
+  // Compliance already exists properly as QM-KPI-010 under Sarah. So the NAME
+  // was the error, not the calculator. calc_mode is now auto, which is what it
+  // has effectively been since June.
+  { code: "SPEC-KPI-02", name: "Compliance Obligation Tracking", owner_type: "grq_specialist", owner_name: "AlHanouf", category: "governance", unit: "%", target: 95, weight: 50, direction: "higher_is_better", frequency: "monthly", calc_mode: "auto", description: "Measures the percentage of applicable compliance obligations that carry a named responsible department, so every obligation the organisation is subject to has an accountable owner", formula: "Applicable Obligations With a Responsible Department ÷ Applicable Obligations × 100", data_source: "Compliance Obligations Register" },
   { code: "SPEC-KPI-06", name: "CAPA Follow-Up SLA Compliance", owner_type: "grq_specialist", owner_name: "AlHanouf", category: "quality", unit: "%", target: 95, weight: 50, direction: "higher_is_better", frequency: "monthly", calc_mode: "auto", description: "Measures the percentage of due CAPAs that were followed up within the defined SLA and escalated when overdue", formula: "CAPAs Followed Up Within SLA ÷ Total Due CAPAs × 100", data_source: "CAPA Register" },
 
   // ───────────── Legal — Ali Fahad (5) ─────────────
@@ -148,6 +159,31 @@ export async function seedFinalGrqKpis(): Promise<void> {
       "Before 2 Sep 2026 this KPI reported document-mapping clause coverage. " +
         "From that date it reports on-time delivery of Certification Milestone Plan " +
         "(GRQ-PLAN-2026-01 v3.0) milestones. Values either side are not comparable.",
+    ],
+  );
+
+  // SPEC-KPI-02 was RENAMED, not re-measured. Unlike GRC-KPI-002 above, the
+  // numbers either side of this date ARE comparable: every recorded value was
+  // already Compliance Obligation Tracking, computed by the calculator that
+  // has been registered under this code since before the first stored value.
+  // Only the label, description, formula and source were wrong. Saying so
+  // matters — an annotation that implied a break would make an auditor discard
+  // four months of perfectly good history.
+  await pool.query(
+    `UPDATE kpi_definitions
+        SET methodology_changed_at = DATE '2026-09-07',
+            methodology_note = $1
+      WHERE kpi_code = 'SPEC-KPI-02'
+        AND methodology_changed_at IS NULL`,
+    [
+      "Relabelled on 7 Sep 2026. This KPI was defined as \"Documentation " +
+        "Lifecycle Compliance\" (manual, Document Master List), but the values " +
+        "stored against it were always Compliance Obligation Tracking — " +
+        "applicable obligations carrying a responsible department — produced by " +
+        "the calculator registered under this code. The definition has been " +
+        "corrected to match what was being measured. Historical values are " +
+        "unaffected and remain comparable. Documentation Lifecycle Compliance " +
+        "is tracked separately as QM-KPI-010.",
     ],
   );
 
