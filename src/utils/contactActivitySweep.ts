@@ -57,13 +57,25 @@ function verifyBatchSize(): number {
   return Number.isFinite(raw) && raw > 0 ? Math.min(raw, 500) : 150;
 }
 
+/**
+ * Safety valve only — the pass stops on its own when a page returns fewer than
+ * 200 rows. Raised from 400 (80k activities) because hitting the cap is not a
+ * harmless truncation: a capped pass has not read every activity, so it is not
+ * allowed to clear stale counts, and the census can never self-heal. On a book
+ * with 70k contacts, 80k activities is a plausible corpus size, which made the
+ * old default the difference between a census that converges and one that does
+ * not.
+ */
 function maxBulkPages(): number {
   const raw = parseInt(process.env.CONTACT_ACTIVITY_BULK_MAX_PAGES || "", 10);
-  return Number.isFinite(raw) && raw > 0 ? raw : 400; // 400 x 200 = 80k activities
+  return Number.isFinite(raw) && raw > 0 ? raw : 5000; // 1M activities
 }
 
 export interface ContactActivitySweepResult {
   bulkModules: Record<string, number>;
+  /** Contacts whose bulk counts were cleared because a COMPLETE pass did not
+   *  see them. Only ever set after an error-free, untruncated pass. */
+  staleCleared?: number;
   contactsWithActivity: number;
   verifiedThisRun: number;
   provenEmpty: number;
@@ -256,19 +268,21 @@ export async function runContactActivitySweep(): Promise<ContactActivitySweepRes
     errors: [],
   };
 
+  // Stamped BEFORE the pass so "not seen this run" is decidable afterwards.
+  const runStartedAt = Date.now();
   const perContact = await runBulkPass(result);
   const bulkFailed = result.errors.length > 0;
 
-  // Reset the bulk columns before writing, so a contact whose activities were
-  // deleted in Zoho falls back to 0 instead of keeping a stale count.
-  if (!bulkFailed) {
-    await pool.query(
-      `UPDATE contact_activity_counts
-          SET bulk_calls = 0, bulk_tasks = 0, bulk_events = 0,
-              total = emails + attachments + notes`,
-    );
-  }
-
+  // NOTE — the reset that used to live HERE was a correctness bug, and it fired
+  // in production. It zeroed every contact's bulk counts BEFORE re-writing them,
+  // so an interrupted run (a Republish restart is enough) left contacts that
+  // really do have calls sitting at zero. Verified in that state, a contact with
+  // 30 calls would have been published to the "safe to delete" list. Observed
+  // live: with_activity fell from 16,744 to 6,545 across a restart.
+  //
+  // Zeroing now happens AFTER the pass, only for contacts the pass did not see,
+  // and only when the pass was COMPLETE — see below. A stale-high count merely
+  // keeps a contact off the safe list, which is the harmless direction.
   for (const [contactId, cols] of perContact) {
     const calls = cols.bulk_calls || 0;
     const tasks = cols.bulk_tasks || 0;
@@ -292,6 +306,26 @@ export async function runContactActivitySweep(): Promise<ContactActivitySweepRes
   }
   result.contactsWithActivity = perContact.size;
 
+  // Zero the contacts this pass did NOT see — but ONLY after a pass that was
+  // both error-free and complete. A truncated pass has not read every activity,
+  // so "not seen" would not mean "has none", and zeroing on that basis is
+  // exactly how a contact with calls reaches the safe-to-delete list.
+  //
+  // Anything zeroed here also loses verified_at: its total just changed, so the
+  // earlier verification no longer describes it and must be redone.
+  if (!bulkFailed && !result.truncated) {
+    const cleared = await pool.query(
+      `UPDATE contact_activity_counts
+          SET bulk_calls = 0, bulk_tasks = 0, bulk_events = 0,
+              total = emails + attachments + notes,
+              verified_at = NULL
+        WHERE (bulk_at IS NULL OR bulk_at < $1)
+          AND (bulk_calls > 0 OR bulk_tasks > 0 OR bulk_events > 0)`,
+      [new Date(runStartedAt).toISOString()],
+    );
+    result.staleCleared = cleared.rowCount || 0;
+  }
+
   await runVerifyPass(result, bulkFailed);
 
   const empty = await pool.query(
@@ -304,7 +338,10 @@ export async function runContactActivitySweep(): Promise<ContactActivitySweepRes
     `[contact-activity] bulk ${JSON.stringify(result.bulkModules)}, ` +
       `${result.contactsWithActivity} contact(s) with activity, ` +
       `verified ${result.verifiedThisRun} this run, ${result.provenEmpty} proven empty` +
-      (result.truncated ? " (BULK TRUNCATED — raise CONTACT_ACTIVITY_BULK_MAX_PAGES)" : "") +
+      (result.staleCleared ? `, cleared ${result.staleCleared} stale` : "") +
+      (result.truncated
+        ? " (BULK TRUNCATED — raise CONTACT_ACTIVITY_BULK_MAX_PAGES; stale counts NOT cleared, so the safe list stays conservative)"
+        : "") +
       (result.errors.length ? ` — ${result.errors.length} error(s)` : ""),
   );
   return result;
