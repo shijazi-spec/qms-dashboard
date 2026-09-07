@@ -571,6 +571,8 @@ export const mastra = new Mastra({
         runWeeklyExecBriefIfDue,
         runLeadershipPushIfDue,
         runHealthPulseIfStale,
+        runApprovalExpiryIfDue,
+        runOutboxDrainIfDue,
       } = await import("../utils/scheduledJobs");
       const helpers: Array<{
         name: string;
@@ -582,6 +584,14 @@ export const mastra = new Mastra({
         // first wins, and the freshness check makes the other a no-op. Cheap
         // when healthy — one MAX(run_at) query per tick.
         { name: "HealthPulse", fn: () => runHealthPulseIfStale() },
+        // Drains queued Slack messages. directAuditRunner ENQUEUES into
+        // notification_outbox and relies on the notification-outbox-drain cron
+        // to send them; that cron had no fallback, so on this deployment the
+        // quality-audit fallback kept queueing while nothing sent.
+        { name: "OutboxDrain", fn: () => runOutboxDrainIfDue() },
+        // Expires HITL approvals past expires_at. Its Inngest cron has never
+        // run — see runApprovalExpiryIfDue for the evidence.
+        { name: "ApprovalExpiry", fn: () => runApprovalExpiryIfDue() },
         { name: "RateLimit429Pruner", fn: () => runPruneRateLimit429IfStale() },
         { name: "DuplicateRadar", fn: () => runDuplicateScanIfStale() },
         { name: "ConsultantScanner", fn: () => runConsultantScannerIfStale() },

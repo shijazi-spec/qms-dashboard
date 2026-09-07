@@ -1072,3 +1072,81 @@ export async function runHealthPulseIfStale(
     return { ran: false, ageHours };
   }
 }
+
+/**
+ * Flip HITL approvals past their expiry from 'pending' to 'expired'.
+ *
+ * The ai-approval-expiry Inngest cron (every 15 min) already does this and its
+ * body is a single UPDATE. It has never run: on 2026-09-07, 275 rows were
+ * eligible and
+ * the count EVER expired was zero. That is the clearest single proof that
+ * Inngest crons do not fire on this deployment.
+ *
+ * Time-based rather than freshness-based: there is no "last run" timestamp to
+ * read, so this self-throttles in memory. A restart re-runs it once, which is
+ * harmless — the UPDATE is idempotent and matches nothing when the queue is
+ * already clean.
+ */
+let _lastApprovalExpiryMs = 0;
+export async function runApprovalExpiryIfDue(
+  minIntervalMinutes = 15,
+): Promise<{ ran: boolean; ageHours: number; result?: any }> {
+  const ageHours = _lastApprovalExpiryMs
+    ? (Date.now() - _lastApprovalExpiryMs) / 3_600_000
+    : Infinity;
+  if (ageHours * 60 < minIntervalMinutes) return { ran: false, ageHours };
+
+  try {
+    const { expireStalePendingActions } = await import("./aiApprovalDatabase");
+    const expired = await expireStalePendingActions();
+    _lastApprovalExpiryMs = Date.now();
+    if (expired > 0) {
+      // Deliberately loud. Each row is an AI proposal that aged out WITHOUT a
+      // human decision, which is a governance event, not routine housekeeping.
+      logger.warn(
+        `[ApprovalExpiry Fallback] Expired ${expired} pending AI approval(s) — these aged out unreviewed.`,
+      );
+    }
+    return { ran: true, ageHours, result: { expired } };
+  } catch (err) {
+    logger.error("[ApprovalExpiry Fallback] Expiry failed:", err);
+    return { ran: false, ageHours };
+  }
+}
+
+/**
+ * Send queued Slack messages sitting in notification_outbox.
+ *
+ * The outbox is the durable-retry path for Slack: directAuditRunner enqueues
+ * audit results into it and relies on the notification-outbox-drain cron
+ * (every 10 min) to send them. That cron has no fallback, so on a deployment where
+ * Inngest does not fire, the quality-audit fallback keeps ENQUEUEING while
+ * nothing DRAINS — messages accumulate as 'pending' and are never sent.
+ *
+ * executiveDigest drains inline after enqueueing, so it is unaffected; this
+ * covers the producers that do not.
+ */
+let _lastOutboxDrainMs = 0;
+export async function runOutboxDrainIfDue(
+  minIntervalMinutes = 10,
+): Promise<{ ran: boolean; ageHours: number; result?: any }> {
+  const ageHours = _lastOutboxDrainMs
+    ? (Date.now() - _lastOutboxDrainMs) / 3_600_000
+    : Infinity;
+  if (ageHours * 60 < minIntervalMinutes) return { ran: false, ageHours };
+
+  try {
+    const { processDueOutboxMessages } = await import("./notificationOutbox");
+    const result = await processDueOutboxMessages();
+    _lastOutboxDrainMs = Date.now();
+    if (result.sent > 0 || result.failed > 0) {
+      logger.info(
+        `[OutboxDrain Fallback] sent=${result.sent} failed=${result.failed} pending=${result.pending}`,
+      );
+    }
+    return { ran: true, ageHours, result };
+  } catch (err) {
+    logger.error("[OutboxDrain Fallback] Drain failed:", err);
+    return { ran: false, ageHours };
+  }
+}
