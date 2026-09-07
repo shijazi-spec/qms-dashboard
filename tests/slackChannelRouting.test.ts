@@ -1,0 +1,120 @@
+/**
+ * Unit tests for src/utils/slackChannelRouting.ts
+ *
+ * Mis-routing is quiet and expensive: a SAMA deadline warning landing in a
+ * sales channel is not obviously wrong to anyone reading either channel, and
+ * an alert sent to a channel nobody owns is the same as no alert. These pin
+ * the routing rules and, most importantly, the fallbacks.
+ *
+ * Run:  npx tsx tests/slackChannelRouting.test.ts
+ */
+
+import {
+  resolveSlackAudience,
+  resolveSlackChannel,
+  AUDIENCE_ENV_VAR,
+} from "../src/utils/slackChannelRouting";
+import { TestSuite } from "./_helpers/runner";
+
+const suite = new TestSuite("slackChannelRouting");
+
+console.log("\n=== Slack channel routing ===\n");
+
+const ENV = {
+  SLACK_CHANNEL_PLATFORM: "C_PLATFORM",
+  SLACK_CHANNEL_SALES_SDR: "C_SALES",
+  SLACK_CHANNEL_CS: "C_CS",
+  SLACK_CHANNEL_MARKETPLACE: "C_MARKET",
+  SLACK_CHANNEL_ID: "C_LEGACY",
+} as NodeJS.ProcessEnv;
+
+await suite.test("platform-owned modules route to the platform channel", async () => {
+  for (const m of ["platform", "qms", "audits", "compliance", "pdpl", "kpis", "ai-governance"]) {
+    suite.expectEqual(resolveSlackAudience(m), "platform", m);
+  }
+});
+
+await suite.test("fraud goes to platform, NOT to a business unit", async () => {
+  // Fraud is a SAMA/AML compliance function owned by GRQ. Routing it to a
+  // sales channel would put incident detail in front of the wrong audience.
+  suite.expectEqual(resolveSlackAudience("fraud"), "platform", "fraud");
+});
+
+await suite.test("SDR/Sales modules route to the sales channel", async () => {
+  for (const m of ["calls", "duplicates", "Leads", "Deals", "Accounts", "CRM"]) {
+    suite.expectEqual(resolveSlackAudience(m), "sales_sdr", m);
+  }
+});
+
+await suite.test("CS modules route to the CS channel", async () => {
+  for (const m of ["cs", "cs_lifecycle", "handoff"]) {
+    suite.expectEqual(resolveSlackAudience(m), "cs", m);
+  }
+});
+
+await suite.test("module matching is case-insensitive", async () => {
+  // Callers use both "Leads" and "leads"; the map must not care.
+  suite.expectEqual(resolveSlackAudience("LEADS"), "sales_sdr", "upper");
+  suite.expectEqual(resolveSlackAudience("  Deals  "), "sales_sdr", "padded");
+});
+
+await suite.test("an unknown module lands on platform, not nowhere", async () => {
+  // The important property: an unrouted alert must reach a staffed channel
+  // rather than being silently dropped or sent somewhere unowned.
+  suite.expectEqual(resolveSlackAudience("some_new_module"), "platform", "unknown");
+  suite.expectEqual(resolveSlackAudience(undefined), "platform", "undefined");
+  suite.expectEqual(resolveSlackAudience(null), "platform", "null");
+  suite.expectEqual(resolveSlackAudience(""), "platform", "empty");
+});
+
+await suite.test("segment overrides module", async () => {
+  // A marketplace duplicate cluster belongs to the marketplace channel even
+  // though its module says "duplicates".
+  suite.expectEqual(
+    resolveSlackAudience("duplicates", "marketplace"),
+    "marketplace",
+    "marketplace segment wins",
+  );
+  suite.expectEqual(
+    resolveSlackAudience("duplicates", "Partner Accounts"),
+    "marketplace",
+    "partner accounts is a marketplace layout",
+  );
+  suite.expectEqual(
+    resolveSlackAudience("duplicates", "walaplus"),
+    "sales_sdr",
+    "a corporate segment does not override",
+  );
+});
+
+await suite.test("resolves each audience to its own channel", async () => {
+  suite.expectEqual(resolveSlackChannel("platform", null, ENV).channel, "C_PLATFORM", "platform");
+  suite.expectEqual(resolveSlackChannel("calls", null, ENV).channel, "C_SALES", "sales");
+  suite.expectEqual(resolveSlackChannel("cs", null, ENV).channel, "C_CS", "cs");
+  suite.expectEqual(resolveSlackChannel("duplicates", "marketplace", ENV).channel, "C_MARKET", "marketplace");
+});
+
+await suite.test("falls back to SLACK_CHANNEL_ID when an audience is unconfigured", async () => {
+  // Partial configuration must behave exactly like today rather than dropping
+  // messages for the audiences that have no channel yet.
+  const partial = { SLACK_CHANNEL_ID: "C_LEGACY" } as NodeJS.ProcessEnv;
+  suite.expectEqual(resolveSlackChannel("calls", null, partial).channel, "C_LEGACY", "sales falls back");
+  suite.expectEqual(resolveSlackChannel("platform", null, partial).channel, "C_LEGACY", "platform falls back");
+});
+
+await suite.test("returns null when Slack is entirely unconfigured", async () => {
+  const none = {} as NodeJS.ProcessEnv;
+  suite.expectEqual(resolveSlackChannel("platform", null, none).channel, null, "no channel");
+});
+
+await suite.test("SLACK_DEFAULT_CHANNEL is honoured as a last resort", async () => {
+  const legacy = { SLACK_DEFAULT_CHANNEL: "C_OLD" } as NodeJS.ProcessEnv;
+  suite.expectEqual(resolveSlackChannel("qms", null, legacy).channel, "C_OLD", "default channel");
+});
+
+await suite.test("every audience has a distinct env var", async () => {
+  const vars = Object.values(AUDIENCE_ENV_VAR);
+  suite.expectEqual(new Set(vars).size, vars.length, "no duplicate env var names");
+});
+
+suite.finishOrExit();

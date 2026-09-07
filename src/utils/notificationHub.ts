@@ -251,8 +251,13 @@ async function sendEmailNotification(notif: Notification): Promise<void> {
 async function sendSlackNotification(notif: Notification): Promise<void> {
   try {
     const slackToken = process.env.SLACK_BOT_TOKEN;
-    const slackChannel =
-      process.env.SLACK_CHANNEL_ID || process.env.SLACK_DEFAULT_CHANNEL;
+    // Routed by AUDIENCE rather than posted to one channel for everything.
+    // Platform health and a fraud reminder used to arrive side by side in the
+    // same channel with different owners. Falls back to SLACK_CHANNEL_ID when
+    // the audience channel is unset, so partial configuration behaves exactly
+    // as before rather than dropping messages.
+    const { resolveSlackChannel } = await import("./slackChannelRouting");
+    const { channel: slackChannel } = resolveSlackChannel(notif.module);
     if (!slackToken || !slackChannel) return;
 
     const { WebClient } = await import("@slack/web-api");
