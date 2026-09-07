@@ -18,9 +18,36 @@ const SRC = readFileSync(
   join(__dirname, "../../src/utils/scheduledJobs.ts"),
   "utf8",
 );
-const BODY = /export async function runKpiVisibilityWatchdog[\s\S]*?\n\}/.exec(
+/**
+ * The watchdog's body.
+ *
+ * The terminator is `\n}` NOT followed by `>`. The function's return type is a
+ * multi-line object:
+ *
+ *     export async function runKpiVisibilityWatchdog(): Promise<{
+ *       ran: boolean;
+ *       ...
+ *     }> {
+ *
+ * so `}> {` puts a closing brace in column 0 and the non-greedy match stopped
+ * there. BODY was the 113-character SIGNATURE, and all five assertions below
+ * failed against it with messages that pointed at the implementation rather
+ * than at this line — "expected '' to contain 'catch'" came from slicing
+ * between two indexOf calls that both returned -1.
+ */
+const BODY = /export async function runKpiVisibilityWatchdog[\s\S]*?\n\}(?!>)/.exec(
   SRC,
 )![0];
+
+// Fail loudly, and here, if the extraction ever truncates again. Without this
+// a future signature change turns every assertion below into a misleading
+// claim about the implementation.
+if (!BODY.includes("verifySeededKpiVisibility")) {
+  throw new Error(
+    `runKpiVisibilityWatchdog body extraction failed — got ${BODY.length} chars, ` +
+      `which does not look like the function body. Check the terminator regex.`,
+  );
+}
 
 describe("runKpiVisibilityWatchdog", () => {
   it("checks for orphan values", () => {

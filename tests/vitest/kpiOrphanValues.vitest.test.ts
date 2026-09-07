@@ -35,6 +35,16 @@ const DB = readFileSync(
   "utf8",
 );
 
+/**
+ * Source with comments removed, for assertions about CODE.
+ *
+ * Anything that locates a construct by string index must scan this, not the raw
+ * text: a comment explaining the very thing being asserted will otherwise match
+ * first and shift every offset derived from it.
+ */
+const stripComments = (s: string) =>
+  s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
 /** Body of a named exported function in kpiDatabase.ts. */
 const fn = (name: string) =>
   new RegExp(`export async function ${name}\\([\\s\\S]*?\\n\\}`).exec(DB)![0];
@@ -157,10 +167,17 @@ describe("the purge", () => {
 
   it("never lets a failed audit write fail the purge", () => {
     // logEvent rethrows, and event_logs writes have failed in prod before.
-    const body = /export async function purgeOrphanAutoValues[\s\S]*?\n\}/.exec(
-      SRC,
-    )![0];
+    //
+    // Scanned with comments stripped. The comment above the try block explains
+    // that "logEvent rethrows", so indexOf("logEvent") landed in the PROSE four
+    // lines before the `try {` it was meant to find, and the slice ended too
+    // early to contain it. The code was correct the whole time. (check-i18n.cjs
+    // has the same trap, reading t('key') inside comments.)
+    const body = stripComments(
+      /export async function purgeOrphanAutoValues[\s\S]*?\n\}/.exec(SRC)![0],
+    );
     const auditIdx = body.indexOf("logEvent");
+    expect(auditIdx).toBeGreaterThan(-1);
     expect(body.slice(0, auditIdx)).toContain("try {");
     expect(body.slice(auditIdx)).toContain("catch");
   });
