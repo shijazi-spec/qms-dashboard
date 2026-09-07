@@ -249,6 +249,8 @@ async function sendEmailNotification(notif: Notification): Promise<void> {
 }
 
 async function sendSlackNotification(notif: Notification): Promise<void> {
+  // Declared outside the try so the catch can name the channel that refused.
+  let slackChannel: string | null = null;
   try {
     const slackToken = process.env.SLACK_BOT_TOKEN;
     // Routed by AUDIENCE rather than posted to one channel for everything.
@@ -257,7 +259,7 @@ async function sendSlackNotification(notif: Notification): Promise<void> {
     // the audience channel is unset, so partial configuration behaves exactly
     // as before rather than dropping messages.
     const { resolveSlackChannel } = await import("./slackChannelRouting");
-    const { channel: slackChannel } = resolveSlackChannel(notif.module);
+    slackChannel = resolveSlackChannel(notif.module).channel;
     if (!slackToken || !slackChannel) return;
 
     const { WebClient } = await import("@slack/web-api");
@@ -273,8 +275,22 @@ async function sendSlackNotification(notif: Notification): Promise<void> {
     await pool.query(`UPDATE notifications SET sent_at = NOW() WHERE id = $1`, [
       notif.id,
     ]);
-  } catch (err) {
-    logger.error("[NotificationHub] Slack send failed:", err);
+  } catch (err: any) {
+    // Name the fix, not just the failure. The single most common cause of a
+    // silent audience channel is a brand-new channel the bot was never invited
+    // to: Slack answers `not_in_channel` / `channel_not_found`, the send is
+    // swallowed here, and the channel simply stays empty — which reads as
+    // "nothing to report" rather than "misconfigured".
+    const slackCode = err?.data?.error || err?.code || "";
+    if (slackCode === "not_in_channel" || slackCode === "channel_not_found") {
+      logger.error(
+        `[NotificationHub] Slack refused channel "${slackChannel}" (${slackCode}). ` +
+          `The bot is not a member. Invite it in that channel (/invite @<app>) — ` +
+          `until then every notification routed there is silently dropped.`,
+      );
+    } else {
+      logger.error("[NotificationHub] Slack send failed:", err);
+    }
   }
 }
 
