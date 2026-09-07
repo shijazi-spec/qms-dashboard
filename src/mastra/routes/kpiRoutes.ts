@@ -863,8 +863,22 @@ export const kpiRoutes = [
             broken.length
               ? "A team is showing fewer KPIs than its seeder writes. The rows may exist but be unreadable — check is_active for NULL and the owner_name spelling."
               : null,
-            orphans.length
-              ? `${orphans.length} value(s) written by a calculator sit on KPIs now marked manual. They are suppressed from display; POST /api/kpis/orphan-values/purge removes them for good.`
+            orphans.filter((o) => !o.has_calculator).length
+              ? `${orphans.filter((o) => !o.has_calculator).length} value(s) written by a calculator that no longer exists sit on KPIs now marked manual. Suppressed from display; POST /api/kpis/orphan-values/purge removes them for good.`
+              : null,
+            // Reported separately and named differently on purpose: a purge
+            // does NOT fix these. The next recalc writes them again, because
+            // the calculator is still registered under that code while the
+            // definition says manual. Someone has to decide which of the two
+            // is right about what the KPI measures.
+            orphans.filter((o) => o.has_calculator).length
+              ? `${orphans.filter((o) => o.has_calculator).length} value(s) come from a LIVE calculator registered under a KPI whose definition is marked manual — the definition and the calculator disagree about what is being measured (${[
+                  ...new Set(
+                    orphans
+                      .filter((o) => o.has_calculator)
+                      .map((o) => o.kpi_code),
+                  ),
+                ].join(", ")}). Purging will not fix this; the code needs one owner.`
               : null,
           ].filter(Boolean);
           return c.json({
@@ -878,6 +892,7 @@ export const kpiRoutes = [
               value: o.actual_value,
               period_end: o.period_end,
               written_at: o.created_at,
+              has_calculator: o.has_calculator,
             })),
             ...(orphanError ? { orphanError } : {}),
             ...(problems.length ? { problem: problems.join(" ") } : {}),
@@ -940,10 +955,21 @@ export const kpiRoutes = [
             );
           const dryRun =
             c.req.query("dryRun") === "1" || c.req.query("dryRun") === "true";
+          // ?code= clears one KPI without disturbing others; ?includeLive=1
+          // also deletes rows a registered calculator would recreate (only
+          // useful once that calculator is gone — see has_calculator).
+          const code = c.req.query("code") || undefined;
+          const includeLive =
+            c.req.query("includeLive") === "1" ||
+            c.req.query("includeLive") === "true";
           const { purgeOrphanAutoValues } = await import(
             "../../utils/kpiOrphanValues"
           );
-          const result = await purgeOrphanAutoValues({ dryRun });
+          const result = await purgeOrphanAutoValues({
+            dryRun,
+            code,
+            includeLive,
+          });
           return c.json({ success: true, ...result });
         } catch (error) {
           safeLogger.error("Error purging orphan KPI values:", error);

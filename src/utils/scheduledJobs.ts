@@ -437,6 +437,164 @@ async function notificationPostedWithinHours(
   }
 }
 
+/**
+ * In-process fallback for the CS LIFECYCLE nightly scan.
+ *
+ * The Inngest cron `duplicate-radar-cs-lifecycle-scan` (default 03:45 UTC) was
+ * the ONLY driver, and Inngest crons do not fire on this deployment — so unlike
+ * the overlap scan, which at least ran without telling anyone, this one did not
+ * run at all. The 12 CS lifecycle rules were evaluated only when someone opened
+ * the tab.
+ *
+ * STALENESS MARKER: scanner_run_log, not the scan's own output. The overlap
+ * scan can be dated from `duplicate_clusters.cs_overlap_verdict` because it
+ * persists a verdict; the lifecycle scan is read-only — it derives violations
+ * from raw_data every time and stores nothing — so there is no row whose age
+ * means "last scanned". event_logs would have been the other candidate and is
+ * deliberately not used: audit writes are currently failing in production
+ * (AUDIT WRITE FAILED), and a gate that silently fails open would re-run this
+ * scan on every 45-minute tick.
+ *
+ * summaryOnly: the notification needs five integers. The full path builds,
+ * sorts and serialises thousands of violation rows that nothing here reads, and
+ * this process is already tight on both DB connections and memory.
+ *
+ * NO AUTO-CAPA. The Inngest function opens corrective actions off this scan;
+ * that is deliberately left out. Auto-CAPA is frozen
+ * (AUTO_CAPA_GLOBAL_ENABLED=false) and quietly reviving it through a fallback —
+ * writing CAPA records nobody asked for — is exactly the kind of scope the
+ * fallback should not take on itself.
+ */
+export async function runCsLifecycleScanIfStale(
+  maxAgeHours = 25,
+): Promise<{ ran: boolean; ageHours: number; result?: any }> {
+  const scanner = "cs-lifecycle-scan";
+  const pool = sharedPool;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS scanner_run_log (
+      id SERIAL PRIMARY KEY,
+      scanner_name VARCHAR(100) NOT NULL,
+      ran_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      success BOOLEAN NOT NULL DEFAULT true,
+      summary JSONB
+    );
+    CREATE INDEX IF NOT EXISTS idx_scanner_run_log_name_time ON scanner_run_log(scanner_name, ran_at DESC);
+  `);
+  const r = await pool.query<{ hours: number | null }>(
+    `SELECT EXTRACT(EPOCH FROM (NOW() - MAX(ran_at)))/3600 AS hours
+       FROM scanner_run_log WHERE scanner_name=$1 AND success=true`,
+    [scanner],
+  );
+  const ageHours = r.rows[0]?.hours == null ? Infinity : Number(r.rows[0].hours);
+  if (ageHours < maxAgeHours) {
+    return { ran: false, ageHours };
+  }
+
+  logger.info(
+    `[CsLifecycle Fallback] Last scan was ${ageHours === Infinity ? "never" : ageHours.toFixed(1) + "h ago"} (>= ${maxAgeHours}h); running scan.`,
+  );
+  try {
+    const { scanCsLifecycleViolations, initDuplicateRadarTables } =
+      await import("./duplicateRadarDatabase");
+    await initDuplicateRadarTables();
+    const result = await scanCsLifecycleViolations({
+      limit: 5000,
+      summaryOnly: true,
+    });
+
+    const critical = Number(result?.summary?.by_severity?.critical || 0);
+    const warning = Number(result?.summary?.by_severity?.warning || 0);
+    logger.info(
+      `[CsLifecycle Fallback] Scan complete: ${result?.summary?.total_violations || 0} violation(s) across ${result?.summary?.total_cs_deals || 0} CS deals (${critical} critical, ${warning} warning)`,
+    );
+
+    // Audit trail, mirroring the Inngest step. Best-effort — a logging hiccup
+    // must never turn a completed scan into a failed one.
+    try {
+      const { logEvent } = await import("./eventLogsDatabase");
+      await logEvent({
+        actionType: "scan",
+        entityType: "duplicate_radar_cs_lifecycle",
+        module: "duplicates",
+        severity: critical > 0 ? "WARNING" : "INFO",
+        description: `CS Lifecycle scan complete (fallback): ${result?.summary?.total_violations || 0} violation(s) across ${result?.summary?.total_cs_deals || 0} CS deals (${critical} critical, ${warning} warning).`,
+        newValue: result?.summary,
+      });
+    } catch (e) {
+      logger.warn("[CsLifecycle Fallback] event_logs write failed:", e);
+    }
+
+    await notifyCsLifecycleViolations(critical, warning);
+
+    // Stamped only on success, so a failed scan retries on the next tick
+    // instead of being treated as this cycle's run.
+    await pool.query(
+      `INSERT INTO scanner_run_log (scanner_name, success, summary) VALUES ($1, true, $2)`,
+      [scanner, JSON.stringify(result?.summary ?? {})],
+    );
+    return { ran: true, ageHours, result };
+  } catch (err) {
+    logger.error("[CsLifecycle Fallback] Scan failed:", err);
+    try {
+      await pool.query(
+        `INSERT INTO scanner_run_log (scanner_name, success, summary) VALUES ($1, false, $2)`,
+        [scanner, JSON.stringify({ error: String(err) })],
+      );
+    } catch {
+      /* the failure record is best-effort too */
+    }
+    return { ran: false, ageHours };
+  }
+}
+
+/**
+ * Tell the CS channel about critical lifecycle violations.
+ *
+ * Mirrors the Inngest `notify-on-critical` step — same event type, wording and
+ * "high" priority — so the CS team sees one message whichever driver ran.
+ *
+ * Gated on critical > 0, matching Inngest. Warnings are carried IN the message
+ * but never trigger it on their own: the message states a one-working-day SLA,
+ * which is a claim about criticals.
+ *
+ * Same persistent 20h dedup as the overlap alert, and the same fail-open
+ * behaviour — see notificationPostedWithinHours.
+ */
+async function notifyCsLifecycleViolations(
+  critical: number,
+  warning: number,
+): Promise<void> {
+  try {
+    if (critical === 0) {
+      logger.info(
+        "[CsLifecycle Fallback] 0 critical violation(s) — not posting",
+      );
+      return;
+    }
+    if (await notificationPostedWithinHours("cs_lifecycle_violations", 20)) {
+      logger.info(
+        "[CsLifecycle Fallback] Violation alert already posted in the last 20h — skipping",
+      );
+      return;
+    }
+    const { notifyEvent } = await import("./notificationHub");
+    await notifyEvent({
+      type: "cs_lifecycle_violations",
+      module: "cs_lifecycle",
+      title: `CS Lifecycle: ${critical} critical compliance violation(s)`,
+      message: `Nightly scan found ${critical} critical and ${warning} warning violation(s) on CS-tracked deals. Resolve critical findings within one working day per CS team SLA.`,
+      entityType: "cs_lifecycle_violations",
+      actionUrl: "/duplicates",
+      priority: "high",
+    });
+    logger.info(
+      `[CsLifecycle Fallback] Posted CS lifecycle alert: ${critical} critical`,
+    );
+  } catch (err) {
+    logger.error("[CsLifecycle Fallback] Notification failed:", err);
+  }
+}
+
 export async function runKPIAutoCalcIfStale(
   maxAgeHours = 24,
 ): Promise<{ ran: boolean; ageHours: number; result?: KPIAutoCalcResult }> {
@@ -705,14 +863,26 @@ export async function runKpiVisibilityWatchdog(): Promise<{
       const { findOrphanAutoValues } = await import("./kpiOrphanValues");
       const orphans = await findOrphanAutoValues();
       orphanCount = orphans.length;
-      if (orphanCount) {
+      // Two faults, one symptom, opposite remedies — say which is which, or
+      // the reader purges the collisions and watches them come back.
+      const dead = orphans.filter((o) => !o.has_calculator);
+      const collisions = orphans.filter((o) => o.has_calculator);
+      if (dead.length) {
         logger.warn(
-          `⚠️ [KpiWatchdog] ${orphanCount} orphan auto-value(s) — a calculator wrote them, ` +
-            `the KPI is now manual, nothing maintains them: ` +
-            orphans
-              .map((o) => `${o.kpi_code}=${o.actual_value}`)
-              .join(", ") +
+          `⚠️ [KpiWatchdog] ${dead.length} orphan auto-value(s) — the calculator that wrote ` +
+            `them is gone and the KPI is manual, so nothing maintains them: ` +
+            dead.map((o) => `${o.kpi_code}=${o.actual_value}`).join(", ") +
             `. Suppressed from display; POST /api/kpis/orphan-values/purge to remove.`,
+        );
+      }
+      if (collisions.length) {
+        logger.error(
+          `❌ [KpiWatchdog] ${collisions.length} value(s) from a LIVE calculator on a KPI ` +
+            `defined as manual — definition and calculator disagree about what is measured: ` +
+            collisions
+              .map((o) => `${o.kpi_code} (${o.kpi_name})=${o.actual_value}`)
+              .join(", ") +
+            `. A purge will NOT fix this; the next recalc rewrites the row.`,
         );
       }
     } catch (e) {

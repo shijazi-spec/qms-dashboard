@@ -66,6 +66,40 @@ export interface OrphanAutoValue {
   period_end: string | null;
   created_at: string | null;
   calc_details: unknown;
+  /**
+   * TRUE when a calculator is still registered under this KPI's code.
+   *
+   * The sweep of 2026-09-07 found two different faults wearing the same
+   * symptom, and the remedies are opposites:
+   *
+   *   DEAD (false) — CS-KPI-21. The calculator was deleted; the value it wrote
+   *   is inert. Purging it is the fix, and it stays gone.
+   *
+   *   LIVE COLLISION (true) — SPEC-KPI-02. A calculator IS registered under
+   *   that code and writes to it every recalc, but the definition is seeded
+   *   `manual`. Purging is pointless — the next recalc puts the row straight
+   *   back — and worse, the sweep would read clean in between. The real fault
+   *   is that the definition and the calculator disagree about what the KPI
+   *   measures, and only a person can say which one is right.
+   *
+   * Deleting a row that a live calculator recreates is how a defect gets
+   * marked resolved four times.
+   */
+  has_calculator: boolean;
+}
+
+/**
+ * KPI codes with a registered process calculator. Empty on failure rather than
+ * throwing: an unknown registry must not make the sweep claim every row is
+ * dead and safe to delete.
+ */
+async function calculatorCodes(): Promise<Set<string>> {
+  try {
+    const { PROCESS_CALCULATORS } = await import("./kpiProcessCalc");
+    return new Set(Object.keys(PROCESS_CALCULATORS));
+  } catch {
+    return new Set();
+  }
 }
 
 /**
@@ -100,16 +134,21 @@ export async function findOrphanAutoValues(): Promise<OrphanAutoValue[]> {
       WHERE ${ORPHAN_VALUE_SQL}
       ORDER BY kv.period_end DESC, kv.id DESC`,
   );
+  const live = await calculatorCodes();
   return res.rows.map((r: any) => ({
     ...r,
     actual_value: r.actual_value === null ? null : Number(r.actual_value),
+    has_calculator: live.has(String(r.kpi_code)),
   }));
 }
 
 export interface PurgeResult {
   dryRun: boolean;
   deleted: number;
+  /** What was (or would be) deleted. */
   rows: OrphanAutoValue[];
+  /** Left alone because a live calculator would recreate them. */
+  skipped: OrphanAutoValue[];
 }
 
 /**
@@ -119,15 +158,30 @@ export interface PurgeResult {
  * `DELETE ... WHERE <predicate>` on a value table is not a statement to leave
  * room for surprises in.
  *
- * `dryRun` reports what would go without touching anything.
+ * `dryRun`      reports what would go without touching anything.
+ * `code`        restricts to one kpi_code, for clearing a known bad figure
+ *               without disturbing anything still under discussion.
+ * `includeLive` also deletes rows whose code still has a calculator. OFF by
+ *               default: those come straight back on the next recalc, so
+ *               deleting them buys a clean sweep and nothing else. Only
+ *               meaningful once the calculator itself is gone.
  */
 export async function purgeOrphanAutoValues(
-  opts: { dryRun?: boolean } = {},
+  opts: { dryRun?: boolean; code?: string; includeLive?: boolean } = {},
 ): Promise<PurgeResult> {
   const dryRun = opts.dryRun === true;
-  const rows = await findOrphanAutoValues();
+  const all = await findOrphanAutoValues();
+  const inScope = opts.code
+    ? all.filter((r) => String(r.kpi_code) === opts.code)
+    : all;
+  const skipped = opts.includeLive
+    ? []
+    : inScope.filter((r) => r.has_calculator);
+  const rows = opts.includeLive
+    ? inScope
+    : inScope.filter((r) => !r.has_calculator);
   if (dryRun || rows.length === 0) {
-    return { dryRun, deleted: 0, rows };
+    return { dryRun, deleted: 0, rows, skipped };
   }
   const { pool } = await import("./kpiDatabase");
   const ids = rows.map((r) => Number(r.value_id));
@@ -161,5 +215,5 @@ export async function purgeOrphanAutoValues(
     /* audit is best-effort; the purge itself already succeeded */
   }
 
-  return { dryRun, deleted: res.rowCount ?? 0, rows };
+  return { dryRun, deleted: res.rowCount ?? 0, rows, skipped };
 }

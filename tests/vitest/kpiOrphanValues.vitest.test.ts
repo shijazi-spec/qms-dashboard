@@ -211,3 +211,53 @@ describe("the sweep covers every team, not just the one that broke", () => {
     expect(SRC).toContain('await import("./kpiDatabase")');
   });
 });
+
+/**
+ * The first real sweep (2026-09-07) returned five rows and TWO different
+ * faults. CS-KPI-21 was dead — its calculator had been deleted. SPEC-KPI-02
+ * was a live collision: `calcComplianceObligationTracking` is still registered
+ * under that code and writes to it every recalc, while the definition is
+ * seeded manual and named for a different metric entirely.
+ *
+ * Purging a live collision deletes a row that comes back on the next recalc,
+ * and buys a clean sweep in between. That is worse than not purging: it looks
+ * fixed.
+ */
+describe("dead orphans and live collisions are told apart", () => {
+  const purge = () =>
+    /export async function purgeOrphanAutoValues[\s\S]*?\n\}/.exec(SRC)![0];
+
+  it("the sweep marks whether a calculator still exists for the code", () => {
+    const body = /export async function findOrphanAutoValues[\s\S]*?\n\}/.exec(
+      SRC,
+    )![0];
+    expect(body).toContain("has_calculator");
+    expect(SRC).toContain("PROCESS_CALCULATORS");
+  });
+
+  it("an unreadable calculator registry does not mark everything dead", () => {
+    // Empty set ⇒ has_calculator false for every row ⇒ the purge would happily
+    // delete rows a live calculator recreates. Failing closed is not possible
+    // here, so the catch must at least not be silent about what it assumed.
+    const helper = /async function calculatorCodes[\s\S]*?\n\}/.exec(SRC)![0];
+    expect(helper).toContain("catch");
+    expect(helper).toContain("new Set()");
+  });
+
+  it("the purge leaves live collisions alone by default", () => {
+    expect(purge()).toContain("includeLive");
+    expect(purge()).toContain("r.has_calculator");
+  });
+
+  it("reports what it skipped rather than silently narrowing", () => {
+    // A purge that quietly declines to delete something is the same class of
+    // problem as the value it was meant to remove.
+    expect(purge()).toContain("skipped");
+  });
+
+  it("can be aimed at a single KPI code", () => {
+    // So one known-bad figure can be cleared without touching rows whose
+    // ownership is still an open question.
+    expect(purge()).toContain("opts.code");
+  });
+});
