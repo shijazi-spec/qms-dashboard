@@ -426,31 +426,42 @@ const CHECKS: Check[] = [
     },
   },
   {
+    // id kept as `endpoint_audit_latest` so the per-check history in
+    // health_pulse_runs stays continuous, even though this no longer speaks
+    // HTTP. The label says what it actually does now.
     id: "endpoint_audit_latest",
-    label: "/api/audit/latest returns valid shape",
+    label: "Latest audit result has usable shape",
     category: "endpoints",
     run: async () => {
-      const adminKey = process.env.ADMIN_API_KEY;
-      if (!adminKey) {
-        return { status: "skipped", message: "ADMIN_API_KEY not configured" };
-      }
-      const res = await fetch(`${SELF_BASE_URL}/api/audit/latest`, {
-        headers: { "X-Admin-Key": adminKey },
-        signal: AbortSignal.timeout(8000),
-      });
-      if (!res.ok) {
+      // Reads the data DIRECTLY instead of calling /api/audit/latest over HTTP.
+      //
+      // That HTTP call could never have succeeded. It sent X-Admin-Key, but
+      // checkApiAuth accepts the shared admin key ONLY on /api/admin/* and
+      // /api/inngest — every other /api/* route requires a real user session.
+      // So this check reported "HTTP 401" permanently, and the failure was in
+      // the CHECK, not in the audit data it was supposed to be watching. That
+      // is worse than no check: it burns a permanent red on the dashboard and
+      // teaches people that a failing pulse item is normal.
+      //
+      // Widening the middleware to accept the key here was the wrong fix — the
+      // comment on that boundary is explicit that a shared key must not become
+      // a universal credential for regulated business data. The pulse runs
+      // in-process with database access, so it does not need HTTP at all.
+      //
+      // What is lost: the HTTP/serialization layer is no longer exercised. What
+      // is kept is what the original check said it cared about — "the response
+      // existing but being structurally empty" — which is a property of the
+      // DATA. /api/health above still covers the HTTP path end to end.
+      const { getLatestAuditResult } = await import("./database");
+      const body: any = await getLatestAuditResult({});
+      if (!body || typeof body !== "object") {
         return {
           status: "fail",
-          message: `HTTP ${res.status}`,
-          details: { status: res.status },
+          message: "No audit result available",
         };
       }
-      const body: any = await res.json().catch(() => null);
-      if (!body || typeof body !== "object") {
-        return { status: "fail", message: "Response is not JSON" };
-      }
-      // Accept a number of plausible top-level shapes; the bug we care about is
-      // the response existing but being structurally empty.
+      // Accept a number of plausible shapes; the bug we care about is a result
+      // existing but being structurally empty.
       const hasContent =
         Array.isArray(body.audits) ||
         Array.isArray(body.all_issues) ||
@@ -460,7 +471,7 @@ const CHECKS: Check[] = [
       if (!hasContent) {
         return {
           status: "fail",
-          message: "Endpoint returned 200 but response is empty/unrecognized",
+          message: "Audit result exists but is empty/unrecognized",
           details: { keys: Object.keys(body) },
         };
       }
