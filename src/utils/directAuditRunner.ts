@@ -948,10 +948,11 @@ export async function runDirectAudit(
     });
     logger?.info("✅ [DirectAudit] Audit results saved to database successfully");
 
-    // Slack notification — audit completed. Posts to SLACK_CHANNEL_ID using
-    // SLACK_BOT_TOKEN. Failures are swallowed so a Slack outage never blocks
-    // the audit pipeline. This is in addition to the internal audit_notifications
-    // table updated by fireAuditCompletedTrigger below.
+    // Slack notification — audit completed. Routed to the PLATFORM audience
+    // (see below) using SLACK_BOT_TOKEN. Failures are swallowed so a Slack
+    // outage never blocks the audit pipeline. This is in addition to the
+    // internal audit_notifications table updated by fireAuditCompletedTrigger
+    // below, and to the per-department summaries posted after it.
     try {
       const slackFlag = String(
         process.env.DIRECT_AUDIT_SLACK_NOTIFY ?? "true",
@@ -960,10 +961,27 @@ export async function runDirectAudit(
         slackFlag,
       );
       const slackToken = process.env.SLACK_BOT_TOKEN || process.env.SLACK_API_TOKEN;
-      const slackChannel =
-        process.env.DIRECT_AUDIT_SLACK_CHANNEL ||
-        process.env.SLACK_CHANNEL_ID ||
-        process.env.SLACK_DEFAULT_CHANNEL;
+
+      // The COMBINED scorecard — every module, both segments, one score. That
+      // is platform content, so it goes to the platform audience.
+      //
+      // It used to follow DIRECT_AUDIT_SLACK_CHANNEL, which production sets to
+      // the SDR/Sales channel (C0AS5G4UN91). The result was that
+      // wp-sdr-sales-audits received a cross-section summary carrying
+      // Marketplace and CS numbers, on top of its own department summary —
+      // against Sarah 2026-09-07: "my issue with the sales sdr channel shall
+      // have nothing regarding other sections."
+      //
+      // The PER-DEPARTMENT summaries (postPerDepartmentAuditSummaries, below)
+      // are unaffected: each already routes itself, and the SDR/Sales one still
+      // lands in the SDR/Sales channel. That is the audit-per-department split
+      // she asked for; this combined post is the thing that broke it.
+      //
+      // DIRECT_AUDIT_SLACK_CHANNEL is deliberately no longer consulted here.
+      // Honouring it would reintroduce exactly the routing this removes, and
+      // its only remaining reader is the digest-format fallback below.
+      const { resolveSlackChannel } = await import("./slackChannelRouting");
+      const slackChannel = resolveSlackChannel("audits").channel;
 
       if (directAuditSlackEnabled && slackToken && slackChannel && totalRecordsAudited === 0) {
         // ROOT-CAUSE GUARD (2026-05-28):
@@ -1254,13 +1272,12 @@ export async function runDirectAudit(
             window,
             // Direct-audit fallback should notify immediately for this audit run.
             enforceIdempotency: false,
-            channelOverride:
-              process.env.DIRECT_AUDIT_SLACK_CHANNEL ||
-              process.env.DIGEST_SLACK_CHANNEL_WEEKLY ||
-              process.env.DIGEST_SLACK_CHANNEL ||
-              process.env.SLACK_CHANNEL_ID ||
-              process.env.SLACK_DEFAULT_CHANNEL ||
-              undefined,
+            // No channelOverride. This chain used to begin with
+            // DIRECT_AUDIT_SLACK_CHANNEL and then repeat, verbatim, the
+            // resolution sendDigestSlack already does — so its only real effect
+            // was to push a platform-wide digest into the SDR/Sales channel,
+            // and to set an override that bypasses the platform mute. Letting
+            // sendDigestSlack resolve its own destination fixes both.
           });
           logger?.info("✅ [DirectAudit] Digest-format fallback notification attempted", {
             success: fallbackResult.success,

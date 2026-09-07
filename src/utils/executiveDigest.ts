@@ -2262,6 +2262,24 @@ export async function sendDigestSlack(
     return { success: true, skipped: true, method: "slack-no-channel", runKey, cadence };
   }
 
+  // The executive digest is platform content and, with DIGEST_SLACK_CHANNEL
+  // unset, lands in the platform channel via SLACK_CHANNEL_ID — so it honours
+  // the same mute (Sarah 2026-09-07, "keep them quiet too until I finish the
+  // in-platform view"). An explicit channelOverride means a person chose a
+  // destination on purpose and is left alone; `preview` returns above and is
+  // untouched either way.
+  if (!options.channelOverride) {
+    const { platformAnnouncementsMuted, noteSuppressedPlatformPost } =
+      await import("./slackChannelRouting");
+    if (platformAnnouncementsMuted()) {
+      noteSuppressedPlatformPost(
+        `${cadenceLabel(cadence)} executive digest`,
+        "platform",
+      );
+      return { success: true, skipped: true, method: "slack-muted", runKey, cadence };
+    }
+  }
+
   if (options.enforceIdempotency !== false && (await hasSuccessfulDigestRun(runKey))) {
     return {
       success: true,

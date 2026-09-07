@@ -28,16 +28,24 @@ export const adminApiRoutes = [
           if (!hasValidAdminApiKey(c) && !isAdminAuthorized(c)) {
             return c.json({ error: "Authentication required" }, 401);
           }
-          const { AUDIENCE_ENV_VARS, resolveSlackChannel } = await import(
-            "../../utils/slackChannelRouting"
-          );
+          const {
+            AUDIENCE_ENV_VARS,
+            resolveSlackChannel,
+            platformAnnouncementsMuted,
+            getSuppressedPlatformPosts,
+            PLATFORM_ANNOUNCEMENTS_ENV,
+          } = await import("../../utils/slackChannelRouting");
 
           const audiences: Record<string, unknown> = {};
           for (const [audience, vars] of Object.entries(AUDIENCE_ENV_VARS)) {
             const setVar = (vars as string[]).find((v) =>
               (process.env[v] || "").trim(),
             );
-            const { channel } = resolveSlackChannel(
+            // ignoreMute: this endpoint reports the WIRING. A muted platform
+            // channel resolves to null for senders, and showing that here would
+            // read as "not configured" — the exact confusion this endpoint
+            // exists to prevent. The mute is reported separately below.
+            const { channel, muted } = resolveSlackChannel(
               audience === "sales_sdr"
                 ? "calls"
                 : audience === "cs"
@@ -45,20 +53,31 @@ export const adminApiRoutes = [
                   : audience === "marketplace"
                     ? "marketplace"
                     : "platform",
+              null,
+              process.env,
+              { ignoreMute: true },
             );
             audiences[audience] = {
               channel: channel || null,
               resolvedVia: setVar || "FALLBACK",
               fallingBack: !setVar,
+              muted,
             };
           }
+
+          const suppressed = getSuppressedPlatformPosts();
 
           const fallback =
             (process.env.SLACK_CHANNEL_ID || "").trim() ||
             (process.env.SLACK_DEFAULT_CHANNEL || "").trim() ||
             null;
 
-          // These pick their own channel and never consult the router.
+          // Channel env vars outside the audience router. Reported because a
+          // stray value here silently overrides the routing above.
+          // DIRECT_AUDIT_SLACK_CHANNEL is listed but NO LONGER READ by the
+          // combined audit post — it used to send a cross-section scorecard to
+          // the SDR/Sales channel. Shown so a leftover secret is visible rather
+          // than mysterious.
           const overrides: Record<string, string | null> = {};
           for (const v of [
             "DIRECT_AUDIT_SLACK_CHANNEL",
@@ -80,6 +99,15 @@ export const adminApiRoutes = [
               Object.values(audiences).some((a: any) => a.fallingBack),
             audiences,
             featureOverrides: overrides,
+            // The platform channel is muted until the in-app view replaces it
+            // (Sarah 2026-09-07). Reported with what the mute swallowed since
+            // boot, so "the channel is quiet" is never mistaken for "the sender
+            // is broken". Counts reset on restart — they are a diagnostic, not
+            // a record; the durable copy is the in-app notification.
+            platformChannelMuted: platformAnnouncementsMuted(),
+            platformMuteEnvVar: PLATFORM_ANNOUNCEMENTS_ENV,
+            suppressedPlatformPosts: suppressed.count,
+            suppressedPlatformRecent: suppressed.recent,
           });
         } catch (error) {
           logger.error("[Admin] slack-routing failed:", error);

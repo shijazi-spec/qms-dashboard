@@ -266,8 +266,23 @@ async function sendSlackNotification(notif: Notification): Promise<void> {
     // same channel with different owners. Falls back to SLACK_CHANNEL_ID when
     // the audience channel is unset, so partial configuration behaves exactly
     // as before rather than dropping messages.
-    const { resolveSlackChannel } = await import("./slackChannelRouting");
-    slackChannel = resolveSlackChannel(notif.module).channel;
+    const { resolveSlackChannel, noteSuppressedPlatformPost } = await import(
+      "./slackChannelRouting"
+    );
+    const routed = resolveSlackChannel(notif.module);
+    slackChannel = routed.channel;
+
+    // Muted platform channel: the in-app notification has already been written
+    // by the caller, so the content is not lost — only the announcement is.
+    // Recorded and logged rather than dropped on the floor, so a quiet channel
+    // can be told apart from a broken sender.
+    if (routed.muted) {
+      noteSuppressedPlatformPost(notif.title, notif.module);
+      logger.info(
+        `[NotificationHub] Platform Slack post suppressed (PLATFORM_SLACK_ANNOUNCEMENTS is not "true"): ${notif.title}`,
+      );
+      return;
+    }
     if (!slackToken || !slackChannel) return;
 
     const { WebClient } = await import("@slack/web-api");

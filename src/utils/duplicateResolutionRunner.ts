@@ -302,6 +302,43 @@ export function isResolutionSlackConfigured(): boolean {
   return !!process.env.SLACK_BOT_TOKEN && !!getResolutionSlackChannel();
 }
 
+/**
+ * Whether the SCHEDULED posts from this file should stay quiet.
+ *
+ * This channel IS the platform channel, so it honours the same mute as
+ * everything else routed to `platform` (PLATFORM_SLACK_ANNOUNCEMENTS) — see
+ * slackChannelRouting for why. These senders do not go through the router
+ * (they resolve AUTONOMOUS_RESOLUTION_SLACK_CHANNEL themselves), so the check
+ * has to be repeated here rather than inherited.
+ *
+ * Applies to the automated senders only: the per-tick ping, the resolution
+ * digest and the weekly leadership brief. The operator's "Send test ping"
+ * button and postResolutionMessage stay live — a person pressing a button is
+ * not the noise being muted, and a mute that also breaks the wiring test
+ * cannot be verified before it is turned off again.
+ *
+ * Async import, not require: this file is ESM, where `require` is not defined
+ * at all. A require here would throw on every call, hit the catch below, and
+ * report "not muted" — a mute that never mutes and never says why.
+ */
+async function resolutionAnnouncementsMuted(title: string): Promise<boolean> {
+  try {
+    const { platformAnnouncementsMuted, noteSuppressedPlatformPost } =
+      await import("./slackChannelRouting");
+    if (!platformAnnouncementsMuted()) return false;
+    noteSuppressedPlatformPost(title, "duplicates");
+    logger.info(
+      `[dup-resolution-runner] platform Slack post suppressed (PLATFORM_SLACK_ANNOUNCEMENTS is not "true"): ${title}`,
+    );
+    return true;
+  } catch {
+    // Never let the mute check itself stop a post. Failing open here means the
+    // worst case is a message Sarah did not want, not a message she needed and
+    // never got.
+    return false;
+  }
+}
+
 /** Resolve the public base URL: explicit env first, else Replit's domain. */
 function publicBaseUrl(): string {
   const explicit = (process.env.PUBLIC_BASE_URL || "").trim().replace(/\/+$/, "");
@@ -340,6 +377,11 @@ async function pingResolutionSlack(summary: ResolutionRunSummary): Promise<void>
     // when there were real applies or errors. Once in assisted mode (applied>0)
     // the per-tick ping returns automatically with real numbers.
     if (summary.applied === 0 && summary.errors === 0) return;
+
+    // Checked AFTER the quiet gates above, so the suppression counter records
+    // only posts that would genuinely have been sent.
+    if (await resolutionAnnouncementsMuted("Autonomous Resolution — run ping"))
+      return;
 
     const icon = summary.errors > 0 ? "🔴" : summary.queued > 0 ? "🟡" : "🟢";
     let breakdownText = "";
@@ -504,10 +546,21 @@ export async function postResolutionMessage(
   }
 }
 
-// Channels the WEEKLY leadership brief posts to. Defaults: #grq-assistant
-// (resolution channel) + #automatic-audits. Override via env (comma-separated
-// channel ids). The bot must be a MEMBER of each channel to post.
-const WEEKLY_BRIEF_CHANNELS_DEFAULT = ["C0B93BCJFFV", "C0AS5G4UN91"];
+/**
+ * Channels the WEEKLY leadership brief posts to.
+ *
+ * Was ["C0B93BCJFFV", "C0AS5G4UN91"] — the platform channel AND the SDR/Sales
+ * one. That predates the channel split: both ids were written when the second
+ * was still #automatic-audits, a shared catch-all. It is now
+ * wp-sdr-sales-audits, and Sarah 2026-09-07: "my issue with the sales sdr
+ * channel shall have nothing regarding other sections."
+ *
+ * The brief is Duplicate Radar / platform content — cluster counts, exposure,
+ * duplicate rate — not findings on the Sales team's own records, so the SDR
+ * channel is dropped. It survives only if someone names it explicitly in
+ * AUTONOMOUS_WEEKLY_BRIEF_CHANNELS. The bot must be a MEMBER of each channel.
+ */
+const WEEKLY_BRIEF_CHANNELS_DEFAULT = ["C0B93BCJFFV"];
 function getWeeklyBriefChannels(): string[] {
   const env = (process.env.AUTONOMOUS_WEEKLY_BRIEF_CHANNELS || "").trim();
   if (env) return env.split(",").map((s) => s.trim()).filter(Boolean);
@@ -682,6 +735,11 @@ export async function postWeeklyExecBrief(
   const posted: string[] = [];
   const errors: string[] = [];
   if (!token) return { ok: false, posted, errors: ["SLACK_BOT_TOKEN not set"] };
+  if (await resolutionAnnouncementsMuted("Weekly Leadership Brief")) {
+    // ok:true — nothing failed. The snapshot above was still recorded, so next
+    // week's week-over-week delta stays correct whether or not this posted.
+    return { ok: true, posted, errors: [] };
+  }
   const text = `📊 *Weekly Leadership Brief*\n\n${brief}\n${resolutionScreenLink()}`;
   const { WebClient } = await import("@slack/web-api");
   const slack = new WebClient(token);
@@ -998,6 +1056,10 @@ export async function postResolutionDigest(opts: {
     const token = process.env.SLACK_BOT_TOKEN;
     const channel = getResolutionSlackChannel();
     if (!token || !channel) return;
+    // Checked before the aggregation queries below — no point spending them on
+    // a message that will not be sent.
+    if (await resolutionAnnouncementsMuted(`Resolution digest — ${opts.label}`))
+      return;
 
     let agentApplies = 0;
     let humanApplies = 0;

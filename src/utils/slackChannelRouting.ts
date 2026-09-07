@@ -141,23 +141,112 @@ export function resolveSlackAudience(
   return MODULE_AUDIENCE[key] ?? "platform";
 }
 
+/* ────────────────────────────────────────────────────────────────────────────
+ * Platform-channel mute
+ * ──────────────────────────────────────────────────────────────────────────*/
+
+/**
+ * The platform channel is muted until this is "true".
+ *
+ * Sarah 2026-09-07: "keep them quiet too until I finish the in-platform view."
+ * The Slack side of grq-platform-status was carrying operational chatter — the
+ * resolution digest, merge-applied pings, the weekly brief, KPI results — that
+ * she is in the middle of rebuilding as an in-app screen. Until that lands,
+ * Slack repeats a story the platform is about to tell better.
+ *
+ * Opt-IN, matching HEALTH_PULSE_SLACK_ALERTS and FRAUD_REMINDERS_ENABLED, so
+ * silence is what you get by doing nothing and noise takes a deliberate act.
+ *
+ * SCOPE, deliberately narrow:
+ *   · Only the `platform` audience. sales_sdr, cs and marketplace keep posting;
+ *     those channels have owners waiting on them.
+ *   · Only AUTOMATED posts. A human pressing "Send test ping" bypasses this —
+ *     muting the thing that proves the wiring works would make the wiring
+ *     impossible to check, which is how a mute becomes a permanent outage.
+ *   · Slack ONLY. notifyEvent still writes the in-app notification, so nothing
+ *     is lost — it just stops being announced. That is the whole point: the
+ *     data keeps flowing to the screen she is building.
+ */
+export const PLATFORM_ANNOUNCEMENTS_ENV = "PLATFORM_SLACK_ANNOUNCEMENTS";
+
+export function platformAnnouncementsMuted(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return (
+    String(env[PLATFORM_ANNOUNCEMENTS_ENV] || "").toLowerCase() !== "true"
+  );
+}
+
+/**
+ * What the mute swallowed, kept in memory so it is never merely silent.
+ *
+ * A mute that leaves no trace is the same failure this codebase keeps hitting:
+ * something happens and nothing says so. Every suppressed post is counted and
+ * the last few are kept, surfaced by GET /api/admin/slack-routing, so "the
+ * channel is quiet" can always be told apart from "the sender is broken".
+ *
+ * In-memory on purpose: it resets on restart, it is diagnostic rather than a
+ * record, and the durable copy is the in-app notification that was written
+ * anyway.
+ */
+const SUPPRESSED_LIMIT = 20;
+let suppressedCount = 0;
+const suppressedRecent: { at: string; title: string; module: string }[] = [];
+
+export function noteSuppressedPlatformPost(
+  title: string,
+  module?: string | null,
+): void {
+  suppressedCount++;
+  suppressedRecent.unshift({
+    at: new Date().toISOString(),
+    title: String(title || "(untitled)").slice(0, 160),
+    module: String(module || "unknown"),
+  });
+  if (suppressedRecent.length > SUPPRESSED_LIMIT) suppressedRecent.pop();
+}
+
+export function getSuppressedPlatformPosts(): {
+  count: number;
+  recent: { at: string; title: string; module: string }[];
+} {
+  return { count: suppressedCount, recent: [...suppressedRecent] };
+}
+
+/** Test seam — the counter is process-global, so tests must be able to clear it. */
+export function __resetSuppressedPlatformPosts(): void {
+  suppressedCount = 0;
+  suppressedRecent.length = 0;
+}
+
 /**
  * Resolve the channel id to post to, or null when Slack is unconfigured.
  *
  * Falls back to SLACK_CHANNEL_ID / SLACK_DEFAULT_CHANNEL so that configuring
  * none of the new variables leaves behaviour exactly as it was.
+ *
+ * Returns `muted: true` when the platform mute applies. The channel comes back
+ * null in that case so every existing caller — all of which already skip on a
+ * null channel — goes quiet without being touched. Pass `ignoreMute` to read
+ * the real routing anyway, which is what the admin endpoint and the operator's
+ * test button do.
  */
 export function resolveSlackChannel(
   module?: string | null,
   segment?: string | null,
   env: NodeJS.ProcessEnv = process.env,
-): { channel: string | null; audience: SlackAudience } {
+  opts?: { ignoreMute?: boolean },
+): { channel: string | null; audience: SlackAudience; muted: boolean } {
   const audience = resolveSlackAudience(module, segment);
+  const muted = audience === "platform" && platformAnnouncementsMuted(env);
+  if (muted && !opts?.ignoreMute) {
+    return { channel: null, audience, muted: true };
+  }
   const specific = AUDIENCE_ENV_VARS[audience]
     .map((name) => (env[name] || "").trim())
     .find((v) => v.length > 0);
   const fallback =
     (env.SLACK_CHANNEL_ID || "").trim() ||
     (env.SLACK_DEFAULT_CHANNEL || "").trim();
-  return { channel: specific || fallback || null, audience };
+  return { channel: specific || fallback || null, audience, muted };
 }
