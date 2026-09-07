@@ -27,6 +27,7 @@
 
 import { sharedPool as pool } from "./sharedPool";
 import { logger } from "./logger";
+import { redactSensitiveDeep } from "./sensitiveRedaction";
 
 /** Outcome of one check against one subject. */
 export type ConnectorEvidenceStatus =
@@ -62,9 +63,44 @@ export async function initConnectorEvidenceTable(): Promise<void> {
       status       VARCHAR(16)  NOT NULL,
       summary      TEXT         NOT NULL,
       observed     JSONB        NOT NULL DEFAULT '{}'::jsonb,
-      observed_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+      observed_at  TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  // observed_at is TIMESTAMPTZ, not TIMESTAMP. node-pg parses a
+  // timestamp-WITHOUT-time-zone using the *process* timezone, so the same row
+  // reads as a different instant depending on which worker read it — and the
+  // one question this table exists to answer is "was this true on <date>".
+  // observationHistory() also compares a caller-supplied `since` against this
+  // column, which is exactly where the ambiguity would bite.
+  //
+  // Migrate a table created before this was fixed — but only after checking the
+  // current type. `ALTER COLUMN ... TYPE` with a USING clause rewrites the whole
+  // table, and this runs on the first call in every process, so firing it
+  // unconditionally would rewrite the table on every boot forever.
+  try {
+    const col = await pool.query(
+      `SELECT data_type
+         FROM information_schema.columns
+        WHERE table_name = 'connector_evidence'
+          AND column_name = 'observed_at'`,
+    );
+    if (col.rows[0]?.data_type === "timestamp without time zone") {
+      logger.info(
+        "[ConnectorEvidence] migrating observed_at to TIMESTAMPTZ (interpreting existing rows as UTC)",
+      );
+      await pool.query(`
+        ALTER TABLE connector_evidence
+          ALTER COLUMN observed_at TYPE TIMESTAMPTZ
+          USING observed_at AT TIME ZONE 'UTC'
+      `);
+    }
+  } catch (err) {
+    // Never fatal: the table is usable either way, and a connector that cannot
+    // migrate a column must not take the platform down at boot.
+    logger.warn(
+      `[ConnectorEvidence] observed_at type check skipped: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
   // Serves both reads: the newest row per check/subject, and the history of one
   // check over an audit period.
   await pool.query(
@@ -86,33 +122,61 @@ export async function initConnectorEvidenceTable(): Promise<void> {
  * control held at that moment, which is the whole point of an audit trail. The
  * cost of that choice is duplicate-looking rows, which is cheaper than being
  * unable to prove continuity.
+ *
+ * ONE RUN IS ONE TRANSACTION. Partial evidence at the CHECK level is fine and
+ * deliberate — a check that fails records its own 'error' row and the others
+ * still collect. Partial evidence at the STORAGE level is not: a run that wrote
+ * four rows of six and then threw leaves a timeline that looks complete and
+ * silently is not, which is the failure this whole module is meant to prevent.
+ *
+ * `observed` is redacted before it is written. The checks that exist today are
+ * careful to record counts rather than secrets, but this is the generic write
+ * path for every future connector, and "the caller promised not to" is not a
+ * control. redactSensitiveDeep walks every string leaf, so a token that reaches
+ * `observed` through a field nobody anticipated is scrubbed rather than stored.
  */
 export async function recordObservations(
   rows: ConnectorObservation[],
 ): Promise<number> {
   if (rows.length === 0) return 0;
   await initConnectorEvidenceTable();
-  let written = 0;
-  for (const r of rows) {
-    await pool.query(
-      `INSERT INTO connector_evidence
-         (source, check_key, subject, status, summary, observed)
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
-      [
-        r.source,
-        r.check_key,
-        r.subject,
-        r.status,
-        r.summary,
-        JSON.stringify(r.observed ?? {}),
-      ],
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    for (const r of rows) {
+      await client.query(
+        `INSERT INTO connector_evidence
+           (source, check_key, subject, status, summary, observed)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
+        [
+          r.source,
+          r.check_key,
+          r.subject,
+          r.status,
+          // No fieldName argument: redactSensitiveDeep treats a sensitive
+          // fieldName as "redact the whole payload", which would blank a
+          // perfectly good summary if "summary"/"observed" ever joined the deny
+          // list. The deep walk over every leaf is what we want here.
+          redactSensitiveDeep(r.summary),
+          JSON.stringify(redactSensitiveDeep(r.observed ?? {})),
+        ],
+      );
+    }
+    await client.query("COMMIT");
+    logger.info(
+      `[ConnectorEvidence] recorded ${rows.length} observation(s) from ${rows[0].source}`,
     );
-    written++;
+    return rows.length;
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    logger.error(
+      `[ConnectorEvidence] failed to record ${rows.length} observation(s); rolled back:`,
+      err,
+    );
+    throw err;
+  } finally {
+    client.release();
   }
-  logger.info(
-    `[ConnectorEvidence] recorded ${written} observation(s) from ${rows[0].source}`,
-  );
-  return written;
 }
 
 /** Current state: the newest observation per (source, check_key, subject). */

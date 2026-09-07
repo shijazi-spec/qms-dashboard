@@ -58,6 +58,46 @@ export const CHECK_CLAUSE_MAP: Record<string, string[]> = {
   repo_access: ["ISO27001-A.5.15", "ISO27001-A.5.18", "SOC2-CC6.1"],
 };
 
+const PER_PAGE = 100;
+/** 10 pages = 1000 items. Past that, report the truncation rather than guess. */
+const MAX_PAGES = 10;
+
+/**
+ * Read a paginated list endpoint in full.
+ *
+ * The first cut of this connector requested `per_page=100` and used whatever
+ * came back. A repository with 150 open alerts therefore reported 100 — and the
+ * summary line said "N open in total", stating a number that was simply wrong.
+ * Wrong evidence is worse than absent evidence, because an auditor has no way
+ * to tell it is wrong.
+ *
+ * So: follow pages until a short page arrives, and if the cap is reached say so
+ * via `truncated` rather than presenting a partial count as a total.
+ */
+async function githubList(
+  path: string,
+): Promise<{ ok: boolean; status: number; items: any[]; truncated: boolean }> {
+  const items: any[] = [];
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const sep = path.includes("?") ? "&" : "?";
+    const res = await githubGet(`${path}${sep}per_page=${PER_PAGE}&page=${page}`);
+    if (!res.ok) {
+      return { ok: false, status: res.status, items, truncated: false };
+    }
+    const batch = Array.isArray(res.data) ? res.data : [];
+    items.push(...batch);
+    if (batch.length < PER_PAGE) {
+      return { ok: true, status: res.status, items, truncated: false };
+    }
+  }
+  return { ok: true, status: 200, items, truncated: true };
+}
+
+/** "12" normally; "at least 1000" when the page cap cut the list short. */
+function count(n: number, truncated: boolean): string {
+  return truncated ? `at least ${n}` : String(n);
+}
+
 function ok(
   check_key: string,
   subject: string,
@@ -168,7 +208,7 @@ async function checkBranchProtection(
 
 /** Open Dependabot alerts, counted by severity. */
 async function checkDependabot(repo: string): Promise<ConnectorObservation[]> {
-  const res = await githubGet(`/repos/${repo}/dependabot/alerts?state=open&per_page=100`);
+  const res = await githubList(`/repos/${repo}/dependabot/alerts?state=open`);
   if (res.status === 403 || res.status === 404) {
     return [
       na("dependabot_alerts", repo, "Dependabot alerts are not enabled, or the App lacks the security_events permission.", { status: res.status }),
@@ -177,26 +217,39 @@ async function checkDependabot(repo: string): Promise<ConnectorObservation[]> {
   if (!res.ok) {
     return [err("dependabot_alerts", repo, `Could not read Dependabot alerts (HTTP ${res.status}).`, { status: res.status })];
   }
-  const alerts = Array.isArray(res.data) ? res.data : [];
+  const alerts = res.items;
   const bySeverity: Record<string, number> = {};
   for (const a of alerts) {
     const sev = String(a?.security_advisory?.severity || "unknown").toLowerCase();
     bySeverity[sev] = (bySeverity[sev] || 0) + 1;
   }
   const serious = (bySeverity.critical || 0) + (bySeverity.high || 0);
-  const observed = { open_total: alerts.length, by_severity: bySeverity };
+  const observed = {
+    open_total: alerts.length,
+    by_severity: bySeverity,
+    truncated: res.truncated,
+  };
   // The evidence is the number and its recency; "zero criticals" is the pass
   // condition an auditor recognises, not "zero alerts of any kind".
+  //
+  // A truncated list cannot produce a pass: "no critical alerts in the first
+  // 1000" is not the same claim as "no critical alerts", and only the second
+  // one is what a reader would take from a pass.
+  if (res.truncated && serious === 0) {
+    return [
+      err("dependabot_alerts", repo, `More than ${MAX_PAGES * PER_PAGE} open alerts — too many to enumerate, so "no criticals" cannot be asserted.`, observed),
+    ];
+  }
   return [
     serious > 0
-      ? bad("dependabot_alerts", repo, `${serious} open critical/high dependency alert(s).`, observed)
+      ? bad("dependabot_alerts", repo, `${count(serious, res.truncated)} open critical/high dependency alert(s).`, observed)
       : ok("dependabot_alerts", repo, `No open critical or high dependency alerts (${alerts.length} open in total).`, observed),
   ];
 }
 
 /** Open secret-scanning alerts. Any open alert is a finding. */
 async function checkSecretScanning(repo: string): Promise<ConnectorObservation[]> {
-  const res = await githubGet(`/repos/${repo}/secret-scanning/alerts?state=open&per_page=100`);
+  const res = await githubList(`/repos/${repo}/secret-scanning/alerts?state=open`);
   if (res.status === 403 || res.status === 404) {
     return [
       na("secret_scanning", repo, "Secret scanning is not enabled, or the App lacks the secret_scanning_alerts permission.", { status: res.status }),
@@ -205,7 +258,7 @@ async function checkSecretScanning(repo: string): Promise<ConnectorObservation[]
   if (!res.ok) {
     return [err("secret_scanning", repo, `Could not read secret-scanning alerts (HTTP ${res.status}).`, { status: res.status })];
   }
-  const alerts = Array.isArray(res.data) ? res.data : [];
+  const alerts = res.items;
   // Record only counts and types. The alert bodies contain the located secret,
   // which must not be copied into the evidence store.
   const byType: Record<string, number> = {};
@@ -213,24 +266,28 @@ async function checkSecretScanning(repo: string): Promise<ConnectorObservation[]
     const t = String(a?.secret_type_display_name || a?.secret_type || "unknown");
     byType[t] = (byType[t] || 0) + 1;
   }
-  const observed = { open_total: alerts.length, by_type: byType };
+  const observed = {
+    open_total: alerts.length,
+    by_type: byType,
+    truncated: res.truncated,
+  };
   return [
     alerts.length > 0
-      ? bad("secret_scanning", repo, `${alerts.length} unresolved secret-scanning alert(s).`, observed)
+      ? bad("secret_scanning", repo, `${count(alerts.length, res.truncated)} unresolved secret-scanning alert(s).`, observed)
       : ok("secret_scanning", repo, "No unresolved secret-scanning alerts.", observed),
   ];
 }
 
 /** Who can write to the repository. */
 async function checkAccess(repo: string): Promise<ConnectorObservation[]> {
-  const res = await githubGet(`/repos/${repo}/collaborators?per_page=100`);
+  const res = await githubList(`/repos/${repo}/collaborators`);
   if (res.status === 403 || res.status === 404) {
     return [na("repo_access", repo, "Collaborator list unavailable — the App lacks the members/administration permission.", { status: res.status })];
   }
   if (!res.ok) {
     return [err("repo_access", repo, `Could not read collaborators (HTTP ${res.status}).`, { status: res.status })];
   }
-  const people = Array.isArray(res.data) ? res.data : [];
+  const people = res.items;
   // Logins and permission levels only — an access list is the evidence; profile
   // data would be personal information the audit does not need.
   const roster = people.map((p: any) => ({
@@ -241,14 +298,35 @@ async function checkAccess(repo: string): Promise<ConnectorObservation[]> {
   const admins = roster.filter((r) => r.admin).length;
   const writers = roster.filter((r) => r.push).length;
   return [
-    ok("repo_access", repo, `${roster.length} collaborator(s): ${admins} admin, ${writers} with write access.`, {
+    ok("repo_access", repo, `${count(roster.length, res.truncated)} collaborator(s): ${admins} admin, ${writers} with write access.`, {
       total: roster.length,
       admins,
       writers,
+      truncated: res.truncated,
       collaborators: roster,
     }),
   ];
 }
+
+/**
+ * The checks, each carrying the keys it can emit.
+ *
+ * Exported so the invariant "every key a runner emits has a clause mapping" is
+ * testable rather than merely intended — an unmapped key is evidence an auditor
+ * cannot trace to a control.
+ *
+ * A runner may emit several keys (checkBranchProtection emits two); `keys` is
+ * also what gets marked errored when the runner throws before returning.
+ */
+export const CHECK_RUNNERS: Array<{
+  keys: string[];
+  run: (repo: string) => Promise<ConnectorObservation[]>;
+}> = [
+  { keys: ["branch_protection", "code_review_required"], run: checkBranchProtection },
+  { keys: ["dependabot_alerts"], run: checkDependabot },
+  { keys: ["secret_scanning"], run: checkSecretScanning },
+  { keys: ["repo_access"], run: checkAccess },
+];
 
 /**
  * Run every check and persist the results.
@@ -269,16 +347,26 @@ export async function collectGithubEvidence(): Promise<{
     return { configured: false, repo, observations: [], written: 0 };
   }
 
-  const runners = [checkBranchProtection, checkDependabot, checkSecretScanning, checkAccess];
+  // Each runner carries its check_key explicitly. Deriving it from the function
+  // name (`run.name.replace(/^check/, "").toLowerCase()`) produced
+  // "branchprotection" where every other row says "branch_protection", so a
+  // thrown check filed its error under a key that matched nothing — and because
+  // latestObservations() groups by (source, check_key, subject), the dashboard
+  // went on serving the last SUCCESSFUL row while the check was failing. That is
+  // the "manufactures assurance" failure this file's header warns about, so the
+  // key cannot be derived. Function names are also mangled by bundlers, which
+  // would have broken it a second way.
+  //
   const observations: ConnectorObservation[] = [];
-  for (const run of runners) {
+  for (const { keys, run } of CHECK_RUNNERS) {
     try {
       observations.push(...(await run(repo)));
     } catch (e) {
-      logger.warn(`[GitHubEvidence] ${run.name} threw: ${(e as Error).message}`);
-      observations.push(
-        err(run.name.replace(/^check/, "").toLowerCase() || "unknown", repo, `Check failed: ${(e as Error).message}`),
-      );
+      const message = (e as Error).message;
+      logger.warn(`[GitHubEvidence] ${keys.join("/")} threw: ${message}`);
+      for (const key of keys) {
+        observations.push(err(key, repo, `Check failed: ${message}`));
+      }
     }
   }
 

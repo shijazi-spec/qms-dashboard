@@ -179,9 +179,23 @@ export async function getInstallationToken(): Promise<string | null> {
 export async function githubGet(
   path: string,
 ): Promise<{ ok: boolean; status: number; data: any }> {
-  const token = await getInstallationToken();
+  let token = await getInstallationToken();
   if (!token) return { ok: false, status: 0, data: { error: "not_configured" } };
-  const res = await ghFetch(`${GITHUB_API}${path}`, token, "token");
+  let res = await ghFetch(`${GITHUB_API}${path}`, token, "token");
+
+  // A 401 means the cached token is no longer good — revoked, or the App's
+  // permissions changed — and the cache would otherwise keep serving it for the
+  // rest of the TTL, turning every check in the run into a false 'error'. Drop
+  // it and retry once with a fresh token. Only once: a second 401 is a real
+  // authorisation problem, and retrying a loop against GitHub would not fix it.
+  if (res.status === 401) {
+    logger.warn("[GitHubApp] installation token rejected (401) — refreshing once");
+    cached = null;
+    token = await getInstallationToken();
+    if (!token) return { ok: false, status: 401, data: { error: "unauthorized" } };
+    res = await ghFetch(`${GITHUB_API}${path}`, token, "token");
+  }
+
   let data: any = null;
   try {
     data = await res.json();
