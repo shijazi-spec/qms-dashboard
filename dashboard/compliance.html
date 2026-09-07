@@ -768,6 +768,33 @@
             return String(source).split('.')[0];
         }
 
+        // ─── Evidence-chip → GRC module routing. The prefix (table/collection
+        // name before the first dot of `evidence_source`) names the module
+        // that owns that data. Matching on the prefix — never the full dotted
+        // string — means a future `policies.some_new_ratio` links automatically
+        // without a code change. Two prefixes (`training_records`,
+        // `evidence_records`) are deliberately absent: no page in the app owns
+        // that data yet, so they must keep rendering as plain text rather than
+        // a guessed/broken link (spec: design spec §7, mapping confirmed by
+        // the platform owner).
+        const CERT_SOURCE_ROUTES = {
+            policies: '/qms-docs',
+            qms_uploaded_documents: '/document-mapping',
+            doc_tracker_documents: '/documentation-tracker',
+            external_audits: '/external-audits',
+            external_audit_certificates: '/external-audits',
+            audit_runs: '/audit-readiness',
+            nonconformance_capa: '/audit-readiness',
+            management_reviews: '/reviews',
+            enterprise_risks: '/risks'
+        };
+        function _certSourceRoute(source) {
+            const prefix = _certSourceLabel(source);
+            return (prefix && Object.prototype.hasOwnProperty.call(CERT_SOURCE_ROUTES, prefix))
+                ? CERT_SOURCE_ROUTES[prefix]
+                : '';
+        }
+
         function _certActionRowHtml(a) {
             const text = escAttr(a.action_text || '');
             const ownerLabel = escAttr(_ct('compliance.roadmap_owner_label', 'Owner'));
@@ -797,10 +824,30 @@
             // you (design spec §5).
             const reading = a.reading || { state: 'unavailable', have: 0, need: 0, source: a.evidence_source };
             const meta = _certEvidenceMeta(reading.state);
-            const sourceLabel = escAttr(_certSourceLabel(reading.source || a.evidence_source));
+            const sourceRaw = reading.source || a.evidence_source;
+            const sourceLabel = escAttr(_certSourceLabel(sourceRaw));
+            const sourceRoute = _certSourceRoute(sourceRaw);
             const detail = (reading.state === 'satisfied' || reading.state === 'not_satisfied')
                 ? (escAttr(reading.have) + ' / ' + escAttr(reading.need))
                 : (sourceLabel || '—');
+            // The evidence chip always names the source that backs it, so the
+            // whole chip — not just the `detail` text, which for satisfied /
+            // not_satisfied states shows a have/need count instead of the
+            // source name — is what becomes the link into the owning GRC
+            // module. Plain <a href>, no data-on-click / on* handler: this is
+            // cross-page navigation, not a JS action (spec §7). Colour comes
+            // entirely from `meta.cls` on the same element (Tailwind preflight
+            // makes `a` inherit color/text-decoration), so the link affordance
+            // (underline) never fights the state colour.
+            const chipInner = escAttr(meta.label) + ' — ' + detail;
+            const chipTag = sourceRoute ? 'a' : 'span';
+            const chipLinkAttrs = sourceRoute
+                ? (' href="' + escAttr(sourceRoute) + '"'
+                    + ' title="' + escAttr(_ct('compliance.cert_evidence_link_title', 'Open evidence source')) + ': ' + sourceLabel + '"'
+                    + ' aria-label="' + escAttr(_ct('compliance.cert_evidence_link_title', 'Open evidence source')) + ': ' + sourceLabel + '"')
+                : '';
+            const chipCls = 'inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium '
+                + meta.cls + (sourceRoute ? ' underline decoration-dotted cursor-pointer hover:opacity-90' : '');
             return '<div class="cert-action-row flex items-start gap-3 py-2 border-t border-gray-100" data-testid="cert-action-row-' + key + '">'
                 + '<span class="mt-0.5 flex h-4 w-4 items-center justify-center text-xs" aria-hidden="true">' + meta.glyph + '</span>'
                 + '<div class="flex-1 min-w-0">'
@@ -808,8 +855,8 @@
                 + '<div class="text-xs text-gray-400 mt-0.5 flex flex-wrap items-center gap-1.5">'
                 + '<span>' + owner + '</span>'
                 + '<span>' + escAttr(_ct('compliance.cert_auto_label', 'Auto')) + '</span>'
-                + '<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ' + meta.cls + '">'
-                + escAttr(meta.label) + ' — ' + detail + '</span>'
+                + '<' + chipTag + ' class="' + chipCls + '"' + chipLinkAttrs + '>'
+                + chipInner + '</' + chipTag + '>'
                 + '</div></div></div>';
         }
 

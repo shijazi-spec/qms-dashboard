@@ -2212,6 +2212,7 @@
     "cert_evidence_not_satisfied": "Not yet satisfied",
     "cert_evidence_awaiting": "Awaiting data",
     "cert_evidence_unavailable": "Could not read source",
+    "cert_evidence_link_title": "Open evidence source",
     "cert_done_by_label": "Done by",
     "cert_manual_label": "Manual",
     "cert_auto_label": "Auto",

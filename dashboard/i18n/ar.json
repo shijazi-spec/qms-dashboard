@@ -2212,6 +2212,7 @@
     "cert_evidence_not_satisfied": "لم يتحقق بعد",
     "cert_evidence_awaiting": "بانتظار البيانات",
     "cert_evidence_unavailable": "تعذرت قراءة المصدر",
+    "cert_evidence_link_title": "فتح مصدر الدليل",
     "cert_done_by_label": "تم بواسطة",
     "cert_manual_label": "يدوي",
     "cert_auto_label": "تلقائي",
