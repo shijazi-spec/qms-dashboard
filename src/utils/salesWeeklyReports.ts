@@ -24,6 +24,26 @@ import { logger } from "./logger";
 /** The segment these reports cover. Corporate == "walaplus" in radar terms. */
 const SEGMENT = "walaplus";
 
+/**
+ * Stages left out of the Sales compliance report (Sarah 2026-09-07: "don't
+ * include the PAID stage here inside the channel").
+ *
+ * Paid is closed business. The first real report showed 386 missing documents
+ * out of 387 Paid deals — historic records the SDR/Sales team cannot act on,
+ * and at that volume they crowd out the stages that are still open and still
+ * fixable. Excluded from the TOTALS as well as the breakdown, so the headline
+ * figure matches what is listed underneath.
+ *
+ * Override with SALES_COMPLIANCE_EXCLUDE_STAGES (comma-separated) if the stage
+ * names change in Zoho.
+ */
+const EXCLUDED_STAGES = (
+  process.env.SALES_COMPLIANCE_EXCLUDE_STAGES || "Paid"
+)
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
 /** Deals whose required documents are missing, weekly. */
 export async function runDealComplianceWeeklyReport(): Promise<{
   posted: boolean;
@@ -33,7 +53,9 @@ export async function runDealComplianceWeeklyReport(): Promise<{
   const { getSegmentDealComplianceSummary } = await import(
     "./duplicateRadarDatabase"
   );
-  const summary = await getSegmentDealComplianceSummary(SEGMENT as any);
+  const summary = await getSegmentDealComplianceSummary(SEGMENT as any, {
+    excludeStages: EXCLUDED_STAGES,
+  });
 
   const missing = summary.checked - summary.compliant;
   if (summary.checked === 0 || missing === 0) {
@@ -55,6 +77,11 @@ export async function runDealComplianceWeeklyReport(): Promise<{
   const lines: string[] = [
     `*${missing}* deal(s) missing required documents out of ${summary.checked} checked · compliant ${rate}`,
   ];
+  // State the exclusion. A scoped total read as a full total is how a report
+  // quietly misleads — the reader has no way to tell otherwise.
+  if (EXCLUDED_STAGES.length > 0) {
+    lines.push(`_Excludes ${EXCLUDED_STAGES.join(", ")} — closed business._`);
+  }
   if (atRisk > 0) {
     lines.push(`Value on non-compliant deals: SAR ${atRisk.toLocaleString()}`);
   }

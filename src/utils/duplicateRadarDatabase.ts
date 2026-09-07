@@ -3532,10 +3532,33 @@ export function finaliseMultiActiveDealGroups(
  *  Counts ONLY deals that have been doc-checked (rows in deal_doc_compliance). */
 export async function getSegmentDealComplianceSummary(
   segment: DuplicateFilters["segment"],
+  opts?: {
+    /**
+     * Stages to leave out entirely — of the totals, the breakdowns and the
+     * at-risk value, not just the by-stage list. Filtering only the display
+     * would leave a headline that does not add up.
+     *
+     * Optional and empty by default, so every existing caller (the BU report
+     * page, the exports) is unaffected.
+     */
+    excludeStages?: string[];
+  },
 ): Promise<DealComplianceSummary> {
   const seg = segment && segment !== "all" ? (segment === "corporate" ? "walaplus" : segment) : "all";
   const p = buildSegmentPredicate(seg, 1);
   const segCond = p.condition ? " AND " + p.condition : "";
+
+  const exclude = (opts?.excludeStages || [])
+    .map((s) => String(s).trim())
+    .filter(Boolean);
+  // Case-insensitive: Zoho stage names arrive with inconsistent casing.
+  const stageCond = exclude.length
+    ? ` AND LOWER(COALESCE(d.stage,'')) <> ALL($${p.params.length + 1}::text[])`
+    : "";
+  const stageParams = exclude.length
+    ? [exclude.map((s) => s.toLowerCase())]
+    : [];
+
   const res = await pool.query(
     `SELECT d.stage AS stage,
             d.compliant AS compliant,
@@ -3544,8 +3567,8 @@ export async function getSegmentDealComplianceSummary(
             d.missing_docs AS missing_docs
        FROM deal_doc_compliance d
        JOIN duplicate_records r ON r.zoho_record_id = d.zoho_deal_id
-      WHERE r.record_type = 'deal'${segCond}`,
-    [...p.params],
+      WHERE r.record_type = 'deal'${segCond}${stageCond}`,
+    [...p.params, ...stageParams],
   );
   const rows = res.rows.map((x: any) => ({
     stage: x.stage || "Unknown",
