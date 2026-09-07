@@ -1064,6 +1064,13 @@ interface CsKpiAggregates {
   dataGapDeals: number;
   terminationDeals: number;
   churnRecordGapDeals: number;
+  /** Deals currently in each lifecycle phase, and the overdue count per phase.
+   *  Both come from the SAME scan, so a phase's numerator and denominator can
+   *  never be drawn from different populations. */
+  onboardingDeals: number;
+  onboardingOverdue: number;
+  renewalDeals: number;
+  renewalOverdue: number;
 }
 
 const CS_CACHE_TTL_MS = 60_000;
@@ -1095,12 +1102,28 @@ export async function csKpiAggregates(): Promise<CsKpiAggregates> {
     for (const [phase, n] of Object.entries(scan.summary.by_phase || {})) {
       if (/termin|churn/i.test(phase)) termination += Number(n) || 0;
     }
+    // Phase populations, matched by substring: Zoho spells these phases
+    // several ways across records ("Onboarding", "On-boarding", "Renewal /
+    // Retention"), and an exact match on one spelling silently reports a
+    // denominator of zero rather than an error.
+    const phaseTotal = (re: RegExp) => {
+      let n = 0;
+      for (const [phase, count] of Object.entries(scan.summary.by_phase || {})) {
+        if (re.test(phase)) n += Number(count) || 0;
+      }
+      return n;
+    };
+    const byCode = (scan.summary.by_code || {}) as Record<string, number>;
     const data: CsKpiAggregates = {
       csDeals: Number(scan.summary.total_cs_deals || 0),
       slaBreachDeals: sla.size,
       dataGapDeals: gap.size,
       terminationDeals: termination,
       churnRecordGapDeals: churnGap.size,
+      onboardingDeals: phaseTotal(/on-?board/i),
+      onboardingOverdue: Number(byCode.onboarding_overdue) || 0,
+      renewalDeals: phaseTotal(/renew/i),
+      renewalOverdue: Number(byCode.renewal_overdue) || 0,
     };
     csCache = { at: Date.now(), data };
     return data;
@@ -1128,6 +1151,72 @@ export async function calcCsSlaAdherence(): Promise<ProcessKpiValue> {
       cs_deals: a.csDeals,
       deals_with_an_overdue_step: a.slaBreachDeals,
       rules_counted: "onboarding overdue, renewal overdue, phase transition stalled",
+    },
+  };
+}
+
+/**
+ * CS-KPI-11 Onboarding Exit Criteria Achievement Rate.
+ *
+ * §8 defines this as accounts meeting the Adoption transition criteria of
+ * clause 7.7.1, sourced from the Admin / BI Portal — feeds the QMS does not
+ * have. What it CAN see is the CS lifecycle rule `onboarding_overdue`: a deal
+ * that has sat in Onboarding past its allowed window, which is precisely a
+ * deal that has NOT met the transition criteria in time.
+ *
+ * So this is a PROXY and is labelled as one in `details.source`. It measures
+ * timeliness of exit, not the criteria themselves — an account could exit on
+ * time with criteria unmet and still count here. Stated plainly so nobody
+ * reports it as the SOP metric.
+ */
+export async function calcCsOnboardingExitCriteria(): Promise<ProcessKpiValue> {
+  const a = await csKpiAggregates();
+  // No onboarding population means "nothing to measure", NOT 100%. A phase
+  // with no deals reporting perfect compliance is the failure mode that makes
+  // a governance dashboard worthless.
+  if (a.onboardingDeals === 0) return EMPTY;
+  const onTime = Math.max(0, a.onboardingDeals - a.onboardingOverdue);
+  return {
+    value: Math.round((onTime / a.onboardingDeals) * 1000) / 10,
+    dataAvailable: true,
+    details: {
+      source:
+        "PROXY — Zoho CS lifecycle (SOP names Admin Portal / BI Portal / Client-Hub). " +
+        "Measures onboarding deals not overdue, not the 7.7.1 criteria themselves.",
+      onboarding_deals: a.onboardingDeals,
+      overdue_in_onboarding: a.onboardingOverdue,
+      exited_on_time: onTime,
+    },
+  };
+}
+
+/**
+ * CS-KPI-19 Renewal Outreach Timeliness.
+ *
+ * §8: renewals where the first documented renewal activity starts inside the
+ * approved 60-90 calendar-day window, sourced from Client-Hub. The QMS cannot
+ * see renewal ACTIVITY, but the CS lifecycle rule `renewal_overdue` fires when
+ * a renewal date passes without the deal leaving the renewal phase — i.e. the
+ * window was missed.
+ *
+ * PROXY, labelled as such: it catches renewals that ran out of time, not
+ * whether outreach was documented inside the window. A renewal handled late
+ * but closed before the rule's threshold will still count as on time.
+ */
+export async function calcCsRenewalOutreachTimeliness(): Promise<ProcessKpiValue> {
+  const a = await csKpiAggregates();
+  if (a.renewalDeals === 0) return EMPTY;
+  const inWindow = Math.max(0, a.renewalDeals - a.renewalOverdue);
+  return {
+    value: Math.round((inWindow / a.renewalDeals) * 1000) / 10,
+    dataAvailable: true,
+    details: {
+      source:
+        "PROXY — Zoho CS lifecycle (SOP names Client-Hub). Measures renewals not " +
+        "overdue, not whether outreach was documented inside the 60-90 day window.",
+      renewal_deals: a.renewalDeals,
+      overdue_renewals: a.renewalOverdue,
+      within_window: inWindow,
     },
   };
 }
@@ -1457,6 +1546,8 @@ export const PROCESS_CALCULATORS: Record<
   // Admin-BI Portal / QA sampling and stay manual until those feeds exist.
   // CS-KPI-21 Client Churn Rate is intentionally absent — see the note above
   // calcCsDataAccuracy. It cannot be sourced correctly from Zoho.
+  "CS-KPI-11": calcCsOnboardingExitCriteria,
+  "CS-KPI-19": calcCsRenewalOutreachTimeliness,
   "CS-KPI-23": calcCsDataAccuracy,
   "CS-KPI-25": calcCsSlaAdherence,
   "CS-KPI-30": calcCsChurnClassificationAccuracy,
