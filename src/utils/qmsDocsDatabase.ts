@@ -42,7 +42,10 @@ export interface QmsUploadedDocument {
   // legacy library rows. Drives download-module + delete provenance.
   source_policy_id?: number | null;
   // Phase 2.1 — text extraction columns (added via ALTER on init)
+  // Present on SINGLE-document reads. List queries return extracted_chars
+  // instead, so a table of titles does not carry every document body.
   extracted_text?: string | null;
+  extracted_chars?: number | null;
   extraction_status?: QmsDocExtractionStatus | null;
   extracted_at?: string | null;
   extracted_hash?: string | null;
@@ -111,7 +114,8 @@ export async function initQmsDocsTable(): Promise<void> {
   `);
 
   // Phase 2.1 — text-extraction columns (idempotent ALTERs).
-  // extracted_text is truncated to 50k chars at write time. extracted_hash
+  // extracted_text is truncated at write time (documentTextExtractor.MAX_CHARS).
+  // extracted_hash
   // stores SHA-256 of the full file so we know whether to re-extract on
   // file replacement without storing the entire raw blob in the DB.
   await pool.query(
@@ -174,10 +178,20 @@ export async function initQmsDocsTable(): Promise<void> {
 // predicate ever reads it. Listing the columns explicitly keeps those responses
 // exactly the size they were before the column existed.
 //
-// (Note: extracted_text - up to 50k chars - IS still returned by these list
-// queries. That predates the tsvector column and is left as-is here rather than
-// changed silently under an unrelated fix.)
-const DOC_COLUMNS = `id, category, title, file_path, file_name, file_size,
+// extracted_text is NOT among them either. It holds the whole document body,
+// so returning it per row meant the Documents Library list shipped the full
+// text of every document to render a table of titles - and that only gets
+// worse as MAX_CHARS rises to stop large SOPs being truncated. Nothing that
+// LISTS documents reads the body; the one caller that cared was a
+// "does this document have content" test, which extracted_chars answers just
+// as well and in 4 bytes instead of 50,000.
+const DOC_LIST_COLUMNS = `id, category, title, file_path, file_name, file_size,
+    mime_type, notes, regulation_codes, uploaded_by, uploaded_at,
+    source_policy_id, extraction_status, extracted_at, extracted_hash,
+    LENGTH(COALESCE(extracted_text, '')) AS extracted_chars`;
+
+// Single-document reads DO get the body - that is the point of fetching one.
+const DOC_FULL_COLUMNS = `id, category, title, file_path, file_name, file_size,
     mime_type, notes, regulation_codes, uploaded_by, uploaded_at,
     source_policy_id, extracted_text, extraction_status, extracted_at,
     extracted_hash`;
@@ -192,7 +206,7 @@ export async function listDocumentsPendingExtraction(
 ): Promise<QmsUploadedDocument[]> {
   await initQmsDocsTable();
   const result = await pool.query(
-    `SELECT ${DOC_COLUMNS} FROM qms_uploaded_documents
+    `SELECT ${DOC_LIST_COLUMNS} FROM qms_uploaded_documents
       WHERE extraction_status = 'pending' OR extraction_status IS NULL
       ORDER BY uploaded_at ASC
       LIMIT $1`,
@@ -234,12 +248,12 @@ export async function listDocumentsByCategory(
   await initQmsDocsTable();
   const result = category
     ? await pool.query(
-        `SELECT ${DOC_COLUMNS} FROM qms_uploaded_documents WHERE category = $1
+        `SELECT ${DOC_LIST_COLUMNS} FROM qms_uploaded_documents WHERE category = $1
          ORDER BY uploaded_at DESC`,
         [category],
       )
     : await pool.query(
-        `SELECT ${DOC_COLUMNS} FROM qms_uploaded_documents ORDER BY uploaded_at DESC`,
+        `SELECT ${DOC_LIST_COLUMNS} FROM qms_uploaded_documents ORDER BY uploaded_at DESC`,
       );
   return result.rows as QmsUploadedDocument[];
 }
@@ -291,7 +305,7 @@ export async function createDocument(input: {
 export async function getDocumentById(id: number): Promise<QmsUploadedDocument | null> {
   await initQmsDocsTable();
   const result = await pool.query(
-    `SELECT ${DOC_COLUMNS} FROM qms_uploaded_documents WHERE id = $1 LIMIT 1`,
+    `SELECT ${DOC_FULL_COLUMNS} FROM qms_uploaded_documents WHERE id = $1 LIMIT 1`,
     [id],
   );
   return (result.rows[0] as QmsUploadedDocument) || null;

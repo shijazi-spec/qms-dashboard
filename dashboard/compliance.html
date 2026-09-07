@@ -373,30 +373,27 @@
              button — the only thing that ever un-hid this panel — was
              removed with the Frameworks grid above, so this section can
              never become visible from the UI (it stays .hidden forever).
-             It was NOT deleted outright because #clause-cards,
-             #frameworkDetailClauses and #frameworkDetailDocs below are
-             still written by loadClauseCards(), which is still called from
-             unlinkClauseDoc() and the clause-bulk-upload submit handler
-             further down this file — both part of the separate "Clause
-             Documents" modal (#clauseDocsModal). Everything else that used
-             to live in this section (name/meta, Gap Analysis PDF link,
-             Start Audit Run link, Close button, the Framework Gap Analysis
-             snapshot) had no references left outside this panel and the
-             removed grid, so those were deleted. See
-             .superpowers/sdd/remove-grid-report.md for the full grep proof. -->
+             It is kept only as an empty shell hosting the two badges below.
+             loadClauseCards(), the #clause-cards div it rendered into, and
+             the "Clauses & Document Mapping" heading that introduced that
+             div were removed 2026-09-07 as dead code: loadClauseCards() was
+             only ever invoked from here (openFramework(), gone) and from two
+             guarded call sites (unlinkClauseDoc(), the clause-bulk-upload
+             submit handler) whose `if (activeRegulationCode)` guard was
+             permanently false, since nothing set activeRegulationCode
+             non-null anymore. Those two call sites, and the separate "Clause
+             Documents" modal (#clauseDocsModal, openClauseDocsModal(),
+             loadClauseDocs()) they belong to, are untouched and still live —
+             reached via the "Link Docs" button in the obligations table.
+             See .superpowers/sdd/item1-clausecards-report.md (this change)
+             and .superpowers/sdd/remove-grid-report.md (the earlier grid
+             removal) for the full grep proof. -->
         <section class="bg-white rounded-lg shadow mb-6 hidden fade-in">
             <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
                 <div class="flex items-center gap-2 flex-wrap">
                     <span id="frameworkDetailClauses" class="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">0 clauses</span>
                     <span id="frameworkDetailDocs" class="text-xs px-2 py-1 rounded-full bg-indigo-100 text-indigo-800">0 documents linked</span>
                 </div>
-            </div>
-            <div class="p-4 border-b border-gray-200">
-                <h3 class="text-sm font-semibold text-gray-700" data-i18n="compliance.clause_mapping_title">Clauses & Document Mapping</h3>
-                <p class="text-xs text-gray-500 mt-0.5" data-i18n="compliance.clause_mapping_subtitle">Each clause below can be linked to one or more uploaded documents from the QMS library.</p>
-            </div>
-            <div id="clause-cards" class="divide-y divide-gray-200">
-                <div class="p-6 text-center text-gray-400">Loading clauses…</div>
             </div>
         </section>
 
@@ -687,16 +684,6 @@
         let gapByCode = {};                       // /gap-analysis indexed by obligation_code
         let evidenceCountByObId = {};             // doc count per clause (lazy)
         let mergedRows = [];                      // merged + reusable view-model
-        let activeRegulationCode = null;          // for clause-mapping panel
-        // NOTE (2026-09-04): the only code that ever set this away from null
-        // was openFramework(), removed with the Frameworks grid (see
-        // .superpowers/sdd/remove-grid-report.md). It is kept — never
-        // deleted — only because loadClauseCards()'s two callers below
-        // (unlinkClauseDoc(), the clause-bulk-upload submit handler) still
-        // read it to know which framework's clause cards to refresh. Since
-        // nothing sets it non-null anymore, those two `if (activeRegulationCode)`
-        // guards are permanently false; this is a pre-existing consequence of
-        // the grid removal, not new dead code introduced here.
         const obligationTitles = {};
 
         const filterState = {
@@ -1586,7 +1573,7 @@
                     regSel.appendChild(opt);
                 });
                 const docList = docs.documents || docs.items || [];
-                docList.filter(function (d) { return d.extraction_status === 'extracted' || d.extracted_text; }).forEach(function (d) {
+                docList.filter(function (d) { return d.extraction_status === 'extracted' || (d.extracted_chars || 0) > 0; }).forEach(function (d) {
                     const opt = document.createElement('option');
                     opt.value = d.id;
                     opt.textContent = (d.title || d.file_name || ('Doc #' + d.id)) + ' (' + (d.category || '?') + ')';
@@ -1786,54 +1773,6 @@
             }
         }
 
-        // ──────────────────────── Clause-mapping panel (preserved) ─────
-        async function loadClauseCards(regulationCode) {
-            const wrap = document.getElementById('clause-cards');
-            wrap.innerHTML = '<div class="p-6 text-center text-gray-400">Loading clauses…</div>';
-            try {
-                const obligations = allObligations.filter(function (o) { return String(o.regulation_code || '') === String(regulationCode); });
-                const counts = {};
-                await Promise.all(obligations.map(async function (o) {
-                    try {
-                        const r = await fetch('/api/compliance/obligations/' + o.id + '/documents');
-                        if (r.ok) {
-                            const dd = await r.json();
-                            counts[o.id] = (dd.documents || []).length;
-                        } else { counts[o.id] = 0; }
-                    } catch (e) { counts[o.id] = 0; }
-                }));
-                const totalDocs = Object.values(counts).reduce(function (a, b) { return a + b; }, 0);
-                document.getElementById('frameworkDetailClauses').textContent = obligations.length + ' clause' + (obligations.length === 1 ? '' : 's');
-                document.getElementById('frameworkDetailDocs').textContent = totalDocs + ' document' + (totalDocs === 1 ? '' : 's') + ' linked';
-
-                if (obligations.length === 0) {
-                    wrap.innerHTML = '<div class="p-6 text-center text-gray-400">No clauses defined for this regulation yet. Use <strong>+ Add Obligation</strong> above to create one.</div>';
-                    return;
-                }
-                wrap.innerHTML = obligations.map(function (o) {
-                    obligationTitles[o.id] = o.obligation_code + ' — ' + (o.title || '');
-                    const docCount = counts[o.id] || 0;
-                    return '<div class="p-4 hover:bg-gray-50 flex justify-between items-start gap-4" data-testid="clause-card-' + o.id + '">' +
-                        '<div class="flex-1 min-w-0">' +
-                            '<div class="flex items-center gap-2 flex-wrap">' +
-                                '<span class="text-sm font-mono text-blue-600">' + escAttr(o.obligation_code) + '</span>' +
-                                (o.article_reference ? '<span class="text-xs text-gray-400">' + escAttr(o.article_reference) + '</span>' : '') +
-                                '<span class="text-xs px-2 py-0.5 rounded-full priority-' + o.priority + '">' + escAttr(o.priority) + '</span>' +
-                            '</div>' +
-                            '<div class="text-sm font-medium text-gray-900 mt-1">' + escAttr(o.title) + '</div>' +
-                            '<div class="text-xs text-gray-500 mt-1 line-clamp-2">' + escAttr(o.description || '') + '</div>' +
-                        '</div>' +
-                        '<div class="flex items-center gap-2 flex-shrink-0">' +
-                            '<span class="text-xs px-2 py-1 rounded-full ' + (docCount > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500') + '" data-testid="badge-doc-count-' + o.id + '">' + docCount + ' doc' + (docCount === 1 ? '' : 's') + '</span>' +
-                            '<button type="button" data-on-click="openClauseDocsModal" data-args="[' + o.id + ']" class="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700" data-testid="button-manage-docs-' + o.id + '">Manage Docs</button>' +
-                        '</div>' +
-                    '</div>';
-                }).join('');
-            } catch (e) {
-                wrap.innerHTML = '<div class="p-6 text-center text-red-500">Failed to load clauses.</div>';
-            }
-        }
-
         async function openClauseDocsModal(obligationId, title) {
             document.getElementById('clauseDocsTitle').textContent = title || obligationTitles[obligationId] || '';
             document.getElementById('clauseBulkObligationId').value = obligationId;
@@ -1882,7 +1821,6 @@
                 });
                 if (r.ok) {
                     await loadClauseDocs(obligationId);
-                    if (activeRegulationCode) await loadClauseCards(activeRegulationCode);
                 } else {
                     alert('Failed to unlink.');
                 }
@@ -1944,7 +1882,6 @@
                             msg.className = 'mt-2 text-sm ' + (fail ? 'text-amber-700' : 'text-green-700');
                             msg.textContent = ok + ' uploaded & linked' + (fail ? ', ' + fail + ' failed' : '') + '.';
                             await loadClauseDocs(oblId);
-                            if (activeRegulationCode) await loadClauseCards(activeRegulationCode);
                         }
                     } catch (err) {
                         msg.className = 'mt-2 text-sm text-red-600';

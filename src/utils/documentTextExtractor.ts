@@ -47,8 +47,28 @@ export interface ExtractionResult {
   stored_chars?: number;
 }
 
-/** Max characters retained in `extracted_text`. Aligned with plan. */
-export const MAX_CHARS = 50_000;
+/**
+ * Max characters retained in `extracted_text`.
+ *
+ * Raised from 50,000 after measuring the real library: the controlled documents
+ * yield 10k-53k characters each, and WP-SOP-001 (Consent Lifecycle Management)
+ * already produces 53,188 - so the old cap silently truncated the largest SOPs
+ * on ingest. The lost tail is the end of the document, which on an SOP is
+ * typically the records, review and responsibilities sections; clauses covered
+ * only there would have read as permanent gaps with nothing on screen saying
+ * why. Truncation is invisible after the fact, which is what makes it worth
+ * fixing BEFORE the approved documents are attached rather than after - a later
+ * change means re-extracting, re-chunking and re-embedding everything.
+ *
+ * 200k leaves roughly 4x headroom over the largest document measured. The cost
+ * of a bigger body is chunking and embedding volume, both linear and cheap at
+ * this corpus size; it is no longer a response-size cost, because the list
+ * queries return extracted_chars rather than the body (see qmsDocsDatabase).
+ */
+export const MAX_CHARS = (() => {
+  const raw = Number(process.env.DOCUMENT_EXTRACT_MAX_CHARS);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 200_000;
+})();
 
 /** Files larger than this are not attempted (returns `skipped`). */
 export const MAX_FILE_BYTES = 25 * 1024 * 1024; // 25 MB
