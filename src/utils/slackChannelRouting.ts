@@ -146,35 +146,35 @@ export function resolveSlackAudience(
  * ──────────────────────────────────────────────────────────────────────────*/
 
 /**
- * The platform channel is muted until this is "true".
+ * The platform channel posts normally UNLESS this is explicitly set to "true".
  *
- * Sarah 2026-09-07: "keep them quiet too until I finish the in-platform view."
- * The Slack side of grq-platform-status was carrying operational chatter — the
- * resolution digest, merge-applied pings, the weekly brief, KPI results — that
- * she is in the middle of rebuilding as an in-app screen. Until that lands,
- * Slack repeats a story the platform is about to tell better.
+ * DEFAULT OFF — nothing is muted unless someone deliberately mutes it.
  *
- * Opt-IN, matching HEALTH_PULSE_SLACK_ALERTS and FRAUD_REMINDERS_ENABLED, so
- * silence is what you get by doing nothing and noise takes a deliberate act.
+ * This shipped for one afternoon on 2026-09-07 with the opposite polarity, as
+ * an opt-IN switch that silenced the whole platform channel by default. That
+ * was wrong: Sarah wanted two specific alert TYPES stopped — the health pulse
+ * and the fraud reminders — each of which already has its own switch
+ * (HEALTH_PULSE_SLACK_ALERTS, FRAUD_REMINDERS_ENABLED). Silencing the channel
+ * silenced months of working reporting alongside them.
  *
- * SCOPE, deliberately narrow:
- *   · Only the `platform` audience. sales_sdr, cs and marketplace keep posting;
- *     those channels have owners waiting on them.
- *   · Only AUTOMATED posts. A human pressing "Send test ping" bypasses this —
- *     muting the thing that proves the wiring works would make the wiring
- *     impossible to check, which is how a mute becomes a permanent outage.
- *   · Slack ONLY. notifyEvent still writes the in-app notification, so nothing
- *     is lost — it just stops being announced. That is the whole point: the
- *     data keeps flowing to the screen she is building.
+ * The lesson is in the polarity, so it is written into the default: a switch
+ * that turns things OFF must never be the thing that happens when nobody
+ * chooses. Stopping one noisy alert is a job for that alert's own gate, not for
+ * a blanket over everything that shares its channel.
+ *
+ * Kept (rather than deleted) because the machinery is genuinely useful for a
+ * planned quiet period — but it now takes a deliberate PLATFORM_SLACK_MUTE=true
+ * to engage, and it still only ever covers:
+ *   · the `platform` audience — sales_sdr, cs and marketplace are never touched;
+ *   · automated senders — operator buttons always post;
+ *   · Slack — the in-app notification is always written either way.
  */
-export const PLATFORM_ANNOUNCEMENTS_ENV = "PLATFORM_SLACK_ANNOUNCEMENTS";
+export const PLATFORM_MUTE_ENV = "PLATFORM_SLACK_MUTE";
 
 export function platformAnnouncementsMuted(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  return (
-    String(env[PLATFORM_ANNOUNCEMENTS_ENV] || "").toLowerCase() !== "true"
-  );
+  return String(env[PLATFORM_MUTE_ENV] || "").toLowerCase() === "true";
 }
 
 /**

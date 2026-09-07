@@ -33,7 +33,7 @@ export const adminApiRoutes = [
             resolveSlackChannel,
             platformAnnouncementsMuted,
             getSuppressedPlatformPosts,
-            PLATFORM_ANNOUNCEMENTS_ENV,
+            PLATFORM_MUTE_ENV,
           } = await import("../../utils/slackChannelRouting");
 
           const audiences: Record<string, unknown> = {};
@@ -105,7 +105,7 @@ export const adminApiRoutes = [
             // is broken". Counts reset on restart — they are a diagnostic, not
             // a record; the durable copy is the in-app notification.
             platformChannelMuted: platformAnnouncementsMuted(),
-            platformMuteEnvVar: PLATFORM_ANNOUNCEMENTS_ENV,
+            platformMuteEnvVar: PLATFORM_MUTE_ENV,
             suppressedPlatformPosts: suppressed.count,
             suppressedPlatformRecent: suppressed.recent,
           });

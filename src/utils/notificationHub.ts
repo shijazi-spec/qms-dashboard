@@ -279,7 +279,7 @@ async function sendSlackNotification(notif: Notification): Promise<void> {
     if (routed.muted) {
       noteSuppressedPlatformPost(notif.title, notif.module);
       logger.info(
-        `[NotificationHub] Platform Slack post suppressed (PLATFORM_SLACK_ANNOUNCEMENTS is not "true"): ${notif.title}`,
+        `[NotificationHub] Platform Slack post suppressed (PLATFORM_SLACK_MUTE=true): ${notif.title}`,
       );
       return;
     }

@@ -25,12 +25,12 @@ const suite = new TestSuite("slackChannelRouting");
 console.log("\n=== Slack channel routing ===\n");
 
 /**
- * The platform channel is muted unless PLATFORM_SLACK_ANNOUNCEMENTS is "true".
- * Every fixture that asserts platform ROUTING sets it, so those tests keep
- * checking which channel is chosen rather than accidentally re-testing the
- * mute. The mute has its own tests at the bottom.
+ * Nothing is muted unless PLATFORM_SLACK_MUTE is explicitly "true", so the
+ * routing fixtures below need no mute flag at all — the empty default is the
+ * working default. Kept as an empty object rather than deleted so the contrast
+ * with MUTED_ENV stays visible at the bottom of the file.
  */
-const UNMUTED = { PLATFORM_SLACK_ANNOUNCEMENTS: "true" };
+const UNMUTED = {};
 
 const ENV = {
   ...UNMUTED,
@@ -130,9 +130,9 @@ await suite.test("falls back to SLACK_CHANNEL_ID when an audience is unconfigure
 });
 
 await suite.test("returns null when Slack is entirely unconfigured", async () => {
-  // UNMUTED on purpose: without it this would pass because the channel is
-  // muted, not because Slack is unconfigured — the same assertion for a
-  // different reason, which is how a test stops testing anything.
+  // Null here must mean "no channel configured", never "muted" — the mute has
+  // its own assertions below, and one test proving two different things is how
+  // a test stops testing either.
   const none = { ...UNMUTED } as NodeJS.ProcessEnv;
   suite.expectEqual(resolveSlackChannel("platform", null, none).channel, null, "no channel");
 });
@@ -176,9 +176,10 @@ await suite.test("the legacy SALES_SDR spelling still resolves", async () => {
   suite.expectEqual(resolveSlackChannel("calls", null, legacy).channel, "C_OLDNAME", "alias honoured");
 });
 
-/* ── Platform-channel mute (Sarah 2026-09-07) ─────────────────────────────── */
+/* ── Platform-channel mute — OFF unless deliberately switched on ──────────── */
 
 const MUTED_ENV = {
+  PLATFORM_SLACK_MUTE: "true",
   SLACK_CHANNEL_PLATFORM: "C_PLATFORM",
   SLACK_CHANNEL_SDR_SALES: "C_SALES",
   SLACK_CHANNEL_CS: "C_CS",
@@ -186,25 +187,43 @@ const MUTED_ENV = {
   SLACK_CHANNEL_ID: "C_LEGACY",
 } as NodeJS.ProcessEnv;
 
-await suite.test("the mute is opt-IN — silence is the default", async () => {
-  // Doing nothing gives silence; noise requires a deliberate act. Same shape as
-  // HEALTH_PULSE_SLACK_ALERTS and FRAUD_REMINDERS_ENABLED.
-  suite.expectEqual(platformAnnouncementsMuted({} as NodeJS.ProcessEnv), true, "unset");
+await suite.test("NOTHING is muted by default", async () => {
+  // The test that would have caught the 2026-09-07 mistake. This shipped once
+  // with the opposite polarity — an opt-IN switch that silenced the entire
+  // platform channel unless a secret was set — and it took months of working
+  // reporting off Slack with it. A switch that turns things OFF must never be
+  // what happens when nobody chooses.
+  suite.expectEqual(platformAnnouncementsMuted({} as NodeJS.ProcessEnv), false, "unset");
   suite.expectEqual(
-    platformAnnouncementsMuted({ PLATFORM_SLACK_ANNOUNCEMENTS: "" } as NodeJS.ProcessEnv),
-    true,
+    platformAnnouncementsMuted({ PLATFORM_SLACK_MUTE: "" } as NodeJS.ProcessEnv),
+    false,
     "empty",
   );
   suite.expectEqual(
-    platformAnnouncementsMuted({ PLATFORM_SLACK_ANNOUNCEMENTS: "1" } as NodeJS.ProcessEnv),
-    true,
-    "1 is not true — only the literal word enables it",
+    platformAnnouncementsMuted({ PLATFORM_SLACK_MUTE: "false" } as NodeJS.ProcessEnv),
+    false,
+    "explicitly false",
   );
   suite.expectEqual(
-    platformAnnouncementsMuted({ PLATFORM_SLACK_ANNOUNCEMENTS: "TRUE" } as NodeJS.ProcessEnv),
+    platformAnnouncementsMuted({ PLATFORM_SLACK_MUTE: "1" } as NodeJS.ProcessEnv),
     false,
-    "case-insensitive true",
+    "1 does not mute — only the literal word",
   );
+  suite.expectEqual(
+    platformAnnouncementsMuted({ PLATFORM_SLACK_MUTE: "TRUE" } as NodeJS.ProcessEnv),
+    true,
+    "case-insensitive true DOES mute",
+  );
+});
+
+await suite.test("the platform channel posts normally with no mute set", async () => {
+  // The regression that actually cost something: the digest, the merge-applied
+  // ping, the weekly brief and the KPI results all route here.
+  const r = resolveSlackChannel("platform", null, ENV);
+  suite.expectEqual(r.channel, "C_PLATFORM", "platform still posts");
+  suite.expectEqual(r.muted, false, "not muted");
+  suite.expectEqual(resolveSlackChannel("duplicates", null, ENV).channel, "C_PLATFORM", "radar ops");
+  suite.expectEqual(resolveSlackChannel("kpis", null, ENV).channel, "C_PLATFORM", "kpis");
 });
 
 await suite.test("a muted platform channel resolves to null", async () => {

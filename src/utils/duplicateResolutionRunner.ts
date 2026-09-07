@@ -306,7 +306,7 @@ export function isResolutionSlackConfigured(): boolean {
  * Whether the SCHEDULED posts from this file should stay quiet.
  *
  * This channel IS the platform channel, so it honours the same mute as
- * everything else routed to `platform` (PLATFORM_SLACK_ANNOUNCEMENTS) — see
+ * everything else routed to `platform` (PLATFORM_SLACK_MUTE) — see
  * slackChannelRouting for why. These senders do not go through the router
  * (they resolve AUTONOMOUS_RESOLUTION_SLACK_CHANNEL themselves), so the check
  * has to be repeated here rather than inherited.
@@ -328,7 +328,7 @@ async function resolutionAnnouncementsMuted(title: string): Promise<boolean> {
     if (!platformAnnouncementsMuted()) return false;
     noteSuppressedPlatformPost(title, "duplicates");
     logger.info(
-      `[dup-resolution-runner] platform Slack post suppressed (PLATFORM_SLACK_ANNOUNCEMENTS is not "true"): ${title}`,
+      `[dup-resolution-runner] platform Slack post suppressed (PLATFORM_SLACK_MUTE=true): ${title}`,
     );
     return true;
   } catch {
