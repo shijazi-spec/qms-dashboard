@@ -763,43 +763,95 @@ export const mastra = new Mastra({
     });
   };
   /**
+   * Tables this process must ensure exist on EVERY boot.
+   *
+   * All of these were created lazily — on the first read or write of the
+   * feature that owns them — so each existed in whichever environment had
+   * happened to use that feature, and nowhere else. That asymmetry is the
+   * danger, not the laziness: Replit's publish step diffs the DEV database
+   * against PRODUCTION, and a table present in prod but absent from dev reads
+   * as a DELETION. On 2026-09-07 it offered to rename the live
+   * connector_evidence table into a brand-new one; the other option's own
+   * small print said the table "will be dropped". The word DROP appeared in
+   * neither heading. One click, unrecoverable.
+   *
+   * Found by `npm run check:lazy-tables`, which lists the tables the code can
+   * create that a given database does not have. Re-run it after adding a
+   * feature that owns a table.
+   *
+   * Every init below is pure DDL — CREATE TABLE / CREATE INDEX IF NOT EXISTS,
+   * no seeding and no data writes — verified before being put on this path. An
+   * init that seeded rows would not belong here: boot is not the place to
+   * discover a migration.
+   *
+   * uploaded_files is the one that would hurt most. It holds BYTEA blobs, so
+   * "present in prod, absent from dev" is the literal shape of losing the
+   * files.
+   */
+  const BOOT_TABLE_ENSURES: Array<{ label: string; run: () => Promise<unknown> }> = [
+    {
+      label: "connector_evidence",
+      run: () =>
+        import("../utils/connectorEvidenceDatabase").then((m) =>
+          m.initConnectorEvidenceTable(),
+        ),
+    },
+    {
+      // Creates ai_metrics_retention_config AND ai_metrics_retention_audit.
+      label: "ai_metrics_retention_*",
+      run: () =>
+        import("../utils/aiMetricsRetentionConfig").then((m) =>
+          m.initAiMetricsRetentionConfigTable(),
+        ),
+    },
+    {
+      // integration_config rides along with the call-intelligence schema. This
+      // init logs a warning above 2s and can take 5-15s on a genuinely cold
+      // database; on a warm one every statement is an IF NOT EXISTS no-op, and
+      // it is memoized, so a later call-intelligence request pays nothing.
+      label: "integration_config (call intelligence)",
+      run: () =>
+        import("../utils/callIntelligenceDb").then((m) =>
+          m.initCallIntelligenceTables(),
+        ),
+    },
+    {
+      label: "sdr_batch_jobs",
+      run: () =>
+        import("../utils/sdrBatchEvaluator").then((m) =>
+          m.ensureSDRBatchJobsTable(),
+        ),
+    },
+    {
+      label: "uploaded_files",
+      run: () =>
+        import("../utils/fileUpload").then((m) => m.ensureUploadedFilesTable()),
+    },
+  ];
+
+  /**
    * Boot-time preparation, before the first tick.
    *
-   * 1. connector_evidence. It was created ONLY lazily, by the three functions
-   *    that read or write it, so it existed in whichever environment had
-   *    happened to open the Evidence Connectors page and nowhere else. That is
-   *    not a cosmetic difference: Replit's publish step diffs the DEV database
-   *    against PRODUCTION, and a table present in prod but absent from dev
-   *    reads as a DELETION. On 2026-09-07 it offered to rename the live
-   *    connector_evidence table into a brand-new one, and its other option
-   *    said in its own words that the table "will be dropped". A lazily
-   *    created table is a standing invitation to that dialog, and the dialog
-   *    is one click from unrecoverable data loss.
+   * Every step is BEST-EFFORT: none may stop the scheduler from starting, so
+   * the tick runs in `finally` regardless. A failed table ensure is logged by
+   * name and the feature falls back to its own lazy init, exactly as before.
    *
-   *    Creating it at boot means every environment that runs this process has
-   *    it, so the diff is empty and the question is never asked. The init is
-   *    CREATE TABLE IF NOT EXISTS and is already called on every read/write
-   *    path, so this is idempotent and costs one statement per boot.
-   *
-   * 2. The notification-settings cache. resolveSlackChannel reads it
-   *    synchronously and cannot await, so a cold cache means the platform
-   *    master switch falls back to its env default for the first tick —
-   *    correct, but not necessarily what the settings screen says.
-   *
-   * Both are best-effort: neither may stop the scheduler from starting, so the
-   * tick runs in `finally` regardless.
+   * The notification-settings cache is warmed here too: resolveSlackChannel
+   * reads it synchronously and cannot await, so a cold cache means the platform
+   * master switch falls back to its env default for the first tick — correct,
+   * but not necessarily what the settings screen says.
    */
   const startTimer = setTimeout(() => {
     safeLogger.info("⏰ [ScheduledJobFallback] Starting initial pass...");
     Promise.allSettled([
-      import("../utils/connectorEvidenceDatabase")
-        .then((m) => m.initConnectorEvidenceTable())
-        .catch((err) =>
+      ...BOOT_TABLE_ENSURES.map((t) =>
+        t.run().catch((err) =>
           safeLogger.warn(
-            "[Boot] connector_evidence ensure failed (non-fatal):",
+            `[Boot] ${t.label} ensure failed (non-fatal):`,
             err instanceof Error ? err.message : String(err),
           ),
         ),
+      ),
       import("../utils/notificationSettings")
         .then((m) => m.primeNotificationSettings())
         .catch(() => {

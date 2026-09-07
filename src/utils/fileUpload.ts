@@ -14,7 +14,16 @@ const UPLOAD_DIR = join(process.cwd(), 'data', 'documents');
  */
 const filePool = createRedactedPool({ connectionString: process.env.DATABASE_URL });
 let uploadedFilesTableReady: Promise<void> | null = null;
-function ensureUploadedFilesTable(): Promise<void> {
+/**
+ * Exported so the boot sequence can create the table in EVERY environment.
+ *
+ * uploaded_files holds BYTEA blobs and existed only where someone had actually
+ * uploaded a file — production, typically, and not dev. A table present in prod
+ * and absent from dev is what Replit's publish diff reads as a deletion; see
+ * connector_evidence in src/mastra/index.ts. Losing this one would mean losing
+ * the files. Pure DDL, idempotent, memoized.
+ */
+export function ensureUploadedFilesTable(): Promise<void> {
   if (!uploadedFilesTableReady) {
     uploadedFilesTableReady = filePool
       .query(`

@@ -74,7 +74,15 @@ export interface SDRBatchJob {
   metadata: any;
 }
 
-async function ensureSDRBatchJobsTable(): Promise<void> {
+/**
+ * Exported so the boot sequence can create the table in EVERY environment.
+ *
+ * It was private and lazy, so sdr_batch_jobs existed only where someone had
+ * submitted a batch. Replit's publish diffs dev against prod and reads a
+ * table missing on one side as a deletion — see connector_evidence in
+ * src/mastra/index.ts for what that dialog looks like. Pure DDL, idempotent.
+ */
+export async function ensureSDRBatchJobsTable(): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS sdr_batch_jobs (
       id SERIAL PRIMARY KEY,
