@@ -762,19 +762,50 @@ export const mastra = new Mastra({
       safeLogger.error("[ScheduledJobFallback] Unhandled tick error:", err);
     });
   };
-  // Initial tick ~60s after boot so DB pools and routes are fully ready.
+  /**
+   * Boot-time preparation, before the first tick.
+   *
+   * 1. connector_evidence. It was created ONLY lazily, by the three functions
+   *    that read or write it, so it existed in whichever environment had
+   *    happened to open the Evidence Connectors page and nowhere else. That is
+   *    not a cosmetic difference: Replit's publish step diffs the DEV database
+   *    against PRODUCTION, and a table present in prod but absent from dev
+   *    reads as a DELETION. On 2026-09-07 it offered to rename the live
+   *    connector_evidence table into a brand-new one, and its other option
+   *    said in its own words that the table "will be dropped". A lazily
+   *    created table is a standing invitation to that dialog, and the dialog
+   *    is one click from unrecoverable data loss.
+   *
+   *    Creating it at boot means every environment that runs this process has
+   *    it, so the diff is empty and the question is never asked. The init is
+   *    CREATE TABLE IF NOT EXISTS and is already called on every read/write
+   *    path, so this is idempotent and costs one statement per boot.
+   *
+   * 2. The notification-settings cache. resolveSlackChannel reads it
+   *    synchronously and cannot await, so a cold cache means the platform
+   *    master switch falls back to its env default for the first tick —
+   *    correct, but not necessarily what the settings screen says.
+   *
+   * Both are best-effort: neither may stop the scheduler from starting, so the
+   * tick runs in `finally` regardless.
+   */
   const startTimer = setTimeout(() => {
     safeLogger.info("⏰ [ScheduledJobFallback] Starting initial pass...");
-    // Warm the notification-settings cache first. resolveSlackChannel reads it
-    // synchronously and cannot await, so a cold cache means the platform
-    // master switch falls back to its env default for the first tick — correct
-    // but not what the settings screen may say.
-    import("../utils/notificationSettings")
-      .then((m) => m.primeNotificationSettings())
-      .catch(() => {
-        /* degrades to env defaults; primeNotificationSettings never throws */
-      })
-      .finally(() => safeTick());
+    Promise.allSettled([
+      import("../utils/connectorEvidenceDatabase")
+        .then((m) => m.initConnectorEvidenceTable())
+        .catch((err) =>
+          safeLogger.warn(
+            "[Boot] connector_evidence ensure failed (non-fatal):",
+            err instanceof Error ? err.message : String(err),
+          ),
+        ),
+      import("../utils/notificationSettings")
+        .then((m) => m.primeNotificationSettings())
+        .catch(() => {
+          /* degrades to env defaults; primeNotificationSettings never throws */
+        }),
+    ]).finally(() => safeTick());
   }, 60 * 1000);
   // Re-check every 45 minutes (between the suggested 30–60 min cadence).
   const refreshTimer = setInterval(safeTick, 45 * 60 * 1000);
