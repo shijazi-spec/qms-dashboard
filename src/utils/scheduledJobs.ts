@@ -499,7 +499,17 @@ export async function runCsLifecycleScanIfStale(
     await initDuplicateRadarTables();
     const result = await scanCsLifecycleViolations({
       limit: 5000,
-      summaryOnly: true,
+      // NOT summaryOnly. The first real alert read "13 critical and 46
+      // warning" and nothing else — true, and useless: no rule, no account, no
+      // owner, nowhere to start. The breakdown lives in the violation rows, and
+      // the summary alone cannot produce it (by_code mixes all severities
+      // together, so it cannot say which rules the CRITICALS are).
+      //
+      // The rows are cheap here: the scan returns one row per VIOLATION, not
+      // per deal scanned — 59 rows on the run that prompted this, against 5000
+      // deals evaluated. The summaryOnly path exists for the per-BU report,
+      // which renders a single integer from a much larger corpus.
+      summaryOnly: false,
     });
 
     const critical = Number(result?.summary?.by_severity?.critical || 0);
@@ -524,7 +534,7 @@ export async function runCsLifecycleScanIfStale(
       logger.warn("[CsLifecycle Fallback] event_logs write failed:", e);
     }
 
-    await notifyCsLifecycleViolations(critical, warning);
+    await notifyCsLifecycleViolations(result, critical, warning);
 
     // Stamped only on success, so a failed scan retries on the next tick
     // instead of being treated as this cycle's run.
@@ -550,8 +560,22 @@ export async function runCsLifecycleScanIfStale(
 /**
  * Tell the CS channel about critical lifecycle violations.
  *
- * Mirrors the Inngest `notify-on-critical` step — same event type, wording and
- * "high" priority — so the CS team sees one message whichever driver ran.
+ * Mirrors the Inngest `notify-on-critical` step — same event type, trigger and
+ * "high" priority — but carries a BREAKDOWN the Inngest version does not. The
+ * first real alert said "13 critical and 46 warning" and stopped there: true,
+ * and useless. A count tells the CS team something is wrong; it does not tell
+ * them which rule, which account, or whose queue, so the next step is still
+ * "open the dashboard and work it out". The message should survive being read
+ * on a phone at 6pm without opening anything.
+ *
+ * Everything below the headline is computed from the CRITICAL rows only.
+ * summary.by_code mixes severities, so a breakdown taken from it would attribute
+ * warnings to the critical count — a wrong number in a compliance alert is
+ * worse than no number.
+ *
+ * Bounded on purpose: rules, owners and accounts are each capped with an
+ * "…and N more" line. Slack truncates long messages, and the truncation would
+ * silently eat the tail rather than say it did.
  *
  * Gated on critical > 0, matching Inngest. Warnings are carried IN the message
  * but never trigger it on their own: the message states a one-working-day SLA,
@@ -561,6 +585,7 @@ export async function runCsLifecycleScanIfStale(
  * behaviour — see notificationPostedWithinHours.
  */
 async function notifyCsLifecycleViolations(
+  result: any,
   critical: number,
   warning: number,
 ): Promise<void> {
@@ -577,12 +602,64 @@ async function notifyCsLifecycleViolations(
       );
       return;
     }
+
+    const { csRuleLabel, topCounts } = await import("./csAlertFormat");
+    const rows: any[] = Array.isArray(result?.violations)
+      ? result.violations
+      : [];
+    const crit = rows.filter((r) => r?.violation?.severity === "critical");
+
+    const byRule: Record<string, number> = {};
+    const byOwner: Record<string, number> = {};
+    const byAccount: Record<string, number> = {};
+    for (const r of crit) {
+      const code = String(r?.violation?.code || "unknown");
+      byRule[code] = (byRule[code] || 0) + 1;
+      // No CS owner is itself one of the 13 rules, so "(unassigned)" is a real
+      // finding here rather than missing data — it names the gap.
+      const owner = String(r?.cs_owner_name || "").trim() || "(unassigned)";
+      byOwner[owner] = (byOwner[owner] || 0) + 1;
+      const acct = String(r?.account_name || "").trim() || "(no account name)";
+      byAccount[acct] = (byAccount[acct] || 0) + 1;
+    }
+
+    const totalCsDeals = Number(result?.summary?.total_cs_deals || 0);
+    const evaluated = Number(result?.summary?.total_evaluated || 0);
+
+    const parts: string[] = [
+      `*${critical} critical* and ${warning} warning violation(s) across ${totalCsDeals} CS-tracked deal(s) (${evaluated} evaluated).`,
+      `Resolve critical findings within one working day per CS team SLA.`,
+    ];
+
+    if (Object.keys(byRule).length > 0) {
+      parts.push(`\n*Critical by rule:*\n${topCounts(byRule, 8, csRuleLabel)}`);
+    }
+    if (Object.keys(byOwner).length > 0) {
+      parts.push(`\n*Critical by CS owner:*\n${topCounts(byOwner, 6)}`);
+    }
+    if (Object.keys(byAccount).length > 0) {
+      parts.push(`\n*Accounts to start with:*\n${topCounts(byAccount, 8)}`);
+    }
+
+    // Phase distribution is the denominator behind the rules — "8 of 40 renewal
+    // deals are overdue" reads very differently from "8 overdue".
+    const byPhase = result?.summary?.by_phase || {};
+    const phaseLine = Object.entries(byPhase)
+      .filter(([, n]) => Number(n) > 0)
+      .sort((a, b) => Number(b[1]) - Number(a[1]))
+      .slice(0, 6)
+      .map(([p, n]) => `${p} ${n}`)
+      .join(" · ");
+    if (phaseLine) {
+      parts.push(`\n_CS deals by phase: ${phaseLine}_`);
+    }
+
     const { notifyEvent } = await import("./notificationHub");
     await notifyEvent({
       type: "cs_lifecycle_violations",
       module: "cs_lifecycle",
       title: `CS Lifecycle: ${critical} critical compliance violation(s)`,
-      message: `Nightly scan found ${critical} critical and ${warning} warning violation(s) on CS-tracked deals. Resolve critical findings within one working day per CS team SLA.`,
+      message: parts.join("\n"),
       entityType: "cs_lifecycle_violations",
       actionUrl: "/duplicates",
       priority: "high",
