@@ -40,10 +40,19 @@ await suite.test("fraud goes to platform, NOT to a business unit", async () => {
   suite.expectEqual(resolveSlackAudience("fraud"), "platform", "fraud");
 });
 
-await suite.test("SDR/Sales modules route to the sales channel", async () => {
-  for (const m of ["calls", "duplicates", "Leads", "Deals", "Accounts", "CRM"]) {
+await suite.test("SDR/Sales AUDIT FINDINGS route to the sales channel", async () => {
+  // The weekly data-quality audit over the team's own records.
+  for (const m of ["calls", "Leads", "Deals", "Accounts", "Contacts", "CRM"]) {
     suite.expectEqual(resolveSlackAudience(m), "sales_sdr", m);
   }
+});
+
+await suite.test("Duplicate Radar OPERATIONS route to platform, not sales", async () => {
+  // The resolution digest and "merge applied" messages are the platform acting
+  // on data, and the platform channel is where that behaviour gets reviewed and
+  // tuned. Distinct from the audit findings above, which are the team's records.
+  suite.expectEqual(resolveSlackAudience("duplicates"), "platform", "duplicates");
+  suite.expectEqual(resolveSlackAudience("duplicate-radar"), "platform", "duplicate-radar");
 });
 
 await suite.test("CS modules route to the CS channel", async () => {
@@ -81,9 +90,14 @@ await suite.test("segment overrides module", async () => {
     "partner accounts is a marketplace layout",
   );
   suite.expectEqual(
-    resolveSlackAudience("duplicates", "walaplus"),
+    resolveSlackAudience("Leads", "walaplus"),
     "sales_sdr",
-    "a corporate segment does not override",
+    "a corporate segment does not override the module",
+  );
+  suite.expectEqual(
+    resolveSlackAudience("Leads", "marketplace"),
+    "marketplace",
+    "a marketplace Leads finding leaves the sales channel",
   );
 });
 

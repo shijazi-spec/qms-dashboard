@@ -84,20 +84,27 @@ const MODULE_AUDIENCE: Record<string, SlackAudience> = {
   // unit's queue — its recipients are GRQ, not a sales team.
   fraud: "platform",
 
+  // Duplicate Radar OPERATIONS — the resolution digest, "merge applied",
+  // cluster progress. These are the platform DOING something, and the platform
+  // channel is where Sarah works through and improves that behaviour, so they
+  // belong with platform status rather than in a team's audit channel
+  // (Sarah 2026-09-07; this reverses an earlier reading that put them with
+  // Sales). The autonomous runner posts via AUTONOMOUS_RESOLUTION_SLACK_CHANNEL,
+  // whose default already targets that channel — leaving it unset is correct.
+  duplicates: "platform",
+  "duplicate-radar": "platform",
+
   // ── SDR (B2B) and Sales (B2B) ────────────────────────────────────────────
+  // AUDIT FINDINGS on the team's own records — the weekly data-quality audit
+  // over corporate/WalaPlus Leads, Deals, Accounts and Contacts. NOTE: the
+  // audit spans segments; marketplace findings should go to `marketplace`, but
+  // the notification does not yet carry the segment, so everything lands here
+  // for now. See resolveSlackAudience's `segment` argument.
   calls: "sales_sdr",
   sdr: "sales_sdr",
   sales: "sales_sdr",
   crm: "sales_sdr",
   roi: "sales_sdr",
-  // Duplicate Radar. Sarah had no preference; these sit with Sales/SDR because
-  // the records being merged are theirs. NOTE: radar traffic spans segments —
-  // a marketplace cluster should really go to `marketplace`, but the
-  // notification does not currently carry the segment. Routing that correctly
-  // needs the segment plumbed through notifyEvent; until then everything lands
-  // here. See resolveSlackAudience's `segment` argument.
-  duplicates: "sales_sdr",
-  "duplicate-radar": "sales_sdr",
   leads: "sales_sdr",
   deals: "sales_sdr",
   accounts: "sales_sdr",
