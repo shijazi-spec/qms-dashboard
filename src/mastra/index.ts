@@ -765,7 +765,16 @@ export const mastra = new Mastra({
   // Initial tick ~60s after boot so DB pools and routes are fully ready.
   const startTimer = setTimeout(() => {
     safeLogger.info("⏰ [ScheduledJobFallback] Starting initial pass...");
-    safeTick();
+    // Warm the notification-settings cache first. resolveSlackChannel reads it
+    // synchronously and cannot await, so a cold cache means the platform
+    // master switch falls back to its env default for the first tick — correct
+    // but not what the settings screen may say.
+    import("../utils/notificationSettings")
+      .then((m) => m.primeNotificationSettings())
+      .catch(() => {
+        /* degrades to env defaults; primeNotificationSettings never throws */
+      })
+      .finally(() => safeTick());
   }, 60 * 1000);
   // Re-check every 45 minutes (between the suggested 30–60 min cadence).
   const refreshTimer = setInterval(safeTick, 45 * 60 * 1000);

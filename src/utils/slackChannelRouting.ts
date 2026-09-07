@@ -26,6 +26,8 @@
  * messages.
  */
 
+import { isNotificationEnabledSync } from "./notificationSettings";
+
 export type SlackAudience = "platform" | "sales_sdr" | "cs" | "marketplace";
 
 /**
@@ -171,10 +173,24 @@ export function resolveSlackAudience(
  */
 export const PLATFORM_MUTE_ENV = "PLATFORM_SLACK_MUTE";
 
+/**
+ * Now backed by the notification settings screen, with this env var as the
+ * deployment default rather than the control surface — see notificationSettings
+ * for why twenty-odd secrets was the wrong answer.
+ *
+ * Still synchronous, deliberately: resolveSlackChannel is called from a dozen
+ * senders and making it async would ripple through all of them. The settings
+ * module keeps a warm cache and falls back to this env var when it is cold, so
+ * the worst case is exactly the previous behaviour.
+ *
+ * isNotificationEnabledSync touches no database — it reads an in-memory cache
+ * and otherwise re-derives the answer from `env` — so importing it here keeps
+ * this module testable with a synthetic env and no database in sight.
+ */
 export function platformAnnouncementsMuted(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  return String(env[PLATFORM_MUTE_ENV] || "").toLowerCase() === "true";
+  return !isNotificationEnabledSync("platform_slack_announcements", env);
 }
 
 /**

@@ -65,17 +65,22 @@ function emailConfigured(): boolean {
  * name real open incidents against regulatory clocks, and silencing them by
  * default would be a different and worse decision.
  */
-function remindersEnabled(): boolean {
-  return (
-    String(process.env.FRAUD_REMINDERS_ENABLED || "").toLowerCase() === "true"
-  );
+async function remindersEnabled(): Promise<boolean> {
+  try {
+    const { isNotificationEnabled } = await import("./notificationSettings");
+    return await isNotificationEnabled("fraud_reminders");
+  } catch {
+    return (
+      String(process.env.FRAUD_REMINDERS_ENABLED || "").toLowerCase() === "true"
+    );
+  }
 }
 
 /** Shared early-exit + log for the four gated reminders. */
-function remindersDisabled(checkName: string): boolean {
-  if (remindersEnabled()) return false;
+async function remindersDisabled(checkName: string): Promise<boolean> {
+  if (await remindersEnabled()) return false;
   logger.info(
-    `[FraudChecks] ${checkName} skipped — FRAUD_REMINDERS_ENABLED is not "true".`,
+    `[FraudChecks] ${checkName} skipped — fraud reminders are off in notification settings.`,
   );
   return true;
 }
@@ -228,7 +233,7 @@ export async function runFraudRuleReviewReminder(): Promise<{
   notified: number;
   total_due: number;
 }> {
-  if (remindersDisabled("rule-review")) return { notified: 0, total_due: 0 };
+  if (await remindersDisabled("rule-review")) return { notified: 0, total_due: 0 };
 
   const { getFraudRulesNeedingReviewSoon, initFraudTables } = await import(
     "./fraudDatabase"
@@ -280,7 +285,7 @@ export async function runFraudIncidentOverdueCheck(): Promise<{
   notified: number;
   overdue: number;
 }> {
-  if (remindersDisabled("incident-overdue")) return { notified: 0, overdue: 0 };
+  if (await remindersDisabled("incident-overdue")) return { notified: 0, overdue: 0 };
 
   const { getOverdueFraudIncidents, initFraudTables } = await import(
     "./fraudDatabase"
@@ -330,7 +335,7 @@ export async function runFraudCountryReviewReminder(): Promise<{
   notified: number;
   blacklisted: number;
 }> {
-  if (remindersDisabled("country-review")) return { notified: 0, blacklisted: 0 };
+  if (await remindersDisabled("country-review")) return { notified: 0, blacklisted: 0 };
 
   // Semi-annual, so it must survive restarts: the in-process throttle resets on
   // every republish, which fired this three times in thirty minutes.
@@ -379,7 +384,7 @@ export async function runFraudKpiMonthlyReminder(): Promise<{
   month: string;
   kpi_id: any;
 }> {
-  if (remindersDisabled("kpi-monthly")) return { month: "", kpi_id: null };
+  if (await remindersDisabled("kpi-monthly")) return { month: "", kpi_id: null };
 
   const { initFraudTables, autoCalculateKpisForMonth, upsertFraudKpi } =
     await import("./fraudDatabase");

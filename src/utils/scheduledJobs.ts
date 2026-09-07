@@ -376,6 +376,13 @@ async function notifyCsOverlapBlocks(result: any): Promise<void> {
       logger.info("[CsOverlap Fallback] 0 blocking overlap(s) — not posting");
       return;
     }
+    const { isNotificationEnabled } = await import("./notificationSettings");
+    if (!(await isNotificationEnabled("cs_overlap_alert"))) {
+      logger.info(
+        "[CsOverlap Fallback] Alert is off in notification settings — not posting",
+      );
+      return;
+    }
     if (await notificationPostedWithinHours("cs_pipeline_overlap", 20)) {
       logger.info(
         "[CsOverlap Fallback] Overlap alert already posted in the last 20h — skipping",
@@ -593,6 +600,13 @@ async function notifyCsLifecycleViolations(
     if (critical === 0) {
       logger.info(
         "[CsLifecycle Fallback] 0 critical violation(s) — not posting",
+      );
+      return;
+    }
+    const { isNotificationEnabled } = await import("./notificationSettings");
+    if (!(await isNotificationEnabled("cs_lifecycle_alert"))) {
+      logger.info(
+        "[CsLifecycle Fallback] Alert is off in notification settings — not posting",
       );
       return;
     }
@@ -1682,10 +1696,16 @@ async function salesReportPostedWithinDays(
  *
  * Set SALES_WEEKLY_SLACK_REPORTS=true to turn delivery on.
  */
-function salesWeeklyReportsEnabled(): boolean {
-  return (
-    String(process.env.SALES_WEEKLY_SLACK_REPORTS || "").toLowerCase() === "true"
-  );
+async function salesWeeklyReportsEnabled(): Promise<boolean> {
+  try {
+    const { isNotificationEnabled } = await import("./notificationSettings");
+    return await isNotificationEnabled("sales_weekly_reports");
+  } catch {
+    return (
+      String(process.env.SALES_WEEKLY_SLACK_REPORTS || "").toLowerCase() ===
+      "true"
+    );
+  }
 }
 
 export async function runDealComplianceWeeklyIfDue(): Promise<{
@@ -1693,7 +1713,7 @@ export async function runDealComplianceWeeklyIfDue(): Promise<{
   ageHours: number;
   result?: any;
 }> {
-  if (!salesWeeklyReportsEnabled()) {
+  if (!(await salesWeeklyReportsEnabled())) {
     logger.info(
       '[SalesWeekly] Deal compliance report skipped — delivery is off (SALES_WEEKLY_SLACK_REPORTS is not "true")',
     );
@@ -1719,7 +1739,7 @@ export async function runActiveDealConflictsWeeklyIfDue(): Promise<{
   ageHours: number;
   result?: any;
 }> {
-  if (!salesWeeklyReportsEnabled()) {
+  if (!(await salesWeeklyReportsEnabled())) {
     logger.info(
       '[SalesWeekly] Active deal conflicts report skipped — delivery is off (SALES_WEEKLY_SLACK_REPORTS is not "true")',
     );

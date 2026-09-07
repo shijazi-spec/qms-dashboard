@@ -770,19 +770,31 @@ function parsePersistedChecks(raw: unknown): Array<{ id?: string; status?: strin
  * platform channel in PRODUCTION, which is the thing that has never been
  * verified.
  */
-function pulseAlertsEnabled(): boolean {
-  return (
-    String(process.env.HEALTH_PULSE_SLACK_ALERTS || "").toLowerCase() === "true"
-  );
+/**
+ * Now resolved through the notification settings screen, with
+ * HEALTH_PULSE_SLACK_ALERTS as the deployment default rather than the only way
+ * to change it. Falls back to that env var whenever the settings lookup cannot
+ * answer, so this behaves exactly as before if the database is unreachable.
+ */
+async function pulseAlertsEnabled(): Promise<boolean> {
+  try {
+    const { isNotificationEnabled } = await import("./notificationSettings");
+    return await isNotificationEnabled("health_pulse_slack");
+  } catch {
+    return (
+      String(process.env.HEALTH_PULSE_SLACK_ALERTS || "").toLowerCase() ===
+      "true"
+    );
+  }
 }
 
 export async function maybeNotifyOnPulse(run: PulseRun): Promise<void> {
-  if (!pulseAlertsEnabled()) {
+  if (!(await pulseAlertsEnabled())) {
     // Logged, not silent: the run still happened and its result is on
     // /api/health/pulse. Only the Slack message is withheld.
     if (run.overall_status !== "healthy") {
       logger.warn(
-        `[HealthPulse] ${run.overall_status}: ${run.fail_count} fail, ${run.warn_count} warn — Slack alert suppressed (HEALTH_PULSE_SLACK_ALERTS is not "true")`,
+        `[HealthPulse] ${run.overall_status}: ${run.fail_count} fail, ${run.warn_count} warn — Slack alert suppressed (Platform Health alerts are off in notification settings)`,
       );
     }
     return;

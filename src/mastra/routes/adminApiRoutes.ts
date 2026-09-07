@@ -8,6 +8,124 @@ import { logger } from "../../utils/logger";
 export const adminApiRoutes = [
   {
     /**
+     * Every alert the platform can send, with its resolved state.
+     *
+     * The answer to "what alerts exist and which are on?", which until now
+     * could only be got by reading the source and cross-checking twenty-odd
+     * environment variables across two Replit environments.
+     *
+     * `source` is the point: it says which layer decided — an operator
+     * override, an environment default, or the built-in default — so a switch
+     * that is off is never confused with a switch that is broken. `lastFired`
+     * answers the question a list of toggles cannot: an alert that has been on
+     * for a month and never fired looks identical to a working one.
+     */
+    path: "/api/admin/notification-settings",
+    method: "GET",
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          if (!hasValidAdminApiKey(c) && !isAdminAuthorized(c)) {
+            return c.json({ error: "Authentication required" }, 401);
+          }
+          const { resolveAllNotificationSettings, getLastFiredTimes } =
+            await import("../../utils/notificationSettings");
+          const [settings, lastFired] = await Promise.all([
+            resolveAllNotificationSettings(),
+            getLastFiredTimes(),
+          ]);
+          return c.json({
+            settings: settings.map((s) => ({
+              key: s.key,
+              label: s.label,
+              channel: s.channel,
+              cadence: s.cadence,
+              description: s.description,
+              enabled: s.enabled,
+              source: s.source,
+              envVar: s.envVar,
+              lastFired: lastFired[s.key] ?? null,
+            })),
+          });
+        } catch (error) {
+          logger.error("[Admin] notification-settings read failed:", error);
+          return c.json({ error: "Failed to read notification settings" }, 500);
+        }
+      };
+    },
+  },
+  {
+    /**
+     * Turn one alert on or off, or clear the override.
+     *
+     * Body: { key, enabled: true | false | null, note? }
+     *
+     * `enabled: null` is a real operation, not a delete — it clears the
+     * override so the switch returns to its environment/built-in default, and
+     * the row stays so the audit trail keeps its shape.
+     *
+     * ADMIN ONLY, and every change is written to notification_settings_audit.
+     * These switches decide whether a compliance alert reaches anyone, so "who
+     * turned this off, and when" has to be answerable months later.
+     */
+    path: "/api/admin/notification-settings",
+    method: "POST",
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          if (!hasValidAdminApiKey(c) && !isAdminAuthorized(c)) {
+            return c.json({ error: "Authentication required" }, 401);
+          }
+          const body = await c.req.json().catch(() => ({}));
+          const key = String(body?.key || "").trim();
+          if (!key) return c.json({ error: "key is required" }, 400);
+
+          // Tri-state, and undefined is NOT one of the three. A malformed body
+          // must not silently clear an override that is holding an alert off.
+          const raw = body?.enabled;
+          if (raw !== true && raw !== false && raw !== null) {
+            return c.json(
+              { error: "enabled must be true, false or null" },
+              400,
+            );
+          }
+
+          const { setNotificationOverride, NOTIFICATION_SWITCHES } =
+            await import("../../utils/notificationSettings");
+          if (!NOTIFICATION_SWITCHES.some((s) => s.key === key)) {
+            return c.json({ error: `Unknown switch: ${key}` }, 400);
+          }
+
+          const session = await getSessionFromCookie(c).catch(() => null);
+          const who =
+            (session as any)?.email || (session as any)?.user?.email || "admin-api-key";
+
+          const updated = await setNotificationOverride(
+            key as any,
+            raw,
+            who,
+            typeof body?.note === "string" ? body.note.slice(0, 500) : undefined,
+          );
+          logger.info(
+            `[Admin] notification switch "${key}" set to ${String(raw)} by ${who}`,
+          );
+          return c.json({
+            success: true,
+            setting: {
+              key: updated.key,
+              enabled: updated.enabled,
+              source: updated.source,
+            },
+          });
+        } catch (error) {
+          logger.error("[Admin] notification-settings write failed:", error);
+          return c.json({ error: "Failed to update notification setting" }, 500);
+        }
+      };
+    },
+  },
+  {
+    /**
      * Where THIS RUNNING PROCESS will send each audience's Slack notifications.
      *
      * scripts/slack-routing-doctor.mjs answers the same question, but it runs in
