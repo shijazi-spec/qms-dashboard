@@ -615,20 +615,25 @@ const csOverlapAutoScanFunction = inngest.createFunction(
     await step.run("notify-on-blocks", async () => {
       if (!result.block_count || result.block_count === 0) return;
       try {
-        const { createNotification } = await import(
+        const { notifyEvent } = await import(
           "../../utils/notificationHub"
         );
         const arrFmt =
           result.total_arr_exposure > 0
             ? ` (SAR ${Number(result.total_arr_exposure).toLocaleString()} ARR exposure)`
             : "";
-        await createNotification({
-          module: "duplicates",
-          channel: "in_app",
+        // notifyEvent, not createNotification: this is CS-team work and needs
+        // to reach the CS Slack channel. createNotification delivers only on
+        // the channel it is handed, and "in_app" currently means nobody sees
+        // it. Always "high" — a BLOCK is stopping a marketing push, so the
+        // count does not change whether someone needs to know.
+        await notifyEvent({
+          type: "cs_pipeline_overlap_blocking",
+          module: "cs_lifecycle",
           title: `Duplicate Radar: ${result.block_count} CS-pipeline overlap(s) blocking new pushes`,
           message: `Nightly scan flagged ${result.block_count} BLOCK, ${result.review_count} REVIEW, ${result.warn_count} WARN${arrFmt}. Review on the Duplicates dashboard before approving any marketing batch.`,
-          action_url: "/duplicates",
-          priority: result.block_count >= 10 ? "high" : "medium",
+          actionUrl: "/duplicates",
+          priority: "high",
         });
       } catch (e) {
         logger.warn("[CsOverlap] Notification failed:", e);
@@ -652,7 +657,7 @@ const csOverlapAutoScanFunction = inngest.createFunction(
             "../../utils/notificationHub"
           );
           await createNotification({
-            module: "duplicates",
+            module: "cs_lifecycle",
             channel: "in_app",
             title: `Auto-CAPA: ${capaResult.created} new corrective action(s) opened on CS overlap BLOCK`,
             message: `${capaResult.created} CAPA(s) created (${capaResult.skipped_existing} skipped — already open). Threshold: SAR ${Number(capaResult.threshold_sar).toLocaleString()}. Numbers: ${capaResult.capa_numbers.join(", ") || "—"}.`,
@@ -768,16 +773,20 @@ const csLifecycleScanFunction = inngest.createFunction(
       const warn = result.summary.by_severity.warning || 0;
       if (crit === 0) return;
       try {
-        const { createNotification } = await import(
+        const { notifyEvent } = await import(
           "../../utils/notificationHub"
         );
-        await createNotification({
-          module: "duplicates",
-          channel: "in_app",
+        // notifyEvent so this reaches the CS Slack channel — see the CS-overlap
+        // notification above for why createNotification did not. Always "high":
+        // the message itself states a one-working-day SLA, so it is actionable
+        // at any count.
+        await notifyEvent({
+          type: "cs_lifecycle_violations",
+          module: "cs_lifecycle",
           title: `CS Lifecycle: ${crit} critical compliance violation(s)`,
           message: `Nightly scan found ${crit} critical and ${warn} warning violation(s) on CS-tracked deals. Resolve critical findings within one working day per CS team SLA.`,
-          action_url: "/duplicates",
-          priority: crit >= 5 ? "high" : "medium",
+          actionUrl: "/duplicates",
+          priority: "high",
         });
       } catch (e) {
         logger.warn("[CsLifecycle] Notification failed:", e);
@@ -801,7 +810,7 @@ const csLifecycleScanFunction = inngest.createFunction(
             "../../utils/notificationHub"
           );
           await createNotification({
-            module: "duplicates",
+            module: "cs_lifecycle",
             channel: "in_app",
             title: `Auto-CAPA: ${capaResult.created} new corrective action(s) opened on CS lifecycle violations`,
             message: `${capaResult.created} CAPA(s) created (${capaResult.skipped_existing} skipped — already open). Severities: ${capaResult.severities.join(", ")}. Numbers: ${capaResult.capa_numbers.join(", ") || "—"}.`,
