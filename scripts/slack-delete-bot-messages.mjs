@@ -42,10 +42,36 @@ const MATCH = arg("match");
 const HOURS = Number(arg("hours", "48"));
 const LIMIT = Number(arg("limit", "200"));
 
-if (!CHANNEL || !MATCH) {
+/**
+ * --link mode: delete specific messages by their Slack permalink.
+ *
+ * This exists because searching for the bot's own messages needs
+ * conversations.history, and granting groups:history would give the bot
+ * permanent read access to every private channel it sits in — a large, lasting
+ * permission for a one-off cleanup. Deleting needs only chat:write, which the
+ * bot already has because it posted.
+ *
+ * A permalink carries BOTH the channel and the timestamp:
+ *   https://walaplus.slack.com/archives/C0123ABCD/p1757251234567890
+ *                                       ^channel   ^ts (dot removed)
+ * so nothing else has to be looked up. Get one via "Copy link" on the message.
+ */
+const LINKS = process.argv
+  .filter((a) => a.includes("/archives/"))
+  .map((raw) => {
+    const m = raw.match(/\/archives\/([A-Z0-9]+)\/p(\d{10})(\d{6})/i);
+    if (!m) return null;
+    return { channel: m[1], ts: `${m[2]}.${m[3]}`, raw };
+  })
+  .filter(Boolean);
+
+if (LINKS.length === 0 && (!CHANNEL || !MATCH)) {
   console.error(
-    "Both --channel and --match are required.\n" +
-      '  node scripts/slack-delete-bot-messages.mjs --channel C0123 --match "Country Risk Register" [--hours 48] [--apply]',
+    "Give it EITHER message links, or a channel + match.\n\n" +
+      "  By link (no extra Slack scope needed — use 'Copy link' on each message):\n" +
+      "    node scripts/slack-delete-bot-messages.mjs <link> <link> --apply\n\n" +
+      "  By search (needs channels:history / groups:history):\n" +
+      '    node scripts/slack-delete-bot-messages.mjs --channel C0123 --match "Country Risk Register" [--hours 48] [--apply]',
   );
   process.exit(2);
 }
@@ -82,6 +108,34 @@ const main = async () => {
   const myBotId = me.bot_id;
   const myUserId = me.user_id;
   console.log(`Authenticated as ${me.user} (bot_id=${myBotId}) in ${me.team}`);
+
+  // ---- link mode: delete exactly what was named, nothing else -------------
+  if (LINKS.length > 0) {
+    console.log(`\n${LINKS.length} message(s) named by link:\n`);
+    for (const l of LINKS) {
+      console.log(
+        `  ${APPLY ? "DELETE" : "would delete"}  channel=${l.channel} ts=${l.ts}  (${new Date(Number(l.ts) * 1000).toISOString()})`,
+      );
+    }
+    if (!APPLY) {
+      console.log(`\nDRY RUN — nothing deleted. Add --apply to delete these.`);
+      return;
+    }
+    let ok = 0;
+    for (const l of LINKS) {
+      try {
+        await api("chat.delete", { channel: l.channel, ts: l.ts });
+        ok++;
+        await new Promise((r) => setTimeout(r, 1200));
+      } catch (err) {
+        // cant_delete_message means the bot did not author it — that is the
+        // guard doing its job, not a bug to work around.
+        console.error(`  failed ts=${l.ts}: ${err.message}`);
+      }
+    }
+    console.log(`\nDeleted ${ok}/${LINKS.length}.`);
+    return;
+  }
 
   const oldest = ((Date.now() - HOURS * 3600 * 1000) / 1000).toFixed(6);
   const history = await api(
