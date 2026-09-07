@@ -81,6 +81,7 @@ const WalaPlusNav = {
       case 'compliance':      return this._t('nav.items.compliance');
       case 'external-audits': return this._t('nav.items.external-audits');
       case 'connectors':      return this._t('nav.items.connectors');
+      case 'notification-settings': return this._t('nav.items.notification-settings');
       case 'vendors':         return this._t('nav.items.vendors');
       case 'reviews':         return this._t('nav.items.reviews');
       case 'kpis':            return this._t('nav.items.kpis');
@@ -278,7 +279,13 @@ const WalaPlusNav = {
         // UNGATED, matching their previous placement — adding a requiresRole
         // here would silently remove them for roles that can see them today.
         { label: 'Table F', href: '/tablef', icon: 'table', id: 'tablef' },
-        { label: 'Trigger Alerts', href: '/triggers', icon: 'exclamation-triangle', id: 'triggers' }
+        { label: 'Trigger Alerts', href: '/triggers', icon: 'exclamation-triangle', id: 'triggers' },
+        // Next to Trigger Alerts on purpose: one is the queue of alerts that
+        // fired, the other decides which fire at all. requiresRole mirrors
+        // GOVERNANCE_AND_EXECUTIVE in staticPageRoutes.ts exactly — a link to a
+        // page that answers 403 is worse than no link, and a page with no link
+        // is one nobody finds.
+        { label: 'Notification Settings', href: '/notification-settings', icon: 'cog', id: 'notification-settings', requiresRole: ['admin', 'head_of_operations_quality', 'grc_manager', 'quality_manager', 'executive'] }
       ]
     },
     {

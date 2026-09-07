@@ -78,7 +78,8 @@
       "qms-docs": "مكتبة الوثائق",
       "triggers": "تنبيهات المؤشرات",
       "documentation-tracker": "متتبّع الوثائق",
-      "connectors": "روابط جمع الأدلة"
+      "connectors": "روابط جمع الأدلة",
+      "notification-settings": "إعدادات التنبيهات"
     }
   },
   "login": {

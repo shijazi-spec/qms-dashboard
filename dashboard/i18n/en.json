@@ -78,7 +78,8 @@
       "qms-docs": "Documents Library",
       "triggers": "Trigger Alerts",
       "documentation-tracker": "Documentation Tracker",
-      "connectors": "Evidence Connectors"
+      "connectors": "Evidence Connectors",
+      "notification-settings": "Notification Settings"
     }
   },
   "login": {

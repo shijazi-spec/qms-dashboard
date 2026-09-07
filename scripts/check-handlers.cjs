@@ -99,6 +99,7 @@ const INLINE_SCRIPT_NONCE_ALLOWLIST = new Set([
   "dashboard/logs.html",
   "dashboard/migration.html",
   "dashboard/northstar-data.html",
+  "dashboard/notification-settings.html",
   "dashboard/notifications.html",
   "dashboard/okrs.html",
   "dashboard/onboarding.html",

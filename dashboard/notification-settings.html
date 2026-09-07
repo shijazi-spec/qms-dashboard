@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>WalaPlus - Notification Settings</title>
+    <link rel="stylesheet" href="/dashboard/tailwind.css">
+    <link rel="stylesheet" href="/css/theme.css">
+    <script id="walaplus-theme-fouc-init">
+        (function () {
+            try {
+                var v = localStorage.getItem('walaplus_theme');
+                if (v === 'dark') {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.add('wp-dark');
+                }
+            } catch (e) { /* private-mode / blocked storage — light default is fine */ }
+        })();
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        html { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; min-height: 100vh; }
+
+        /* State pills. Colour is always paired with a word — the same answer
+           has to reach someone reading a printout or with a colour vision
+           deficiency. */
+        .ns-pill { display:inline-flex; align-items:center; gap:6px; font-size:11px;
+                   font-weight:600; padding:3px 10px; border-radius:9999px;
+                   border:1px solid transparent; white-space:nowrap; }
+        .ns-on   { background:#ecfdf5; color:#065f46; border-color:#a7f3d0; }
+        .ns-off  { background:#fef2f2; color:#991b1b; border-color:#fecaca; }
+        .ns-src  { background:#f8fafc; color:#475569; border-color:#e2e8f0; }
+        .ns-ovr  { background:#eff6ff; color:#1e40af; border-color:#bfdbfe; }
+        .ns-btn  { font-size:12px; font-weight:600; padding:5px 12px; border-radius:6px;
+                   border:1px solid #d1d5db; background:#fff; color:#374151; cursor:pointer; }
+        .ns-btn:hover { background:#f9fafb; }
+        .ns-btn[disabled] { opacity:.5; cursor:default; }
+        .ns-note { font-size:11px; color:#6b7280; }
+    </style>
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/utilities.css">
+    <script src="/js/csp-styles.js?v=1"></script>
+    <script src="/js/i18n.js?v=1.0"></script>
+    <script src="/js/a11y.js" defer></script>
+    <script src="/js/safe-actions.js?v=2"></script>
+    <script src="/js/navigation.js?v=5.9"></script>
+</head>
+<body class="bg-gray-50">
+    <main class="max-w-6xl mx-auto px-4 py-8">
+        <header class="mb-6">
+            <h1 class="text-2xl font-semibold text-gray-900">Notification settings</h1>
+            <p class="mt-2 text-sm text-gray-600 max-w-3xl">
+                Every alert the platform can send, and whether it is on. This replaces
+                hunting through environment secrets in two places: changes here take
+                effect immediately, with no restart.
+            </p>
+            <p class="mt-2 text-sm text-gray-600 max-w-3xl">
+                <strong>Source</strong> says which layer decided — so an alert that is
+                switched off is never mistaken for one that is broken.
+                <strong>Last sent</strong> answers what a row of toggles cannot: an alert
+                that has been on for a month and never fired looks exactly like a working one.
+            </p>
+        </header>
+
+        <div id="nsBanner" class="hidden mb-4 rounded-md border px-4 py-3 text-sm"></div>
+
+        <div class="bg-white shadow rounded-lg overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Alert</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">When</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Goes to</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">State</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Source</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Last sent</th>
+                            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Change</th>
+                        </tr>
+                    </thead>
+                    <tbody id="nsBody" class="bg-white divide-y divide-gray-200">
+                        <tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <p class="mt-4 ns-note max-w-3xl">
+            Every change is recorded with who made it and when. Clearing an override
+            returns the alert to its deployment default rather than switching it off.
+        </p>
+    </main>
+
+    <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
+    <script>
+        // i18n before the first render: t() returns the key's last dot-segment
+        // rather than null on a miss, so a too-early render leaves text that
+        // looks deliberate rather than obviously broken.
+        var nsT = function (key, fallback) {
+            return (window.WalaPlusI18n ? window.WalaPlusI18n.t(key) : null) || fallback;
+        };
+
+        function nsEsc(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        var NS_CHANNEL_LABEL = {
+            platform: 'grq-platform-status',
+            sales_sdr: 'wp-sdr-sales-audits',
+            cs: 'wp-cs-audits',
+            marketplace: 'marketplace-audits',
+            email: 'Email'
+        };
+
+        var NS_SOURCE_LABEL = {
+            override: 'Set here',
+            env: 'Deployment secret',
+            'default': 'Built-in default'
+        };
+
+        function nsBanner(text, ok) {
+            var el = document.getElementById('nsBanner');
+            if (!el) return;
+            el.textContent = text;
+            el.className = 'mb-4 rounded-md border px-4 py-3 text-sm ' +
+                (ok ? 'bg-green-50 border-green-200 text-green-800'
+                    : 'bg-red-50 border-red-200 text-red-800');
+        }
+
+        function nsRelative(iso) {
+            if (!iso) return 'never';
+            var then = new Date(iso).getTime();
+            if (isNaN(then)) return 'never';
+            var mins = Math.floor((Date.now() - then) / 60000);
+            if (mins < 1) return 'just now';
+            if (mins < 60) return mins + 'm ago';
+            var hrs = Math.floor(mins / 60);
+            if (hrs < 48) return hrs + 'h ago';
+            return Math.floor(hrs / 24) + 'd ago';
+        }
+
+        function nsRender(settings) {
+            var body = document.getElementById('nsBody');
+            if (!body) return;
+            if (!settings || settings.length === 0) {
+                body.innerHTML = '<tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">No alerts registered.</td></tr>';
+                return;
+            }
+            body.innerHTML = settings.map(function (s) {
+                var stateCls = s.enabled ? 'ns-on' : 'ns-off';
+                var stateTxt = s.enabled ? 'Sending' : 'Off';
+                var srcCls = s.source === 'override' ? 'ns-ovr' : 'ns-src';
+                // "Last sent" is meaningless for an alert that is switched off —
+                // showing "never" beside "Off" reads as a fault rather than the
+                // expected consequence of the switch beside it.
+                var last = s.enabled ? nsRelative(s.lastFired) : '—';
+                var clearBtn = s.source === 'override'
+                    ? '<button class="ns-btn ml-2" data-ns-key="' + nsEsc(s.key) + '" data-ns-set="null">Clear</button>'
+                    : '';
+                return '<tr>' +
+                    '<td class="px-4 py-3 align-top">' +
+                        '<div class="text-sm font-medium text-gray-900">' + nsEsc(s.label) + '</div>' +
+                        '<div class="ns-note mt-1 max-w-md">' + nsEsc(s.description) + '</div>' +
+                    '</td>' +
+                    '<td class="px-4 py-3 align-top text-sm text-gray-600">' + nsEsc(s.cadence) + '</td>' +
+                    '<td class="px-4 py-3 align-top text-sm text-gray-600">' +
+                        nsEsc(NS_CHANNEL_LABEL[s.channel] || s.channel) + '</td>' +
+                    '<td class="px-4 py-3 align-top"><span class="ns-pill ' + stateCls + '">' + stateTxt + '</span></td>' +
+                    '<td class="px-4 py-3 align-top">' +
+                        '<span class="ns-pill ' + srcCls + '">' + nsEsc(NS_SOURCE_LABEL[s.source] || s.source) + '</span>' +
+                        (s.envVar ? '<div class="ns-note mt-1">' + nsEsc(s.envVar) + '</div>' : '') +
+                    '</td>' +
+                    '<td class="px-4 py-3 align-top text-sm text-gray-600">' + nsEsc(last) + '</td>' +
+                    '<td class="px-4 py-3 align-top text-right whitespace-nowrap">' +
+                        '<button class="ns-btn" data-ns-key="' + nsEsc(s.key) + '" data-ns-set="' +
+                            (s.enabled ? 'false' : 'true') + '">' +
+                            (s.enabled ? 'Turn off' : 'Turn on') + '</button>' +
+                        clearBtn +
+                    '</td>' +
+                '</tr>';
+            }).join('');
+        }
+
+        function nsLoad() {
+            fetch('/api/admin/notification-settings', { credentials: 'same-origin' })
+                .then(function (r) {
+                    if (r.status === 401) throw new Error('Sign in as an admin to view notification settings.');
+                    if (!r.ok) throw new Error('Could not load settings (HTTP ' + r.status + ').');
+                    return r.json();
+                })
+                .then(function (d) { nsRender(d.settings || []); })
+                .catch(function (e) {
+                    nsBanner(e.message || 'Could not load settings.', false);
+                    var body = document.getElementById('nsBody');
+                    if (body) body.innerHTML = '<tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">Could not load.</td></tr>';
+                });
+        }
+
+        // Delegated listener rather than inline handlers: inline onclick is
+        // blocked by the page CSP, and delegation survives the table being
+        // re-rendered after every change.
+        document.addEventListener('click', function (ev) {
+            var btn = ev.target && ev.target.closest ? ev.target.closest('[data-ns-key]') : null;
+            if (!btn) return;
+            var key = btn.getAttribute('data-ns-key');
+            var raw = btn.getAttribute('data-ns-set');
+            var enabled = raw === 'null' ? null : (raw === 'true');
+
+            btn.disabled = true;
+            fetch('/api/admin/notification-settings', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: key, enabled: enabled })
+            })
+                .then(function (r) {
+                    if (r.status === 401) throw new Error('Sign in as an admin to change notification settings.');
+                    if (!r.ok) throw new Error('Change failed (HTTP ' + r.status + ').');
+                    return r.json();
+                })
+                .then(function () {
+                    nsBanner('Saved. The change is live now — no restart needed.', true);
+                    nsLoad();
+                })
+                .catch(function (e) {
+                    nsBanner(e.message || 'Change failed.', false);
+                    btn.disabled = false;
+                });
+        });
+
+        nsLoad();
+    </script>
+</body>
+</html>

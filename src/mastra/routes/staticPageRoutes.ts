@@ -506,6 +506,22 @@ export const staticPageRoutes = [
         `To access the evidence connectors, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
       ),
   },
+  // /notification-settings → the one place every alert switch lives. Replaces
+  // hunting through twenty-odd environment secrets across two Replit
+  // environments to answer "is this alert on?". Same gate as the other
+  // governance pages; the backing API is under /api/admin/*, which is
+  // admin-key gated in checkApiAuth.
+  {
+    path: "/notification-settings",
+    method: "GET",
+    createHandler: async () =>
+      serveDashboardPageWithRoleGate(
+        "notification-settings.html",
+        GOVERNANCE_AND_EXECUTIVE,
+        "Notification Settings Setup Required",
+        `To manage notification settings, please set the <code class="bg-gray-100 px-2 py-1 rounded">ADMIN_API_KEY</code> secret or sign in.`,
+      ),
+  },
   {
     path: "/documentation-tracker",
     method: "GET",
