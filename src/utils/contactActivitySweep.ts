@@ -310,6 +310,131 @@ export async function runContactActivitySweep(): Promise<ContactActivitySweepRes
   return result;
 }
 
+/** Every related list that counts as history, for the self-contained check. */
+const ALL_CONTACT_LISTS = [
+  { list: "Tasks", column: "bulk_tasks" },
+  { list: "Calls", column: "bulk_calls" },
+  { list: "Events", column: "bulk_events" },
+  { list: "Emails", column: "emails" },
+  { list: "Attachments", column: "attachments" },
+  { list: "Notes", column: "notes" },
+] as const;
+
+function onDemandCap(): number {
+  const raw = parseInt(process.env.CONTACT_ACTIVITY_ONDEMAND_MAX || "", 10);
+  return Number.isFinite(raw) && raw > 0 ? Math.min(raw, 200) : 60;
+}
+function onDemandConcurrency(): number {
+  const raw = parseInt(process.env.CONTACT_ACTIVITY_ONDEMAND_CONCURRENCY || "", 10);
+  return Number.isFinite(raw) && raw > 0 ? Math.min(raw, 8) : 4;
+}
+
+export interface OnDemandVerifyResult {
+  requested: number;
+  checked: number;
+  provenEmpty: string[];
+  hasActivity: Array<{ id: string; total: number }>;
+  failed: Array<{ id: string; reason: string }>;
+  capped: boolean;
+}
+
+/**
+ * Verify a SPECIFIC set of contacts right now, for the batch the operator is
+ * about to act on (Sarah 2026-09-06).
+ *
+ * Why this exists alongside the sweep: the background sweep verifies ~150
+ * contacts a run against ~53,000 candidates, so waiting for it to reach a
+ * particular row takes months. This checks the rows on screen in seconds.
+ *
+ * SELF-CONTAINED by design — it reads all six related lists per contact rather
+ * than trusting the bulk pass to have reached them. The bulk pass is an
+ * optimisation for coverage; correctness here must not depend on whether it
+ * happened to have run. That costs 6 calls per contact instead of 3, which is
+ * affordable precisely because the batch is small and bounded.
+ *
+ * A contact whose lists cannot all be read is reported as FAILED, never as
+ * empty — same rule as everywhere else in this module.
+ */
+export async function verifyContactsNow(
+  zohoIds: string[],
+): Promise<OnDemandVerifyResult> {
+  const cap = onDemandCap();
+  const ids = Array.from(new Set(zohoIds.filter(Boolean))).slice(0, cap);
+  const result: OnDemandVerifyResult = {
+    requested: zohoIds.length,
+    checked: 0,
+    provenEmpty: [],
+    hasActivity: [],
+    failed: [],
+    capped: zohoIds.length > ids.length,
+  };
+
+  const queue = [...ids];
+  const worker = async () => {
+    for (;;) {
+      const id = queue.shift();
+      if (!id) return;
+      const counts: Record<string, number> = {};
+      let failedList: string | null = null;
+      for (const { list, column } of ALL_CONTACT_LISTS) {
+        try {
+          const recs = await fetchZohoRelatedRecords("Contacts", id, list, {
+            perPage: 200,
+          });
+          counts[column] = recs.length;
+        } catch (e: any) {
+          failedList = list;
+          break;
+        }
+      }
+      if (failedList) {
+        result.failed.push({ id, reason: `could not read ${failedList}` });
+        continue;
+      }
+      const total = Object.values(counts).reduce((n, v) => n + v, 0);
+      await pool.query(
+        `INSERT INTO contact_activity_counts
+           (zoho_contact_id, bulk_calls, bulk_tasks, bulk_events, emails, attachments, notes,
+            total, bulk_at, verified_at, checked_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW(), NOW())
+         ON CONFLICT (zoho_contact_id) DO UPDATE SET
+           bulk_calls = EXCLUDED.bulk_calls,
+           bulk_tasks = EXCLUDED.bulk_tasks,
+           bulk_events = EXCLUDED.bulk_events,
+           emails = EXCLUDED.emails,
+           attachments = EXCLUDED.attachments,
+           notes = EXCLUDED.notes,
+           total = EXCLUDED.total,
+           bulk_at = NOW(),
+           verified_at = NOW(),
+           checked_at = NOW()`,
+        [
+          id,
+          counts.bulk_calls || 0,
+          counts.bulk_tasks || 0,
+          counts.bulk_events || 0,
+          counts.emails || 0,
+          counts.attachments || 0,
+          counts.notes || 0,
+          total,
+        ],
+      );
+      result.checked++;
+      if (total === 0) result.provenEmpty.push(id);
+      else result.hasActivity.push({ id, total });
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(onDemandConcurrency(), ids.length || 1) }, worker),
+  );
+  logger.info(
+    `[contact-activity] on-demand verified ${result.checked}/${result.requested}: ` +
+      `${result.provenEmpty.length} empty, ${result.hasActivity.length} with activity, ` +
+      `${result.failed.length} unreadable`,
+  );
+  return result;
+}
+
 export interface NoActivityContact {
   zoho_contact_id: string;
   name: string | null;

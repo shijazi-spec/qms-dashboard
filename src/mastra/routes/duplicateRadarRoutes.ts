@@ -4196,6 +4196,39 @@ export const duplicateRadarRoutes = [
   },
 
   {
+    // VERIFY SPECIFIC CONTACTS NOW (Sarah 2026-09-06). The background sweep
+    // verifies ~150 contacts a run against ~53,000 candidates, so waiting for
+    // it to reach a particular row takes months. This checks the rows the
+    // operator is actually looking at, in seconds, so Empty-Delete can be used
+    // on that batch immediately.
+    // POST /api/duplicates/contacts/verify-activity  { zohoIds: [...] }
+    path: "/api/duplicates/contacts/verify-activity",
+    method: "POST" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const { requireAdminOrKey, unauthorizedResponse: unauth } = await import(
+          "../../utils/rbacMiddleware"
+        );
+        const su = await requireAdminOrKey(c);
+        if (!su) return unauth(c);
+        const body = await c.req.json().catch(() => ({}));
+        const zohoIds: string[] = Array.isArray(body?.zohoIds)
+          ? body.zohoIds.map((x: any) => String(x)).filter(Boolean)
+          : [];
+        if (!zohoIds.length) return c.json({ error: "zohoIds required" }, 400);
+        const { verifyContactsNow } = await import(
+          "../../utils/contactActivitySweep"
+        );
+        const result = await verifyContactsNow(zohoIds);
+        return c.json({ success: true, ...result });
+      } catch (e: any) {
+        logger.error("contacts/verify-activity failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+
+  {
     // Progress for the background contact activity check.
     // GET /api/duplicates/contacts/activity-sweep/status
     path: "/api/duplicates/contacts/activity-sweep/status",

@@ -8895,6 +8895,44 @@
         function downloadNoActivityCsv() {
             window.location.href = '/api/duplicates/contacts/no-activity?format=csv&limit=20000';
         }
+
+        // Verify the contacts on THIS page of the Empty/Junk Contacts table.
+        //
+        // Empty-Delete refuses any contact the census has not proven empty, and
+        // the background sweep verifies ~150 a run against ~53,000 candidates —
+        // so waiting for it to reach these particular rows takes months. This
+        // clears the check for the rows in front of the operator, in seconds.
+        async function verifyContactActivityThisPage() {
+            const btn = document.getElementById('erVerifyActivityBtn');
+            const restore = btn ? btn.innerHTML : '';
+            const ids = Array.from(
+                document.querySelectorAll('#erContactsBody .er-cb[data-zoho-id]'),
+            ).map(function (el) { return el.getAttribute('data-zoho-id'); }).filter(Boolean);
+            if (!ids.length) { rrToast('No contacts on this page to check.'); return; }
+            try {
+                if (btn) { btn.disabled = true; btn.innerHTML = 'Checking ' + _fn(ids.length) + '…'; }
+                const res = await fetch('/api/duplicates/contacts/verify-activity', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ zohoIds: ids }),
+                });
+                const d = await res.json().catch(function () { return {}; });
+                if (!res.ok || d.error) { rrToast('Check failed: ' + (d.error || ('HTTP ' + res.status))); return; }
+                // Report all three outcomes. "Has activity" is the useful half:
+                // those rows look empty here but would lose history if deleted.
+                const parts = [];
+                parts.push(_fn((d.provenEmpty || []).length) + ' safe to delete');
+                if ((d.hasActivity || []).length) parts.push(_fn(d.hasActivity.length) + ' have activity — will NOT be tagged');
+                if ((d.failed || []).length) parts.push(_fn(d.failed.length) + ' could not be read — left unverified');
+                if (d.capped) parts.push('capped at ' + _fn(d.checked) + ' this run — click again for the rest');
+                rrToast('✓ ' + parts.join(' · '));
+                await Promise.all([erReload('contacts'), loadNoActivityContacts()]);
+            } catch (e) {
+                rrToast('Check failed: ' + (e && e.message ? e.message : e));
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = restore; }
+            }
+        }
         function erReload(kind) {
             const map = { deals: 'erDealsBody', accounts: 'erAccountsBody', contacts: 'erContactsBody' };
             erLoad(kind, map[kind]);

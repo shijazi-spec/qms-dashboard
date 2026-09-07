@@ -2123,6 +2123,7 @@
               <h3 class="text-base font-bold text-gray-900"><span data-i18n="duplicates.er_contacts">Contacts</span> <span class="text-xs font-normal text-gray-500">— <span data-i18n="duplicates.er_contacts_sub">name-only / test</span></span></h3>
               <span id="erCount-contacts" class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">—</span>
               <button data-on-click="erVerifyPage" data-args="[&quot;contacts&quot;]" class="ms-auto rr-btn rr-btn-ghost" title="Live-check the records shown on THIS page against Zoho — drop any that actually have deals/contacts, prune already-deleted ones. No tagging.">🔎 <span data-i18n="duplicates.er_verify_page">Verify this page (CRM)</span></button>
+              <button id="erVerifyActivityBtn" data-on-click="verifyContactActivityThisPage" class="rr-btn rr-btn-ghost" title="Check the contacts on THIS page against Zoho for calls, meetings, emails, notes and attachments. Empty-Delete refuses any contact that has not been verified, because deleting one takes its activity history with it — this is how you clear that check for the rows in front of you.">🔎 Verify activity (this page)</button>
               <button id="erAiBtn-contacts" data-on-click="erAiApply" data-args="[&quot;contacts&quot;]" class="rr-btn rr-btn-ai" title="Verify each empty record live in Zoho, prune already-deleted ones, and tag the genuinely-empty ones Empty-Delete (Adam). The platform never deletes.">🤖 <span data-i18n="duplicates.er_ai_apply">AI-Apply empty → Empty-Delete</span></button>
               <span id="erAiProgress-contacts" class="text-xs font-medium text-rose-700" role="status" aria-live="polite"></span>
               <button data-on-click="erReload" data-args="[&quot;contacts&quot;]" class="rr-btn rr-btn-ghost">↻ <span data-i18n="duplicates.er_refresh">Refresh</span></button>
@@ -2613,7 +2614,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=192"></script>
+    <script src="/js/duplicates-app.js?v=193"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {
