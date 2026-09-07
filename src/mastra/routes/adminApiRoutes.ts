@@ -96,7 +96,12 @@ export const adminApiRoutes = [
             return c.json({ error: `Unknown switch: ${key}` }, 400);
           }
 
-          const session = await getSessionFromCookie(c).catch(() => null);
+          // getSessionFromCookie is SYNCHRONOUS and takes the cookie header,
+          // not the context: `await ...(c).catch(...)` failed to compile
+          // (nothing to .catch on a possibly-null value) and would have matched
+          // no session even if it had, quietly attributing every settings change
+          // to "admin-api-key" instead of the person who made it.
+          const session = getSessionFromCookie(c.req.header("Cookie"));
           const who =
             (session as any)?.email || (session as any)?.user?.email || "admin-api-key";
 
