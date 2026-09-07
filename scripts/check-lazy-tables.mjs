@@ -52,6 +52,26 @@ function walk(dir, out = []) {
 }
 
 /**
+ * Remove comments before scanning.
+ *
+ * MANDATORY, not tidiness. This codebase has now been bitten four times by a
+ * source-scraping check that read a comment as code: check-i18n.cjs, the
+ * kpiOrphan tests, the connector test, and this script on its first run — where
+ * a prose sentence in src/mastra/index.ts reading "The init is CREATE TABLE IF
+ * NOT EXISTS and is already called..." was reported as a missing table named
+ * `and`. A checker that invents findings is worse than no checker: it costs
+ * exactly the attention it was built to save.
+ *
+ * Deliberately crude. It can mangle a "//" inside a string literal, which for a
+ * CREATE TABLE scan changes nothing — no table name hides behind a URL.
+ */
+function stripComments(text) {
+  return text
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+}
+
+/**
  * table name → the files that declare it.
  *
  * A table can legitimately be declared in more than one file (two features that
@@ -64,7 +84,7 @@ function collectDeclaredTables() {
     // Test files declare fixtures that never ship. Counting them would produce
     // findings nobody can act on.
     if (file.includes(".test.") || file.includes(".spec.")) continue;
-    const text = readFileSync(file, "utf8");
+    const text = stripComments(readFileSync(file, "utf8"));
     const re = /CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+([a-zA-Z_][a-zA-Z0-9_]*)/gi;
     let m;
     while ((m = re.exec(text))) {
