@@ -567,6 +567,7 @@ export const mastra = new Mastra({
         runQualityAuditIfStale,
         runKPIAutoCalcIfStale,
         runCsOverlapScanIfStale,
+        runCsLifecycleScanIfStale,
         runDeletionFeedSweepIfStale,
         runAutonomousResolutionIfStale,
         runResolutionDigestIfDue,
@@ -623,6 +624,10 @@ export const mastra = new Mastra({
         { name: "QualityAudit", fn: () => runQualityAuditIfStale() },
         { name: "KPIAutoCalc", fn: () => runKPIAutoCalcIfStale() },
         { name: "CsOverlapScan", fn: () => runCsOverlapScanIfStale() },
+        // Placed straight after the overlap scan: both feed wp-cs-audits, and
+        // running them on the same tick means the CS team gets one coherent
+        // picture of a day rather than two alerts hours apart.
+        { name: "CsLifecycleScan", fn: () => runCsLifecycleScanIfStale() },
         // Chunk-embedding backfill behind the Mapping Console's semantic pass
         // and the evidence judge's retrieve-then-verify excerpt. Deliberately
         // bounded to a few documents per tick: 14 modules share one OpenAI key
