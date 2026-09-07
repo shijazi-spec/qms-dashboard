@@ -218,20 +218,28 @@
     </div>
 
     <script>
+        // Colour and icon MATCH the "Browse by Category" cards on Integrated QMS
+        // (MASTER_GROUPS in policies.html). Both pages group the SAME documents
+        // the same five ways, so SOPs must not be amber here and blue there: a
+        // reader who learns "purple means policy" on one page should not have to
+        // relearn it on the other.
+        //
+        // SOPs pairs with Processes - same colour, same icon - because they are
+        // the same rows counted under two names.
         const CATEGORIES = [
-            { id: 'documents',         label: 'Documents',         color: 'blue',   description: 'General governance artefacts' },
-            { id: 'policies',          label: 'Policies',          color: 'indigo', description: 'Approved corporate policies' },
-            { id: 'forms',             label: 'Forms',             color: 'green',  description: 'Operational forms & templates' },
-            { id: 'security_controls', label: 'Security Controls', color: 'red',    description: 'NCA/ISO control evidence' },
-            { id: 'sops',              label: 'SOPs',              color: 'amber',  description: 'Standard operating procedures' }
+            { id: 'sops',              label: 'SOPs',              color: 'blue',   icon: '\u2699\ufe0f',       description: 'Standard operating procedures', sub: 'SOPs \u00b7 Procedures \u00b7 Work Instructions' },
+            { id: 'documents',         label: 'Documents',         color: 'indigo', icon: '\ud83d\udcd8',       description: 'General governance artefacts',  sub: 'Guidelines \u00b7 Manuals \u00b7 Documents' },
+            { id: 'policies',          label: 'Policies',          color: 'purple', icon: '\ud83d\udcdc',       description: 'Approved corporate policies',   sub: 'Governance & corporate policies' },
+            { id: 'forms',             label: 'Forms',             color: 'amber',  icon: '\ud83d\udcdd',       description: 'Operational forms & templates', sub: 'Forms \u00b7 Templates' },
+            { id: 'security_controls', label: 'Security Controls', color: 'red',    icon: '\ud83d\udee1\ufe0f', description: 'NCA/ISO control evidence',      sub: 'Internal controls \u00b7 Security controls' }
         ];
 
         const COLOR_CLASSES = {
-            blue:   { ring: 'ring-blue-200',   bg: 'bg-blue-50',   text: 'text-blue-700' },
-            indigo: { ring: 'ring-indigo-200', bg: 'bg-indigo-50', text: 'text-indigo-700' },
-            green:  { ring: 'ring-green-200',  bg: 'bg-green-50',  text: 'text-green-700' },
-            red:    { ring: 'ring-red-200',    bg: 'bg-red-50',    text: 'text-red-700' },
-            amber:  { ring: 'ring-amber-200',  bg: 'bg-amber-50',  text: 'text-amber-700' }
+            blue:   { border: 'border-blue-500',   bg: 'bg-blue-50',   text: 'text-blue-700',   ring: 'ring-blue-300' },
+            indigo: { border: 'border-indigo-500', bg: 'bg-indigo-50', text: 'text-indigo-700', ring: 'ring-indigo-300' },
+            purple: { border: 'border-purple-500', bg: 'bg-purple-50', text: 'text-purple-700', ring: 'ring-purple-300' },
+            amber:  { border: 'border-amber-500',  bg: 'bg-amber-50',  text: 'text-amber-700',  ring: 'ring-amber-300' },
+            red:    { border: 'border-red-500',    bg: 'bg-red-50',    text: 'text-red-700',    ring: 'ring-red-300' }
         };
 
         let selectedCategory = null;
@@ -254,15 +262,25 @@
             wrap.innerHTML = CATEGORIES.map(function (c) {
                 const cc = COLOR_CLASSES[c.color] || COLOR_CLASSES.blue;
                 const count = cachedCounts[c.id] || 0;
-                const active = selectedCategory === c.id ? ' ring-2 ' + cc.ring : ' ring-1 ring-gray-200';
-                return '<button type="button" data-on-click="selectCategory" data-args=\'["' + c.id + '"]\' ' +
-                    'class="cat-card text-start bg-white rounded-xl p-5 ' + active + ' hover:bg-gray-50" ' +
+                // Selection is a RING, not a colour change: the colour carries
+                // the category, so recolouring on click would say the wrong
+                // thing. Paired with aria-pressed so the state is not conveyed
+                // by appearance alone.
+                const active = selectedCategory === c.id;
+                const ring = active ? ' ring-2 ' + cc.ring : ' ring-1 ring-gray-200';
+                return '<button type="button" data-on-click="selectCategory" data-args=' + "'" + '["' + c.id + '"]' + "'" + ' ' +
+                    'aria-pressed="' + (active ? 'true' : 'false') + '" ' +
+                    'class="cat-card text-start bg-white rounded-lg overflow-hidden border-s-4 ' + cc.border + ring + ' hover:bg-gray-50" ' +
                     'data-testid="card-category-' + c.id + '">' +
-                        '<div class="flex items-center justify-between">' +
-                            '<span class="' + cc.bg + ' ' + cc.text + ' text-xs font-semibold px-2 py-1 rounded">' + c.label + '</span>' +
-                            '<span class="text-2xl font-bold text-gray-900" data-testid="text-count-' + c.id + '">' + count + '</span>' +
+                        '<div class="' + cc.bg + ' px-4 py-2 flex items-center gap-2">' +
+                            '<span aria-hidden="true">' + c.icon + '</span>' +
+                            '<span class="' + cc.text + ' text-sm font-semibold">' + escapeHtml(c.label) + '</span>' +
                         '</div>' +
-                        '<p class="text-xs text-gray-500 mt-3">' + escapeHtml(c.description) + '</p>' +
+                        '<div class="px-4 py-3">' +
+                            '<div class="text-3xl font-bold text-gray-900" data-testid="text-count-' + c.id + '">' + count + '</div>' +
+                            '<p class="text-xs text-gray-500 mt-1">' + escapeHtml(c.description) + '</p>' +
+                            '<p class="text-[11px] text-gray-400 mt-2">' + escapeHtml(c.sub) + '</p>' +
+                        '</div>' +
                     '</button>';
             }).join('');
         }
