@@ -48,6 +48,39 @@ function emailConfigured(): boolean {
 }
 
 /**
+ * The four PERIODIC reminders are OFF by default (Sarah 2026-09-07: "stop this
+ * type of notification till I prepare it finally inside the platform").
+ *
+ * They are calendar prompts — rule review due, country register due, month-end
+ * KPI, incidents past 30 days — and their content and cadence are still being
+ * settled. Shipping them enabled put a semi-annual reminder into Slack four
+ * times in one morning.
+ *
+ * Set FRAUD_REMINDERS_ENABLED=true to turn them on. Deliberately opt-IN rather
+ * than opt-out: an unfinished reminder that stays quiet costs nothing, whereas
+ * one that fires teaches people to ignore the channel.
+ *
+ * This gate does NOT cover the two incident-specific checks — the SAMA 72-hour
+ * deadline and the containment-SLA breach. Those are not calendar prompts; they
+ * name real open incidents against regulatory clocks, and silencing them by
+ * default would be a different and worse decision.
+ */
+function remindersEnabled(): boolean {
+  return (
+    String(process.env.FRAUD_REMINDERS_ENABLED || "").toLowerCase() === "true"
+  );
+}
+
+/** Shared early-exit + log for the four gated reminders. */
+function remindersDisabled(checkName: string): boolean {
+  if (remindersEnabled()) return false;
+  logger.info(
+    `[FraudChecks] ${checkName} skipped — FRAUD_REMINDERS_ENABLED is not "true".`,
+  );
+  return true;
+}
+
+/**
  * One aggregated Slack/email announcement for a whole run.
  *
  * `notifyEvent` fans out to Slack and email at critical|high and to in-app
@@ -195,6 +228,8 @@ export async function runFraudRuleReviewReminder(): Promise<{
   notified: number;
   total_due: number;
 }> {
+  if (remindersDisabled("rule-review")) return { notified: 0, total_due: 0 };
+
   const { getFraudRulesNeedingReviewSoon, initFraudTables } = await import(
     "./fraudDatabase"
   );
@@ -245,6 +280,8 @@ export async function runFraudIncidentOverdueCheck(): Promise<{
   notified: number;
   overdue: number;
 }> {
+  if (remindersDisabled("incident-overdue")) return { notified: 0, overdue: 0 };
+
   const { getOverdueFraudIncidents, initFraudTables } = await import(
     "./fraudDatabase"
   );
@@ -293,6 +330,8 @@ export async function runFraudCountryReviewReminder(): Promise<{
   notified: number;
   blacklisted: number;
 }> {
+  if (remindersDisabled("country-review")) return { notified: 0, blacklisted: 0 };
+
   // Semi-annual, so it must survive restarts: the in-process throttle resets on
   // every republish, which fired this three times in thirty minutes.
   // 150 days ≈ one gap in the Feb/Oct cadence, so a genuine cycle still lands.
@@ -340,6 +379,8 @@ export async function runFraudKpiMonthlyReminder(): Promise<{
   month: string;
   kpi_id: any;
 }> {
+  if (remindersDisabled("kpi-monthly")) return { month: "", kpi_id: null };
+
   const { initFraudTables, autoCalculateKpisForMonth, upsertFraudKpi } =
     await import("./fraudDatabase");
   await initFraudTables();
