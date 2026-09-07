@@ -759,6 +759,20 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
   // pattern leaves `/api/documentation-tracker` itself matching no rule, which
   // deny-by-default then 403s — and it breaks the page-shell drift test, whose
   // backingApiPath is the bare path.
+  // Evidence connectors. Same `(\/|$)` shape as the tracker rules above, for
+  // the same reason: a trailing-slash-only pattern leaves the bare path
+  // matching no rule, which deny-by-default then 403s.
+  {
+    pattern: /^\/api\/connectors(\/|$)/,
+    methods: ["POST", "PUT", "PATCH", "DELETE"],
+    roles: ["admin", "grc_manager", "quality_manager", "head_of_operations_quality"],
+  },
+  {
+    pattern: /^\/api\/connectors(\/|$)/,
+    methods: ["GET"],
+    roles: ["admin", "quality_manager", "grc_manager", "head_of_operations_quality", "executive"],
+  },
+
   {
     pattern: /^\/api\/documentation-tracker(\/|$)/,
     methods: ["POST", "PUT", "PATCH", "DELETE"],
