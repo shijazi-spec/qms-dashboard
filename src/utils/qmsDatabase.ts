@@ -836,7 +836,7 @@ export async function getTrainingAssignments(options: {
      FROM training_assignments ta
      LEFT JOIN training_records tr ON ta.training_id = tr.training_id
      ${whereClause} 
-     ORDER BY ta.assigned_date DESC 
+     ORDER BY ta.created_at DESC
      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
     [...params, limit, offset]
   );

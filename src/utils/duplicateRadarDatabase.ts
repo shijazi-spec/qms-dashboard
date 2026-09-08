@@ -12515,8 +12515,16 @@ export async function lookupRecordsByZohoIds(zohoIds: string[]): Promise<{
 }> {
   if (!zohoIds.length) return {};
   const result = await pool.query(
+    // data_quality_score / data_quality_flags are NOT columns on
+    // duplicate_records — no CREATE, no ALTER, no addColumnIfNotExists declares
+    // them. Selecting them threw, and because the caller runs this inside a
+    // Promise.all with runLiveQualityCheck, the rejection took the whole
+    // /api/enrich-crm-records route down to a 500 every time.
+    //
+    // Nothing is lost by dropping them: the quality half of that response comes
+    // from runLiveQualityCheck, computed live, and the two fields below already
+    // default (?? 100, || []) because the author knew they might be absent.
     `SELECT dr.zoho_record_id, dr.cluster_id, dr.record_type,
-            dr.data_quality_score, dr.data_quality_flags,
             dc.domain, dc.company_name, dc.confidence_level,
             dc.confidence_score, dc.total_records
      FROM duplicate_records dr

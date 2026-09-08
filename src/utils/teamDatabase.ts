@@ -1249,7 +1249,10 @@ export async function getTrainingMatrix(): Promise<{
                  'title', tr.title,
                  'status', ta.status,
                  'due_date', ta.due_date,
-                 'completion_date', ta.completion_date
+                 // The COLUMN is completed_date; the JSON KEY stays
+                 // completion_date so consumers of this shape are unaffected.
+                 // ta.completion_date does not exist, so this whole query threw.
+                 'completion_date', ta.completed_date
                )
              ) FILTER (WHERE ta.id IS NOT NULL),
              '[]'

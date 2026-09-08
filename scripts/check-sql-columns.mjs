@@ -212,15 +212,31 @@ function buildSchema(files) {
 
 /* ── SQL extraction ───────────────────────────────────────────────────────── */
 
-/** Template literals that look like SQL. */
-function extractQueries(text) {
+/**
+ * Template literals that look like SQL.
+ *
+ * `raw` is the ORIGINAL file text, `text` the comment-stripped copy. Line
+ * numbers are computed against `raw`: stripping collapses every block comment
+ * to a single space, so a line number from the stripped text drifts further
+ * from the truth the deeper into the file it is. The first run pointed at
+ * duplicateRadarDatabase.ts:11651 for a query that lives at 12519 — 868 lines
+ * out, and pointing at a function signature. A finding you cannot locate is
+ * barely a finding.
+ */
+function extractQueries(text, raw) {
   const out = [];
   const re = /`([^`]*)`/g;
   let m;
   while ((m = re.exec(text))) {
     const body = m[1];
     if (!/\b(SELECT|INSERT\s+INTO|UPDATE|DELETE\s+FROM)\b/i.test(body)) continue;
-    const line = text.slice(0, m.index).split("\n").length;
+    // Locate this exact query in the original text to get a usable line number.
+    const anchor = body.slice(0, 60);
+    const at = anchor.trim() ? raw.indexOf(anchor) : -1;
+    const line =
+      at >= 0
+        ? raw.slice(0, at).split("\n").length
+        : text.slice(0, m.index).split("\n").length;
     out.push({ sql: body, line, hasInterpolation: /\$\{/.test(body) });
   }
   return out;
@@ -254,6 +270,26 @@ function sanitizeSql(sql) {
       .replace(/\$\d+/g, " ")
       .replace(/::[a-zA-Z_][\w]*(\[\])?/g, " ")
   );
+}
+
+/**
+ * Aliases attached to a DERIVED table — `) alias` closing a subquery.
+ *
+ * These shadow real table aliases and must never be resolved to a table. In
+ * duplicateResolutionRunner one query joins `duplicate_resolution_ledger lg`
+ * inside a subquery and then closes that subquery as `) lg`. The outer
+ * `lg.cluster_id` refers to the DERIVED table's select list, not to the ledger
+ * — which has no cluster_id — so the checker reported a bug in a correct query.
+ */
+function derivedAliases(sql) {
+  const out = new Set();
+  const re = /\)\s*(?:AS\s+)?([a-zA-Z_][\w]*)/gi;
+  let m;
+  while ((m = re.exec(sql))) {
+    const name = m[1].toLowerCase();
+    if (!SQL_KEYWORDS.has(name)) out.add(name);
+  }
+  return out;
 }
 
 /** alias/table → table, from FROM / JOIN / UPDATE / INSERT INTO. */
@@ -357,12 +393,16 @@ function main() {
 
   for (const file of files) {
     const rel = relative(ROOT, file).replace(/\\/g, "/");
-    const text = stripComments(readFileSync(file, "utf8"));
-    for (const q of extractQueries(text)) {
+    const raw = readFileSync(file, "utf8");
+    const text = stripComments(raw);
+    for (const q of extractQueries(text, raw)) {
       const sql = sanitizeSql(q.sql);
       const { map, tables } = tableRefs(sql);
       if (tables.size === 0) continue;
       const aliases = queryAliases(sql);
+      // Derived-table aliases shadow real ones; drop them from resolution
+      // entirely rather than resolving them to the wrong table.
+      for (const d of derivedAliases(sql)) map.delete(d);
 
       // ── Pass A: qualified references ────────────────────────────────────
       const qualRe = /\b([a-zA-Z_][\w]*)\.([a-zA-Z_][\w]*)\b/g;
