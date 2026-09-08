@@ -16,6 +16,7 @@
     "check:schema-parity": "node scripts/check-schema-parity.mjs --strict",
     "check:lockfile": "node scripts/check-lockfile-registry.mjs",
     "check:lazy-tables": "node scripts/check-lazy-tables.mjs",
+    "check:sql-columns": "node scripts/check-sql-columns.mjs",
     "check:rbac": "npx tsx tests/rbacRouteCoverage.test.ts",
     "check:all": "npm run check && npm run check:tests && npm run check:html-js && npm run check:schema-parity && npm run check:rbac && npm run check:routes && npm run check:lockfile",
     "format": "prettier --write \"**/*.ts\"",
