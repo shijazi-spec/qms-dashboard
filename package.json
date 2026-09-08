@@ -18,7 +18,7 @@
     "check:lazy-tables": "node scripts/check-lazy-tables.mjs",
     "check:sql-columns": "node scripts/check-sql-columns.mjs",
     "check:rbac": "npx tsx tests/rbacRouteCoverage.test.ts",
-    "check:all": "npm run check && npm run check:tests && npm run check:html-js && npm run check:schema-parity && npm run check:rbac && npm run check:routes && npm run check:lockfile",
+    "check:all": "npm run check && npm run check:tests && npm run check:html-js && npm run check:schema-parity && npm run check:rbac && npm run check:routes && npm run check:lockfile && npm run check:sql-columns -- --strict",
     "format": "prettier --write \"**/*.ts\"",
     "test": "npx tsx tests/runIntegrationTests.ts",
     "qc": "npx tsx tests/qc/run-platform-qc.ts",
