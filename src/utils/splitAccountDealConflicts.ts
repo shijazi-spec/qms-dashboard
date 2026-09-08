@@ -31,7 +31,13 @@
  * names. Catching that class needs an alias map, not a better matcher.
  */
 
-import { pool, buildSegmentPredicate, openStagePredicate, normalizeCompanyName } from "./duplicateRadarDatabase";
+import {
+  pool,
+  buildSegmentPredicate,
+  openStagePredicate,
+  normalizeCompanyName,
+  isPlaceholderName,
+} from "./duplicateRadarDatabase";
 import type { DuplicateFilters } from "./duplicateRadarDatabase";
 
 /**
@@ -40,6 +46,48 @@ import type { DuplicateFilters } from "./duplicateRadarDatabase";
  * "co" or "stc" swallow unrelated companies.
  */
 const MIN_JOIN_LEN = 4;
+
+/**
+ * Leading words that name a CATEGORY of client rather than a client, so two
+ * accounts sharing one are not evidence of anything.
+ *
+ * Found on the first live run (2026-09-09): the largest group this check
+ * returned was four Account records — "Confidential Government",
+ * "Confidential- الخطوط السعودية", "Confidential", "Confidential ( Consulting
+ * Firm)" — carrying five open deals under five different owners. They are four
+ * DIFFERENT clients whose names were withheld, and merging them would have sent
+ * five sellers a collision that does not exist.
+ *
+ * Deliberately short and evidence-driven: every entry is a word actually seen
+ * standing in for a withheld or unentered name. Do not pad it with plausible
+ * guesses — a word listed here silently disables name matching for every
+ * account that starts with it. Note `normalizeCompanyName` already strips
+ * company/group/holding/co and their Arabic equivalents, so those never reach
+ * this check as a first token.
+ */
+const NON_IDENTIFYING_FIRST_TOKENS = new Set<string>([
+  "confidential",
+  "anonymous",
+  "undisclosed",
+  "placeholder",
+  "unnamed",
+  "سري",
+  "سرية",
+]);
+
+/**
+ * True when a name is too generic to join ANOTHER account on. Placeholder names
+ * ("N/A", "لا يوجد") and category stand-ins ("Confidential …") both qualify.
+ *
+ * This gates the NAME signals only. A shared domain still joins these accounts,
+ * because a domain is proof regardless of how badly the record is named.
+ */
+export function isNonIdentifyingCompanyName(name: string | null | undefined): boolean {
+  if (isPlaceholderName(name)) return true;
+  const norm = normalizeCompanyName(String(name || "")).trim();
+  if (!norm) return true;
+  return NON_IDENTIFYING_FIRST_TOKENS.has(norm.split(" ")[0]);
+}
 
 export type SplitAccountSignal = "domain" | "exact_name" | "name_containment";
 
@@ -172,11 +220,18 @@ export function groupSplitAccountConflicts(
   }
 
   // 2. exact normalized name, and bucket for 3.
+  //
+  // Placeholder and category names are excluded from BOTH name signals here —
+  // they never enter `norms`, so they cannot join or be joined by name. The
+  // domain pass above already ran, so a badly-named account with a real domain
+  // is still grouped.
   const norms = new Map<string, string>();
   const byNorm = new Map<string, string[]>();
   const byFirstToken = new Map<string, string[]>();
   for (const id of ids) {
-    const n = normalizeCompanyName(byId.get(id)!.account_name || "").trim();
+    const rawName = byId.get(id)!.account_name || "";
+    if (isNonIdentifyingCompanyName(rawName)) continue;
+    const n = normalizeCompanyName(rawName).trim();
     if (!n || n.length < MIN_JOIN_LEN) continue;
     norms.set(id, n);
     (byNorm.get(n) || byNorm.set(n, []).get(n)!).push(id);
@@ -258,6 +313,9 @@ export async function getSplitAccountDealConflicts(
   segment: string;
   companies: SplitAccountConflict[];
   accounts_scanned: number;
+  /** Accounts whose name was too generic to match on — reported rather than
+   *  dropped silently, so a shrinking list is explainable. */
+  name_matching_suppressed: number;
 }> {
   const seg = !segment || segment === "corporate" ? "walaplus" : segment;
   const p = buildSegmentPredicate(seg, 1);
@@ -334,9 +392,13 @@ export async function getSplitAccountDealConflicts(
     }
   }
 
+  const all = Array.from(sides.values());
   return {
     segment: seg,
-    companies: groupSplitAccountConflicts(Array.from(sides.values())),
+    companies: groupSplitAccountConflicts(all),
     accounts_scanned: sides.size,
+    name_matching_suppressed: all.filter((s) =>
+      isNonIdentifyingCompanyName(s.account_name),
+    ).length,
   };
 }

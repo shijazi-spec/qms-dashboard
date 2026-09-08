@@ -13739,6 +13739,10 @@ export const duplicateRadarRoutes = [
           success: true,
           segment: result.segment,
           accounts_scanned: result.accounts_scanned,
+          // Placeholder / "Confidential …" names cannot join on NAME (they can
+          // still join on domain). Reported so a shorter list is explainable
+          // rather than looking like the check quietly missed something.
+          name_matching_suppressed: result.name_matching_suppressed,
           companies_split_across_accounts: companies.length,
           // Split out by how strong the evidence is, so a reader never has to
           // treat a fuzzy name match as proven.

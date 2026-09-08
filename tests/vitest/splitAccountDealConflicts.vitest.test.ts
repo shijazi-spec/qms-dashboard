@@ -13,6 +13,7 @@ import { describe, it, expect } from "vitest";
 import {
   groupSplitAccountConflicts,
   normalizeAccountDomain,
+  isNonIdentifyingCompanyName,
   type SplitAccountSide,
 } from "../../src/utils/splitAccountDealConflicts";
 
@@ -124,6 +125,47 @@ describe("groupSplitAccountConflicts", () => {
       side({ account_id: "e2", account_name: "Empty Co Two", domain: "empty.sa" }),
     ]);
     expect(out).toEqual([]);
+  });
+});
+
+describe("junk and placeholder names", () => {
+  // The largest group the first live run returned was four DIFFERENT clients
+  // whose names were withheld, carrying five open deals under five owners.
+  it("does not join accounts on a withheld-name stand-in", () => {
+    const out = groupSplitAccountConflicts([
+      side({ account_id: "c1", account_name: "Confidential Government" }),
+      side({ account_id: "c2", account_name: "Confidential- الخطوط السعودية" }),
+      side({ account_id: "c3", account_name: "Confidential" }),
+      side({ account_id: "c4", account_name: "Confidential ( Consulting Firm)" }),
+    ]);
+    expect(out).toEqual([]);
+  });
+
+  it("does not join accounts on a placeholder name", () => {
+    const out = groupSplitAccountConflicts([
+      side({ account_id: "p1", account_name: "N/A" }),
+      side({ account_id: "p2", account_name: "n/a" }),
+    ]);
+    expect(out).toEqual([]);
+  });
+
+  it("STILL joins a badly-named account when the domain proves it", () => {
+    const out = groupSplitAccountConflicts([
+      side({ account_id: "d1", account_name: "Confidential", domain: "realco.sa" }),
+      side({ account_id: "d2", account_name: "Real Co Trading", domain: "realco.sa" }),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].signal).toBe("domain");
+  });
+
+  it("does not suppress a real company that merely contains a listed word", () => {
+    // The rule is FIRST TOKEN only — "Riyadh Confidential Services" is a name,
+    // not a stand-in for one.
+    expect(isNonIdentifyingCompanyName("Riyadh Confidential Services")).toBe(false);
+    expect(isNonIdentifyingCompanyName("Confidential ( Consulting Firm)")).toBe(true);
+    expect(isNonIdentifyingCompanyName("لا يوجد")).toBe(true);
+    expect(isNonIdentifyingCompanyName("")).toBe(true);
+    expect(isNonIdentifyingCompanyName("Aster DM Healthcare")).toBe(false);
   });
 });
 
