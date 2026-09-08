@@ -191,12 +191,25 @@ function extractQueries(text) {
  * switched off.
  */
 function sanitizeSql(sql) {
-  return sql
-    .replace(/\$\{[^}]*\}/g, " ?? ")
-    .replace(/'(?:[^'\\]|\\.)*'/g, " '' ")
-    .replace(/--[^\n]*/g, " ")
-    .replace(/\$\d+/g, " ")
-    .replace(/::[a-zA-Z_][\w]*(\[\])?/g, " ");
+  return (
+    sql
+      // An identifier GLUED to an interpolation is not a column name — it is a
+      // fragment of one. `total_${o.col}` left `total_` behind and the first
+      // calibration run duly reported a missing column `duplicate_clusters
+      // .total_`. Kill the whole token, both sides.
+      .replace(/[a-zA-Z_]\w*\$\{[^}]*\}[\w]*/g, " ")
+      .replace(/\$\{[^}]*\}[a-zA-Z_]\w*/g, " ")
+      .replace(/\$\{[^}]*\}/g, " ")
+      // NAMED FUNCTION ARGUMENTS: MAKE_INTERVAL(hours => $2). `hours` is a
+      // parameter name, not a column. The first run reported
+      // notifications.hours and notifications.days from my own dedup helper,
+      // and enterprise_risks.days from riskDatabase.
+      .replace(/\b[a-zA-Z_]\w*\s*=>/g, " ")
+      .replace(/'(?:[^'\\]|\\.)*'/g, " '' ")
+      .replace(/--[^\n]*/g, " ")
+      .replace(/\$\d+/g, " ")
+      .replace(/::[a-zA-Z_][\w]*(\[\])?/g, " ")
+  );
 }
 
 /** alias/table → table, from FROM / JOIN / UPDATE / INSERT INTO. */
@@ -259,6 +272,33 @@ function main() {
     (f) => !f.includes(".test.") && !f.includes(".spec."),
   );
   const schema = buildSchema(files);
+
+  /**
+   * --debug-table <name>: print what the CREATE parser actually found.
+   *
+   * Added after the first calibration run reported kpi_values.actual_value as
+   * undeclared six times over — while the column is plainly declared at
+   * kpiDatabase.ts:179. Either the parser is missing columns or the finding is
+   * real, and guessing between those two from the outside is how a checker
+   * gets argued with instead of fixed. This makes it answer for itself.
+   */
+  const dbgIdx = process.argv.indexOf("--debug-table");
+  if (dbgIdx >= 0 && process.argv[dbgIdx + 1]) {
+    const t = process.argv[dbgIdx + 1].toLowerCase();
+    const cols = schema.get(t);
+    console.log(`\n--debug-table ${t}`);
+    if (!cols) {
+      console.log(
+        `  NO CREATE TABLE parsed for "${t}". Every reference to it is skipped,\n` +
+          `  so it cannot be the source of a finding — unless the finding names a\n` +
+          `  different table than you expect.\n`,
+      );
+    } else {
+      console.log(`  ${cols.size} column(s) parsed:`);
+      console.log(`    ${[...cols].sort().join(", ")}\n`);
+    }
+    return;
+  }
 
   let baseline = new Set();
   if (existsSync(BASELINE_PATH)) {
