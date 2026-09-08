@@ -1344,24 +1344,23 @@ export const callIntelligenceRoutes = [
             );
           }
 
-          // Same gate the backfill Pass 3 uses: row must have a phone
-          // somewhere (contact_phone column OR metadata.contact_phone),
-          // otherwise auto-link can't try anything. Including the
-          // metadata path because some legacy ingest paths only write
-          // the phone there. Audio-only rows with no phone at all are
-          // skipped — they can't match by phone and shouldn't fall
-          // through to activity-only linking (too lossy).
+          // Same gate the backfill Pass 3 uses: the row must carry a phone in
+          // metadata, otherwise auto-link has nothing to match on. Audio-only
+          // rows with no phone at all are skipped — they can't match by phone
+          // and shouldn't fall through to activity-only linking (too lossy).
+          //
+          // There is no `contact_phone` COLUMN. The phone has always lived in
+          // metadata JSONB; the same mistake was fixed in the compliance query
+          // above on 2026-05-28 and missed here, so this query threw
+          // `column "contact_phone" does not exist` on every run.
           const candidatesRes = await callIntelligencePool.query(
             `
             SELECT id, agent_email, agent_name, call_date, created_at,
-                   metadata, contact_phone
+                   metadata
               FROM call_records
              WHERE lead_id IS NULL
                AND deal_id IS NULL
-               AND (
-                    (metadata->>'contact_phone') IS NOT NULL
-                 OR contact_phone IS NOT NULL
-               )
+               AND (metadata->>'contact_phone') IS NOT NULL
                AND id > $2
              ORDER BY id ASC
              LIMIT $1
@@ -6208,7 +6207,13 @@ ${transcriptText}
                 { field: "Agent Email", value: callRecord.agent_email || "" },
                 { field: "Agent Name", value: callRecord.agent_name || "" },
                 { field: "Contact Name", value: callRecord.contact_name || "" },
-                { field: "Contact Phone", value: callRecord.contact_phone || "" },
+                // metadata, not a column — there is no contact_phone column on
+                // call_records. This cell had been silently blank on every
+                // export since it was written.
+                {
+                  field: "Contact Phone",
+                  value: callRecord.metadata?.contact_phone || "",
+                },
                 { field: "Call Date", value: fmtDate(callRecord.call_date) },
                 { field: "Source", value: callRecord.source || "" },
                 { field: "", value: "" },

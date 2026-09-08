@@ -183,14 +183,11 @@ async function backfillAutoLinks(perBootCap: number): Promise<{
   const res = await pool.query(
     `
     SELECT id, agent_email, agent_name, call_date, created_at, metadata,
-           recording_url, contact_phone
+           recording_url
       FROM call_records
      WHERE lead_id IS NULL
        AND deal_id IS NULL
-       AND (
-            (metadata->>'contact_phone') IS NOT NULL
-         OR contact_phone IS NOT NULL
-       )
+       AND (metadata->>'contact_phone') IS NOT NULL
      ORDER BY id DESC
      LIMIT $1
   `,
@@ -305,7 +302,7 @@ async function cleanupMismatchedLinks(perBootCap: number): Promise<{
   const candidatesRes = await pool.query(
     `
     SELECT id, call_id, lead_id, deal_id, linked_via, metadata,
-           agent_email, agent_name, call_date, contact_phone
+           agent_email, agent_name, call_date
       FROM call_records
      WHERE (lead_id IS NOT NULL OR deal_id IS NOT NULL)
        AND linked_via IS DISTINCT FROM 'activity'
