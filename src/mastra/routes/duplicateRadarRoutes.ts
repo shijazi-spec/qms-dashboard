@@ -13715,6 +13715,48 @@ export const duplicateRadarRoutes = [
   },
 
   {
+    // THE REVERSE CHECK (2026-09-09): one company split across TWO OR MORE
+    // Account records with an open deal on each. Every account looks clean on
+    // its own, so /multi-active-deals cannot see it — but two sellers are still
+    // working the same client. Read-only, reports fuzzy matches as evidence to
+    // verify, never as confirmed duplicates. The fix is always an Account merge.
+    // GET /api/duplicates/split-account-conflicts?segment=
+    path: "/api/duplicates/split-account-conflicts",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const url = new URL(c.req.url);
+        // Same layout scoping as the main tab, and the same reason it is not "all".
+        const segment = (url.searchParams.get("segment") || "walaplus") as any;
+        const { getSplitAccountDealConflicts } = await import(
+          "../../utils/splitAccountDealConflicts"
+        );
+        const result = await getSplitAccountDealConflicts(segment);
+        const companies = result.companies;
+        return c.json({
+          success: true,
+          segment: result.segment,
+          accounts_scanned: result.accounts_scanned,
+          companies_split_across_accounts: companies.length,
+          // Split out by how strong the evidence is, so a reader never has to
+          // treat a fuzzy name match as proven.
+          proven_by_domain: companies.filter((x) => x.signal === "domain").length,
+          matched_by_exact_name: companies.filter((x) => x.signal === "exact_name").length,
+          needs_verification: companies.filter((x) => x.signal === "name_containment").length,
+          total_open_deals: companies.reduce((a, x) => a + x.open_deals, 0),
+          total_open_value: Math.round(companies.reduce((a, x) => a + x.total_open_value, 0)),
+          companies,
+        });
+      } catch (e: any) {
+        logger.error("split-account-conflicts failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+
+  {
     // The same conflicts as an Excel workbook, for attaching to the flag that
     // goes to the Head of Sales. Two sheets:
     //   "Duplicated deals" — ONE ROW PER DEAL, because the recipient acts on
