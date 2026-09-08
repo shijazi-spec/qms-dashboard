@@ -132,7 +132,20 @@ function buildSchema(files) {
         else if (ch === ")") depth--;
         i++;
       }
-      const body = text.slice(start, i - 1);
+      // SQL line comments, stripped INSIDE the body only.
+      //
+      // stripComments() above removes JavaScript comments; a CREATE TABLE body
+      // lives inside a template literal and comments there are `--`. Without
+      // this, a comment containing a comma splits the body mid-sentence: the
+      // next fragment begins with a prose word, which is recorded as a column,
+      // and the REAL column after the comment is swallowed with it. That is how
+      // kpi_values came back with `and`, `silently` and `windows` as columns
+      // and without `actual_value` — which then reported six false findings
+      // against a column that has always existed.
+      //
+      // Scoped to the body rather than the whole file because `--` is a
+      // decrement operator in JavaScript.
+      const body = text.slice(start, i - 1).replace(/--[^\n]*/g, " ");
 
       // Split on top-level commas only.
       let d = 0;
@@ -149,9 +162,13 @@ function buildSchema(files) {
       parts.push(cur);
 
       for (const part of parts) {
-        const first = part.trim().split(/\s+/)[0];
-        if (!first) continue;
-        const bare = first.replace(/["`]/g, "");
+        const tokens = part.trim().split(/\s+/).filter(Boolean);
+        // A column definition is always at least `name TYPE`. A lone word is
+        // debris, not a column — cheap belt to the comment-stripping braces
+        // above, since the failure mode here is silent: a bad column name
+        // never errors, it just makes a real reference look undeclared.
+        if (tokens.length < 2) continue;
+        const bare = tokens[0].replace(/["`]/g, "");
         if (!/^[a-zA-Z_][\w]*$/.test(bare)) continue;
         if (NON_COLUMN_LEADERS.has(bare.toLowerCase())) continue;
         add(table, bare);
