@@ -4122,16 +4122,23 @@ export const duplicateRadarRoutes = [
             const s = v == null ? "" : String(v);
             return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
           };
+          // "Action" leads the merge columns so the admin working this sheet
+          // sorts on it and never bulk-deletes a row that should be merged.
           const header = [
-            "Contact", "Account", "Email", "Phone", "Owner", "Created", "Verified empty at", "Zoho ID", "Open in Zoho",
+            "Action", "Contact", "Account", "Email", "Phone", "Owner", "Created", "Verified empty at", "Zoho ID", "Open in Zoho",
+            "Merge into", "Merge into email", "Merge into activities", "Merge into Zoho ID",
           ];
           const body = rows.map((r: any) =>
             [
+              r.twin_id ? "MERGE — do not delete" : "Delete",
               r.name, r.account, r.email, r.phone, r.owner,
               r.created_date ? String(r.created_date).slice(0, 10) : "",
               r.verified_at ? String(r.verified_at).slice(0, 19).replace("T", " ") : "",
               r.zoho_contact_id,
               `https://crm.zoho.com/crm/org766568398/tab/Contacts/${r.zoho_contact_id}`,
+              r.twin_name || "", r.twin_email || "",
+              r.twin_activity == null ? "" : r.twin_activity,
+              r.twin_id || "",
             ].map(esc).join(","),
           );
           // BOM so Excel reads the Arabic names correctly.
@@ -4143,7 +4150,23 @@ export const duplicateRadarRoutes = [
             },
           });
         }
-        return c.json({ success: true, coverage, total: rows.length, contacts: rows });
+        const mergeCandidates = rows.filter((r: any) => r.twin_id);
+        return c.json({
+          success: true,
+          coverage,
+          total: rows.length,
+          // Split the headline: these two numbers need different actions, and
+          // one count covering both would read as "N safe to delete" when some
+          // of them are not safe to delete at all.
+          deletable: rows.length - mergeCandidates.length,
+          merge_candidates: mergeCandidates.length,
+          // Of those, the ones where the direction is already settled because
+          // the twin is PROVEN to hold activity.
+          merge_direction_known: mergeCandidates.filter(
+            (r: any) => (r.twin_activity || 0) > 0,
+          ).length,
+          contacts: rows,
+        });
       } catch (e: any) {
         logger.error("contacts/no-activity failed", e);
         return c.json({ error: "An internal error occurred" }, 500);
@@ -13465,12 +13488,13 @@ export const duplicateRadarRoutes = [
         // worked. Set EMPTY_DELETE_REQUIRE_ACTIVITY_CHECK=false only to
         // deliberately bypass this.
         let skippedUnverified: string[] = [];
+        let skippedHasDuplicate: string[] = [];
         let workingIds = zohoIds;
         if (
           module === "Contacts" &&
           process.env.EMPTY_DELETE_REQUIRE_ACTIVITY_CHECK !== "false"
         ) {
-          const { isContactProvenEmpty } = await import(
+          const { isContactProvenEmpty, contactsWithDuplicateTwin } = await import(
             "../../utils/contactActivitySweep"
           );
           const allowed: string[] = [];
@@ -13478,13 +13502,27 @@ export const duplicateRadarRoutes = [
             if (await isContactProvenEmpty(id)) allowed.push(id);
             else skippedUnverified.push(id);
           }
-          workingIds = allowed;
+          // SECOND gate (Sarah 2026-09-09): proven-empty makes a delete safe,
+          // not right. An empty contact that duplicates another one usually
+          // carries the only copy of some field, so deleting it destroys data
+          // a merge would have kept. Route these to the merge flow instead —
+          // including from a bulk select-all, which is where this would
+          // otherwise slip through unnoticed.
+          const twinned = await contactsWithDuplicateTwin(allowed);
+          if (twinned.size) {
+            workingIds = allowed.filter((id) => !twinned.has(id));
+            skippedHasDuplicate = allowed.filter((id) => twinned.has(id));
+          } else {
+            workingIds = allowed;
+          }
           if (!workingIds.length) {
             return c.json(
               {
-                error:
-                  "None of these contacts have been verified as activity-free yet, so none were tagged. Deleting a contact removes its calls, meetings and emails with it. Run the contact activity check first — the Contacts with no activity list only shows records proven to hold nothing.",
+                error: skippedHasDuplicate.length
+                  ? "None of these contacts were tagged. They have duplicates, so deleting them would throw away fields the surviving record does not have — merge them instead, keeping the contact that holds the activities."
+                  : "None of these contacts have been verified as activity-free yet, so none were tagged. Deleting a contact removes its calls, meetings and emails with it. Run the contact activity check first — the Contacts with no activity list only shows records proven to hold nothing.",
                 skipped_unverified: skippedUnverified,
+                skipped_has_duplicate: skippedHasDuplicate,
               },
               409,
             );
@@ -13506,6 +13544,10 @@ export const duplicateRadarRoutes = [
           tag,
           skipped_unverified: skippedUnverified.length,
           skipped_unverified_ids: skippedUnverified,
+          // Reported, never silently dropped: the operator has to see that
+          // these rows still need handling, as a MERGE rather than a delete.
+          skipped_has_duplicate: skippedHasDuplicate.length,
+          skipped_has_duplicate_ids: skippedHasDuplicate,
         });
       } catch (e: any) {
         logger.error("empty-records/tag failed", e);

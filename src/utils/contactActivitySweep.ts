@@ -481,12 +481,33 @@ export interface NoActivityContact {
   account: string | null;
   created_date: string | null;
   verified_at: string | null;
+  /**
+   * The duplicate this empty contact should be MERGED into rather than deleted
+   * (Sarah 2026-09-09), or null when it has no duplicate.
+   *
+   * An empty contact with a twin is not "safe to delete" — it is LOSSY. The
+   * empty record often carries the only copy of a field: the live example was
+   * Diana ahmed <Diana@exhaleyogasa.net>, whose twin with all the activity is
+   * on a gmail address. Delete it and that address exists nowhere.
+   *
+   * `twin_activity` is the twin's activity count: > 0 means the direction is
+   * settled (keep the twin, absorb this one), null means the census has not
+   * reached the twin yet and nobody should merge on a guess.
+   */
+  twin_id: string | null;
+  twin_name: string | null;
+  twin_email: string | null;
+  twin_activity: number | null;
 }
 
 /**
- * Contacts PROVEN to hold no activity of any kind — the only ones that are safe
- * to delete. Requires verified_at, so a contact the sweep has not finished with
- * is absent rather than assumed empty.
+ * Contacts PROVEN to hold no activity of any kind. Requires verified_at, so a
+ * contact the sweep has not finished with is absent rather than assumed empty.
+ *
+ * Proven-empty makes a delete SAFE. It does not make it RIGHT: a row carrying
+ * `twin_id` duplicates another contact and must be MERGED into it, because the
+ * empty record routinely holds the only copy of a field. Callers must split the
+ * two cases — Empty-Delete refuses the twinned ones outright.
  */
 export async function getContactsWithNoActivity(
   limit = 5000,
@@ -502,13 +523,47 @@ export async function getContactsWithNoActivity(
               NULLIF(BTRIM(r.company_name), '')
             ) AS account,
             r.created_date,
-            a.verified_at
+            a.verified_at,
+            tw.twin_id,
+            tw.twin_name,
+            tw.twin_email,
+            tw.twin_activity
        FROM contact_activity_counts a
        JOIN duplicate_records r ON r.zoho_record_id = a.zoho_contact_id
+       -- The duplicate this record should be merged INTO, if it has one. The
+       -- lateral is bounded by the outer LIMIT (thousands of rows, not the
+       -- whole corpus) and probes duplicate_records on the indexed cluster_id,
+       -- so it stays cheap — unlike the per-open-deal lateral that took the
+       -- multi-active-deals query from ~1s to 13s.
+       LEFT JOIN LATERAL (
+         SELECT t.zoho_record_id AS twin_id,
+                NULLIF(BTRIM(t.record_name), '') AS twin_name,
+                NULLIF(BTRIM(t.email), '') AS twin_email,
+                tc.total AS twin_activity
+           FROM duplicate_records t
+           LEFT JOIN contact_activity_counts tc
+                  ON tc.zoho_contact_id = t.zoho_record_id
+          WHERE t.record_type = 'contact'
+            AND t.cluster_id = r.cluster_id
+            AND t.zoho_record_id IS NOT NULL
+            AND t.zoho_record_id <> r.zoho_record_id
+            -- A pair the operator has already pulled apart stays apart:
+            -- re-proposing a merge they rejected is how a cleaned cluster
+            -- comes back to life.
+            AND NOT EXISTS (
+              SELECT 1 FROM duplicate_separation_ledger s
+               WHERE s.zoho_id_low = LEAST(r.zoho_record_id, t.zoho_record_id)
+                 AND s.zoho_id_high = GREATEST(r.zoho_record_id, t.zoho_record_id)
+            )
+          -- Prefer the twin with the most activity: that is the survivor.
+          ORDER BY COALESCE(tc.total, -1) DESC, t.created_date ASC NULLS LAST
+          LIMIT 1
+       ) tw ON r.cluster_id IS NOT NULL
       WHERE r.record_type = 'contact'
         AND a.total = 0
         AND a.verified_at IS NOT NULL
-      ORDER BY r.created_date ASC NULLS LAST
+      -- Merge candidates first: they are the rows that must NOT be deleted.
+      ORDER BY (tw.twin_id IS NOT NULL) DESC, r.created_date ASC NULLS LAST
       LIMIT $1`,
     [limit],
   );
@@ -546,4 +601,45 @@ export async function isContactProvenEmpty(zohoId: string): Promise<boolean> {
     [zohoId],
   );
   return res.rows.length > 0;
+}
+
+/**
+ * Which of these contacts have a DUPLICATE and must therefore be merged rather
+ * than deleted (Sarah 2026-09-09)?
+ *
+ * Proven-empty is what makes a delete SAFE; it is not what makes it RIGHT. An
+ * empty contact that duplicates another one usually holds the only copy of some
+ * field — the live case was an email address that existed on no other record —
+ * so deleting it silently destroys data that a merge would have kept. These ids
+ * are refused by Empty-Delete and sent to the merge flow instead.
+ *
+ * Pairs the operator has already separated are excluded: a rejected merge stays
+ * rejected, and such a contact is genuinely deletable.
+ *
+ * Returns the subset that has a twin. Unknown ids are simply absent.
+ */
+export async function contactsWithDuplicateTwin(
+  zohoIds: string[],
+): Promise<Set<string>> {
+  const ids = Array.from(new Set((zohoIds || []).map(String).filter(Boolean)));
+  if (!ids.length) return new Set();
+  const res = await pool.query(
+    `SELECT DISTINCT r.zoho_record_id AS id
+       FROM duplicate_records r
+       JOIN duplicate_records t
+         ON t.record_type = 'contact'
+        AND t.cluster_id = r.cluster_id
+        AND t.zoho_record_id IS NOT NULL
+        AND t.zoho_record_id <> r.zoho_record_id
+      WHERE r.record_type = 'contact'
+        AND r.cluster_id IS NOT NULL
+        AND r.zoho_record_id = ANY($1::text[])
+        AND NOT EXISTS (
+          SELECT 1 FROM duplicate_separation_ledger s
+           WHERE s.zoho_id_low = LEAST(r.zoho_record_id, t.zoho_record_id)
+             AND s.zoho_id_high = GREATEST(r.zoho_record_id, t.zoho_record_id)
+        )`,
+    [ids],
+  );
+  return new Set((res.rows as any[]).map((r) => String(r.id)));
 }

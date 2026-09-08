@@ -8809,7 +8809,10 @@
                 return;
             }
             const rows = d.contacts || [];
-            if (cnt) cnt.textContent = _fn(rows.length);
+            // The headline counts DELETABLE rows only. A merge candidate is not
+            // safe to delete — it is lossy — so folding both into one number
+            // would label rows "safe to delete" that are not (Sarah 2026-09-09).
+            if (cnt) cnt.textContent = _fn(d.deletable != null ? d.deletable : rows.length);
             // Coverage is stated plainly because a SHORT list here usually means
             // "the sweep has not finished", not "only these are empty" — and
             // acting on it as though it were complete is the mistake that costs
@@ -8824,6 +8827,14 @@
                     + '<strong class="text-emerald-700">' + _fn(cvg.proven_empty || 0) + '</strong> proven empty'
                     + (pct < 100
                         ? ' <span class="text-amber-700">— the check is still running, so this list will grow. A contact that has not been checked yet is not shown.</span>'
+                        : '')
+                    // Merge candidates get their own sentence, not a footnote:
+                    // they are the rows where "delete" is the WRONG action.
+                    + ((d.merge_candidates || 0) > 0
+                        ? '<br><strong class="text-indigo-700">' + _fn(d.merge_candidates) + '</strong>'
+                          + ' of these have a duplicate and must be <strong>merged, not deleted</strong>'
+                          + ' — the empty record often holds the only copy of an email or phone.'
+                          + ' They are listed first and are blocked from delete.'
                         : '');
             }
             if (!rows.length) {
@@ -8832,13 +8843,31 @@
             }
             body.innerHTML = rows.map(function (r) {
                 const url = 'https://crm.zoho.com/crm/org766568398/tab/Contacts/' + encodeURIComponent(r.zoho_contact_id);
-                return '<tr>'
+                const twinUrl = r.twin_id
+                    ? 'https://crm.zoho.com/crm/org766568398/tab/Contacts/' + encodeURIComponent(r.twin_id)
+                    : null;
+                // A row with a twin is NOT a delete candidate. It says so in the
+                // status column and its action is the merge, not "Open in Zoho",
+                // so the two cases can never be confused at a glance.
+                const status = twinUrl
+                    ? '<span class="rr-badge rr-warn">⇄ merge, don\'t delete</span>'
+                      + ((r.twin_activity || 0) > 0
+                          ? '<div class="text-xs text-gray-500">keep the twin — ' + _fn(r.twin_activity) + ' activit' + (r.twin_activity === 1 ? 'y' : 'ies') + '</div>'
+                          : '<div class="text-xs text-amber-700">twin not checked yet — verify before merging</div>')
+                    : '<span class="rr-badge rr-good">✓ no activity</span>';
+                const action = twinUrl
+                    ? '<a href="' + twinUrl + '" target="_blank" rel="noopener" class="text-indigo-700 hover:underline">Merge into '
+                      + escapeHtml(r.twin_name || 'duplicate') + ' ↗</a>'
+                      + (r.twin_email ? '<div class="text-xs text-gray-500">' + escapeHtml(r.twin_email) + '</div>' : '')
+                      + '<div class="text-xs"><a href="' + url + '" target="_blank" rel="noopener" class="text-gray-500 hover:underline">open this one ↗</a></div>'
+                    : '<a href="' + url + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline">Open in Zoho ↗</a>';
+                return '<tr' + (twinUrl ? ' class="bg-indigo-50"' : '') + '>'
                     + '<td>' + escapeHtml(r.name || '—') + (r.email ? '<div class="text-xs text-gray-500">' + escapeHtml(r.email) + '</div>' : '') + '</td>'
                     + '<td>' + escapeHtml(r.account || '—') + '</td>'
                     + '<td>' + escapeHtml(r.owner || '—') + '</td>'
                     + '<td>' + escapeHtml(r.created_date ? String(r.created_date).slice(0, 10) : '—') + '</td>'
-                    + '<td><span class="rr-badge rr-good">✓ no activity</span></td>'
-                    + '<td><a href="' + url + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline">Open in Zoho ↗</a></td>'
+                    + '<td>' + status + '</td>'
+                    + '<td>' + action + '</td>'
                     + '</tr>';
             }).join('');
         }
