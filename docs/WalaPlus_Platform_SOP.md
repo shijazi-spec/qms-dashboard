@@ -1615,7 +1615,6 @@ Follow these rules:
 | `directAuditRunner.ts` | Direct audit execution fallback |
 | `evaluationSchema.ts` | Evaluation framework schemas |
 | `reportGenerator.ts` | Report generation |
-| `exportUtils.ts` | CSV export utilities |
 | `inputSanitizer.ts` | XSS/injection prevention, field whitelisting |
 | `rateLimiter.ts` | Tiered rate limiting |
 | `rbacMiddleware.ts` | Auth middleware (requireAdminOrKey, requireWriteRole) |

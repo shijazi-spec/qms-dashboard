@@ -208,8 +208,8 @@ const value = payload?.field || (() => {
 See these files for complete examples:
 
 - `exampleConnectorTrigger.ts` - Linear webhook handler (comprehensive example)
-- `slackTriggers.ts` - Slack webhook handler
-- `telegramTriggers.ts` - Telegram webhook handler
+- `slackTriggers.ts` - Slack webhook handler (the live one — read this for how it
+  is actually done here)
 
 ## Architecture Notes
 
