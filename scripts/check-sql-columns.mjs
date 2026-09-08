@@ -96,6 +96,16 @@ function stripComments(text) {
  */
 function buildSchema(files) {
   const schema = new Map();
+  /**
+   * Tables we have an actual CREATE for.
+   *
+   * ONLY these are checkable. An ALTER adds to a schema, it never defines one,
+   * so a table known only from `ALTER TABLE x ADD COLUMN y` has a one-column
+   * "schema" and every other column on it looks undeclared. That is exactly
+   * what happened to quality_audit_results, which has no CREATE anywhere in
+   * src/ and produced two confident, wrong findings on its second run.
+   */
+  const created = new Set();
   const add = (table, col) => {
     const t = table.toLowerCase();
     if (!schema.has(t)) schema.set(t, new Set());
@@ -121,6 +131,7 @@ function buildSchema(files) {
     let m;
     while ((m = createRe.exec(text))) {
       const table = m[1];
+      created.add(table.toLowerCase());
       // Walk forward counting parens so a column like NUMERIC(10,2) or a CHECK
       // (...) does not end the body early.
       let depth = 1;
@@ -179,7 +190,23 @@ function buildSchema(files) {
     const alterRe =
       /ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([a-zA-Z_][\w]*)\s+ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z_][\w]*)/gi;
     while ((m = alterRe.exec(text))) add(m[1], m[2]);
+
+    // addColumnIfNotExists("table", "column", "TYPE")
+    //
+    // A THIRD way this codebase declares a column, and the one that produced
+    // most of the second run's findings. auditDatabase alone adds 26 columns
+    // this way — audits.audit_code, planned_start_date and the rest are all
+    // real, declared columns that simply never appear as literal SQL.
+    //
+    // A checker that only understands the syntaxes it was told about will
+    // confidently report the ones it was not.
+    const helperRe =
+      /addColumnIfNotExists\(\s*["'`]([a-zA-Z_][\w]*)["'`]\s*,\s*["'`]([a-zA-Z_][\w]*)["'`]/g;
+    while ((m = helperRe.exec(text))) add(m[1], m[2]);
   }
+
+  // Drop anything we never saw a CREATE for.
+  for (const t of [...schema.keys()]) if (!created.has(t)) schema.delete(t);
   return schema;
 }
 
