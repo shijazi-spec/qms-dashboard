@@ -220,15 +220,49 @@ async function checkOverdueTreatments(result: ScanResult): Promise<void> {
 
 async function checkMissedKPIs(result: ScanResult): Promise<void> {
   if (!(await schemaSupports("kpi_definitions"))) return;
-  if (!(await schemaSupports("kpi_entries"))) return;
+  if (!(await schemaSupports("kpi_values"))) return;
+  // This check had never run once. It guarded on a table called `kpi_entries`
+  // that has never existed — the real one is `kpi_values` — so schemaSupports
+  // returned false and the function exited before the query. Which is why the
+  // three column names below were also wrong and nobody ever saw an error:
+  // kpi_definitions has kpi_name and target_value, not name and target, and
+  // the measurement column is actual_value.
+  //
+  // Aliased back to name/target/value so the alert-building code below is
+  // untouched — the fix is the query, not the message.
+  //
+  // is_active added: a retired KPI sitting below its old target is not a miss,
+  // and this check has a whole history of them to walk on its first real run.
   const rows = await safeQuery(
     `
-    SELECT kd.id, kd.name, kd.target, ke.value, ke.period_end
+    SELECT kd.id,
+           kd.kpi_name     AS name,
+           kd.target_value AS target,
+           kv.actual_value AS value,
+           kv.period_end
     FROM kpi_definitions kd
     JOIN LATERAL (
-      SELECT value, period_end FROM kpi_entries WHERE kpi_id = kd.id ORDER BY period_end DESC LIMIT 1
-    ) ke ON true
-    WHERE ke.value < kd.target
+      SELECT actual_value, period_end
+        FROM kpi_values
+       WHERE kpi_id = kd.id
+       ORDER BY period_end DESC
+       LIMIT 1
+    ) kv ON true
+    WHERE kd.is_active
+      AND kd.target_value IS NOT NULL
+      AND kd.target_value <> 0
+      AND kv.actual_value IS NOT NULL
+      -- DIRECTION MATTERS, and the original query ignored it. For a
+      -- lower-is-better KPI (defect rate, overdue count, cost) sitting BELOW
+      -- target is success. Alerting on those would have made this check wrong
+      -- on its very first run, on roughly half the catalogue.
+      AND (
+        (COALESCE(kd.threshold_direction, 'higher_is_better') = 'higher_is_better'
+         AND kv.actual_value < kd.target_value)
+        OR
+        (kd.threshold_direction = 'lower_is_better'
+         AND kv.actual_value > kd.target_value)
+      )
   `,
     [],
     "checkMissedKPIs",
@@ -236,7 +270,12 @@ async function checkMissedKPIs(result: ScanResult): Promise<void> {
   result.checksPerformed++;
 
   for (const kpi of rows) {
-    const gap = (((kpi.target - kpi.value) / kpi.target) * 100).toFixed(1);
+    // Absolute: for a lower-is-better KPI the raw difference is negative, and
+    // "-40% below target" reads as the opposite of what happened. The query
+    // has already decided this row IS a miss; this only sizes it.
+    const gap = Math.abs(
+      ((Number(kpi.target) - Number(kpi.value)) / Number(kpi.target)) * 100,
+    ).toFixed(1);
     const created = await createAlertIfNew(
       "kpi_miss",
       parseFloat(gap) > 20 ? "high" : "medium",

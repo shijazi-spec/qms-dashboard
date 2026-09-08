@@ -6,6 +6,76 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
+/**
+ * quality_audit_results — the table nothing created.
+ *
+ * It is written to, ALTERed, read by a dozen call sites and synced between
+ * prod and dev, and until 2026-09-08 NO code anywhere declared it. It survived
+ * only because production has had it since whatever created it was deleted. On
+ * a genuinely fresh environment every audit save failed, and check:lazy-tables
+ * could not even report it — that script compares DECLARED tables against the
+ * database, and this one was declared nowhere.
+ *
+ * The shape is derived from the code's own contract: the INSERT in
+ * saveQualityAuditResult, the two ALTERs, and the columns the read paths
+ * select (audit_date, created_at, id). PRODUCTION REMAINS AUTHORITATIVE — this
+ * is `IF NOT EXISTS`, so it is a no-op wherever the table already exists and
+ * changes nothing about the live schema. It exists so a new environment gets a
+ * working table instead of an error.
+ *
+ * The ALTERed columns (rules_hash, is_locked, locked_at) are declared here as
+ * well as in their ALTERs because check:schema-parity requires exactly that —
+ * a runtime ALTER whose column is missing from the canonical CREATE is the
+ * drift that gets a column proposed for DROP at publish time.
+ *
+ * The period_* columns are TEXT because the code passes the date-picker values
+ * straight through as strings and only ever displays them. If production has
+ * them as DATE/TIMESTAMP, that is what production keeps.
+ */
+let qualityAuditTableReady: Promise<void> | null = null;
+export async function ensureQualityAuditResultsTable(): Promise<void> {
+  if (qualityAuditTableReady) return qualityAuditTableReady;
+  qualityAuditTableReady = (async () => {
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS quality_audit_results (
+          id SERIAL PRIMARY KEY,
+          audit_date TIMESTAMP DEFAULT NOW(),
+          scorecard_id INTEGER,
+          governance_doc_id INTEGER,
+          total_records_audited INTEGER DEFAULT 0,
+          total_issues_found INTEGER DEFAULT 0,
+          people_score NUMERIC,
+          process_score NUMERIC,
+          governance_score NUMERIC,
+          overall_score NUMERIC,
+          dimension_details JSONB,
+          issues_by_category JSONB,
+          recommendations JSONB,
+          calendar_events_count INTEGER,
+          raw_audit_data JSONB,
+          period_created_start TEXT,
+          period_created_end TEXT,
+          period_modified_start TEXT,
+          period_modified_end TEXT,
+          rules_hash TEXT,
+          is_locked BOOLEAN DEFAULT FALSE,
+          locked_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_quality_audit_results_audit_date
+          ON quality_audit_results(audit_date DESC);
+      `);
+      logger.info("[QualityAudit] quality_audit_results table ready");
+    } catch (err) {
+      logger.error("[QualityAudit] Failed to ensure the table:", err);
+      qualityAuditTableReady = null;
+      throw err;
+    }
+  })();
+  return qualityAuditTableReady;
+}
+
 let activityTablesReady: Promise<void> | null = null;
 async function ensureActivityTables(): Promise<void> {
   if (activityTablesReady) return activityTablesReady;
@@ -274,6 +344,10 @@ export async function saveAuditResult(
   // call a goalpost-shift "improving". Safe on existing rows (defaults
   // to NULL ⇒ "unknown ruler" and the trend logic treats NULL as a
   // forced "rules changed" verdict).
+  // Create before altering. The ALTER below has always assumed the table
+  // exists; on a fresh environment it did not, and the save failed here.
+  await ensureQualityAuditResultsTable();
+
   await pool.query(
     `ALTER TABLE quality_audit_results
        ADD COLUMN IF NOT EXISTS rules_hash TEXT`,

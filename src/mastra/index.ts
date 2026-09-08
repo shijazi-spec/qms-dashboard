@@ -839,6 +839,16 @@ export const mastra = new Mastra({
       run: () =>
         import("../utils/fileUpload").then((m) => m.ensureUploadedFilesTable()),
     },
+    {
+      // Written to, ALTERed and read by a dozen call sites, and until
+      // 2026-09-08 declared by nothing at all — it survived only because
+      // production has had it since whatever created it was deleted.
+      label: "quality_audit_results",
+      run: () =>
+        import("../utils/database").then((m) =>
+          m.ensureQualityAuditResultsTable(),
+        ),
+    },
   ];
 
   /**
