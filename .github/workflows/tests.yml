@@ -82,6 +82,17 @@ jobs:
           node-version: "20"
           cache: npm
 
+      # Runs before the install, and the reason is this workflow's own history:
+      # a lockfile carrying Replit's internal proxy host has taken this suite
+      # down twice — once quietly (empty node_modules/.bin -> "tsx: not found",
+      # exit 127, which is what the elaborate repair + diagnostic steps below
+      # were built to chase) and once loudly (2026-09-09: `npm ci` hard-failed,
+      # and every step below — repair, diagnostics, the suite itself — was
+      # SKIPPED, so none of that machinery produced a single annotation).
+      # Checking the lockfile first turns both into one clear message.
+      - name: lockfile registry guard
+        run: node scripts/check-lockfile-registry.mjs
+
       - name: Install dependencies
         run: npm ci
 
