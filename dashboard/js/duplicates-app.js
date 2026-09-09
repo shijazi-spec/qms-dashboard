@@ -60,6 +60,10 @@
             // Refresh invalidates every lazy tab so the next click reloads
             // it from the server instead of showing pre-refresh data.
             if (window._loadedTabs) window._loadedTabs.clear();
+            // Force past the freshness TTL: the usual reason to press Refresh
+            // is "I just synced", and a cached watermark would still read old.
+            try { if (typeof _rrLoadFreshness === 'function') await _rrLoadFreshness(true); } catch (e) { /* annotation only */ }
+            try { if (typeof _rrRenderFreshness === 'function') _rrRenderFreshness(); } catch (e) { /* annotation only */ }
 
             const activeTabEl = document.querySelector('[id^="tab-"].tab-active');
             const activeTab = activeTabEl ? activeTabEl.id.replace(/^tab-/, '') : 'summary';
@@ -6879,6 +6883,9 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             _loadRadarConfig();
+            // The landing tab never goes through showTab(), so the freshness
+            // bar would stay blank until the first tab switch without this.
+            try { _rrRenderFreshness(); } catch (e) { /* annotation only */ }
             // Fill the period year list before the first tab restore, so the
             // control is usable without switching tabs first.
             _initPeriodYears();
@@ -7625,34 +7632,16 @@
                     card('teal', 'Open value', 'SAR ' + Number(data.total_open_value || 0).toLocaleString(), 'sum of the open deals');
             }
             if (summary) {
-                // Freshness FIRST, and as markup rather than textContent: this
-                // tab reads the local mirror, so a deal closed in Zoho since
-                // the last sync is still shown here. Stating the as-of date is
-                // what separates "the tab is broken" from "the mirror is old".
-                var asOf = '';
-                if (data.data_as_of) {
-                    var syncedAt = new Date(data.data_as_of);
-                    var ageMin = Math.max(0, Math.round((Date.now() - syncedAt.getTime()) / 60000));
-                    var ageTxt = ageMin < 60
-                        ? ageMin + ' min ago'
-                        : (ageMin < 1440
-                            ? Math.round(ageMin / 60) + ' h ago'
-                            : Math.round(ageMin / 1440) + ' d ago');
-                    var stale = ageMin >= 180;
-                    asOf = '<span class="' + (stale ? 'text-amber-700 font-semibold' : 'text-gray-600') + '">'
-                        + (stale ? '⚠ ' : '')
-                        + 'Deals data as of <strong>' + escapeHtml(_fd(syncedAt, {
-                            day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
-                        })) + '</strong> (' + ageTxt + ')'
-                        + (stale ? ' — close or keep a deal in Zoho and it will not show here until you Run Scan.' : '')
-                        + '</span> · ';
-                } else {
-                    asOf = '<span class="text-amber-700">⚠ Deals have never been synced from Zoho.</span> · ';
-                }
-                summary.innerHTML = asOf + escapeHtml('Layout: ' + seg + ' · ' + rows.length + ' shown' +
+                // Freshness is NOT stated here. It is the same sentence on
+                // every tab, so it lives in the shared bar under the tab strip
+                // (_rrRenderFreshness) — two wordings of one fact on one screen
+                // is how they end up disagreeing.
+                summary.textContent = 'Layout: ' + seg + ' · ' + rows.length + ' shown' +
                     (multiOnly ? ' (multiple owners only)' : ' (all conflicts)') +
-                    ' · closed, won and activated stages are excluded.');
+                    ' · closed, won and activated stages are excluded.';
             }
+            // A load is the freshest moment to restate how old the mirror is.
+            if (typeof _rrRenderFreshness === 'function') _rrRenderFreshness();
             if (!rows.length) {
                 body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-gray-500">No conflicts found for this layout.</td></tr>';
                 return;
@@ -8055,10 +8044,113 @@
             });
         };
 
+        // ── Mirror freshness, shared by EVERY tab ────────────────────────────
+        //
+        // Nothing in the Duplicate Radar reads Zoho live. Every tab renders
+        // `duplicate_records`, which only moves when a sync runs. So a deal
+        // closed, a contact merged or an account renamed in Zoho stays on
+        // screen until then — and the operator reasonably concludes the tab is
+        // broken. It was found on Active Deal Conflicts (Ziad's review, Sarah
+        // 2026-09-09) but it was never specific to that tab, so the answer is
+        // one bar under the tab strip rather than a sentence per tab.
+        //
+        // Which module a tab depends on decides what the bar names. Tabs absent
+        // from this map fall back to the OLDEST watermark across all modules —
+        // the honest answer for a tab that spans several.
+        var _RR_TAB_MODULES = {
+            'leads': ['Leads'],
+            'deals': ['Deals'],
+            'contacts': ['Contacts'],
+            'accounts': ['Accounts'],
+            'active-deal-conflicts': ['Deals'],
+            'deal-lifecycle': ['Deals'],
+            'deal-compliance': ['Deals'],
+            'cs-overlap': ['Deals'],
+            'cs-lifecycle': ['Deals'],
+            'account-hints': ['Deals', 'Accounts', 'Contacts'],
+            'cross-module': ['Leads', 'Deals', 'Contacts', 'Accounts'],
+            'empty-records': ['Contacts', 'Accounts'],
+        };
+        var _rrFreshness = null;      // { modules: {...} }
+        var _rrFreshnessAt = 0;       // when we last fetched it
+        var _rrFreshnessTTL = 60000;  // a minute is plenty for a staleness read
+
+        async function _rrLoadFreshness(force) {
+            if (!force && _rrFreshness && (Date.now() - _rrFreshnessAt) < _rrFreshnessTTL) return _rrFreshness;
+            try {
+                var r = await fetch('/api/duplicates/sync-freshness', { credentials: 'same-origin' });
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                _rrFreshness = await r.json();
+                _rrFreshnessAt = Date.now();
+            } catch (e) {
+                // A freshness read must never break the tab it annotates.
+                _rrFreshness = null;
+            }
+            return _rrFreshness;
+        }
+
+        // Renders the bar for the CURRENT tab. Safe to call from anywhere — and
+        // it keeps that promise ITSELF rather than leaving it to callers.
+        //
+        // Every call site is fire-and-forget, so the `try { ... } catch` around
+        // those calls cannot catch what this function throws: an async function
+        // turns a throw into a rejected promise, which sails straight past a
+        // synchronous catch and lands as an unhandled rejection. Swallowing
+        // inside means one place does it instead of four. The call-site guards
+        // stay because they still catch the one thing they can — a bare
+        // reference before this assignment has run.
+        window._rrRenderFreshness = async function () {
+            var el = document.getElementById('rrFreshness');
+            if (!el) return;
+            try {
+                var tab = window._currentTab || 'summary';
+                var d = await _rrLoadFreshness(false);
+                var mods = (d && d.modules) || null;
+                if (!mods) { el.innerHTML = ''; return; }
+                var wanted = _RR_TAB_MODULES[tab] || Object.keys(mods);
+                // The OLDEST module wins: a tab is only as current as its stalest
+                // input, and quoting the freshest would overstate the data.
+                var oldest = null, oldestMod = null, never = [];
+                wanted.forEach(function (m) {
+                    var at = mods[m];
+                    if (!at) { never.push(m); return; }
+                    var t = new Date(at).getTime();
+                    if (oldest === null || t < oldest) { oldest = t; oldestMod = m; }
+                });
+                if (oldest === null) {
+                    el.innerHTML = '<span class="text-amber-700">⚠ ' + escapeHtml(wanted.join(', '))
+                        + ' ' + (wanted.length > 1 ? 'have' : 'has') + ' never been synced from Zoho — this tab has nothing current to show.</span>';
+                    return;
+                }
+                var ageMin = Math.max(0, Math.round((Date.now() - oldest) / 60000));
+                var ageTxt = ageMin < 60 ? ageMin + ' min ago'
+                    : (ageMin < 1440 ? Math.round(ageMin / 60) + ' h ago'
+                        : Math.round(ageMin / 1440) + ' d ago');
+                var stale = ageMin >= 180;
+                var label = wanted.length > 1 ? (escapeHtml(oldestMod) + ', oldest of ' + wanted.length) : escapeHtml(oldestMod);
+                el.innerHTML =
+                    '<span class="' + (stale ? 'text-amber-800' : 'text-gray-600') + '">'
+                    + (stale ? '⚠ ' : '🕒 ')
+                    + escapeHtml(label) + ' data as of <strong>'
+                    + escapeHtml(_fd(new Date(oldest), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))
+                    + '</strong> (' + ageTxt + ')'
+                    + (never.length ? ' · <span class="text-amber-700">' + escapeHtml(never.join(', ')) + ' never synced</span>' : '')
+                    + (stale ? ' — changes you made in Zoho since then are not shown here. Run Scan to pull them.' : '')
+                    + '</span>';
+            } catch (e) {
+                // Blank beats half a sentence: the bar is an annotation, and a
+                // wrong or truncated staleness claim is worse than none.
+                el.innerHTML = '';
+            }
+        };
+
         function showTab(tab) {
             // Track which tab the user is on — buildFilterParams() reads this
             // to look up the per-tab AI-status chip selection.
             window._currentTab = tab;
+            // Restate how old this tab's data is on every switch: the module it
+            // depends on changes with the tab, so one static line would lie.
+            try { _rrRenderFreshness(); } catch (e) { /* never block navigation */ }
             // Per-tab filter persistence: snapshot the OUTGOING tab's form
             // BEFORE we swap classes, then restore the INCOMING tab's form
             // AFTER the swap (when document.querySelector('.tab-active')

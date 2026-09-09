@@ -468,6 +468,13 @@
             <span id="syncStaleWarning" class="hidden text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded">⚠ Data may be stale — click "Sync Now"</span>
         </div>
 
+        <!-- Mirror freshness, shared by every tab. Nothing in the radar reads
+             Zoho live: each tab renders duplicate_records, which only moves on
+             a sync. Without this line a tab showing work already done in the
+             CRM looks broken rather than stale (Sarah 2026-09-09). Filled by
+             _rrRenderFreshness() on every showTab() and after each sync. -->
+        <div id="rrFreshness" class="text-xs mb-3 min-h-[1rem]" data-testid="text-mirror-freshness"></div>
+
         <!-- Merge Workflow Guidance Banner -->
         <div id="mergeGuideBanner" class="hidden bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-4 flex items-start gap-3" data-testid="banner-merge-guide">
             <svg class="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -2614,7 +2621,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=195"></script>
+    <script src="/js/duplicates-app.js?v=196"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

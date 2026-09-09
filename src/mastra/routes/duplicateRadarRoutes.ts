@@ -13769,6 +13769,30 @@ export const duplicateRadarRoutes = [
   },
 
   {
+    // Mirror freshness for the shared bar under the tab strip (Sarah
+    // 2026-09-09). Every radar tab reads duplicate_records, so every tab can
+    // be showing records Zoho has already moved on from — the tab is not
+    // broken, the mirror is old, and only this makes that visible.
+    // GET /api/duplicates/sync-freshness
+    path: "/api/duplicates/sync-freshness",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const { getModuleSyncFreshness } = await import(
+          "../../utils/duplicateRadarDatabase"
+        );
+        const modules = await getModuleSyncFreshness();
+        return c.json({ success: true, modules, server_now: new Date().toISOString() });
+      } catch (e: any) {
+        logger.error("sync-freshness failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+
+  {
     // THE REVERSE CHECK (2026-09-09): one company split across TWO OR MORE
     // Account records with an open deal on each. Every account looks clean on
     // its own, so /multi-active-deals cannot see it — but two sellers are still

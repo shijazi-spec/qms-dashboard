@@ -3447,6 +3447,35 @@ async function queryMultiActiveDealAccounts(
 }
 
 /**
+ * Every module's mirror watermark, for the freshness bar the whole radar
+ * shares (Sarah 2026-09-09).
+ *
+ * The tabs read `duplicate_records`, never Zoho, so EVERY tab can be showing
+ * work the CRM no longer agrees with — not just Active Deal Conflicts, which
+ * is simply where it was noticed. One bar under the tab strip, naming the
+ * module the current tab depends on, is the platform-wide version of that fix.
+ *
+ * Returns `{ Deals: "…Z", Contacts: null, … }`. Never throws: a missing
+ * watermark must not take down the tab it is annotating.
+ */
+export async function getModuleSyncFreshness(): Promise<
+  Record<string, string | null>
+> {
+  try {
+    const r = await pool.query(
+      `SELECT module,
+              to_char(last_sync_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS at
+         FROM zoho_sync_state`,
+    );
+    const out: Record<string, string | null> = {};
+    for (const row of r.rows as any[]) out[String(row.module)] = row.at || null;
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/**
  * When the Deals mirror was last refreshed from Zoho.
  *
  * The radar tabs read `duplicate_records`, never Zoho directly, so a deal
