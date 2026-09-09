@@ -3265,12 +3265,19 @@ const multiActiveInFlight = new Map<string, Promise<MultiActiveDealAccount[]>>()
 
 export async function getMultiActiveDealAccounts(
   segment: DuplicateFilters["segment"],
-  opts?: { multiOwnerOnly?: boolean; limit?: number },
+  opts?: { multiOwnerOnly?: boolean; limit?: number; bypassCache?: boolean },
 ): Promise<MultiActiveDealAccount[]> {
   const cacheKey = `${!segment || segment === "corporate" ? "walaplus" : segment}|${
     opts?.limit ?? "d"
   }`;
-  const hit = multiActiveCache.get(cacheKey);
+  // `bypassCache` is for the two callers where a stale answer is a WRONG answer
+  // (Sarah 2026-09-09): the operator pressing Refresh, and the XLSX that goes to
+  // the Head of Sales. Refresh meant "re-render the cache", so after syncing
+  // Zoho the tab kept showing resolved conflicts and the button looked broken;
+  // worse, exporting straight after a sync handed out pre-sync rows. An
+  // in-flight query is still joined below — it started moments ago, so it IS
+  // fresh, and this way a double-click cannot run the query twice.
+  const hit = opts?.bypassCache ? null : multiActiveCache.get(cacheKey);
   if (hit && Date.now() - hit.at < MULTI_ACTIVE_TTL_MS) {
     // multiOwnerOnly is applied by the caller, so one cached set serves both.
     return opts?.multiOwnerOnly ? hit.rows.filter((r) => r.distinct_owners > 1) : hit.rows;
@@ -3437,6 +3444,29 @@ async function queryMultiActiveDealAccounts(
   }
 
   return finaliseMultiActiveDealGroups(raw, { multiOwnerOnly: !!opts?.multiOwnerOnly });
+}
+
+/**
+ * When the Deals mirror was last refreshed from Zoho.
+ *
+ * The radar tabs read `duplicate_records`, never Zoho directly, so a deal
+ * Ziad closed this morning is invisible until a sync lands. Surfacing this
+ * beside the numbers is the difference between "the tab is broken" and "the
+ * mirror is from yesterday" — the operator can see which, and act.
+ *
+ * Null when the module has never synced.
+ */
+export async function getDealsLastSyncAt(): Promise<string | null> {
+  try {
+    const r = await pool.query(
+      `SELECT to_char(last_sync_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS at
+         FROM zoho_sync_state WHERE module = 'Deals'`,
+    );
+    return r.rows[0]?.at || null;
+  } catch {
+    // Never let a missing watermark break the tab it is only annotating.
+    return null;
+  }
 }
 
 /** A conflict before domains are attached and same-domain groups are merged. */

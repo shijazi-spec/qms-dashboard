@@ -7575,7 +7575,11 @@
             return 'https://crm.zoho.com/crm/org766568398/tab/Deals/' + encodeURIComponent(String(id || ''));
         }
 
-        window.loadActiveDealConflicts = async function () {
+        // `fresh` is passed as true by the Refresh button (data-args="[true]").
+        // It forces the server past its 90s result cache. Without it, pressing
+        // Refresh straight after syncing Zoho re-rendered the SAME cached rows
+        // and the button looked broken — which is precisely when it gets used.
+        window.loadActiveDealConflicts = async function (fresh) {
             var body = document.getElementById('adcBody');
             var stats = document.getElementById('adcStats');
             var summary = document.getElementById('adcSummary');
@@ -7586,7 +7590,7 @@
             var data;
             try {
                 var url = '/api/duplicates/multi-active-deals?segment=' + encodeURIComponent(seg) +
-                    '&limit=1000' + (multiOnly ? '&multi_owner=1' : '');
+                    '&limit=1000' + (multiOnly ? '&multi_owner=1' : '') + (fresh === true ? '&fresh=1' : '');
                 var res = await fetch(url, { credentials: 'same-origin' });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 data = await res.json();
@@ -7621,9 +7625,33 @@
                     card('teal', 'Open value', 'SAR ' + Number(data.total_open_value || 0).toLocaleString(), 'sum of the open deals');
             }
             if (summary) {
-                summary.textContent = 'Layout: ' + seg + ' · ' + rows.length + ' shown' +
+                // Freshness FIRST, and as markup rather than textContent: this
+                // tab reads the local mirror, so a deal closed in Zoho since
+                // the last sync is still shown here. Stating the as-of date is
+                // what separates "the tab is broken" from "the mirror is old".
+                var asOf = '';
+                if (data.data_as_of) {
+                    var syncedAt = new Date(data.data_as_of);
+                    var ageMin = Math.max(0, Math.round((Date.now() - syncedAt.getTime()) / 60000));
+                    var ageTxt = ageMin < 60
+                        ? ageMin + ' min ago'
+                        : (ageMin < 1440
+                            ? Math.round(ageMin / 60) + ' h ago'
+                            : Math.round(ageMin / 1440) + ' d ago');
+                    var stale = ageMin >= 180;
+                    asOf = '<span class="' + (stale ? 'text-amber-700 font-semibold' : 'text-gray-600') + '">'
+                        + (stale ? '⚠ ' : '')
+                        + 'Deals data as of <strong>' + escapeHtml(_fd(syncedAt, {
+                            day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+                        })) + '</strong> (' + ageTxt + ')'
+                        + (stale ? ' — close or keep a deal in Zoho and it will not show here until you Run Scan.' : '')
+                        + '</span> · ';
+                } else {
+                    asOf = '<span class="text-amber-700">⚠ Deals have never been synced from Zoho.</span> · ';
+                }
+                summary.innerHTML = asOf + escapeHtml('Layout: ' + seg + ' · ' + rows.length + ' shown' +
                     (multiOnly ? ' (multiple owners only)' : ' (all conflicts)') +
-                    ' · closed, won and activated stages are excluded.';
+                    ' · closed, won and activated stages are excluded.');
             }
             if (!rows.length) {
                 body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-gray-500">No conflicts found for this layout.</td></tr>';

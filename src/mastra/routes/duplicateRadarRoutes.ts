@@ -13722,7 +13722,11 @@ export const duplicateRadarRoutes = [
         const segment = (url.searchParams.get("segment") || "walaplus") as any;
         const multiOwnerOnly = url.searchParams.get("multi_owner") === "1";
         const limitRaw = parseInt(url.searchParams.get("limit") || "", 10);
-        const { getMultiActiveDealAccounts } = await import(
+        // ?fresh=1 — the operator pressed Refresh. An explicit refresh must
+        // re-query, not re-render the 90s cache; otherwise the button appears
+        // dead right after a Zoho sync, which is exactly when it is used.
+        const fresh = url.searchParams.get("fresh") === "1";
+        const { getMultiActiveDealAccounts, getDealsLastSyncAt } = await import(
           "../../utils/duplicateRadarDatabase"
         );
         // ALWAYS fetch unfiltered, then narrow. The headline counts describe the
@@ -13731,15 +13735,23 @@ export const duplicateRadarRoutes = [
         // ticks the filter. Computing them from the filtered set made both
         // cards show the same number whenever the box was ticked (found while
         // testing the tab, 2026-08-25).
-        const all = await getMultiActiveDealAccounts(segment, {
-          multiOwnerOnly: false,
-          limit: Number.isFinite(limitRaw) ? limitRaw : undefined,
-        });
+        const [all, dataAsOf] = await Promise.all([
+          getMultiActiveDealAccounts(segment, {
+            multiOwnerOnly: false,
+            limit: Number.isFinite(limitRaw) ? limitRaw : undefined,
+            bypassCache: fresh,
+          }),
+          getDealsLastSyncAt(),
+        ]);
         const multiOwner = all.filter((r) => r.distinct_owners > 1);
         const rows = multiOwnerOnly ? multiOwner : all;
         return c.json({
           success: true,
           segment,
+          // When the Deals mirror was last pulled from Zoho. The tab reads the
+          // mirror, so this is the real "as of" date of every number below.
+          data_as_of: dataAsOf,
+          served_fresh: fresh,
           // Both counts, always — different problems with different owners.
           accounts_with_multiple_open_deals: all.length,
           accounts_with_multiple_owners: multiOwner.length,
@@ -13837,9 +13849,16 @@ export const duplicateRadarRoutes = [
         const { buildWorkbook } = await import("../../utils/excelExport");
         const { buildMultiActiveDealSheets, multiActiveDealsFilename } =
           await import("../../utils/multiActiveDealsExport");
+        // ALWAYS bypass the 90s cache here (Sarah 2026-09-09). This workbook
+        // goes to the Head of Sales, and the normal flow is "sync Zoho, then
+        // export" — which served pre-sync rows inside the TTL and handed him a
+        // file contradicting the decisions he had just made. The cache was
+        // there so viewing the tab then exporting did not run the query twice;
+        // one extra ~1.7s query is a fair price for a report that is right.
         const everything = await getMultiActiveDealAccounts(segment, {
           multiOwnerOnly: false,
           limit: 2000,
+          bypassCache: true,
         });
         const rows = multiOwnerOnly
           ? everything.filter((r) => r.distinct_owners > 1)
