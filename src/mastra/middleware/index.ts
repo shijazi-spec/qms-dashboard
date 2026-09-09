@@ -319,6 +319,59 @@ function checkPageAuth(c: any): Response | null {
   return null;
 }
 
+/**
+ * Where a valid X-Admin-Key ALONE is enough, with no user session.
+ *
+ * Exported and pure so the boundary can be tested. It used to be three inline
+ * booleans inside checkApiAuth, which meant the single most security-relevant
+ * decision in the middleware had no test and could only be reasoned about by
+ * reading it.
+ *
+ * The key is deliberately NOT a universal credential: anything outside this
+ * function requires a real OIDC session, because a shared secret that can read
+ * and mutate regulated business data is a much larger thing to hold than one
+ * that cannot.
+ *
+ *   · /api/admin/*  — the key's designed home; server-to-server tooling.
+ *   · /api/inngest* — machine webhook, already validated by checkInngestAccess()
+ *                     earlier in the chain; rejecting key-only callers here
+ *                     would mean the Inngest serve handler is never reached.
+ *   · GET /api/health/pulse and /pulse/latest — operational diagnostics ONLY:
+ *     check names, pass/fail, staleness in hours. No customer, deal or
+ *     personnel data passes through them. healthPulseRoutes.authorize() has
+ *     always documented the key as an intended caller, but this gate rejected
+ *     it before the handler ran — with a 401 rather than the handler's 403,
+ *     which reads as a bad key rather than an unreachable route. Any monitoring
+ *     poller for the platform's own health check failed that way.
+ *
+ * GET only, matched exactly. POST /api/health/pulse/run stays out: triggering a
+ * run is work, not a read, and a credential that can only observe has a
+ * materially smaller blast radius than one that can make the platform act.
+ */
+export function classifyKeyAccess(
+  urlPath: string,
+  method: string,
+): {
+  isAdminRoute: boolean;
+  isInngestRoute: boolean;
+  isHealthPulseRead: boolean;
+  isKeyAllowedRoute: boolean;
+} {
+  const isAdminRoute =
+    urlPath.startsWith('/api/admin/') || urlPath === '/api/admin';
+  const isInngestRoute =
+    urlPath === '/api/inngest' || urlPath.startsWith('/api/inngest/');
+  const isHealthPulseRead =
+    method === 'GET' &&
+    (urlPath === '/api/health/pulse' || urlPath === '/api/health/pulse/latest');
+  return {
+    isAdminRoute,
+    isInngestRoute,
+    isHealthPulseRead,
+    isKeyAllowedRoute: isAdminRoute || isInngestRoute || isHealthPulseRead,
+  };
+}
+
 async function checkApiAuth(c: any, urlPath: string, method: string): Promise<Response | null> {
   const session = getSessionFromCookie(c.req.header('Cookie'));
   const hasAdminKey = hasValidAdminApiKey(c);
@@ -356,12 +409,8 @@ async function checkApiAuth(c: any, urlPath: string, method: string): Promise<Re
   // routes require a real OIDC user session.  Accepting the shared key as a
   // universal credential would allow any service or operator holding the key
   // to read and mutate unrelated regulated business data.
-  const isAdminRoute = urlPath.startsWith('/api/admin/') || urlPath === '/api/admin';
-  // /api/inngest uses key-based machine auth via checkInngestAccess() which
-  // runs before checkApiAuth() in the middleware chain.  We must not reject
-  // key-only callers here, or the Inngest serve handler will never be reached.
-  const isInngestRoute = urlPath === '/api/inngest' || urlPath.startsWith('/api/inngest/');
-  const isKeyAllowedRoute = isAdminRoute || isInngestRoute;
+  const { isAdminRoute, isInngestRoute, isHealthPulseRead, isKeyAllowedRoute } =
+    classifyKeyAccess(urlPath, method);
 
   if (!session && !(hasAdminKey && isKeyAllowedRoute)) {
     return c.json({ error: 'Authentication required' }, 401);
@@ -390,6 +439,11 @@ async function checkApiAuth(c: any, urlPath: string, method: string): Promise<Re
     if (hasAdminKey) return null;
     // Session callers on /api/inngest fall through to normal RBAC below.
   }
+
+  // A key-only caller has no session, so enforceRoutePermission below would
+  // reject it on the next line. Allow it here — the handler still runs its own
+  // authorize() check, so the key is validated twice, not bypassed once.
+  if (isHealthPulseRead && hasAdminKey) return null;
 
   // For all non-admin routes enforce RBAC unconditionally.  The admin key
   // does not bypass route-level permission checks outside /api/admin/*.
