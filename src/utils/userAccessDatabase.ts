@@ -538,12 +538,31 @@ export async function initUserAccessTables(): Promise<void> {
     )
   `);
 
+  // NOTE: platform_users is declared TWICE in this file — here, and in
+  // ensureOidcAuthTables above. Both are CREATE TABLE IF NOT EXISTS, so
+  // whichever runs first in a fresh database wins and the other silently does
+  // nothing. They disagreed, and it cost two tests a day of red CI:
+  //
+  //   this one          team VARCHAR(50) NOT NULL
+  //   ensureOidcAuth    team VARCHAR(50) NOT NULL DEFAULT 'Other'
+  //
+  // Production was shaped by the version WITH the default — dashboardApiRoutes
+  // and consultantRoutes both insert (email, full_name, role, status) and omit
+  // team, and both pass against it. CI created the table from this declaration
+  // instead and every such insert died on a NOT NULL violation
+  // (routine: ExecConstraints).
+  //
+  // `team` now carries the same default so the two agree. `status` still does
+  // NOT: this path is the invitation/approval flow where a new user must start
+  // 'pending_approval', while the OIDC path auto-provisions an SSO user as
+  // 'active'. That difference is deliberate, but it is a second divergence on
+  // one table and the right end state is a single declaration, not two.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS platform_users (
       id SERIAL PRIMARY KEY,
       email VARCHAR(255) UNIQUE NOT NULL,
       full_name VARCHAR(255) NOT NULL,
-      team VARCHAR(50) NOT NULL,
+      team VARCHAR(50) NOT NULL DEFAULT 'Other',
       role VARCHAR(50) NOT NULL,
       status VARCHAR(30) DEFAULT 'pending_approval',
       password_hash VARCHAR(255),
