@@ -71,13 +71,13 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Alert</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">When</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Goes to</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">State</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Source</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Last sent</th>
-                            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Change</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-semibold text-gray-500 uppercase tracking-wider">Alert</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-semibold text-gray-500 uppercase tracking-wider">When</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-semibold text-gray-500 uppercase tracking-wider">Goes to</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-semibold text-gray-500 uppercase tracking-wider">State</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-semibold text-gray-500 uppercase tracking-wider">Source</th>
+                            <th scope="col" class="px-4 py-3 text-start text-xs font-semibold text-gray-500 uppercase tracking-wider">Last sent</th>
+                            <th scope="col" class="px-4 py-3 text-end text-xs font-semibold text-gray-500 uppercase tracking-wider">Change</th>
                         </tr>
                     </thead>
                     <tbody id="nsBody" class="bg-white divide-y divide-gray-200">
@@ -159,7 +159,7 @@
                 // expected consequence of the switch beside it.
                 var last = s.enabled ? nsRelative(s.lastFired) : '—';
                 var clearBtn = s.source === 'override'
-                    ? '<button class="ns-btn ml-2" data-ns-key="' + nsEsc(s.key) + '" data-ns-set="null">Clear</button>'
+                    ? '<button class="ns-btn ms-2" data-ns-key="' + nsEsc(s.key) + '" data-ns-set="null">Clear</button>'
                     : '';
                 return '<tr>' +
                     '<td class="px-4 py-3 align-top">' +
@@ -175,7 +175,7 @@
                         (s.envVar ? '<div class="ns-note mt-1">' + nsEsc(s.envVar) + '</div>' : '') +
                     '</td>' +
                     '<td class="px-4 py-3 align-top text-sm text-gray-600">' + nsEsc(last) + '</td>' +
-                    '<td class="px-4 py-3 align-top text-right whitespace-nowrap">' +
+                    '<td class="px-4 py-3 align-top text-end whitespace-nowrap">' +
                         '<button class="ns-btn" data-ns-key="' + nsEsc(s.key) + '" data-ns-set="' +
                             (s.enabled ? 'false' : 'true') + '">' +
                             (s.enabled ? 'Turn off' : 'Turn on') + '</button>' +
@@ -231,6 +231,15 @@
                     btn.disabled = false;
                 });
         });
+
+        // The page loads /js/i18n.js and connT() calls WalaPlusI18n.t(), but
+        // nothing ever booted the dictionary — so every lookup fell through to
+        // its English fallback and the Arabic build of this page was silently
+        // English. Canonical bootstrap, same shape as every other dashboard
+        // page.
+        if (window.WalaPlusI18n) {
+            window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
+        }
 
         nsLoad();
     </script>
