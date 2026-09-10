@@ -8044,6 +8044,89 @@
             });
         };
 
+        // ── Contacts to merge ────────────────────────────────────────────────
+        //
+        // Prepares a NATIVE Zoho merge. The platform cannot do it: Zoho v2 has
+        // no merge endpoint and no reliable way to move an activity between
+        // records, so a merge here would mean copying fields and orphaning the
+        // history — the exact failure that started all of this. Zoho's own
+        // merge re-points calls, meetings, tasks, notes and attachments onto
+        // the master and keeps the second email and phone as secondary values.
+        //
+        // So this renders the decision — who survives, why, and what the record
+        // looks like afterwards — and links both records. Nothing writes.
+        window.loadContactMergeWorklist = async function () {
+            var body = document.getElementById('cmwBody');
+            var cnt = document.getElementById('cmwCount');
+            var sum = document.getElementById('cmwSummary');
+            if (!body) return;
+            body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-gray-400">Loading…</td></tr>';
+            var d;
+            try {
+                d = await fetch('/api/duplicates/contacts/merge-worklist', { credentials: 'same-origin' }).then(function (r) { return r.json(); });
+            } catch (e) {
+                body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-red-600">Could not load: ' + escapeHtml(String((e && e.message) || e)) + '</td></tr>';
+                return;
+            }
+            if (!d || d.error) {
+                body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-red-600">' + escapeHtml((d && d.error) || 'Failed to load') + '</td></tr>';
+                return;
+            }
+            var items = d.items || [];
+            if (cnt) cnt.textContent = _fn(items.length);
+            if (sum) {
+                sum.innerHTML = items.length
+                    ? '<strong>' + _fn(items.length) + '</strong> merge(s) ready · '
+                      + '<strong>' + _fn(d.contacts_to_remove_after_merge || 0) + '</strong> duplicate record(s) disappear once merged · '
+                      // Stated because an "activities after merge" total is only
+                      // real when every side has been counted; the rest are floors.
+                      + '<strong>' + _fn(d.groups_with_full_counts || 0) + '</strong> with a complete activity count. '
+                      + '<span class="text-gray-500">Merging in Zoho keeps every activity — the master only decides which name, email and phone stay primary.</span>'
+                    : '';
+            }
+            if (!items.length) {
+                body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-gray-500">No contact merges pending. A pair needs 2 of {email, phone, full name} to qualify, and pairs you have split stay split.</td></tr>';
+                return;
+            }
+            var zurl = function (id) { return 'https://crm.zoho.com/crm/org766568398/tab/Contacts/' + encodeURIComponent(String(id || '')); };
+            var who = function (m) {
+                return '<a href="' + zurl(m.zoho_contact_id) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline">'
+                    + escapeHtml(m.name || '(no name)') + ' ↗</a>'
+                    + (m.email ? '<div class="text-xs text-gray-500">' + escapeHtml(m.email) + '</div>' : '')
+                    + (m.phone ? '<div class="text-xs text-gray-500">' + escapeHtml(m.phone) + '</div>' : '');
+            };
+            var acts = function (m) {
+                // NEVER print 0 for an uncounted record — that is the distinction
+                // the whole activity census exists to preserve.
+                return m.activity_total == null
+                    ? '<span class="text-amber-700">not counted</span>'
+                    : '<strong>' + _fn(m.activity_total) + '</strong>';
+            };
+            body.innerHTML = items.map(function (g) {
+                var dups = g.duplicates || [];
+                var p = g.merged_preview || {};
+                return '<tr>'
+                    + '<td>' + who(g.master)
+                        + '<div class="text-xs text-indigo-700 mt-1">' + escapeHtml(g.master_reason || '') + '</div></td>'
+                    + '<td>' + dups.map(who).join('<div class="my-1 border-t border-gray-200"></div>') + '</td>'
+                    + '<td><span class="rr-badge rr-info">' + escapeHtml((g.matched_on || []).join(' + ')) + '</span></td>'
+                    + '<td>' + acts(g.master) + ' <span class="text-gray-400">vs</span> ' + dups.map(acts).join(', ') + '</td>'
+                    + '<td class="text-xs">'
+                        + '<div><strong>' + escapeHtml(p.name || '—') + '</strong></div>'
+                        + (p.emails && p.emails.length ? '<div>' + p.emails.map(escapeHtml).join('<br>') + '</div>' : '')
+                        + (p.phones && p.phones.length ? '<div class="text-gray-500">' + p.phones.map(escapeHtml).join('<br>') + '</div>' : '')
+                        + '<div class="mt-1">' + (p.activities == null
+                            ? '<span class="text-amber-700">activity total unknown</span>'
+                            : '<span class="text-emerald-700">' + _fn(p.activities) + ' activities kept</span>') + '</div>'
+                    + '</td>'
+                    + '</tr>';
+            }).join('');
+        };
+
+        window.downloadContactMergeCsv = function () {
+            window.location.href = '/api/duplicates/contacts/merge-worklist?format=csv';
+        };
+
         // ── Mirror freshness, shared by EVERY tab ────────────────────────────
         //
         // Nothing in the Duplicate Radar reads Zoho live. Every tab renders
@@ -8217,6 +8300,9 @@
                     window._loadedTabs.add('stale-deals');
                 }
             }
+            // The merge worklist is the reason this tab was unworkable, so it
+            // loads on entry rather than waiting for a click.
+            if (tab === 'contacts') loadContactMergeWorklist();
             if (tab === 'logs') { loadAgentActivity(); loadManualActions(); }
             if (tab === 'deal-compliance' && !window._loadedTabs.has('deal-compliance')) loadDealCompliance();
             if (tab === 'empty-records' && !window._loadedTabs.has('empty-records')) loadEmptyRecords();

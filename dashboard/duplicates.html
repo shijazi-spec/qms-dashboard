@@ -1239,6 +1239,27 @@
             <div class="rr-note rr-note-info mb-3">
                 <strong>Contact duplicates.</strong> Contact records that share an email address, phone, or full name within the same Account. Merging these keeps activity history (calls, emails, meetings) attached to a single person instead of scattered across copies, and prevents duplicate outreach.
             </div>
+
+            <!-- CONTACTS TO MERGE (Sarah 2026-09-10). Prepares the decision; the
+                 merge itself happens in Zoho, which is the only thing that can
+                 re-point calls/meetings/tasks onto the survivor. Read-only. -->
+            <div class="mb-6 border border-indigo-200 rounded-lg p-4 bg-indigo-50/40">
+              <div class="flex items-center gap-2 mb-2 flex-wrap">
+                <h3 class="text-base font-bold text-gray-900">Contacts to merge
+                  <span class="text-xs font-normal text-gray-600">— same person on two records. Merge in Zoho and every call, meeting and task moves onto the survivor; the second email and phone are kept.</span>
+                </h3>
+                <span id="cmwCount" class="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-xs font-bold">—</span>
+                <button data-on-click="loadContactMergeWorklist" class="ms-auto rr-btn rr-btn-ghost">↻ Refresh</button>
+                <button data-on-click="downloadContactMergeCsv" title="Download the worklist as CSV — one block per merge, master first." class="rr-btn rr-btn-ghost">⬇ Export CSV</button>
+              </div>
+              <div id="cmwSummary" class="text-xs text-gray-600 mb-2">—</div>
+              <div class="overflow-x-auto border border-gray-200 rounded-lg bg-white">
+                <table class="rr-table min-w-full" data-no-sort>
+                  <thead><tr><th scope="col">Keep (master)</th><th scope="col">Merge into it</th><th scope="col">Matched on</th><th scope="col">Activities</th><th scope="col">After merge</th></tr></thead>
+                  <tbody id="cmwBody"><tr><td colspan="5" class="px-3 py-4 text-gray-500">Open this tab to load…</td></tr></tbody>
+                </table>
+              </div>
+            </div>
             <div class="flex justify-end mb-3 gap-2">
                 <button data-on-click="exportTab" data-args="[&quot;contact&quot;]" data-pass-event="true" id="contactsExportBtn" data-testid="button-export-contacts" title="Download a CSV of every Contact duplicate currently in the radar (respects the start/end date filters above)." class="rr-btn rr-btn-ghost">⬇ Export CSV</button>
                 <button data-on-click="refreshModuleTableFromZoho" data-args="[&quot;contacts&quot;]" id="contactsZohoRefreshBtn" title="Pull live values from Zoho for every contact currently shown. Use this when the CRM has been updated but the table still shows old values." class="rr-btn rr-btn-ghost">🔃 Refresh from Zoho (live)</button>
@@ -2621,7 +2642,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=196"></script>
+    <script src="/js/duplicates-app.js?v=197"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

@@ -4069,9 +4069,19 @@ export const duplicateRadarRoutes = [
           inScope: inScopeRows.length + neverChecked,
           dashboardUrl: process.env.MISSING_DOCS_REPORT_LINK,
         });
+        // EFFECTIVE state, not just the secret: the notifications screen can
+        // enable this without any env var, and a preview that reported
+        // "disabled" while the toggle was on would send someone hunting for a
+        // Replit Secret they do not need.
+        const { isNotificationEnabled: _isNotifOn } = await import(
+          "../../utils/notificationSettings"
+        );
+        const effectivelyEnabled = await _isNotifOn("missing_docs_report").catch(
+          () => isMonthlyMissingDocsEnabled(),
+        );
         return c.json({
           success: true,
-          enabled: isMonthlyMissingDocsEnabled(),
+          enabled: effectivelyEnabled,
           recipient_count: monthlyMissingDocsRecipients().length,
           period: periodLabel(covered),
           checked: inScopeRows.length,
@@ -13763,6 +13773,123 @@ export const duplicateRadarRoutes = [
         });
       } catch (e: any) {
         logger.error("multi-active-deals failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+
+  {
+    // CONTACTS TO MERGE (Sarah 2026-09-10). Prepares a native Zoho merge:
+    // which record survives, what the merged contact looks like, and how much
+    // activity is at stake. READ-ONLY — Zoho v2 has no merge endpoint and no
+    // reliable way to move an activity, so the merge itself happens in Zoho's
+    // UI, which carries calls/meetings/tasks onto the master and keeps the
+    // secondary emails and phones.
+    // GET /api/duplicates/contacts/merge-worklist?limit=&format=csv
+    path: "/api/duplicates/contacts/merge-worklist",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const url = new URL(c.req.url);
+        const limitRaw = parseInt(url.searchParams.get("limit") || "", 10);
+        const { getContactMergeWorklist } = await import(
+          "../../utils/contactMergeWorklist"
+        );
+        const result = await getContactMergeWorklist(
+          Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : undefined,
+        );
+
+        if ((url.searchParams.get("format") || "").toLowerCase() === "csv") {
+          const esc = (v: any) => {
+            const s = v == null ? "" : String(v);
+            return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+          };
+          const zurl = (id: string) =>
+            `https://crm.zoho.com/crm/org766568398/tab/Contacts/${id}`;
+          const header = [
+            "Role", "Contact", "Email", "Phone", "Account", "Activities",
+            "Activity counted", "Matched on", "Why this master",
+            "Merged name", "Merged emails", "Merged phones", "Zoho ID", "Open in Zoho",
+          ];
+          const body: string[] = [];
+          for (const g of result.groups) {
+            const rows = [
+              { role: "KEEP (master)", m: g.master },
+              ...g.duplicates.map((d) => ({ role: "MERGE INTO MASTER", m: d })),
+            ];
+            for (const { role, m } of rows) {
+              body.push(
+                [
+                  role, m.name, m.email, m.phone, m.account,
+                  m.activity_total == null ? "not counted" : m.activity_total,
+                  m.activity_verified ? "verified" : "no",
+                  g.matched_on.join(" + "),
+                  role.startsWith("KEEP") ? g.master_reason : "",
+                  role.startsWith("KEEP") ? g.merged_preview.name : "",
+                  role.startsWith("KEEP") ? g.merged_preview.emails.join(" ; ") : "",
+                  role.startsWith("KEEP") ? g.merged_preview.phones.join(" ; ") : "",
+                  m.zoho_contact_id, zurl(m.zoho_contact_id),
+                ].map(esc).join(","),
+              );
+            }
+            body.push(""); // blank line between groups, so the sheet reads as pairs
+          }
+          // BOM so Excel reads the Arabic names correctly.
+          const csv = "﻿" + [header.join(","), ...body].join("\r\n");
+          return new Response(csv, {
+            headers: {
+              "Content-Type": "text/csv; charset=utf-8",
+              "Content-Disposition": `attachment; filename="contacts-to-merge-${result.groups.length}.csv"`,
+            },
+          });
+        }
+
+        return c.json({
+          success: true,
+          groups: result.groups.length,
+          contacts_scanned: result.contacts_scanned,
+          // Groups whose every member has been counted, so the "activities
+          // after merge" figure is real rather than a floor.
+          groups_with_full_counts: result.groups_with_full_counts,
+          contacts_to_remove_after_merge: result.groups.reduce(
+            (n, g) => n + g.duplicates.length,
+            0,
+          ),
+          items: result.groups,
+        });
+      } catch (e: any) {
+        logger.error("contacts/merge-worklist failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+
+  {
+    // POST-DEPLOY SELF-CHECK (Sarah 2026-09-10). Exercises the September
+    // safety rules in one call — five of the six exist to stop the platform
+    // destroying CRM history or handing Sales a report that contradicts the
+    // CRM, and verifying them by hand worked only while someone remembered.
+    // STRICTLY READ-ONLY: the Empty-Delete gate is proven by asking the gate
+    // predicate what it WOULD refuse, never by tagging a record in Zoho.
+    // GET /api/duplicates/self-check
+    path: "/api/duplicates/self-check",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const { runDuplicateRadarSelfCheck } = await import(
+          "../../utils/duplicateRadarSelfCheck"
+        );
+        const report = await runDuplicateRadarSelfCheck();
+        // 200 either way — a failed CHECK is a valid RESULT, not a failed
+        // request. A non-2xx here would make "the self-check is down" and
+        // "the platform is broken" indistinguishable to any caller.
+        return c.json(report);
+      } catch (e: any) {
+        logger.error("duplicate radar self-check failed", e);
         return c.json({ error: "An internal error occurred" }, 500);
       }
     },
