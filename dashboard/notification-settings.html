@@ -232,11 +232,17 @@
                 });
         });
 
-        // The page loads /js/i18n.js and nsT() calls WalaPlusI18n.t(), but
-        // nothing ever booted the dictionary — so every lookup fell through to
-        // its English fallback and the Arabic build of this page was silently
-        // English. Canonical bootstrap, same shape as every other dashboard
-        // page.
+        // The page loads /js/i18n.js and its nsT helper forwards to the i18n
+        // dictionary, but nothing ever booted that dictionary — so every lookup
+        // fell through to its English fallback and the Arabic build of this
+        // page was silently English. Canonical bootstrap, same shape as every
+        // other dashboard page.
+        //
+        // Written WITHOUT the helper's parentheses and without the literal
+        // dotted t-call: check-i18n.cjs scans raw source and reads either of
+        // those as a dynamic call site even inside a comment. An earlier
+        // wording of this very comment put two phantom entries into
+        // scripts/i18n-dynamic-baseline.json.
         if (window.WalaPlusI18n) {
             window.WalaPlusI18n.init().then(function () { window.WalaPlusI18n.applyToDOM(); });
         }

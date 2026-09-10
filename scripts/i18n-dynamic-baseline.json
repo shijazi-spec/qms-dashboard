@@ -26,14 +26,6 @@
       "source": "dashboard/js/duplicates-app.js"
     },
     {
-      "snippet": "nsT() calls WalaPlusI18n.t(), but",
-      "source": "dashboard/notification-settings.html (inline <script>)"
-    },
-    {
-      "snippet": "t(), but",
-      "source": "dashboard/notification-settings.html (inline <script>)"
-    },
-    {
       "snippet": "t('policies.' + k);",
       "source": "dashboard/policies.html (inline <script>)"
     },
