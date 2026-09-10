@@ -635,8 +635,26 @@ function extractInlineScripts(html) {
  *               → cannot be statically verified; surface as a warning.
  *
  * Returns { staticKeys: [{key, source}], dynamicRefs: [{snippet, source}] }
+ *
+ * COMMENTS ARE STRIPPED FIRST, and that is load-bearing. This scanner reads raw
+ * text, so prose describing a call was indistinguishable from the call. On
+ * 2026-09-10 a comment in notification-settings.html reading "nsT() calls
+ * WalaPlusI18n.t(), but nothing ever booted the dictionary" produced TWO
+ * phantom dynamic call sites from one sentence — the direct match plus the
+ * wrapper rescan below — and a subsequent `--update-baseline` wrote both into
+ * i18n-dynamic-baseline.json, a file whose own header calls each entry "an
+ * explicit attestation that the dynamic key cannot be made static". They were
+ * attestations about a sentence, and every later regeneration would have
+ * carried them forward.
+ *
+ * Measured before adopting, over dashboard/*.html + dashboard/js/*.js: 1108 t()
+ * sites found raw, 1106 after stripping. The only two removed are the usage
+ * examples in this repo's own dashboard/js/i18n.js header docblock. No real
+ * call site is lost, and no DYNAMIC snippet changes, so every existing baseline
+ * entry is still found and nothing needs pruning.
  */
-function extractTCalls(source, sourceName) {
+function extractTCalls(rawSource, sourceName) {
+  const source = stripComments(rawSource);
   const staticKeys = [];
   const dynamicSnippets = new Set();
   // Wrapper aliases are local helpers that forward their first argument to
