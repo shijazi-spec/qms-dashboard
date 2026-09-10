@@ -323,4 +323,12 @@ async function createQMSTables() {
   }
 }
 
-createQMSTables().catch(console.error);
+// A bootstrap step that cannot fail is not a bootstrap step. `.catch(
+// console.error)` exited 0 even on a connection refusal, so a CI run that
+// created nothing looked identical to one that created everything — and the
+// missing tables surfaced later as a dozen confusing test failures instead of
+// one clear setup failure.
+createQMSTables().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

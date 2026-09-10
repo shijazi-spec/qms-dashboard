@@ -222,6 +222,28 @@ jobs:
           # pure duplication that burned 90s of every run. The real
           # "Run test suite" step below reports the tally itself.
 
+      # The postgres service above starts EMPTY and `npm test` runs straight
+      # against it. Most of the suite copes — this app owns its schema at
+      # runtime, so a test that exercises a feature triggers the lazy
+      # `CREATE TABLE IF NOT EXISTS` that owns its table on the way through.
+      #
+      # A test that seeds through a data helper does not. aiOpsRoutes calls
+      # createAIAlert() with nothing having called initAIAlertsTable(), and one
+      # run reported `relation "ai_alerts" does not exist` 24 times while the
+      # same test passed on every developer machine, where the feature had been
+      # exercised once long ago. Six of eleven failing files were this.
+      #
+      # Deliberately NOT `continue-on-error`: if the schema cannot be created,
+      # the suite's DB failures are noise and the run should say so at the step
+      # that actually broke.
+      - name: Bootstrap test schema
+        env:
+          DATABASE_URL: postgres://test:test@localhost:5432/qms_test
+          ALLOW_TEST_SCHEMA_BOOTSTRAP: "1"
+        run: |
+          npx tsx scripts/createQMSTables.ts
+          npx tsx scripts/bootstrap-test-schema.ts
+
       # Non-blocking while we establish the baseline. Remove
       # `continue-on-error` to promote this to a hard gate.
       - name: Run test suite
