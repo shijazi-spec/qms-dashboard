@@ -1414,12 +1414,17 @@ const NORTH_STAR_DEFS: Array<{
  * own independent recompute, so leadership never drifts from what the managers see
  * (Ahmad 2026-08-16).
  *
- * The two CHECKLIST KPIs (QM-KPI-015 Framework, QM-KPI-008 Pilot) are deliberately
- * NOT here: their stored kpi_values can lag behind ticks/backfills (that left BU
- * Pilot showing a stale 0). They keep their live scoped-rate calc
- * (calcFrameworkChecklistCompletion / calcBuCoverageRate → actionPlanCompleteRate),
- * which is exactly the value the /kpis checklist header shows and — after the
- * matching /api/kpis card fix — the card too.
+ * QM-KPI-015 (Framework) and QM-KPI-008 (BU Coverage) are deliberately NOT here:
+ * their stored kpi_values can lag behind ticks/backfills (that left BU Pilot
+ * showing a stale 0). Both keep a LIVE calc —
+ * calcFrameworkChecklistCompletion → actionPlanCompleteRate for QM-KPI-015, and
+ * calcBuCoverageRate → buGovernedRate for QM-KPI-008 — which is the same value
+ * the /kpis header and card show.
+ *
+ * QM-KPI-008 is no longer a checklist KPI (2026-09-10): the 5-stage Pilot
+ * Validation plan moved to QM-KPI-016, which leadership does not track. The
+ * reason for excluding 008 from the mirror is unchanged — it still computes
+ * live rather than reading a stored value.
  */
 const MIRROR_DASHBOARD_CODES = new Set<string>([
   "QM-KPI-002", // Audit Execution Rate (auto)
