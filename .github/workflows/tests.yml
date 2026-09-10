@@ -368,6 +368,7 @@ jobs:
           # For each failing file we keep the TAIL of its block, which is where a
           # thrown error and its stack land.
           : > /tmp/failing-tails.txt
+          NTAIL=0
           while IFS= read -r line; do
             [ -n "$line" ] || continue
             # Drop the "[FAIL (exit N)] 12.3s  " prefix. The label is everything
@@ -375,24 +376,43 @@ jobs:
             # "tests/vitest/** (vitest)" — so take fields 5..NF, not $NF.
             f=$(printf '%s\n' "$line" | awk '{ $1=""; $2=""; $3=""; $4=""; sub(/^[[:space:]]+/, ""); print }')
             [ -n "$f" ] || continue
+            # index() not a regex: the label contains ** and ( ) which would
+            # otherwise need escaping.
+            # Two stop conditions, not one. The next block header ends most
+            # blocks — but the LAST block flushed has no header after it, so
+            # without the second condition it ran to EOF and swallowed the
+            # runner's summary. That summary is one line per file, so with 267
+            # files `tail -25` would have shown 25 lines of summary and none of
+            # the error. Found by running this against a synthetic log.
+            BLOCK=$(awk -v f="$f" '
+              index($0, "──── " f "  (") == 1 { inblk = 1; next }
+              inblk && index($0, "──── ") == 1 { inblk = 0 }
+              inblk && $0 ~ /^[[:space:]]*\[(PASS\]|FAIL \(exit)/ { inblk = 0 }
+              inblk { print }
+            ' /tmp/test-clean.log | tail -25)
+
             {
               echo "──────── ${f}"
-              # index() not a regex: the label contains ** and ( ) which would
-              # otherwise need escaping.
-              # Two stop conditions, not one. The next block header ends most
-              # blocks — but the LAST block flushed has no header after it, so
-              # without the second condition it ran to EOF and swallowed the
-              # runner's summary. That summary is one line per file, so with 267
-              # files `tail -25` would have shown 25 lines of summary and none of
-              # the error. Found by running this against a synthetic log.
-              awk -v f="$f" '
-                index($0, "──── " f "  (") == 1 { inblk = 1; next }
-                inblk && index($0, "──── ") == 1 { inblk = 0 }
-                inblk && $0 ~ /^[[:space:]]*\[(PASS\]|FAIL \(exit)/ { inblk = 0 }
-                inblk { print }
-              ' /tmp/test-clean.log | tail -25
+              printf '%s\n' "${BLOCK:-<no block matched this label>}"
               echo ""
             } >> /tmp/failing-tails.txt
+
+            # ALSO as ::notice annotations, and that is the point rather than a
+            # nicety. The job summary needs a SIGNED-IN viewer — anonymously the
+            # run page says "Sign in to view logs" — which is the same wall as
+            # the raw log this whole annotation block exists to route around.
+            # Annotations come back from the public check-runs API instead.
+            # Notices carry their own ~10-per-step budget, separate from the
+            # warnings above, so the tails cost the tally and file list nothing.
+            #
+            # An empty BLOCK is reported explicitly: "the extractor matched
+            # nothing" and "the test printed nothing useful" are different bugs
+            # and must not look identical.
+            if [ "${NTAIL}" -lt 8 ]; then
+              NTAIL=$((NTAIL + 1))
+              TAILMSG=$(printf '%s\n' "${BLOCK:-<no block matched this label>}" | tail -10 | tr '\n' '|' | tr -d '\r' | cut -c1-1600)
+              echo "::notice title=test-7-tail-${NTAIL} ${f}::${TAILMSG}"
+            fi
           done < /tmp/failing-files.txt
 
           # One annotation, not a chunked set: the budget above is nearly spent,
