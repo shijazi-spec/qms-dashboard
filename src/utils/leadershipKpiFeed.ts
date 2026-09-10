@@ -10,7 +10,7 @@
  *
  * Scope = the 4 KPIs leadership tracks today:
  *   - QM-KPI-002  Audit Execution Rate                    (Quality Manager)
- *   - QM-KPI-008  BU Pilot Validation Completion Rate     (Quality Manager)
+ *   - QM-KPI-008  BU Coverage Rate                        (Quality Manager)
  *   - QM-KPI-015  BU Framework Readiness Rate             (Quality Manager)
  *   - GRC-KPI-008 Compliance Coverage Index               (GRC Manager)
  *
@@ -412,17 +412,29 @@ async function calcBuCoverageRate() {
     );
   }
 
-  // QM-KPI-008 = BU Pilot Validation Completion Rate: BUs that completed the full
-  // 5-stage Pilot Validation plan ÷ the 8 planned BUs (binary; same value /kpis
-  // records). (business_units seeding above is kept — calcRiskAssessmentCoverage
-  // relies on it.)
-  const { actionPlanCompleteRate } = await import("./kpiChecklistDatabase");
-  const rate = await actionPlanCompleteRate("QM-KPI-008");
-  if (!rate) return { value: 0, dataAvailable: false, reason: "no_pilot_checklist_yet" };
+  // QM-KPI-008 = BU Coverage Rate.
+  //
+  // This called actionPlanCompleteRate("QM-KPI-008") — binary pilot-validation
+  // completion over 8 planned BUs — and its comment claimed that was the "same
+  // value /kpis records". It was not. /kpis records
+  // PROCESS_CALCULATORS["QM-KPI-008"], which is average governance coverage
+  // WITH PARTIAL CREDIT, so leadership and the dashboard were sending two
+  // different numbers for one KPI code and nothing compared them.
+  //
+  // Both now end at buGovernedRate(): the process calculator reaches it via
+  // buCoverageRateForFeed(), and this reads it directly for the covered/total
+  // detail. One computation, so they cannot drift apart again — see
+  // tests/vitest/kpiBuCoverageSingleSource.vitest.test.ts.
+  //
+  // (business_units seeding above is kept — calcRiskAssessmentCoverage relies
+  // on it.)
+  const { buGovernedRate } = await import("./kpiChecklistDatabase");
+  const r = await buGovernedRate();
+  if (!r) return { value: 0, dataAvailable: false, reason: "no_bu_coverage_yet" };
   return {
-    value: rate.value,
+    value: r.value,
     dataAvailable: true,
-    details: { bus_pilot_validated: rate.complete, bus_planned: rate.total },
+    details: { bus_covered: r.covered, bus_total: r.total },
   };
 }
 
@@ -737,13 +749,16 @@ const FEED_KPIS: FeedKpiConfig[] = [
   },
   {
     code: "QM-KPI-008",
-    name: "BU Pilot Validation Completion Rate",
+    // This is the label leadership actually sees. It said "BU Pilot Validation
+    // Completion Rate" while the value was governance coverage with partial
+    // credit — the name is the half that has to match the number.
+    name: "BU Coverage Rate",
     unit: "%",
     target: 100,
     green: 95,
     amber: 80,
     direction: "higher_is_better",
-    calc: calcBuCoverageRate, // NOTE: fn name is legacy; it computes the QM-KPI-008 Pilot Validation checklist rate (see its body).
+    calc: calcBuCoverageRate,
   },
   {
     code: "GRC-KPI-008",

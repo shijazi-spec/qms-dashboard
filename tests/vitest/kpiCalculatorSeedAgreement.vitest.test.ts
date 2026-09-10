@@ -50,11 +50,32 @@ function seededModes(): Map<string, string> {
   return out;
 }
 
+/**
+ * Modes that tell the truth when a calculator exists.
+ *
+ * The rule this test enforces is "the mode must not claim the number is
+ * hand-maintained when a calculator writes it". Two modes satisfy that:
+ *
+ *   auto        — a platform calculator computes it outright.
+ *   bu_coverage — computed from the per-BU coverage tracker. Still machine
+ *                 -derived; the mode exists because kpis.html gates the
+ *                 "Manage BU Coverage" admin modal on it, so the mode also
+ *                 chooses the editor for the data the calculator reads.
+ *
+ * `manual` and `checklist` remain offenders. Both point a reader (and
+ * kpis.html) at a human editor that is NOT where the value comes from, which
+ * is the SPEC-KPI-02 failure this file exists to catch. QM-KPI-008 was seeded
+ * `checklist` while calcBuCoverageTracked wrote it, so the page offered the
+ * 5-stage pilot checklist as the source of a governance-coverage number
+ * (found 2026-09-10).
+ */
+const MACHINE_MODES = new Set(["auto", "bu_coverage"]);
+
 describe("seeded calc_mode agrees with the calculator registry", () => {
-  it("every seeded KPI with a calculator is marked auto", () => {
+  it("every seeded KPI with a calculator is marked machine-computed", () => {
     const live = calculatorCodes();
     const offenders = Array.from(seededModes().entries())
-      .filter(([code, mode]) => live.has(code) && mode !== "auto")
+      .filter(([code, mode]) => live.has(code) && !MACHINE_MODES.has(mode))
       .map(([code, mode]) => `${code} seeded ${mode}`);
 
     // A calculator writes to this code on every recalc whatever calc_mode
@@ -62,6 +83,14 @@ describe("seeded calc_mode agrees with the calculator registry", () => {
     // resulting value look hand-entered, and hides it from the orphan sweep's
     // "dead" bucket where a purge would be the wrong remedy anyway.
     expect(offenders).toEqual([]);
+  });
+
+  it("does not let 'manual' or 'checklist' through for a calculated code", () => {
+    // Anti-tautology: widening the allow-list above to accept bu_coverage must
+    // not have widened it to accept every mode. If this ever passes with
+    // "manual" in MACHINE_MODES, the gate is gone.
+    expect(MACHINE_MODES.has("manual")).toBe(false);
+    expect(MACHINE_MODES.has("checklist")).toBe(false);
   });
 
   it("SPEC-KPI-02 is named for what its calculator computes", () => {
