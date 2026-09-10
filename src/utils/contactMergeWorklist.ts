@@ -70,6 +70,24 @@ const normName = (v: string | null | undefined) =>
   String(v || "").trim().toLowerCase().replace(/\s+/g, " ");
 
 /**
+ * Identity key for a phone number — the LAST 9 DIGITS, so `+966 54 593 7834`
+ * and `0545937834` are recognised as one number.
+ *
+ * This must stay identical to the comparison in `matchSignals`. It did not,
+ * and the merged preview listed the same Saudi mobile twice in two formats
+ * (caught by the preview test, 2026-09-10). Anyone reading that would
+ * reasonably conclude the merge was about to keep a second number that does
+ * not exist.
+ *
+ * Below 7 digits the value is junk ("11") rather than a number, so it keys on
+ * itself instead — two different junk values must not collapse into one.
+ */
+const phoneKey = (v: string | null | undefined) => {
+  const d = digits(v);
+  return d.length >= 7 ? d.slice(-9) : d;
+};
+
+/**
  * PURE. Which of {email, phone, full name} two contacts share.
  *
  * The standing rule is TWO of the three (Sarah): one alone is not evidence —
@@ -88,10 +106,12 @@ export function matchSignals(
   const ea = normEmail(a.email);
   const eb = normEmail(b.email);
   if (ea && ea === eb) out.push("email");
+  // Same key the merged preview de-duplicates on — see phoneKey.
   const pa = digits(a.phone);
   const pb = digits(b.phone);
-  // Compare on the last 9 digits so +966 5x… and 05x… are the same number.
-  if (pa.length >= 7 && pb.length >= 7 && pa.slice(-9) === pb.slice(-9)) out.push("phone");
+  if (pa.length >= 7 && pb.length >= 7 && phoneKey(a.phone) === phoneKey(b.phone)) {
+    out.push("phone");
+  }
   const na = normName(a.name);
   const nb = normName(b.name);
   if (na && na === nb) out.push("name");
@@ -194,7 +214,7 @@ export function buildMergeGroup(
     merged_preview: {
       name: master.name,
       emails: unionValues(master.email, duplicates.map((d) => d.email), normEmail),
-      phones: unionValues(master.phone, duplicates.map((d) => d.phone), digits),
+      phones: unionValues(master.phone, duplicates.map((d) => d.phone), phoneKey),
       account: master.account || duplicates.map((d) => d.account).find(Boolean) || null,
       activities: fullyCounted ? all.reduce((n, m) => n + (m.activity_total || 0), 0) : null,
     },

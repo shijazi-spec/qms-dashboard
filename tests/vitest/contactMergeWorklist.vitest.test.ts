@@ -78,7 +78,10 @@ describe("pickMaster", () => {
       c({ zoho_contact_id: "a", email: "a@x.com" }),
       c({ zoho_contact_id: "b" }),
     ]);
-    expect(reason).toMatch(/not been counted yet/i);
+    // The point is that the reason ADMITS the uncertainty and sends the reader
+    // to Zoho, rather than stating a confident-sounding basis it does not have.
+    expect(reason).toMatch(/counted yet/i);
+    expect(reason).toMatch(/check in zoho/i);
   });
 
   it("breaks a tie on having an email, then on age", () => {
@@ -98,7 +101,9 @@ describe("buildMergeGroup", () => {
     expect(g.master.zoho_contact_id).toBe("m");
     expect(g.duplicates.map((x) => x.zoho_contact_id)).toEqual(["d"]);
     expect(g.merged_preview.emails).toEqual(["Kakoook@gmail.com", "Diana@exhaleyogasa.net"]);
-    // Same number in two formats collapses to one entry.
+    // Same number in two formats collapses to one entry, in the master's
+    // format. Listing it twice would imply the merge keeps a second number
+    // that does not exist.
     expect(g.merged_preview.phones).toEqual(["0545937834"]);
     expect(g.merged_preview.activities).toBe(9);
     expect(g.activity_fully_counted).toBe(true);
