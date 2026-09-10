@@ -3443,7 +3443,15 @@ async function queryMultiActiveDealAccounts(
     if (!g.domain && g.account_id) g.domain = domains.get(g.account_id) || null;
   }
 
-  return finaliseMultiActiveDealGroups(raw, { multiOwnerOnly: !!opts?.multiOwnerOnly });
+  // Best-effort: getSeparationPairKeySet swallows a missing table and returns
+  // an empty set, so a ledger problem shows every conflict rather than hiding
+  // one. Over-reporting here is recoverable; under-reporting is not.
+  const separatedPairs = await getSeparationPairKeySet();
+
+  return finaliseMultiActiveDealGroups(raw, {
+    multiOwnerOnly: !!opts?.multiOwnerOnly,
+    separatedPairs,
+  });
 }
 
 /**
@@ -3536,9 +3544,31 @@ export interface MultiActiveDealGroup {
  * merge — a recommendation only makes sense between deals that are actually
  * competing for the same customer.
  */
+/** Ledger key for a pair of ids, order-independent. */
+export function separationKey(a: string, b: string): string {
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
+
 export function finaliseMultiActiveDealGroups(
   groups: MultiActiveDealGroup[],
-  opts: { multiOwnerOnly: boolean },
+  opts: {
+    multiOwnerOnly: boolean;
+    /**
+     * Deal-id pairs an operator has dismissed as "not a conflict", from
+     * duplicate_separation_ledger.
+     *
+     * Sarah 2026-09-10: two open deals on one account are routinely two SISTER
+     * COMPANIES — legitimately separate business that no amount of CRM work
+     * will resolve, because there is nothing to resolve. Without a way to say
+     * so, those rows sit in the list forever and train the team to skim past
+     * a tab that is supposed to be a worklist.
+     *
+     * Keyed on DEAL ids rather than the account, deliberately: dismissing this
+     * pair must not blind the account. A THIRD deal appearing later is a new
+     * conflict and has to surface.
+     */
+    separatedPairs?: Set<string>;
+  },
 ): MultiActiveDealAccount[] {
   const merged = new Map<string, MultiActiveDealGroup>();
   for (const g of groups) {
@@ -3563,7 +3593,23 @@ export function finaliseMultiActiveDealGroups(
     // different paths, and counting it twice would invent a conflict.
     const byId = new Map<string, (typeof g.deals)[number]>();
     for (const d of g.deals) byId.set(String(d.id), d);
-    const deals = [...byId.values()];
+    let deals = [...byId.values()];
+
+    // Drop a deal only when it has been dismissed against EVERY other deal
+    // still in the group. A deal dismissed against one sibling but not another
+    // is still in a live conflict with that other one, and hiding it would be
+    // the failure this tab exists to prevent.
+    const sep = opts.separatedPairs;
+    if (sep && sep.size > 0 && deals.length > 1) {
+      deals = deals.filter((d) =>
+        deals.some(
+          (o) =>
+            String(o.id) !== String(d.id) &&
+            !sep.has(separationKey(String(d.id), String(o.id))),
+        ),
+      );
+    }
+
     if (deals.length < 2) continue;
     const owners = Array.from(new Set(deals.map((d) => d.owner).filter(Boolean)));
     if (opts.multiOwnerOnly && owners.length < 2) continue;

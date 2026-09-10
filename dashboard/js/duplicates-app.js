@@ -7593,7 +7593,7 @@
             if (!body) return;
             var seg = (document.getElementById('adcSegment') || {}).value || 'walaplus';
             var multiOnly = !!(document.getElementById('adcMultiOwnerOnly') || {}).checked;
-            body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-gray-500">Loading…</td></tr>';
+            body.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-gray-500">Loading…</td></tr>';
             var data;
             try {
                 var url = '/api/duplicates/multi-active-deals?segment=' + encodeURIComponent(seg) +
@@ -7602,7 +7602,7 @@
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 data = await res.json();
             } catch (e) {
-                body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-amber-700">Could not load: ' +
+                body.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-amber-700">Could not load: ' +
                     escapeHtml(String((e && e.message) || e)) + '</td></tr>';
                 return;
             }
@@ -7643,7 +7643,7 @@
             // A load is the freshest moment to restate how old the mirror is.
             if (typeof _rrRenderFreshness === 'function') _rrRenderFreshness();
             if (!rows.length) {
-                body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-gray-500">No conflicts found for this layout.</td></tr>';
+                body.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-gray-500">No conflicts found for this layout.</td></tr>';
                 return;
             }
             // Summary row per company + one hidden DETAIL row per deal, using
@@ -7682,6 +7682,28 @@
                         (keeper ? '<div class="rr-sub">keep: ' + escapeHtml(String(keeper.stage || '')) +
                             ' / ' + escapeHtml(String(keeper.owner || '')) + '</div>' : '') + '</td>' +
                     '<td class="rr-num">' + Number(a.total_open_value || 0).toLocaleString() + '</td>' +
+                    // "Not a conflict" — sister companies. Its own
+                    // data-on-click wins over the row's (closest ancestor
+                    // wins), so pressing it does not also expand the row.
+                    '<td>' +
+                        '<button type="button" class="rr-btn rr-btn-ghost" ' +
+                            'data-on-click="dismissDealConflict" ' +
+                            // escAttr, NOT escapeHtml. escapeHtml is
+                            // textContent -> innerHTML, which escapes & < >
+                            // but leaves " untouched, because a quote is not
+                            // special in text content. The JSON here is inside
+                            // a double-quoted attribute and carries an account
+                            // NAME, so an account called `Al "Fanar" Group`
+                            // would close the attribute early. escAttr escapes
+                            // the quote.
+                            'data-args="' + escAttr(JSON.stringify([
+                                (a.deals || []).map(function (d) { return String(d.id); }),
+                                String(a.account_name || '')
+                            ])) + '" ' +
+                            'title="These deals are not in conflict — e.g. two sister companies. Records this pair as permanently separate; it will not come back on the next scan. A NEW deal on this account still surfaces.">' +
+                            'Not a conflict' +
+                        '</button>' +
+                    '</td>' +
                     '</tr>';
                 var details = (a.deals || []).map(function (d) {
                     var keep = d.suggestion === 'keep';
@@ -7706,10 +7728,57 @@
                         '<td class="rr-sub">created ' + _dcFmtDate(d.created) +
                             '<div class="rr-sub">last activity ' + _dcFmtDate(d.last_activity) + '</div></td>' +
                         '<td class="rr-num">' + (d.amount ? Number(d.amount).toLocaleString() : '—') + '</td>' +
+                        // Keeps the detail row aligned with the 6-column head.
+                        '<td></td>' +
                         '</tr>';
                 }).join('');
                 return head + details;
             }).join('');
+        };
+
+        // "Not a conflict" — record these deals as permanently separate.
+        //
+        // Sarah 2026-09-10: two open deals on one account are often two SISTER
+        // COMPANIES. There is nothing to resolve in CRM, so without this the
+        // row returns on every scan and the tab stops being a worklist.
+        //
+        // Writes duplicate_separation_ledger — the same ledger Account
+        // Duplicates' dismiss uses — so there is one permanent record of
+        // "keep apart" rather than a second mechanism. No Zoho write.
+        window.dismissDealConflict = function (dealIds, accountName) {
+            var ids = (dealIds || []).map(String).filter(Boolean);
+            if (ids.length < 2) {
+                alert('Need at least 2 deals to dismiss a conflict.');
+                return;
+            }
+            // Say it is permanent, and say what still comes back, so nobody
+            // has to discover the second half by waiting a week for it.
+            if (!confirm(
+                'Mark the ' + ids.length + ' open deals on "' + (accountName || 'this account') +
+                '" as NOT a conflict?\n\n' +
+                'Use this when they are separate businesses — e.g. two sister companies.\n\n' +
+                'This is permanent: the pair stays out of this tab, the daily Sales report ' +
+                'and the split-account check. A NEW deal on this account will still be flagged. ' +
+                'Nothing is changed in Zoho.'
+            )) return;
+            fetch('/api/duplicates/deal-conflicts/dismiss', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ ids: ids, scope: 'deals' })
+            })
+                .then(function (r) { return r.json().catch(function () { return {}; }); })
+                .then(function (j) {
+                    if (j && j.success) {
+                        // Reload rather than hide the row: the server decides
+                        // what is still a conflict, and a row hidden by the
+                        // client would disagree with the next refresh.
+                        loadActiveDealConflicts();
+                    } else {
+                        alert('Could not dismiss: ' + ((j && j.error) || 'unknown error'));
+                    }
+                })
+                .catch(function (e) { alert('Could not dismiss: ' + e); });
         };
 
         // Open/close every conflict at once — the state is read off the first

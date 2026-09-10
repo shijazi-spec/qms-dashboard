@@ -2323,6 +2323,69 @@ export const duplicateRadarRoutes = [
   {
     // Dismiss an account auto-merge group as "NOT duplicates" (Ahmad 2026-06-23).
     // Records the group's accounts as mutually separated (durable) so the group
+    // Dismiss a DEAL CONFLICT as "no conflict" — sister companies.
+    //
+    // Sarah 2026-09-10: "they are sometimes 2 sister companies, so we couldn't
+    // solve the conflict as there is no conflict." Two open deals on one
+    // account, or two Account records fuzzy-joined into one company, are
+    // routinely two real and separate businesses. Nothing in CRM will resolve
+    // that, so the row returns on every scan and the tab stops being a
+    // worklist.
+    //
+    // Writes the same duplicate_separation_ledger the Account Duplicates
+    // dismiss uses, so there is ONE permanent "keep apart" record and no second
+    // mechanism to keep in sync. No Zoho write: this changes what WE claim, not
+    // the customer's data.
+    //
+    // `ids` are DEAL ids from the Active Deal Conflicts tab and ACCOUNT ids
+    // from the split-account check. The ledger is id-agnostic, and each reader
+    // only ever looks up the kind it holds, so one endpoint serves both.
+    //   POST /api/duplicates/deal-conflicts/dismiss  { ids: string[], scope }
+    path: "/api/duplicates/deal-conflicts/dismiss",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const body = await c.req.json().catch(() => ({}));
+          const ids: string[] = Array.isArray(body?.ids)
+            ? body.ids.map((z: any) => String(z || "").trim()).filter(Boolean)
+            : [];
+          const scope = body?.scope === "accounts" ? "accounts" : "deals";
+          // Two is the minimum that can BE a conflict. Rejecting one id also
+          // stops a mis-wired button quietly writing nothing and reporting
+          // success.
+          const unique = Array.from(new Set(ids));
+          if (unique.length < 2) {
+            return c.json(
+              { error: "Need at least 2 ids to dismiss a conflict." },
+              400,
+            );
+          }
+          const performedBy = `${(user as any)?.email || "user"} (dismiss deal conflict: ${scope})`;
+          const { recordSeparations } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          // One singleton group per id → every pair between them is separated.
+          const pairs = await recordSeparations(
+            unique.map((z) => [z]),
+            "dismiss",
+            performedBy,
+          );
+          return c.json({
+            success: true,
+            scope,
+            separatedPairs: pairs,
+            ids: unique.length,
+          });
+        } catch (e: any) {
+          return c.json({ error: e?.message || String(e) }, 500);
+        }
+      };
+    },
+  },
+  {
     // is excluded from this AND future previews/merges — no Zoho write.
     //   POST /api/duplicates/accounts/dismiss-merge-group  { zohoIds: string[] }
     path: "/api/duplicates/accounts/dismiss-merge-group",

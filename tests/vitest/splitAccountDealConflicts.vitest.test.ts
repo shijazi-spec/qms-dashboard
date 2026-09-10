@@ -181,3 +181,71 @@ describe("normalizeAccountDomain", () => {
     expect(normalizeAccountDomain("   ")).toBeNull();
   });
 });
+
+describe('dismissed pairs — "not the same company"', () => {
+  // Sarah 2026-09-10: the case this join gets wrong is SISTER COMPANIES —
+  // two real, separate businesses sharing a domain or a name token. Dismissing
+  // writes the ACCOUNT pair to duplicate_separation_ledger, and it is applied
+  // as a refusal to union, so it removes exactly that edge.
+  const key = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+
+  it("does not join a dismissed pair, even on a shared domain", () => {
+    // Domain is treated as PROOF everywhere else in this module. A person who
+    // opened both records outranks it: sister companies really do share one.
+    const sides = [
+      side({ account_id: "s1", account_name: "Al Fanar Electric", domain: "alfanar.com" }),
+      side({ account_id: "s2", account_name: "Al Fanar Construction", domain: "alfanar.com" }),
+    ];
+    expect(groupSplitAccountConflicts(sides)).toHaveLength(1);
+    expect(
+      groupSplitAccountConflicts(sides, new Set([key("s1", "s2")])),
+    ).toHaveLength(0);
+  });
+
+  it("does not join a dismissed pair on an exact name match", () => {
+    const sides = [
+      side({ account_id: "n1", account_name: "Mayar Foods" }),
+      side({ account_id: "n2", account_name: "Mayar Foods" }),
+    ];
+    expect(groupSplitAccountConflicts(sides)).toHaveLength(1);
+    expect(
+      groupSplitAccountConflicts(sides, new Set([key("n1", "n2")])),
+    ).toHaveLength(0);
+  });
+
+  it("removes only the dismissed EDGE, not the whole group", () => {
+    // Three accounts on one domain with one pair dismissed: the remaining
+    // accounts are still one company by a signal nobody dismissed, and that
+    // group is still real. Dropping it would hide a live conflict.
+    const sides = [
+      side({ account_id: "t1", account_name: "Lendo", domain: "lendo.sa" }),
+      side({ account_id: "t2", account_name: "Lendo Capital", domain: "lendo.sa" }),
+      side({ account_id: "t3", account_name: "Lendo Finance", domain: "lendo.sa" }),
+    ];
+    const out = groupSplitAccountConflicts(sides, new Set([key("t1", "t2")]));
+    // t1-t3 and t2-t3 still union, so all three remain one company via t3.
+    expect(out).toHaveLength(1);
+    expect(out[0].account_count).toBe(3);
+  });
+
+  it("separates a pair fully once every edge between them is dismissed", () => {
+    const sides = [
+      side({ account_id: "u1", account_name: "Sure Global", domain: "sure.com" }),
+      side({ account_id: "u2", account_name: "Sure Global Tech", domain: "sure.com" }),
+      side({ account_id: "u3", account_name: "Unrelated Co", domain: "other.com" }),
+    ];
+    const out = groupSplitAccountConflicts(sides, new Set([key("u1", "u2")]));
+    expect(out).toHaveLength(0);
+  });
+
+  it("an empty or absent ledger changes nothing", () => {
+    // getSeparationPairKeySet returns an empty set when the table is missing:
+    // the degraded path reports every group rather than hiding one.
+    const sides = [
+      side({ account_id: "v1", account_name: "Acme", domain: "acme.com" }),
+      side({ account_id: "v2", account_name: "Acme KSA", domain: "acme.com" }),
+    ];
+    expect(groupSplitAccountConflicts(sides, new Set())).toHaveLength(1);
+    expect(groupSplitAccountConflicts(sides)).toHaveLength(1);
+  });
+});

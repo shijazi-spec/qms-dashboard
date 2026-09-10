@@ -202,3 +202,95 @@ describe("recommendation and ordering", () => {
     expect(out.map((r) => r.account_name)).toEqual(["collision", "small"]);
   });
 });
+
+describe('dismissed pairs — "not a conflict"', () => {
+  // Sarah 2026-09-10: two open deals on one account are routinely two SISTER
+  // COMPANIES. Nothing in CRM resolves that, so the row returned on every
+  // scan and the tab stopped being a worklist. Dismissing writes the deal
+  // pair to duplicate_separation_ledger; these tests pin what that does.
+  const key = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+
+  it("drops a two-deal conflict once the pair is dismissed", () => {
+    const d1 = deal({ id: "x1" });
+    const d2 = deal({ id: "x2", owner: "Owner B" });
+    const g = group({ deals: [d1, d2] });
+
+    expect(run([g])).toHaveLength(1);
+
+    const out = finaliseMultiActiveDealGroups([g], {
+      multiOwnerOnly: false,
+      separatedPairs: new Set([key("x1", "x2")]),
+    });
+    expect(out).toHaveLength(0);
+  });
+
+  it("keeps a THIRD deal in play — dismissing one pair is not dismissing the account", () => {
+    // The whole reason this keys on deal ids and not the account. A new deal
+    // landing on a previously-dismissed account is a fresh conflict, and
+    // hiding it would be the failure this tab exists to prevent.
+    const g = group({
+      deals: [
+        deal({ id: "y1" }),
+        deal({ id: "y2", owner: "Owner B" }),
+        deal({ id: "y3", owner: "Owner C" }),
+      ],
+    });
+    const out = finaliseMultiActiveDealGroups([g], {
+      multiOwnerOnly: false,
+      separatedPairs: new Set([key("y1", "y2")]),
+    });
+    expect(out).toHaveLength(1);
+    // y1 still conflicts with y3, and y2 with y3, so all three stay.
+    expect(out[0].open_deals).toBe(3);
+  });
+
+  it("drops a deal only when it is dismissed against EVERY sibling", () => {
+    const g = group({
+      deals: [
+        deal({ id: "z1" }),
+        deal({ id: "z2", owner: "Owner B" }),
+        deal({ id: "z3", owner: "Owner C" }),
+      ],
+    });
+    const out = finaliseMultiActiveDealGroups([g], {
+      multiOwnerOnly: false,
+      separatedPairs: new Set([key("z1", "z2"), key("z1", "z3")]),
+    });
+    // z1 is dismissed against both, so it leaves; z2 vs z3 is still live.
+    expect(out).toHaveLength(1);
+    expect(out[0].open_deals).toBe(2);
+    expect(out[0].deals.map((d: any) => d.id).sort()).toEqual(["z2", "z3"]);
+  });
+
+  it("an empty or absent ledger changes nothing", () => {
+    // getSeparationPairKeySet returns an empty set when the table is missing,
+    // so this is the degraded path: show every conflict rather than hide one.
+    const g = group();
+    expect(
+      finaliseMultiActiveDealGroups([g], {
+        multiOwnerOnly: false,
+        separatedPairs: new Set(),
+      }),
+    ).toHaveLength(1);
+    expect(run([g])).toHaveLength(1);
+  });
+
+  it("recomputes owners and value from what survives", () => {
+    // A stale count is how a dismissal quietly misleads: the row would claim
+    // three deals while showing two.
+    const g = group({
+      deals: [
+        deal({ id: "w1", owner: "Owner A", amount: 100 }),
+        deal({ id: "w2", owner: "Owner A", amount: 200 }),
+        deal({ id: "w3", owner: "Owner B", amount: 400 }),
+      ],
+    });
+    const out = finaliseMultiActiveDealGroups([g], {
+      multiOwnerOnly: false,
+      separatedPairs: new Set([key("w1", "w2"), key("w1", "w3")]),
+    });
+    expect(out[0].open_deals).toBe(2);
+    expect(out[0].distinct_owners).toBe(2);
+    expect(out[0].total_open_value).toBe(600);
+  });
+});

@@ -37,6 +37,8 @@ import {
   openStagePredicate,
   normalizeCompanyName,
   isPlaceholderName,
+  separationKey,
+  getSeparationPairKeySet,
 } from "./duplicateRadarDatabase";
 import type { DuplicateFilters } from "./duplicateRadarDatabase";
 
@@ -189,6 +191,21 @@ class UnionFind {
  */
 export function groupSplitAccountConflicts(
   sides: SplitAccountSide[],
+  /**
+   * Account-id pairs an operator dismissed as "not the same company", from
+   * duplicate_separation_ledger.
+   *
+   * Sarah 2026-09-10: the join is fuzzy by design, and the case it gets wrong
+   * is SISTER COMPANIES — two real, separate businesses that share a domain or
+   * a name token. There is no conflict to resolve, so without a way to say so
+   * the group returns every scan forever.
+   *
+   * Applied as a refusal to UNION, not as a filter over finished groups: a
+   * dismissed pair should remove exactly that edge. If a third account joins
+   * the other two by a signal nobody dismissed, that group is still real and
+   * must still be reported.
+   */
+  separatedPairs?: Set<string>,
 ): SplitAccountConflict[] {
   const byId = new Map<string, SplitAccountSide>();
   for (const s of sides) {
@@ -201,6 +218,10 @@ export function groupSplitAccountConflicts(
   const uf = new UnionFind();
   const signalFor = new Map<string, SplitAccountSignal>();
   const noteSignal = (a: string, b: string, sig: SplitAccountSignal) => {
+    // Dismissed pairs never join — including on `domain`, which is otherwise
+    // treated as proof. Two sister companies really do share one domain, and a
+    // person who has looked at the records outranks the signal.
+    if (separatedPairs && separatedPairs.has(separationKey(a, b))) return;
     uf.union(a, b);
     const root = uf.find(a);
     const held = signalFor.get(root);
@@ -215,8 +236,21 @@ export function groupSplitAccountConflicts(
     if (!d) continue;
     (byDomain.get(d) || byDomain.set(d, []).get(d)!).push(id);
   }
+  // Pairwise, not chained from group[0].
+  //
+  // With every edge accepted the two are identical — union-find produces the
+  // same component either way — so this is not a behaviour change on its own.
+  // It matters once an edge can be REFUSED: chaining asks only "group[0] vs
+  // each", so dismissing (a,b) as sister companies would also detach b from c,
+  // a pair nobody dismissed and which shares the same domain. That would hide
+  // a real conflict, and hiding one is the failure this module exists to stop.
+  // Buckets hold accounts sharing one identical domain, so k is small.
   for (const group of byDomain.values()) {
-    for (let i = 1; i < group.length; i++) noteSignal(group[0], group[i], "domain");
+    for (let i = 0; i < group.length; i++) {
+      for (let j = i + 1; j < group.length; j++) {
+        noteSignal(group[i], group[j], "domain");
+      }
+    }
   }
 
   // 2. exact normalized name, and bucket for 3.
@@ -240,8 +274,13 @@ export function groupSplitAccountConflicts(
       (byFirstToken.get(first) || byFirstToken.set(first, []).get(first)!).push(id);
     }
   }
+  // Pairwise for the same reason as the domain pass above.
   for (const group of byNorm.values()) {
-    for (let i = 1; i < group.length; i++) noteSignal(group[0], group[i], "exact_name");
+    for (let i = 0; i < group.length; i++) {
+      for (let j = i + 1; j < group.length; j++) {
+        noteSignal(group[i], group[j], "exact_name");
+      }
+    }
   }
 
   // 3. token-aligned containment, within a shared first token
@@ -393,9 +432,12 @@ export async function getSplitAccountDealConflicts(
   }
 
   const all = Array.from(sides.values());
+  // Best-effort by design: a missing ledger returns an empty set, so a problem
+  // here shows every group rather than hiding one.
+  const separatedPairs = await getSeparationPairKeySet();
   return {
     segment: seg,
-    companies: groupSplitAccountConflicts(all),
+    companies: groupSplitAccountConflicts(all, separatedPairs),
     accounts_scanned: sides.size,
     name_matching_suppressed: all.filter((s) =>
       isNonIdentifyingCompanyName(s.account_name),
