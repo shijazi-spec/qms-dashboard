@@ -129,6 +129,18 @@ const STEPS: BootstrapStep[] = [
       ),
   },
   {
+    // Pure DDL, and the same init the app already runs at boot (see
+    // BOOT_TABLE_ENSURES in src/mastra/index.ts) — so this is proven, not new.
+    // Covers call_records and meeting_mom, which surfaced only once the
+    // platform_users and zoho_sync_state failures above stopped masking them.
+    // Slow on a cold database: index.ts records 5-15s, which is what CI has.
+    label: "call intelligence schema",
+    run: () =>
+      import("../src/utils/callIntelligenceDb").then((m) =>
+        m.initCallIntelligenceTables(),
+      ),
+  },
+  {
     // NOT pure DDL — see WHY THE GUARD above. Runs last for that reason.
     // kpi_definitions is needed by estimateEndpoints (the KPI CSV and XLSX
     // estimate routes).
