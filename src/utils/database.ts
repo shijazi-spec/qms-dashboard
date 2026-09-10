@@ -225,7 +225,11 @@ export async function ensureQualityScorecardsTable(): Promise<void> {
 }
 
 let activityTablesReady: Promise<void> | null = null;
-async function ensureActivityTables(): Promise<void> {
+// Exported so the CI schema bootstrap can front-run it. It was module-private
+// while its only caller was the lazy path below, but system_events is written
+// by prodToDevSyncCron and read by the logs views, so a test that touches
+// either needs the table before that lazy path has ever run.
+export async function ensureActivityTables(): Promise<void> {
   if (activityTablesReady) return activityTablesReady;
   activityTablesReady = (async () => {
     try {

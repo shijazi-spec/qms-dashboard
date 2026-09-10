@@ -168,6 +168,23 @@ const STEPS: BootstrapStep[] = [
       ),
   },
   {
+    // Pure DDL. Already in BOOT_TABLE_ENSURES, but the suite never boots the
+    // app — so it needs its own entry here rather than inheriting one.
+    label: "quality_audit_results",
+    run: () =>
+      import("../src/utils/database").then((m) =>
+        m.ensureQualityAuditResultsTable(),
+      ),
+  },
+  {
+    // Pure DDL. One init, three tables: admin_activities, workflow_runs and
+    // system_events. system_events is the one the suite reported missing —
+    // written by prodToDevSyncCron, read by the logs views.
+    label: "system_events (+ admin_activities, workflow_runs)",
+    run: () =>
+      import("../src/utils/database").then((m) => m.ensureActivityTables()),
+  },
+  {
     // NOT pure DDL — see WHY THE GUARD above. Runs last for that reason.
     // kpi_definitions is needed by estimateEndpoints (the KPI CSV and XLSX
     // estimate routes).
