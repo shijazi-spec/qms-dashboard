@@ -66,17 +66,50 @@ done
 # avoids matching identifiers like `myStyle="..."` or CSS `font-style:`).
 PATTERN=' style="'
 
-if ! command -v rg >/dev/null 2>&1; then
-  echo "ERROR: ripgrep (rg) is required for scripts/check-no-inline-styles.sh" >&2
-  exit 2
-fi
+# The same allowlist as an ERE, for the grep fallback below. `grep --exclude`
+# matches BASENAMES, not paths, so allowlisted paths have to be filtered out of
+# the results rather than excluded from the search.
+ALLOWLIST_RE=""
+for f in "${ALLOWLIST_FILES[@]}"; do
+  esc=$(printf '%s' "$f" | sed 's/[.[\*^$]/\\&/g')
+  ALLOWLIST_RE="${ALLOWLIST_RE:+${ALLOWLIST_RE}|}${esc}"
+done
+
+# Prefer ripgrep; fall back to GNU grep when it is absent.
+#
+# This fallback is not a convenience. A missing `rg` used to be a hard `exit 2`,
+# and tests/noInlineStyles.test.ts only asserts that the script exited 0 — so
+# "ripgrep is not installed on this runner" was indistinguishable from "someone
+# reintroduced an inline style", and CI reported a CSP violation that did not
+# exist. A guardrail that cannot tell those two apart is worse than no
+# guardrail, because it teaches people to ignore it.
+#
+# Both engines emit `path:line:content`, which is the shape the marker filter
+# and the reporting below depend on. One behavioural difference: ripgrep skips
+# .gitignore'd files and grep does not. Nothing under dashboard/ or src/mastra/
+# is ignored, so the two agree today.
+scan_matches() {
+  if command -v rg >/dev/null 2>&1; then
+    rg --line-number --no-heading --color=never \
+      "${RG_GLOBS[@]}" \
+      -- "$PATTERN" "${SEARCH_PATHS[@]}" 2>/dev/null
+    return 0
+  fi
+
+  local raw
+  raw=$(grep -rnI --exclude='*.css' -F -- "$PATTERN" \
+    "${SEARCH_PATHS[@]}" 2>/dev/null || true)
+  [ -n "$raw" ] || return 0
+  if [ -n "$ALLOWLIST_RE" ]; then
+    printf '%s\n' "$raw" | grep -vE "^(${ALLOWLIST_RE}):" || true
+  else
+    printf '%s\n' "$raw"
+  fi
+}
 
 # Collect raw matches (path:line:content), then drop any line that opted out
 # via the `csp-safe-inline-style` marker.
-matches=$(rg --line-number --no-heading --color=never \
-  "${RG_GLOBS[@]}" \
-  -- "$PATTERN" "${SEARCH_PATHS[@]}" 2>/dev/null \
-  | grep -v 'csp-safe-inline-style' || true)
+matches=$(scan_matches | grep -v 'csp-safe-inline-style' || true)
 
 if [ -n "$matches" ]; then
   count=$(printf '%s\n' "$matches" | wc -l | tr -d ' ')

@@ -63,17 +63,49 @@ done
 # CSP-safe (e.g. `el.onclick = fn`).
 PATTERN='\bon(click|submit|load|error|mouseover|focus|change|keydown|keyup|keypress|blur|input|reset|select|dblclick|mousedown|mouseup|mouseout|contextmenu|dragstart|drop|scroll|resize|beforeunload|unload|abort|cancel|close|toggle)='
 
-if ! command -v rg >/dev/null 2>&1; then
-  echo "ERROR: ripgrep (rg) is required for scripts/check-no-inline-handlers.sh" >&2
-  exit 2
-fi
+# The same allowlist as an ERE, for the grep fallback below. `grep --exclude`
+# matches BASENAMES, not paths, so allowlisted paths have to be filtered out of
+# the results rather than excluded from the search.
+ALLOWLIST_RE=""
+for f in "${ALLOWLIST_FILES[@]}"; do
+  esc=$(printf '%s' "$f" | sed 's/[.[\*^$]/\\&/g')
+  ALLOWLIST_RE="${ALLOWLIST_RE:+${ALLOWLIST_RE}|}${esc}"
+done
+
+# Prefer ripgrep; fall back to GNU grep when it is absent.
+#
+# This fallback is not a convenience. A missing `rg` used to be a hard `exit 2`,
+# and tests/noInlineHandlers.test.ts only asserts that the script exited 0 — so
+# "ripgrep is not installed on this runner" was indistinguishable from "someone
+# reintroduced an inline handler", and CI reported a CSP violation that did not
+# exist. A guardrail that cannot tell those two apart is worse than no
+# guardrail, because it teaches people to ignore it.
+#
+# `\b` is supported by both engines (Rust regex and GNU ERE), so PATTERN needs
+# no translation. One behavioural difference: ripgrep skips .gitignore'd files
+# and grep does not. Nothing under dashboard/ or src/mastra/ is ignored, so the
+# two agree today.
+scan_matches() {
+  if command -v rg >/dev/null 2>&1; then
+    rg --line-number --no-heading --color=never \
+      "${RG_GLOBS[@]}" \
+      -- "$PATTERN" "${SEARCH_PATHS[@]}" 2>/dev/null
+    return 0
+  fi
+
+  local raw
+  raw=$(grep -rnIE -- "$PATTERN" "${SEARCH_PATHS[@]}" 2>/dev/null || true)
+  [ -n "$raw" ] || return 0
+  if [ -n "$ALLOWLIST_RE" ]; then
+    printf '%s\n' "$raw" | grep -vE "^(${ALLOWLIST_RE}):" || true
+  else
+    printf '%s\n' "$raw"
+  fi
+}
 
 # Collect raw matches (path:line:content), then drop any line that opted out
 # via the `csp-safe-inline-handler` marker.
-matches=$(rg --line-number --no-heading --color=never \
-  "${RG_GLOBS[@]}" \
-  -- "$PATTERN" "${SEARCH_PATHS[@]}" 2>/dev/null \
-  | grep -v 'csp-safe-inline-handler' || true)
+matches=$(scan_matches | grep -v 'csp-safe-inline-handler' || true)
 
 if [ -n "$matches" ]; then
   count=$(printf '%s\n' "$matches" | wc -l | tr -d ' ')
