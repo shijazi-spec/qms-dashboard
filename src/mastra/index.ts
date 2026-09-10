@@ -840,6 +840,18 @@ export const mastra = new Mastra({
         import("../utils/fileUpload").then((m) => m.ensureUploadedFilesTable()),
     },
     {
+      // BEFORE quality_audit_results deliberately: production has a FOREIGN KEY
+      // from quality_audit_results.scorecard_id to quality_scorecards(id).
+      // Neither declaration reproduces that constraint, so the order is not
+      // load-bearing today — but parent-first is the order that stays correct
+      // if the FK is ever added.
+      label: "quality_scorecards",
+      run: () =>
+        import("../utils/database").then((m) =>
+          m.ensureQualityScorecardsTable(),
+        ),
+    },
+    {
       // Written to, ALTERed and read by a dozen call sites, and until
       // 2026-09-08 declared by nothing at all — it survived only because
       // production has had it since whatever created it was deleted.

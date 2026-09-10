@@ -83,12 +83,14 @@ function isDisposableTarget(target: Target): boolean {
  * because a test failed once is how this turns into a second, worse migration
  * system.
  *
- * `quality_scorecards` is still missing from this list, and knowingly so. It is
- * the third table that live code reads and writes while nothing in the repo
- * declares it, but its `\d` output has not been transcribed yet — and guessing
- * a VARCHAR length for a table production already owns is the drift that gets
- * a column proposed for DROP at publish time. It joins the list the moment the
- * real column types are in hand, not before.
+ * The last three entries are a different case from the rest. governance_documents,
+ * capas and quality_scorecards are not lazily-created tables whose init this
+ * runs early — until 2026-09-10 they had no declaration anywhere in the repo at
+ * all, and existed only because production has always had them. Their ensures
+ * were written by transcribing `\d` / information_schema off the live database,
+ * never by inferring types from the queries: a guessed VARCHAR length for a
+ * table production already owns is the drift that gets a column proposed for
+ * DROP at publish time.
  */
 const STEPS: BootstrapStep[] = [
   {
@@ -156,6 +158,14 @@ const STEPS: BootstrapStep[] = [
     label: "capas",
     run: () =>
       import("../src/utils/database").then((m) => m.ensureCapasTable()),
+  },
+  {
+    // Pure DDL. The largest of the three, and the last to be transcribed.
+    label: "quality_scorecards",
+    run: () =>
+      import("../src/utils/database").then((m) =>
+        m.ensureQualityScorecardsTable(),
+      ),
   },
   {
     // NOT pure DDL — see WHY THE GUARD above. Runs last for that reason.

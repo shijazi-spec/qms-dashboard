@@ -170,6 +170,60 @@ export async function ensureCapasTable(): Promise<void> {
   return capasTableReady;
 }
 
+/**
+ * `quality_scorecards` — the largest of the three undeclared production tables:
+ * fifteen write sites and twenty read sites across this file,
+ * scorecardOperations.ts and callIntelligenceDb.ts, and no declaration
+ * anywhere until now.
+ *
+ * Transcribed from information_schema on the live database. Two details that a
+ * reader would otherwise "fix" and break:
+ *
+ *   - `governance_doc_id` is VARCHAR(255) here, while the same column name in
+ *     quality_audit_results is INTEGER. That inconsistency is production's,
+ *     and this declaration matches production rather than tidying it.
+ *   - Only `id` and `name` are NOT NULL. Everything else is nullable even
+ *     where the code always supplies a value.
+ *
+ * quality_audit_results carries a FOREIGN KEY to quality_scorecards(id) in
+ * production. It is not reproduced here, matching the existing
+ * quality_audit_results declaration, which also omits it — these ensures give a
+ * new environment a working table, they do not mirror prod's constraint graph.
+ *
+ * PRODUCTION REMAINS AUTHORITATIVE: IF NOT EXISTS, so a no-op wherever the
+ * table already exists.
+ */
+let qualityScorecardsTableReady: Promise<void> | null = null;
+export async function ensureQualityScorecardsTable(): Promise<void> {
+  if (qualityScorecardsTableReady) return qualityScorecardsTableReady;
+  qualityScorecardsTableReady = (async () => {
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS quality_scorecards (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          description TEXT,
+          dimensions JSONB,
+          is_active BOOLEAN DEFAULT TRUE,
+          crm_module VARCHAR(100),
+          team_name VARCHAR(255),
+          governance_doc_id VARCHAR(255),
+          version VARCHAR(50),
+          created_by VARCHAR(255),
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        );
+      `);
+      logger.info("[Scorecard] quality_scorecards table ready");
+    } catch (err) {
+      logger.error("[Scorecard] Failed to ensure the table:", err);
+      qualityScorecardsTableReady = null;
+      throw err;
+    }
+  })();
+  return qualityScorecardsTableReady;
+}
+
 let activityTablesReady: Promise<void> | null = null;
 async function ensureActivityTables(): Promise<void> {
   if (activityTablesReady) return activityTablesReady;
