@@ -42,6 +42,14 @@
  *   ALLOW_TEST_SCHEMA_BOOTSTRAP=1 npx tsx scripts/bootstrap-test-schema.ts
  */
 
+// Keep this. Every dependency here is loaded through a dynamic import() inside
+// its own step, so a pg Pool is only constructed for a step that actually runs
+// — which leaves the file with no static import or export. TypeScript then
+// treats it as a script rather than a module, and the top-level `await main()`
+// at the bottom becomes an error (TS1375). This marker is what makes it a
+// module.
+export {};
+
 interface BootstrapStep {
   label: string;
   run: () => Promise<unknown>;
