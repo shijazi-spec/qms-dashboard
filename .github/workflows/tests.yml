@@ -293,8 +293,12 @@ jobs:
           # yields exactly one line per failing file and excludes both noise
           # sources. ANSI is stripped first so vitest's colouring cannot smuggle
           # escape bytes into an annotation.
-          sed -e 's/\x1b\[[0-9;]*m//g' /tmp/test-output.log \
-            | grep -aF '[FAIL' \
+          # One ANSI-stripped copy, reused by every extraction below rather than
+          # re-stripping per grep. vitest colours its output, and escape bytes
+          # inside an annotation render as mojibake and eat the size cap.
+          sed -e 's/\x1b\[[0-9;]*m//g' /tmp/test-output.log > /tmp/test-clean.log || true
+
+          grep -aF '[FAIL' /tmp/test-clean.log \
             | sed -e 's/^[[:space:]]*//' \
             > /tmp/failing-files.txt || true
           NFAIL=$(wc -l < /tmp/failing-files.txt | tr -d ' ')
@@ -327,8 +331,8 @@ jobs:
           # ANSI-stripped for the same reason as the file list, and split across
           # two annotations because assertion text is long — 900 chars fit only
           # about four of them.
-          sed -e 's/\x1b\[[0-9;]*m//g' /tmp/test-output.log \
-            | grep -a '✗' | sed -e 's/^[[:space:]]*//' | head -16 > /tmp/failing-assertions.txt || true
+          grep -a '✗' /tmp/test-clean.log \
+            | sed -e 's/^[[:space:]]*//' | head -16 > /tmp/failing-assertions.txt || true
           NASSERT=$(wc -l < /tmp/failing-assertions.txt | tr -d ' ')
           if [ "${NASSERT}" -eq 0 ]; then
             echo "::warning title=test-4-assertions::<no ✗ lines captured>"
@@ -347,6 +351,59 @@ jobs:
           ERRS=$(grep -aoE "(Cannot find package '[^']*'|ECONNREFUSED [0-9.:]+|relation \"[a-z_]+\" does not exist|[A-Za-z]*Error: [^\\\"]{0,90})" /tmp/test-output.log | sort | uniq -c | sort -rn | head -8 | tr '\n' ' ' | tr -d '\r' | cut -c1-900)
           echo "::warning title=test-5-error-kinds::${ERRS:-<none>}"
 
+          # WHY a file failed, for the files that never print an assertion.
+          # ------------------------------------------------------------------
+          # The ✗ capture above only sees a test that FAILED an assertion. A test
+          # that THROWS — a query returning undefined, a missing row, a rejection
+          # in setup — exits non-zero having printed no ✗ at all, so it landed in
+          # the failing-files list and nowhere else. Two files sat undiagnosable
+          # through a whole day of runs for exactly this reason: they passed
+          # locally, and the only record of why they failed here was a log that
+          # needs repo-admin rights to download.
+          #
+          # runIntegrationTests.ts buffers each subprocess and flushes it as one
+          # labelled block (see runOne), so a block is contiguous even at
+          # TEST_CONCURRENCY=4:
+          #     ──── tests/foo.test.ts  (2.0s, exit 1) ────
+          # For each failing file we keep the TAIL of its block, which is where a
+          # thrown error and its stack land.
+          : > /tmp/failing-tails.txt
+          while IFS= read -r line; do
+            [ -n "$line" ] || continue
+            # Drop the "[FAIL (exit N)] 12.3s  " prefix. The label is everything
+            # after the duration and can itself contain spaces — vitest's is
+            # "tests/vitest/** (vitest)" — so take fields 5..NF, not $NF.
+            f=$(printf '%s\n' "$line" | awk '{ $1=""; $2=""; $3=""; $4=""; sub(/^[[:space:]]+/, ""); print }')
+            [ -n "$f" ] || continue
+            {
+              echo "──────── ${f}"
+              # index() not a regex: the label contains ** and ( ) which would
+              # otherwise need escaping.
+              # Two stop conditions, not one. The next block header ends most
+              # blocks — but the LAST block flushed has no header after it, so
+              # without the second condition it ran to EOF and swallowed the
+              # runner's summary. That summary is one line per file, so with 267
+              # files `tail -25` would have shown 25 lines of summary and none of
+              # the error. Found by running this against a synthetic log.
+              awk -v f="$f" '
+                index($0, "──── " f "  (") == 1 { inblk = 1; next }
+                inblk && index($0, "──── ") == 1 { inblk = 0 }
+                inblk && $0 ~ /^[[:space:]]*\[(PASS\]|FAIL \(exit)/ { inblk = 0 }
+                inblk { print }
+              ' /tmp/test-clean.log | tail -25
+              echo ""
+            } >> /tmp/failing-tails.txt
+          done < /tmp/failing-files.txt
+
+          # One annotation, not a chunked set: the budget above is nearly spent,
+          # and this only needs to answer "did something throw, and what".
+          FIRSTERR=$(grep -aoE "([A-Za-z]*Error: [^\"]{0,120}|relation \"[a-z_]+\" does not exist)" /tmp/failing-tails.txt | head -3 | tr '\n' '|' | tr -d '\r' | cut -c1-900)
+          # NO APOSTROPHE in the default text. Bash treats a single quote inside
+          # a ${VAR:-default} expansion as opening a quote even when the whole
+          # expansion is already inside double quotes, so "...file's output"
+          # aborts the step with "unexpected EOF while looking for matching `''".
+          echo "::warning title=test-6-first-throw::${FIRSTERR:-<no error-shaped line in the failing output>}"
+
           {
             echo "### Test baseline"
             echo ""
@@ -364,6 +421,15 @@ jobs:
             echo ""
             echo '```'
             cat /tmp/failing-assertions.txt 2>/dev/null || echo "(none)"
+            echo '```'
+            echo "</details>"
+            echo ""
+            # Open by default: when a file throws rather than asserting, this is
+            # the only place the reason appears.
+            echo "<details open><summary>Output tail per failing file</summary>"
+            echo ""
+            echo '```'
+            cat /tmp/failing-tails.txt 2>/dev/null || echo "(none)"
             echo '```'
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
