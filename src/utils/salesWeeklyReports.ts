@@ -60,7 +60,7 @@ export async function runDealComplianceWeeklyReport(): Promise<{
   const missing = summary.checked - summary.compliant;
   if (summary.checked === 0 || missing === 0) {
     logger.info(
-      `[SalesWeekly] Deal compliance: ${summary.checked} checked, none missing docs — not posting`,
+      `[SalesDaily] Deal compliance: ${summary.checked} checked, none missing docs — not posting`,
     );
     return { posted: false, checked: summary.checked, missing: 0 };
   }
@@ -126,7 +126,7 @@ export async function runDealComplianceWeeklyReport(): Promise<{
   });
 
   logger.info(
-    `[SalesWeekly] Deal compliance posted: ${missing}/${summary.checked} missing`,
+    `[SalesDaily] Deal compliance posted: ${missing}/${summary.checked} missing`,
   );
   return { posted: true, checked: summary.checked, missing };
 }
@@ -146,7 +146,7 @@ export async function runActiveDealConflictsWeeklyReport(): Promise<{
   });
 
   if (!rows || rows.length === 0) {
-    logger.info("[SalesWeekly] Active deal conflicts: none — not posting");
+    logger.info("[SalesDaily] Active deal conflicts: none — not posting");
     return { posted: false, accounts: 0, multiOwner: 0 };
   }
 
@@ -195,7 +195,7 @@ export async function runActiveDealConflictsWeeklyReport(): Promise<{
   });
 
   logger.info(
-    `[SalesWeekly] Active deal conflicts posted: ${rows.length} accounts, ${multiOwner.length} multi-owner`,
+    `[SalesDaily] Active deal conflicts posted: ${rows.length} accounts, ${multiOwner.length} multi-owner`,
   );
   return { posted: true, accounts: rows.length, multiOwner: multiOwner.length };
 }
@@ -227,6 +227,6 @@ async function announceToSales(event: {
       actionUrl: event.actionUrl,
     });
   } catch (err) {
-    logger.error("[SalesWeekly] Announcement failed:", err);
+    logger.error("[SalesDaily] Announcement failed:", err);
   }
 }

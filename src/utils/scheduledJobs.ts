@@ -413,7 +413,7 @@ async function notifyCsOverlapBlocks(result: any): Promise<void> {
 /**
  * Has a notification with this entity type been written in the last N hours?
  *
- * Hours rather than the days-based salesReportPostedWithinDays because the CS
+ * Hours rather than the days-based sales dedup because the CS
  * scan is daily; a whole-day window would round away the difference between
  * "already sent" and "due again".
  *
@@ -846,7 +846,23 @@ export async function runMonthlyMissingDocsReportIfDue(): Promise<{
     periodLabel,
   } = await import("./missingDocsMonthlyReport");
 
-  if (!isMonthlyMissingDocsEnabled()) return { ran: false, ageHours: 0 };
+  // The UI toggle wins, the secret is the fallback (Sarah 2026-09-10: "it's
+  // too much hassle to link every new thing we build to a secret").
+  //
+  // `missing_docs_report` has been registered in NOTIFICATION_SWITCHES all
+  // along, so the toggle already existed on the notifications screen — this
+  // job just never consulted it, and read process.env directly. Flipping the
+  // switch in the UI therefore did nothing, which is why turning this report
+  // on required a Replit Secret and a republish.
+  //
+  // isNotificationEnabled() returns a stored override when there is one and
+  // falls back to the env var otherwise, so MISSING_DOCS_REPORT_ENABLED keeps
+  // working exactly as it does today for anyone who has already set it.
+  const { isNotificationEnabled } = await import("./notificationSettings");
+  const enabled = await isNotificationEnabled("missing_docs_report").catch(() =>
+    isMonthlyMissingDocsEnabled(),
+  );
+  if (!enabled) return { ran: false, ageHours: 0 };
 
   // KSA is UTC+3 and does not observe DST, so a fixed offset is exact here.
   const nowKsa = new Date(Date.now() + 3 * 3600_000);
@@ -1638,11 +1654,14 @@ export async function runFraudKpiMonthlyReminderIfDue() {
 }
 
 /**
- * Weekly Sales/SDR reports — deal compliance and active deal conflicts.
+ * Daily morning Sales/SDR audit reports — deal compliance and active deal
+ * conflicts.
  *
- * Weekly "with the audits" per Sarah 2026-09-07, and threshold-gated: each one
- * stays silent when there is nothing wrong, so the channel keeps meaning
- * something.
+ * Was weekly (Sarah 2026-09-07, "with the audits"); daily from 2026-09-10:
+ * "the sales team solve most of them", so a week-old list is mostly items
+ * already closed. Re-cutting it each morning is what makes it a worklist
+ * rather than a report. Still threshold-gated: each one stays silent when
+ * there is nothing wrong, so the channel keeps meaning something.
  *
  * Both are guarded by a PERSISTENT marker rather than an in-memory timer. The
  * fraud reminders taught this the hard way — an in-process throttle resets on
@@ -1653,24 +1672,24 @@ export async function runFraudKpiMonthlyReminderIfDue() {
  * The marker is the notification row the report itself writes, so there is no
  * extra table and no state to keep in sync.
  */
-async function salesReportPostedWithinDays(
+async function salesReportPostedWithinHours(
   entityType: string,
-  days: number,
+  hours: number,
 ): Promise<boolean> {
   try {
     const { notificationPool } = await import("./notificationHub");
     const res = await notificationPool.query(
       `SELECT 1 FROM notifications
         WHERE related_entity_type = $1
-          AND created_at > NOW() - MAKE_INTERVAL(days => $2)
+          AND created_at > NOW() - MAKE_INTERVAL(hours => $2)
         LIMIT 1`,
-      [entityType, days],
+      [entityType, hours],
     );
     return (res.rowCount ?? 0) > 0;
   } catch (err) {
     // Fail OPEN: a dedup lookup failing must not silence the report.
     logger.warn(
-      "[SalesWeekly] Dedup lookup failed; posting anyway:",
+      "[SalesDaily] Dedup lookup failed; posting anyway:",
       err instanceof Error ? err.message : String(err),
     );
     return false;
@@ -1678,23 +1697,61 @@ async function salesReportPostedWithinDays(
 }
 
 /**
- * The weekly Sales/SDR Slack reports are OFF by default.
+ * One post per day: 20h, not 24h.
  *
- * Sarah 2026-09-07: hold delivery until she has reviewed the first report.
- * These post to wp-sdr-sales-audits — a real team channel — and the only
- * other guard is a 6-day dedup on `related_entity_type`. Both entity types
- * are new, so that lookup finds nothing and the FIRST scheduler tick after a
- * republish would post unannounced. The dedup also fails open by design, so
- * it cannot be relied on to hold anything back.
+ * The scheduler ticks on an interval, not at a fixed minute, so yesterday's
+ * post can land a little later each day. A 24h window would then push the next
+ * one past the morning and eventually skip a day entirely. 20h is comfortably
+ * more than the gap between two consecutive morning ticks and comfortably less
+ * than a day.
+ */
+const SALES_REPORT_DEDUP_HOURS = 20;
+
+/**
+ * Earliest KSA hour these may post. The team reads them at the start of the
+ * day, and a compliance list that arrives at 02:00 is one nobody acts on.
+ */
+const SALES_REPORT_KSA_HOUR = 7;
+
+/** Current hour (0-23) in Asia/Riyadh. UTC+3, no DST. */
+function ksaHour(now: Date = new Date()): number {
+  const h = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Riyadh",
+    hour: "2-digit",
+    hour12: false,
+  }).format(now);
+  return Number(h);
+}
+
+/**
+ * A LOWER bound, deliberately, not a 07:00-11:00 window.
  *
- * Nothing stops being measured: deal compliance and active deal conflicts are
- * already visible in the app and in the exports. Only the Slack delivery, and
- * the dedup-ledger row that goes with it, are withheld — gating here rather
- * than at the send point means no ledger row is written while the reports are
- * off, so the first run after enabling is a clean one rather than one the
- * dedup thinks it has already sent.
+ * If the platform is down or busy all morning, a window would skip that day
+ * silently — and a missing audit report looks exactly like a clean one, which
+ * is the failure mode this whole channel exists to avoid. With a lower bound
+ * the report still goes out late that day, which is visibly late rather than
+ * invisibly absent.
+ */
+function isSalesReportHour(): boolean {
+  return ksaHour() >= SALES_REPORT_KSA_HOUR;
+}
+
+/**
+ * The Sales/SDR audit reports are ON by default (Sarah 2026-09-10).
  *
- * Set SALES_WEEKLY_SLACK_REPORTS=true to turn delivery on.
+ * They were held behind this gate from 2026-09-07 until the first report had
+ * been reviewed. That review happened, the content is what the team wants, so
+ * the default is now "send" — this is their standing daily audit, not a
+ * feature to opt into.
+ *
+ * Resolution order is database override, then SALES_WEEKLY_SLACK_REPORTS, then
+ * the registry default. To stop delivery, switch it off on the notification
+ * settings screen; the env var stays as a deployment-level override.
+ *
+ * The gate still runs BEFORE the dedup lookup. Gating at the send point would
+ * write the dedup-ledger row anyway, and the first run after re-enabling would
+ * then be suppressed as "already sent" — turning it back on would appear to do
+ * nothing.
  */
 async function salesWeeklyReportsEnabled(): Promise<boolean> {
   try {
@@ -1714,12 +1771,20 @@ export async function runDealComplianceWeeklyIfDue(): Promise<{
   result?: any;
 }> {
   if (!(await salesWeeklyReportsEnabled())) {
+    // Say only that it is off, not WHY: the reason may be the settings screen,
+    // the env var or the default, and naming one of them sends whoever is
+    // debugging to the wrong place.
     logger.info(
-      '[SalesWeekly] Deal compliance report skipped — delivery is off (SALES_WEEKLY_SLACK_REPORTS is not "true")',
+      "[SalesDaily] Deal compliance report skipped — delivery is off in notification settings",
     );
     return { ran: false, ageHours: 0 };
   }
-  if (await salesReportPostedWithinDays("deal_compliance", 6)) {
+  if (!isSalesReportHour()) {
+    return { ran: false, ageHours: 0 };
+  }
+  if (
+    await salesReportPostedWithinHours("deal_compliance", SALES_REPORT_DEDUP_HOURS)
+  ) {
     return { ran: false, ageHours: 0 };
   }
   try {
@@ -1729,7 +1794,7 @@ export async function runDealComplianceWeeklyIfDue(): Promise<{
     const result = await runDealComplianceWeeklyReport();
     return { ran: result.posted, ageHours: 0, result };
   } catch (err) {
-    logger.error("[SalesWeekly] Deal compliance report failed:", err);
+    logger.error("[SalesDaily] Deal compliance report failed:", err);
     return { ran: false, ageHours: 0 };
   }
 }
@@ -1741,11 +1806,19 @@ export async function runActiveDealConflictsWeeklyIfDue(): Promise<{
 }> {
   if (!(await salesWeeklyReportsEnabled())) {
     logger.info(
-      '[SalesWeekly] Active deal conflicts report skipped — delivery is off (SALES_WEEKLY_SLACK_REPORTS is not "true")',
+      "[SalesDaily] Active deal conflicts report skipped — delivery is off in notification settings",
     );
     return { ran: false, ageHours: 0 };
   }
-  if (await salesReportPostedWithinDays("active_deal_conflicts", 6)) {
+  if (!isSalesReportHour()) {
+    return { ran: false, ageHours: 0 };
+  }
+  if (
+    await salesReportPostedWithinHours(
+      "active_deal_conflicts",
+      SALES_REPORT_DEDUP_HOURS,
+    )
+  ) {
     return { ran: false, ageHours: 0 };
   }
   try {
@@ -1755,7 +1828,7 @@ export async function runActiveDealConflictsWeeklyIfDue(): Promise<{
     const result = await runActiveDealConflictsWeeklyReport();
     return { ran: result.posted, ageHours: 0, result };
   } catch (err) {
-    logger.error("[SalesWeekly] Active deal conflicts report failed:", err);
+    logger.error("[SalesDaily] Active deal conflicts report failed:", err);
     return { ran: false, ageHours: 0 };
   }
 }

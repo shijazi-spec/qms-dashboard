@@ -112,13 +112,18 @@ export const NOTIFICATION_SWITCHES: NotificationSwitch[] = [
   },
   {
     key: "sales_weekly_reports",
-    label: "Sales weekly reports",
+    label: "Sales daily audit reports",
     channel: "sales_sdr",
-    cadence: "once per 6 days, only when there is something to report",
+    cadence: "every morning from 07:00 KSA, only when there is something to report",
     description:
-      "Deal compliance (deals missing documents, Paid excluded) and active deal conflicts (accounts with more than one open deal). Silent when both are clean.",
+      "Deal compliance (deals missing documents, Paid excluded) and active deal conflicts (accounts with more than one open deal). WalaPlus/corporate only — marketplace is a different team. Silent when both are clean.",
     envVar: "SALES_WEEKLY_SLACK_REPORTS",
-    defaultEnabled: false,
+    // ON by default. This is the SDR/Sales team's standing daily audit, not an
+    // opt-in: Sarah 2026-09-10, "the sales team solve most of them", so the
+    // list is worth re-cutting every morning rather than once a week. The key
+    // and envVar keep their "weekly" names so any stored override and any
+    // configured secret keep resolving; only the cadence changed.
+    defaultEnabled: true,
   },
   {
     key: "direct_audit_slack",
