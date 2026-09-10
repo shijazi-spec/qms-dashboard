@@ -43,9 +43,14 @@ function seededAutoCs(): string[] {
 }
 
 describe("auto and calculator agree", () => {
-  it("computes exactly five of the 33", () => {
+  it("computes exactly six of the 33", () => {
+    // CS-KPI-14 joined on 2026-09-10, once the tenant's Health field was
+    // checked rather than assumed: 939 of 939 populated values parse as
+    // numbers in 0-100. It is the only one of the six that is NOT a proxy —
+    // it is the SOP's own measure, read from the field the CS team scores.
     expect(registeredCsCalculators()).toEqual([
       "CS-KPI-11",
+      "CS-KPI-14",
       "CS-KPI-19",
       "CS-KPI-23",
       "CS-KPI-25",

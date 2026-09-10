@@ -1071,6 +1071,12 @@ interface CsKpiAggregates {
   onboardingOverdue: number;
   renewalDeals: number;
   renewalOverdue: number;
+  /** Health census for CS-KPI-14 — see CsLifecycleSummary. Taken from the
+   *  scan summary, which counts every CS deal, not just violating ones. */
+  healthScored: number;
+  healthSum: number;
+  healthUnscored: number;
+  healthInvalid: number;
 }
 
 const CS_CACHE_TTL_MS = 60_000;
@@ -1124,6 +1130,10 @@ export async function csKpiAggregates(): Promise<CsKpiAggregates> {
       onboardingOverdue: Number(byCode.onboarding_overdue) || 0,
       renewalDeals: phaseTotal(/renew/i),
       renewalOverdue: Number(byCode.renewal_overdue) || 0,
+      healthScored: Number(scan.summary.health_scored) || 0,
+      healthSum: Number(scan.summary.health_sum) || 0,
+      healthUnscored: Number(scan.summary.health_unscored) || 0,
+      healthInvalid: Number(scan.summary.health_invalid) || 0,
     };
     csCache = { at: Date.now(), data };
     return data;
@@ -1217,6 +1227,44 @@ export async function calcCsRenewalOutreachTimeliness(): Promise<ProcessKpiValue
       renewal_deals: a.renewalDeals,
       overdue_renewals: a.renewalOverdue,
       within_window: inWindow,
+    },
+  };
+}
+
+/**
+ * CS-KPI-14 Average Health Score — mean Health across scored CS deals.
+ *
+ * Not a proxy. Unlike CS-KPI-11/19, this is the SOP's own measure: the CS team
+ * scores each customer 0–100 in the CRM and this averages it. Verified against
+ * the tenant on 2026-09-10 before writing: 939 of 939 populated Health fields
+ * parse as numbers in 0–100.
+ *
+ * The denominator is deals that HAVE a score, not all CS deals — an unscored
+ * customer has no health to average, and counting it as zero would report the
+ * CS book as failing because of a blank field. That makes coverage part of the
+ * number's meaning, so it travels in details: scored, unscored, invalid, and
+ * the percentage of the book actually scored. A 78 across 12% of customers is
+ * a different fact from a 78 across all of them.
+ */
+export async function calcCsAverageHealthScore(): Promise<ProcessKpiValue> {
+  const a = await csKpiAggregates();
+  // Nobody scored is not a health of zero, and not 100 either.
+  if (a.healthScored === 0) return EMPTY;
+  const coverageBase = a.healthScored + a.healthUnscored + a.healthInvalid;
+  return {
+    value: Math.round((a.healthSum / a.healthScored) * 10) / 10,
+    dataAvailable: true,
+    details: {
+      source:
+        "Zoho CS section Health field (0-100), averaged over CS deals that " +
+        "carry a score. Unscored customers are excluded, NOT counted as zero.",
+      deals_scored: a.healthScored,
+      deals_unscored: a.healthUnscored,
+      deals_health_not_a_valid_score: a.healthInvalid,
+      coverage_pct:
+        coverageBase > 0
+          ? Math.round((a.healthScored / coverageBase) * 1000) / 10
+          : 0,
     },
   };
 }
@@ -1547,6 +1595,7 @@ export const PROCESS_CALCULATORS: Record<
   // CS-KPI-21 Client Churn Rate is intentionally absent — see the note above
   // calcCsDataAccuracy. It cannot be sourced correctly from Zoho.
   "CS-KPI-11": calcCsOnboardingExitCriteria,
+  "CS-KPI-14": calcCsAverageHealthScore,
   "CS-KPI-19": calcCsRenewalOutreachTimeliness,
   "CS-KPI-23": calcCsDataAccuracy,
   "CS-KPI-25": calcCsSlaAdherence,

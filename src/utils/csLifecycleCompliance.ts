@@ -49,6 +49,48 @@ export interface CsLifecycleEvaluation {
   current_phase: string | null;
   days_since_modified: number | null;
   violations: CsViolation[];
+  /**
+   * The Health field parsed as a 0–100 score, or null when it is absent or
+   * not a usable number. Carried on the EVALUATION rather than re-extracted
+   * by callers so that "which deals count" and "what their score is" can
+   * never come from two different passes — CS-KPI-14 averages exactly the
+   * population this object says is a CS deal.
+   */
+  health_score: number | null;
+  /**
+   * The Health field was populated, whatever it contained. Distinguishes
+   * "nobody has scored this customer" from "someone typed something that is
+   * not a 0–100 score" — the two look identical once parsing has returned
+   * null, and only one of them is a data-entry error worth chasing.
+   */
+  has_health_value: boolean;
+}
+
+/**
+ * Health as a number, or null.
+ *
+ * Verified against the tenant on 2026-09-10 before this was written: 939 of
+ * 939 CS deals carrying a Health value parse as numbers, range 0–100. The
+ * extractor deliberately keeps the field a STRING (unlike arr_value, which it
+ * coerces), so the parsing happens here, once.
+ *
+ *   0 IS A SCORE, not a gap — the customer is on fire. Rule 10 already says
+ *   so, and `Number("")` is 0, which is exactly how a blank field turns into
+ *   a fabricated zero and drags an average down. Hence the explicit blank
+ *   check before any coercion.
+ *
+ *   Out-of-range or non-numeric values are REJECTED, not clamped. A stray
+ *   1000 silently pulls a mean upward; counted separately, it shows up as a
+ *   data-quality number instead of a better-looking score.
+ */
+export function parseHealthScore(raw: unknown): number | null {
+  if (raw === null || raw === undefined) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  const n = Number(s);
+  if (!Number.isFinite(n)) return null;
+  if (n < 0 || n > 100) return null;
+  return n;
 }
 
 export interface CsLifecycleInput {
@@ -218,6 +260,8 @@ export function evaluateCsLifecycle(
       current_phase: null,
       days_since_modified: null,
       violations: [],
+      health_score: null,
+      has_health_value: false,
     };
   }
 
@@ -501,6 +545,8 @@ export function evaluateCsLifecycle(
     current_phase: phase,
     days_since_modified: daysSinceModified,
     violations,
+    health_score: parseHealthScore(fields.health),
+    has_health_value: String(fields.health ?? "").trim() !== "",
   };
 }
 
@@ -517,6 +563,20 @@ export interface CsLifecycleSummary {
   /** CS deals counted by current lifecycle phase (onboarding/adoption/renewal/
    *  termination/…) — answers "how many deals are in the renewal stage". */
   by_phase: Record<string, number>;
+  /**
+   * Health census across CS deals, for CS-KPI-14 Average Health Score.
+   *
+   * The average MUST come from here and not from the violation rows: those
+   * exist only for deals that broke a rule, so averaging them would score the
+   * CS book using only its unhealthiest records and call the result "average
+   * health". Counted in the same pass that decides is_cs_deal.
+   *
+   * health_scored + health_unscored + health_invalid = total_cs_deals.
+   */
+  health_scored: number;
+  health_sum: number;
+  health_unscored: number;
+  health_invalid: number;
 }
 
 export function summarizeViolations(
@@ -543,12 +603,29 @@ export function summarizeViolations(
       renewal_overdue: 0,
     },
     by_phase: {},
+    health_scored: 0,
+    health_sum: 0,
+    health_unscored: 0,
+    health_invalid: 0,
   };
   for (const ev of evaluations) {
     if (ev.is_cs_deal) {
       s.total_cs_deals++;
       const phase = (ev.current_phase || "unknown").toLowerCase();
       s.by_phase[phase] = (s.by_phase[phase] || 0) + 1;
+      // Health census, in the SAME branch that counts a CS deal, so the
+      // denominator of CS-KPI-14 can never drift from total_cs_deals.
+      if (ev.health_score !== null) {
+        s.health_scored++;
+        s.health_sum += ev.health_score;
+      } else if (ev.has_health_value) {
+        // Present but unusable (not a number, or outside 0–100). Kept apart
+        // from "never scored" so a data-entry problem cannot hide inside a
+        // coverage figure.
+        s.health_invalid++;
+      } else {
+        s.health_unscored++;
+      }
     }
     for (const v of ev.violations) {
       s.total_violations++;

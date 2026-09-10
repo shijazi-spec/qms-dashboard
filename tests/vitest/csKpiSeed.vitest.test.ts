@@ -98,9 +98,12 @@ describe("which ones compute", () => {
   // calculators after this test was first written, so "exactly three" became
   // wrong while the seed was right. Keep this list and the registry list below
   // in step with calc_mode: "auto" in kpiDatabase.ts.
-  it("marks exactly the five with calculators as auto", () => {
+  it("marks exactly the six with calculators as auto", () => {
+    // CS-KPI-14 joined 2026-09-10, after the tenant's Health field was checked
+    // and found numeric (939/939 in 0-100) rather than assumed to be.
     expect(ROWS.filter((r) => r.mode === "auto").map((r) => r.code)).toEqual([
       "CS-KPI-11",
+      "CS-KPI-14",
       "CS-KPI-19",
       "CS-KPI-23",
       "CS-KPI-25",
@@ -110,7 +113,7 @@ describe("which ones compute", () => {
 
   it("matches the calculator registry in kpiProcessCalc", () => {
     const calc = readFileSync(join(process.cwd(), "src/utils/kpiProcessCalc.ts"), "utf8");
-    for (const code of ["CS-KPI-11", "CS-KPI-19", "CS-KPI-23", "CS-KPI-25", "CS-KPI-30"]) {
+    for (const code of ["CS-KPI-11", "CS-KPI-14", "CS-KPI-19", "CS-KPI-23", "CS-KPI-25", "CS-KPI-30"]) {
       expect(calc).toContain(`"${code}": calc`);
     }
     // The registry must NOT claim a CS KPI the seed marks manual — that pairing
