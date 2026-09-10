@@ -19,13 +19,24 @@ name: Tests
 #     the type definition that made them compile, reddening CI on the
 #     NEXT commit rather than its own.
 #
-# ROLLOUT: NON-BLOCKING FIRST
-# ---------------------------
-# The test step runs with `continue-on-error: true` so this workflow reports
-# the true pass/fail baseline WITHOUT blocking merges on day one. Once the
-# baseline is green (or the known-failing files are fixed/quarantined), drop
-# the `continue-on-error` line to make it a hard gate — same pattern
-# typecheck.yml used when it was introduced against ~900 pre-existing errors.
+# ROLLOUT: COMPLETE — THIS IS A HARD GATE (2026-09-10)
+# ----------------------------------------------------
+# The test step ran with `continue-on-error: true` while the baseline was being
+# established, so the workflow could report the true pass/fail numbers without
+# blocking merges on day one. That period is over. The baseline reached 267/267
+# and `continue-on-error` was removed: a failing suite now fails the job and
+# blocks the merge, the same way typecheck.yml was promoted after its ~900
+# pre-existing errors were cleared.
+#
+# Nothing was quarantined to get here. The eleven files failing on 2026-09-10
+# were all genuinely fixed — six were CI-only (an empty database with no schema
+# bootstrap), two were a guardrail that exited 2 when ripgrep was absent and
+# could not be told apart from a real violation, and three were real defects in
+# the dashboard.
+#
+# If you are here because the suite went red and you are tempted to put the line
+# back: don't. A baseline that drifts red is far harder to re-close than to
+# hold, which is the entire reason it took a day to clear the first eleven.
 #
 # ENTRY POINT
 # -----------
@@ -244,11 +255,13 @@ jobs:
           npx tsx scripts/createQMSTables.ts
           npx tsx scripts/bootstrap-test-schema.ts
 
-      # Non-blocking while we establish the baseline. Remove
-      # `continue-on-error` to promote this to a hard gate.
+      # BLOCKING. `continue-on-error` was removed on 2026-09-10 once the
+      # baseline reached 267/267 — see ROLLOUT at the top of this file. The step
+      # still ends in `exit $RC`, so the annotations below are produced either
+      # way; the difference is that a non-zero RC now fails the job instead of
+      # being swallowed.
       - name: Run test suite
         id: tests
-        continue-on-error: true
         env:
           # The four vars test files self-default (`process.env.X || "..."`).
           # Setting them explicitly means the suite runs against known values
@@ -464,11 +477,11 @@ jobs:
           if [ "${{ steps.tests.outcome }}" = "success" ]; then
             echo "### ✅ Test suite passed" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "The suite is green. Promote this workflow to a hard gate by removing \`continue-on-error: true\` from the *Run test suite* step in \`.github/workflows/tests.yml\`." >> "$GITHUB_STEP_SUMMARY"
+            echo "The suite is green and this workflow is a hard gate — keep it that way." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "### ⚠️ Test suite did not pass (non-blocking)" >> "$GITHUB_STEP_SUMMARY"
+            echo "### ❌ Test suite failed — this merge is blocked" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "Merges are **not** blocked while the baseline is being established." >> "$GITHUB_STEP_SUMMARY"
+            echo "Fix the listed files. Do **not** restore \`continue-on-error: true\` to get past this: the baseline was cleared from 11 failures to 0 on 2026-09-10 and re-opening it is far more expensive than closing one file now." >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "**Distinguish two very different cases before triaging:**" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
