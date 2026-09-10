@@ -82,6 +82,13 @@ function isDisposableTarget(target: Target): boolean {
  * helper that does not init it — not "every table the app has". Adding one
  * because a test failed once is how this turns into a second, worse migration
  * system.
+ *
+ * Three tables the suite also reports missing are deliberately ABSENT here:
+ * `capas`, `quality_scorecards` and `governance_documents` are queried by live
+ * code (analyticsRoutes does `FROM capas`) but have no CREATE TABLE anywhere in
+ * the repo, so there is no init to call. They are phantom tables — the same
+ * shape as `risks` vs `enterprise_risks` — and they need a fix at the query
+ * site, not an entry in this list.
  */
 const STEPS: BootstrapStep[] = [
   {
@@ -102,8 +109,29 @@ const STEPS: BootstrapStep[] = [
       ),
   },
   {
-    // NOT pure DDL — see WHY THE GUARD above. kpi_definitions is needed by
-    // estimateEndpoints (the KPI CSV and XLSX estimate routes).
+    // Pure DDL. tests/_helpers/sessionAuth registers an active platform_users
+    // row for every signed cookie it mints, so any test that authenticates
+    // writes here before anything has inited it.
+    label: "platform_users",
+    run: () =>
+      import("../src/utils/userAccessDatabase").then((m) =>
+        m.initUserAccessTables(),
+      ),
+  },
+  {
+    // Pure DDL. This creates the whole duplicate-radar schema rather than one
+    // table, because there is no narrower export — zoho_sync_state is the one
+    // the suite actually reads.
+    label: "zoho_sync_state (duplicate radar schema)",
+    run: () =>
+      import("../src/utils/duplicateRadarDatabase").then((m) =>
+        m.initDuplicateRadarTables(),
+      ),
+  },
+  {
+    // NOT pure DDL — see WHY THE GUARD above. Runs last for that reason.
+    // kpi_definitions is needed by estimateEndpoints (the KPI CSV and XLSX
+    // estimate routes).
     label: "kpi_definitions (+ GRQ seed)",
     run: () =>
       import("../src/utils/kpiDatabase").then((m) => m.initKPITables()),
