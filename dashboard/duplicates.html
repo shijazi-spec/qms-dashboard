@@ -2170,6 +2170,28 @@
                A row appears here ONLY once the activity census has positively
                verified the record holds nothing; a contact that has not been
                checked yet is absent, never assumed empty. -->
+          <!-- ORPHAN CONTACTS (Sarah 2026-09-10). Deliberately a SEPARATE list
+               from "no activity" below: a quiet contact can still hold the only
+               phone number for a company. These hold nothing and link to
+               nothing, so there is no merge to consider — only removal. -->
+          <div class="mb-6">
+            <div class="flex items-center gap-2 mb-2 flex-wrap">
+              <h3 class="text-base font-bold text-gray-900">Orphan contacts
+                <span class="text-xs font-normal text-gray-500">— attached to nothing, holding nothing: no Account, no Deal, no activity, no email, no phone. Nothing to preserve and nothing to merge into.</span>
+              </h3>
+              <span id="orphCount" class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-xs font-bold">—</span>
+              <button data-on-click="loadOrphanContacts" class="ms-auto rr-btn rr-btn-ghost">↻ Refresh</button>
+              <button data-on-click="downloadOrphanCsv" title="Download the orphan contacts as CSV for the Zoho admin." class="rr-btn rr-btn-ghost">⬇ Export CSV</button>
+            </div>
+            <div id="orphSummary" class="text-xs text-gray-600 mb-2">—</div>
+            <div class="overflow-x-auto border border-gray-200 rounded-lg">
+              <table class="rr-table min-w-full" data-no-sort>
+                <thead><tr><th scope="col">Contact</th><th scope="col">Owner</th><th scope="col">Created</th><th scope="col">Why it qualifies</th><th scope="col">Action</th></tr></thead>
+                <tbody id="orphBody"><tr><td colspan="5" class="px-3 py-4 text-gray-500">Open this tab to load…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
           <div class="mb-6">
             <div class="flex items-center gap-2 mb-2 flex-wrap">
               <h3 class="text-base font-bold text-gray-900">Contacts with no activity <span class="text-xs font-normal text-gray-500">— no calls, meetings, emails, notes or attachments. Safe to delete <em>unless</em> the contact has a duplicate — those are merged instead, keeping the twin that holds the activities.</span></h3>
@@ -2643,7 +2665,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=198"></script>
+    <script src="/js/duplicates-app.js?v=199"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

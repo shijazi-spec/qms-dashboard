@@ -13842,6 +13842,67 @@ export const duplicateRadarRoutes = [
   },
 
   {
+    // ORPHAN CONTACTS (Sarah 2026-09-10). Attached to nothing, holding
+    // nothing: no Account, no Deal, no activity, no email, no phone. Distinct
+    // from "Contacts with no activity" — a quiet contact can still hold the
+    // only phone number for a company, and an orphan cannot even be merged
+    // into anything. Read-only; produces a list for the Zoho admin.
+    // GET /api/duplicates/contacts/orphans?limit=&format=csv
+    path: "/api/duplicates/contacts/orphans",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const url = new URL(c.req.url);
+        const limitRaw = parseInt(url.searchParams.get("limit") || "", 10);
+        const { getOrphanContacts } = await import("../../utils/orphanContacts");
+        const r = await getOrphanContacts(
+          Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : undefined,
+        );
+
+        if ((url.searchParams.get("format") || "").toLowerCase() === "csv") {
+          const esc = (v: any) => {
+            const s = v == null ? "" : String(v);
+            return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+          };
+          const header = ["Contact", "Owner", "Created", "Why it qualifies", "Zoho ID", "Open in Zoho"];
+          const body = r.contacts.map((x) =>
+            [
+              x.name, x.owner,
+              x.created_date ? String(x.created_date).slice(0, 10) : "",
+              x.reasons.join(" · "),
+              x.zoho_contact_id,
+              `https://crm.zoho.com/crm/org766568398/tab/Contacts/${x.zoho_contact_id}`,
+            ].map(esc).join(","),
+          );
+          const csv = "﻿" + [header.join(","), ...body].join("\r\n");
+          return new Response(csv, {
+            headers: {
+              "Content-Type": "text/csv; charset=utf-8",
+              "Content-Disposition": `attachment; filename="orphan-contacts-${r.contacts.length}.csv"`,
+            },
+          });
+        }
+
+        return c.json({
+          success: true,
+          safe_to_remove: r.contacts.length,
+          examined: r.examined,
+          // Reported so a short list reads as "not proven yet" rather than
+          // "there are only this many" — the census is still filling in.
+          awaiting_verification: r.awaiting_verification,
+          held_by_deal: r.held_by_deal,
+          contacts: r.contacts,
+        });
+      } catch (e: any) {
+        logger.error("contacts/orphans failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+
+  {
     // CONTACTS TO MERGE (Sarah 2026-09-10). Prepares a native Zoho merge:
     // which record survives, what the merged contact looks like, and how much
     // activity is at stake. READ-ONLY — Zoho v2 has no merge endpoint and no

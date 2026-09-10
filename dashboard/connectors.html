@@ -237,16 +237,8 @@
 
         document.addEventListener('DOMContentLoaded', async function () {
             if (window.WalaPlusI18n && window.WalaPlusI18n.init) {
-                // Written as init().then(applyToDOM) rather than
-                // `await init(); applyToDOM();`. The two behave identically, but
-                // check-i18n.cjs locates the bootstrap by scanning source for
-                // `init(...).then(` and cannot see the awaited form — so this
-                // page read as unwired while working correctly. The chain is
-                // still awaited, which keeps the original ordering: i18n is
-                // applied before connReload() paints.
-                await window.WalaPlusI18n.init().then(function () {
-                    if (window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM();
-                });
+                await window.WalaPlusI18n.init();
+                if (window.WalaPlusI18n.applyToDOM) window.WalaPlusI18n.applyToDOM();
             }
             await connReload();
         });

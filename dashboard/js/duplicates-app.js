@@ -9056,8 +9056,70 @@
             }
             await Promise.all([erLoad('deals', 'erDealsBody'), erLoad('accounts', 'erAccountsBody'), erLoad('contacts', 'erContactsBody')]);
             erLoadTaggedStatus();
+            loadOrphanContacts();
             loadNoActivityContacts();
         }
+
+        // ── Orphan contacts (Sarah 2026-09-10) ───────────────────────────────
+        //
+        // A SEPARATE list from "no activity" on purpose. That one asks whether
+        // anyone ever called this person; this one asks whether the record
+        // represents anything at all. A quiet contact can still carry the only
+        // phone number for a company, or be the contact on a Deal — an orphan
+        // has no Account, no Deal, no activity, no email and no phone, so there
+        // is nothing to preserve and nothing to merge it into.
+        window.loadOrphanContacts = async function () {
+            var body = document.getElementById('orphBody');
+            var cnt = document.getElementById('orphCount');
+            var sum = document.getElementById('orphSummary');
+            if (!body) return;
+            body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-gray-400">Loading…</td></tr>';
+            var d;
+            try {
+                d = await fetch('/api/duplicates/contacts/orphans', { credentials: 'same-origin' }).then(function (r) { return r.json(); });
+            } catch (e) {
+                body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-red-600">Could not load: ' + escapeHtml(String((e && e.message) || e)) + '</td></tr>';
+                return;
+            }
+            if (!d || d.error) {
+                body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-red-600">' + escapeHtml((d && d.error) || 'Failed to load') + '</td></tr>';
+                return;
+            }
+            var rows = d.contacts || [];
+            if (cnt) cnt.textContent = _fn(rows.length);
+            if (sum) {
+                // "awaiting verification" is stated because a SHORT list here
+                // usually means the census has not reached these records — not
+                // that there are only this many orphans.
+                sum.innerHTML =
+                    '<strong>' + _fn(d.examined || 0) + '</strong> contact(s) examined with no Account, email or phone · '
+                    + '<strong class="text-rose-700">' + _fn(rows.length) + '</strong> proven safe to remove'
+                    + ((d.awaiting_verification || 0) > 0
+                        ? ' · <span class="text-amber-700"><strong>' + _fn(d.awaiting_verification) + '</strong> not provable yet — the activity census has not verified them, and unknown is never deletable</span>'
+                        : '')
+                    + ((d.held_by_deal || 0) > 0
+                        ? ' · <span class="text-gray-500"><strong>' + _fn(d.held_by_deal) + '</strong> excluded because a Deal points at them</span>'
+                        : '');
+            }
+            if (!rows.length) {
+                body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-gray-500">No orphan contacts proven yet. A record qualifies only when the activity census has verified it holds nothing.</td></tr>';
+                return;
+            }
+            body.innerHTML = rows.map(function (r) {
+                var url = 'https://crm.zoho.com/crm/org766568398/tab/Contacts/' + encodeURIComponent(r.zoho_contact_id);
+                return '<tr>'
+                    + '<td>' + escapeHtml(r.name || '(no name)') + '</td>'
+                    + '<td>' + escapeHtml(r.owner || '—') + '</td>'
+                    + '<td>' + escapeHtml(r.created_date ? String(r.created_date).slice(0, 10) : '—') + '</td>'
+                    + '<td class="text-xs text-gray-600">' + escapeHtml((r.reasons || []).join(' · ')) + '</td>'
+                    + '<td><a href="' + url + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline">Open in Zoho ↗</a></td>'
+                    + '</tr>';
+            }).join('');
+        };
+
+        window.downloadOrphanCsv = function () {
+            window.location.href = '/api/duplicates/contacts/orphans?format=csv';
+        };
 
         // ── Contacts with no activity (Sarah 2026-09-06) ─────────────────────
         //

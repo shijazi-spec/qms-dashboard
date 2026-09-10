@@ -91,6 +91,40 @@ const I18N_SCRIPT_RE = /<script[^>]+src=["'][^"']*\/js\/i18n\.js(?:\?[^"']*)?["'
 // is then extracted with a balanced-paren scan so nested calls like
 // `() => window.WalaPlusI18n.applyToDOM()` are captured correctly.
 const INIT_THEN_RE = /WalaPlusI18n\s*\.\s*init\s*\([^)]*\)\s*\.\s*then\s*\(/g;
+// Second ACCEPTED bootstrap form: `await WalaPlusI18n.init(...)` with an
+// applyToDOM(...) call after it. Both forms boot the dictionary and then apply
+// it, and both order those two steps correctly — the awaited one just does it
+// with a statement instead of a callback.
+//
+// Recognising only `.then(` marked connectors.html as unwired for months while
+// it worked perfectly, because it awaits. "Rewrite correct code so the checker
+// can see it" is the wrong direction; a gate should describe the property it
+// cares about, not one spelling of it.
+const AWAIT_INIT_RE = /await\s+(?:window\.)?WalaPlusI18n\s*\.\s*init\s*\([^)]*\)/g;
+// How far after the awaited init() to look for applyToDOM(). Generous enough
+// for a guard plus a few statements, tight enough that an applyToDOM elsewhere
+// in the file cannot vouch for an unrelated init.
+const AWAIT_APPLY_WINDOW = 600;
+
+/**
+ * Remove comments before any of the source scanning below.
+ *
+ * MANDATORY here, not tidiness. This script reads raw text, so it cannot tell
+ * code from prose, and it has been bitten repeatedly: comments in
+ * compliance.html failed the gate for weeks, and on 2026-09-10 a comment in
+ * notification-settings.html reading "nsT() calls WalaPlusI18n.t()" put TWO
+ * phantom entries into i18n-dynamic-baseline.json, where each entry is supposed
+ * to be an explicit attestation that a dynamic key cannot be made static.
+ *
+ * The `//` rule is anchored to line-start on purpose: an unanchored one eats
+ * the `//` in `src="https://..."` and would silently delete half the page.
+ */
+function stripComments(src) {
+  return src
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^[ \t]*\/\/.*$/gm, '');
+}
 
 /**
  * Starting at `openIdx` (which must point at an opening `(`), return the body
@@ -213,30 +247,52 @@ function checkPageWiring(pages, publicPages) {
     auditedCount++;
     const html = fs.readFileSync(path.join(dir, page), 'utf8');
 
-    if (!I18N_SCRIPT_RE.test(html)) {
+    // Comment-stripped before ANY of the checks below: a page whose only
+    // "bootstrap" is a sentence describing one is not wired, and a commented-out
+    // <script src="/js/i18n.js"> must not count as loading it either. This
+    // matters more now that the awaited form is matched by proximity rather
+    // than by a balanced-paren body.
+    const code = stripComments(html);
+
+    if (!I18N_SCRIPT_RE.test(code)) {
       missingScript.push({ dirLabel, page });
       continue;
     }
 
-    // Find every `WalaPlusI18n.init(...).then(` occurrence and balanced-extract
-    // the body of `.then(...)`. The page passes if at least one of those bodies
-    // contains `applyToDOM(...)`.
+    // Form 1 — `WalaPlusI18n.init(...).then(`: balanced-extract the body of
+    // `.then(...)` and look for applyToDOM(...) inside it.
     INIT_THEN_RE.lastIndex = 0;
     let wired = false;
     let m;
-    while ((m = INIT_THEN_RE.exec(html))) {
+    while ((m = INIT_THEN_RE.exec(code))) {
       const openIdx = m.index + m[0].length - 1;
-      const body = extractBalanced(html, openIdx);
+      const body = extractBalanced(code, openIdx);
       if (body && /applyToDOM\s*\(/.test(body)) {
         wired = true;
         break;
       }
     }
+
+    // Form 2 — `await WalaPlusI18n.init(...)` with applyToDOM(...) close after.
+    // There is no callback body to extract, so this is a bounded lookahead
+    // rather than a containment test; AWAIT_APPLY_WINDOW is what bounds it.
+    if (!wired) {
+      AWAIT_INIT_RE.lastIndex = 0;
+      let am;
+      while ((am = AWAIT_INIT_RE.exec(code))) {
+        const from = am.index + am[0].length;
+        if (/applyToDOM\s*\(/.test(code.slice(from, from + AWAIT_APPLY_WINDOW))) {
+          wired = true;
+          break;
+        }
+      }
+    }
+
     if (!wired) missingInitApply.push({ dirLabel, page });
   }
 
   if (missingScript.length === 0 && missingInitApply.length === 0) {
-    console.log(`✓ Page wiring (${auditedCount} page(s)) — every page loads /js/i18n.js and calls WalaPlusI18n.init().then(applyToDOM)`);
+    console.log(`✓ Page wiring (${auditedCount} page(s)) — every page loads /js/i18n.js and boots it, via init().then(applyToDOM) or an awaited init() followed by applyToDOM()`);
     return true;
   }
 
@@ -255,13 +311,19 @@ function checkPageWiring(pages, publicPages) {
   }
   if (missingInitApply.length) {
     fail(
-      `Page wiring: ${missingInitApply.length} page(s) load i18n.js but never run init().then(applyToDOM)`,
+      `Page wiring: ${missingInitApply.length} page(s) load i18n.js but never boot it`,
       [
         ...missingInitApply.map(({ dirLabel, page }) => `${dirLabel}/${page}`),
         '',
-        'Fix: include this snippet in the page bootstrap script:',
+        'Fix: bootstrap i18n in the page script. EITHER form is accepted:',
         '    window.WalaPlusI18n.init().then(() => window.WalaPlusI18n.applyToDOM());',
+        '  or, inside an async function:',
+        '    await window.WalaPlusI18n.init();',
+        '    window.WalaPlusI18n.applyToDOM();',
+        '',
         'Without it, every `data-i18n="..."` attribute on the page is ignored at runtime.',
+        'Note: comments are stripped before this check, so a commented-out or',
+        'described bootstrap does not count.',
       ],
     );
   }
