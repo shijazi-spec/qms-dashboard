@@ -76,6 +76,100 @@ export async function ensureQualityAuditResultsTable(): Promise<void> {
   return qualityAuditTableReady;
 }
 
+/**
+ * `governance_documents` — declared here for exactly the reason
+ * quality_audit_results was on 2026-09-08. Sixteen call sites in this file
+ * alone read, INSERT and UPDATE it, and nothing in the repo has ever created
+ * it: it survives only because production has had it since whatever made it
+ * was deleted. A fresh environment gets `relation "governance_documents" does
+ * not exist` instead, which is what CI reported.
+ *
+ * Columns and types are TRANSCRIBED from `\d governance_documents` on the live
+ * database, not inferred from the queries — a guessed VARCHAR length is the
+ * drift that gets a column proposed for DROP at publish time.
+ *
+ * PRODUCTION REMAINS AUTHORITATIVE: `IF NOT EXISTS` makes this a no-op
+ * wherever the table already exists, so it changes nothing live and only gives
+ * a new environment a working table instead of an error.
+ */
+let governanceDocumentsTableReady: Promise<void> | null = null;
+export async function ensureGovernanceDocumentsTable(): Promise<void> {
+  if (governanceDocumentsTableReady) return governanceDocumentsTableReady;
+  governanceDocumentsTableReady = (async () => {
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS governance_documents (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          document_type VARCHAR(100),
+          version VARCHAR(50),
+          file_path TEXT,
+          content_text TEXT,
+          rules_json JSONB,
+          is_active BOOLEAN DEFAULT TRUE,
+          crm_module VARCHAR(100),
+          team_name VARCHAR(255),
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        );
+      `);
+      logger.info("[Governance] governance_documents table ready");
+    } catch (err) {
+      logger.error("[Governance] Failed to ensure the table:", err);
+      governanceDocumentsTableReady = null;
+      throw err;
+    }
+  })();
+  return governanceDocumentsTableReady;
+}
+
+/**
+ * `capas` — a THIRD undeclared production table, and deliberately not the same
+ * thing as the declared `capa_records`. `\d capas` shows a uuid primary key, a
+ * unique capa_number and a flat text shape; capa_records is a SERIAL table
+ * with a different column set entirely. Both exist. Neither is a rename of the
+ * other, and executiveDigest queries them side by side.
+ *
+ * Nothing in this repo ever writes to `capas` — all seven call sites are
+ * COUNT/SELECT — so it is populated by something outside this codebase. That
+ * is also why its absence went unnoticed: executiveDigest reads it through
+ * safeQuery, which swallows the error and returns [], so a missing table
+ * reports zero open CAPAs to leadership rather than failing.
+ *
+ * Transcribed from `\d capas`. Same IF NOT EXISTS discipline as above.
+ */
+let capasTableReady: Promise<void> | null = null;
+export async function ensureCapasTable(): Promise<void> {
+  if (capasTableReady) return capasTableReady;
+  capasTableReady = (async () => {
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS capas (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          title TEXT NOT NULL,
+          capa_number TEXT NOT NULL,
+          type TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'open',
+          priority TEXT NOT NULL,
+          assigned_to TEXT NOT NULL,
+          department TEXT NOT NULL,
+          description TEXT NOT NULL,
+          nc_reference TEXT,
+          due_date TIMESTAMP,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          CONSTRAINT capas_capa_number_unique UNIQUE (capa_number)
+        );
+      `);
+      logger.info("[CAPA] capas table ready");
+    } catch (err) {
+      logger.error("[CAPA] Failed to ensure the table:", err);
+      capasTableReady = null;
+      throw err;
+    }
+  })();
+  return capasTableReady;
+}
+
 let activityTablesReady: Promise<void> | null = null;
 async function ensureActivityTables(): Promise<void> {
   if (activityTablesReady) return activityTablesReady;

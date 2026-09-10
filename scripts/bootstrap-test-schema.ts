@@ -83,12 +83,12 @@ function isDisposableTarget(target: Target): boolean {
  * because a test failed once is how this turns into a second, worse migration
  * system.
  *
- * Three tables the suite also reports missing are deliberately ABSENT here:
- * `capas`, `quality_scorecards` and `governance_documents` are queried by live
- * code (analyticsRoutes does `FROM capas`) but have no CREATE TABLE anywhere in
- * the repo, so there is no init to call. They are phantom tables — the same
- * shape as `risks` vs `enterprise_risks` — and they need a fix at the query
- * site, not an entry in this list.
+ * `quality_scorecards` is still missing from this list, and knowingly so. It is
+ * the third table that live code reads and writes while nothing in the repo
+ * declares it, but its `\d` output has not been transcribed yet — and guessing
+ * a VARCHAR length for a table production already owns is the drift that gets
+ * a column proposed for DROP at publish time. It joins the list the moment the
+ * real column types are in hand, not before.
  */
 const STEPS: BootstrapStep[] = [
   {
@@ -139,6 +139,23 @@ const STEPS: BootstrapStep[] = [
       import("../src/utils/callIntelligenceDb").then((m) =>
         m.initCallIntelligenceTables(),
       ),
+  },
+  {
+    // Pure DDL, and newly declarable: governance_documents and capas exist in
+    // production but were declared by nothing in the repo until now, so no
+    // init existed to call. Both were transcribed from `\d` on the live
+    // database — see the docblocks in src/utils/database.ts.
+    label: "governance_documents",
+    run: () =>
+      import("../src/utils/database").then((m) =>
+        m.ensureGovernanceDocumentsTable(),
+      ),
+  },
+  {
+    // Pure DDL. Not capa_records — a separate table that also exists.
+    label: "capas",
+    run: () =>
+      import("../src/utils/database").then((m) => m.ensureCapasTable()),
   },
   {
     // NOT pure DDL — see WHY THE GUARD above. Runs last for that reason.

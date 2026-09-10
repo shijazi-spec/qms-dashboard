@@ -849,6 +849,25 @@ export const mastra = new Mastra({
           m.ensureQualityAuditResultsTable(),
         ),
     },
+    {
+      // Same story as quality_audit_results above, found the same way: sixteen
+      // call sites, no declaration anywhere, alive only because production has
+      // always had it.
+      label: "governance_documents",
+      run: () =>
+        import("../utils/database").then((m) =>
+          m.ensureGovernanceDocumentsTable(),
+        ),
+    },
+    {
+      // NOT capa_records, which is a different declared table with a different
+      // shape. Both exist in production and executiveDigest counts them side
+      // by side. Nothing in this repo writes to `capas`, and safeQuery hides
+      // its absence by returning [] — so a missing table reads as "0 open
+      // CAPAs" in the leadership digest rather than as an error.
+      label: "capas",
+      run: () => import("../utils/database").then((m) => m.ensureCapasTable()),
+    },
   ];
 
   /**
