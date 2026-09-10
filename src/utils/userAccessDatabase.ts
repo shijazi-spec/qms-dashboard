@@ -63,34 +63,22 @@ async function ensureOidcAuthTables(): Promise<void> {
     )
     .then(() => undefined)
     .catch(async () => {
-      await pool.query(`
-      CREATE TABLE IF NOT EXISTS platform_users (
-        id SERIAL PRIMARY KEY,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        full_name VARCHAR(255) NOT NULL,
-        team VARCHAR(50) NOT NULL DEFAULT 'Other',
-        role VARCHAR(50) NOT NULL DEFAULT 'department_viewer',
-        status VARCHAR(30) DEFAULT 'active',
-        password_hash VARCHAR(255),
-        mfa_enabled BOOLEAN DEFAULT FALSE,
-        mfa_secret VARCHAR(255),
-        invitation_id INTEGER,
-        access_reason TEXT,
-        approved_by VARCHAR(255),
-        approved_at TIMESTAMP,
-        denied_by VARCHAR(255),
-        denied_at TIMESTAMP,
-        denial_reason TEXT,
-        last_login_at TIMESTAMP,
-        login_count INTEGER DEFAULT 0,
-        google_id VARCHAR(255),
-        picture TEXT,
-        auth_provider VARCHAR(50) DEFAULT 'local',
-        ui_language VARCHAR(10) DEFAULT 'en',
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
-      )
-    `);
+      // The ALTER above failed because platform_users does not exist at all —
+      // a brand new database, or CI. Build it from the ONE canonical
+      // declaration in initUserAccessTables rather than a second copy.
+      //
+      // A second copy DID live here, and the two drifted. This one had
+      // `team VARCHAR(50) NOT NULL DEFAULT 'Other'` and the canonical one had
+      // no default, so a fresh database got whichever function happened to run
+      // first. Production was shaped by this copy; CI created the strict one
+      // and two suites died on a NOT NULL violation (2026-09-10, 30ddb66f).
+      // Two CREATE TABLE IF NOT EXISTS for one table is a coin toss, not a
+      // fallback.
+      //
+      // Safe to call: initUserAccessTables creates user_invitations BEFORE
+      // platform_users, which the invitation_id foreign key requires, and it
+      // never calls back into this function, so there is no recursion.
+      await initUserAccessTables();
     });
   return oidcAuthTablesReady;
 }
@@ -538,32 +526,32 @@ export async function initUserAccessTables(): Promise<void> {
     )
   `);
 
-  // NOTE: platform_users is declared TWICE in this file — here, and in
-  // ensureOidcAuthTables above. Both are CREATE TABLE IF NOT EXISTS, so
-  // whichever runs first in a fresh database wins and the other silently does
-  // nothing. They disagreed, and it cost two tests a day of red CI:
+  // THE canonical declaration of platform_users — the only one in the codebase.
+  // ensureOidcAuthTables above deliberately holds no second copy: it ALTERs the
+  // OIDC columns onto an existing table, and when the table is missing entirely
+  // it calls THIS function. Two CREATE TABLE IF NOT EXISTS for one table is a
+  // coin toss on which shape a fresh database gets, and that coin came up wrong
+  // once already (2026-09-10, 30ddb66f).
   //
-  //   this one          team VARCHAR(50) NOT NULL
-  //   ensureOidcAuth    team VARCHAR(50) NOT NULL DEFAULT 'Other'
+  // google_id / picture / auth_provider are declared here AND added by ALTER in
+  // ensureOidcAuthTables. That overlap is REQUIRED, not redundant:
+  // check:schema-parity fails when a runtime ALTER adds a column the canonical
+  // CREATE does not declare, because exactly that drift is what gets a column
+  // proposed for DROP at publish time.
   //
-  // Production was shaped by the version WITH the default — dashboardApiRoutes
-  // and consultantRoutes both insert (email, full_name, role, status) and omit
-  // team, and both pass against it. CI created the table from this declaration
-  // instead and every such insert died on a NOT NULL violation
-  // (routine: ExecConstraints).
-  //
-  // `team` now carries the same default so the two agree. `status` still does
-  // NOT: this path is the invitation/approval flow where a new user must start
-  // 'pending_approval', while the OIDC path auto-provisions an SSO user as
-  // 'active'. That difference is deliberate, but it is a second divergence on
-  // one table and the right end state is a single declaration, not two.
+  // The defaults are belt-and-braces only — both INSERT sites in this file
+  // supply team, role and status explicitly (upsertOidcUser passes 'Other' plus
+  // an explicit role/status; the invitation flow passes 'pending_approval'), so
+  // nothing depends on them. `status` therefore keeps the conservative
+  // 'pending_approval': a row that appears without going through either path
+  // should not arrive already active.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS platform_users (
       id SERIAL PRIMARY KEY,
       email VARCHAR(255) UNIQUE NOT NULL,
       full_name VARCHAR(255) NOT NULL,
       team VARCHAR(50) NOT NULL DEFAULT 'Other',
-      role VARCHAR(50) NOT NULL,
+      role VARCHAR(50) NOT NULL DEFAULT 'department_viewer',
       status VARCHAR(30) DEFAULT 'pending_approval',
       password_hash VARCHAR(255),
       mfa_enabled BOOLEAN DEFAULT FALSE,
@@ -577,6 +565,9 @@ export async function initUserAccessTables(): Promise<void> {
       denial_reason TEXT,
       last_login_at TIMESTAMP,
       login_count INTEGER DEFAULT 0,
+      google_id VARCHAR(255),
+      picture TEXT,
+      auth_provider VARCHAR(50) DEFAULT 'local',
       ui_language VARCHAR(10) DEFAULT 'en',
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
