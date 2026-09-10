@@ -690,6 +690,14 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     roles: ["admin", "ai_specialist", "auditor", "bu_owner", "custom", "department_viewer", "executive", "grc_manager", "head_of_operations_quality", "quality_manager", "quality_specialist", "team_lead"],
   },
   {
+    // Destructive maintenance: clearing the blurb-era mapping artefacts wipes
+    // hundreds of rows across five tables. Tighter than the Document-Mapping
+    // write rule below, and it MUST precede it to win.
+    pattern: /^\/api\/compliance\/document-mapping\/purge-blurb-era$/,
+    methods: ["POST"],
+    roles: ["admin", "grc_manager"],
+  },
+  {
     // Document-Mapping write/AI actions — "Run mapping now" (backfill), the
     // per-framework "Map this framework" AI scan, and the AI gap-remediation
     // advisors (recommend a clause / recommend all gaps). Governance/admin

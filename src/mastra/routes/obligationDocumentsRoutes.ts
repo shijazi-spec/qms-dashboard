@@ -35,6 +35,11 @@ const WRITE_ROLES = [
   "quality_manager",
 ];
 
+// Destructive maintenance — deliberately tighter than WRITE_ROLES. Clearing the
+// blurb-era mappings deletes hundreds of rows across five tables; the people who
+// may link a document are not automatically the people who may wipe the corpus.
+const PURGE_ROLES = ["admin", "grc_manager"];
+
 const MAX_FILES_PER_REQUEST = 20;
 const MAX_TOTAL_BYTES_PER_REQUEST = 50 * 1024 * 1024; // 50 MB
 const MAX_NOTES_LEN = 2000;
@@ -522,6 +527,61 @@ export const obligationDocumentsRoutes = [
         } catch (error) {
           safeLogger.error("❌ [ObligationDocs] judge error:", error);
           return c.json({ error: "Failed to judge evidence" }, 500);
+        }
+      };
+    },
+  },
+
+  // Maintenance — clear the mapping artefacts derived from placeholder
+  // projections (see src/utils/blurbEraPurge.ts for what those are).
+  //
+  // Dry run is the DEFAULT and the only thing a bare POST does. Deleting needs
+  // BOTH `confirm: true` and a `expect_total` that matches the count the dry run
+  // just returned — so a stale confirmation from a page left open overnight, or
+  // a second click racing the first, refuses rather than deleting a set the
+  // caller never actually saw.
+  {
+    path: "/api/compliance/document-mapping/purge-blurb-era",
+    method: "POST" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const g = await gate(c, PURGE_ROLES);
+          if (g.error) return g.error;
+
+          const body = await c.req.json().catch(() => ({}));
+          const { purgeBlurbEraMappings } = await import(
+            "../../utils/blurbEraPurge"
+          );
+
+          if (body.confirm !== true) {
+            return c.json({ success: true, ...(await purgeBlurbEraMappings()) });
+          }
+
+          const preview = await purgeBlurbEraMappings();
+          if (
+            typeof body.expect_total !== "number" ||
+            body.expect_total !== preview.total
+          ) {
+            return c.json(
+              {
+                error:
+                  "Confirmation is out of date — the row count changed since it was previewed. Preview again.",
+                expected: body.expect_total ?? null,
+                actual: preview.total,
+              },
+              409,
+            );
+          }
+
+          const result = await purgeBlurbEraMappings({ dryRun: false });
+          safeLogger.warn(
+            `[ObligationDocs] blurb-era purge by ${g.user?.email || "unknown"}: ${JSON.stringify(result.counts)}`,
+          );
+          return c.json({ success: true, ...result });
+        } catch (error) {
+          safeLogger.error("❌ [ObligationDocs] blurb-era purge error:", error);
+          return c.json({ error: "Failed to purge blurb-era mappings" }, 500);
         }
       };
     },

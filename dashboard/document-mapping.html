@@ -101,6 +101,11 @@
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                         <span id="mapAllLabel" data-i18n="docmap.map_all">Map all frameworks with AI</span>
                     </button>
+                    <!-- Destructive maintenance, kept visually apart from the two
+                         actions above: it deletes rather than builds. -->
+                    <button type="button" data-on-click="purgeBlurbEra" id="purgeBlurbBtn" class="text-xs px-3 py-1.5 rounded-lg border border-red-300 text-red-700 hover:bg-red-50 font-medium whitespace-nowrap disabled:opacity-60" data-testid="button-purge-blurb" title="Delete the links, AI findings, citations and scan history produced against placeholder documents, so they can be mapped again once the real files are attached">
+                        <span id="purgeBlurbLabel" data-i18n="docmap.purge_blurb">Clear placeholder mappings</span>
+                    </button>
                 </div>
             </div>
             <div id="coverageGrid" class="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -697,6 +702,50 @@
                 alert(rt('docmap.rejudge_error', 'Re-judge failed') + ': ' + e.message);
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = prev || rt('docmap.rejudge_findings', 'Refresh AI comments'); }
+            }
+        }
+
+        // Clear the mapping artefacts derived from placeholder documents.
+        // Two round-trips on purpose: the first is a dry run whose counts are
+        // shown to the operator, and the second sends those exact counts back
+        // as `expect_total` — so nobody confirms a number they never saw.
+        async function purgeBlurbEra() {
+            var btn = document.getElementById('purgeBlurbBtn');
+            var pt = function (k, fb) { return (window.WalaPlusI18n ? window.WalaPlusI18n.t(k) : null) || fb; };
+            try {
+                if (btn) btn.disabled = true;
+                var pre = await fetch('/api/compliance/document-mapping/purge-blurb-era', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+                var p = await pre.json().catch(function () { return {}; });
+                if (!pre.ok) { alert(pt('docmap.purge_error', 'Purge failed') + (p.error ? ': ' + p.error : '')); return; }
+
+                if (!p.total) {
+                    alert(pt('docmap.purge_none', 'Nothing to clear — no mappings were made against placeholder documents.'));
+                    return;
+                }
+
+                // Spell out every table, because "clear 964 rows" is not
+                // something anyone can consent to without knowing what they are.
+                var lines = Object.keys(p.counts || {})
+                    .filter(function (k) { return p.counts[k] > 0; })
+                    .map(function (k) { return '  • ' + p.counts[k] + ' — ' + ((p.labels || {})[k] || k); })
+                    .join('\n');
+                var kept = (p.preserved_manual_links || []).length;
+                var msg = pt('docmap.purge_confirm_head', 'Clear all mappings made against the {d} placeholder documents?')
+                        .replace('{d}', p.scope ? p.scope.documents_placeholder : '?')
+                    + '\n\n' + lines
+                    + '\n\n' + pt('docmap.purge_confirm_kept', '{n} human-made link(s) will be KEPT.').replace('{n}', kept)
+                    + '\n' + pt('docmap.purge_confirm_tail', 'This cannot be undone from the page. Re-mapping needs the real documents to be attached first.');
+                if (!confirm(msg)) return;
+
+                var res = await fetch('/api/compliance/document-mapping/purge-blurb-era', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: true, expect_total: p.total }) });
+                var d = await res.json().catch(function () { return {}; });
+                if (!res.ok) { alert(pt('docmap.purge_error', 'Purge failed') + (d.error ? ': ' + d.error : '')); return; }
+                alert(pt('docmap.purge_done', 'Cleared {n} row(s).').replace('{n}', d.total || 0));
+                await reloadAll();
+            } catch (e) {
+                alert(pt('docmap.purge_error', 'Purge failed') + ': ' + e.message);
+            } finally {
+                if (btn) btn.disabled = false;
             }
         }
 

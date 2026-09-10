@@ -2058,7 +2058,14 @@
     "step3_sub": "links awaiting your confirmation",
     "step4": "4 · Gaps",
     "step4_sub": "clauses with no document yet",
-    "col_owner": "Owner"
+    "col_owner": "Owner",
+    "purge_blurb": "Clear placeholder mappings",
+    "purge_confirm_head": "Clear all mappings made against the {d} placeholder documents?",
+    "purge_confirm_kept": "{n} human-made link(s) will be KEPT.",
+    "purge_confirm_tail": "This cannot be undone from the page. Re-mapping needs the real documents to be attached first.",
+    "purge_none": "Nothing to clear — no mappings were made against placeholder documents.",
+    "purge_done": "Cleared {n} row(s).",
+    "purge_error": "Purge failed"
   },
   "compliance": {
     "subtitle": "Milestone-by-milestone certification action plan with live evidence, plus framework and obligation tracking below",
