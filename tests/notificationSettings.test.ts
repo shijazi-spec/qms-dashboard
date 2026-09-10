@@ -147,6 +147,18 @@ await suite.test("today's production behaviour is preserved exactly", async () =
   // switch resolves to what it resolved to before. Pinned against the real
   // production environment as of 2026-09-07 — the two mute switches Sarah asked
   // for are off, the rest sit at their defaults.
+  //
+  // RE-PINNED 2026-09-10 for sales_weekly_reports: false -> true. Not drift.
+  // e62c781d turned that report from an opt-in weekly digest into the SDR/Sales
+  // team's standing DAILY audit (Sarah: "the sales team solve most of them"),
+  // so ON with no override is the new intended production behaviour. The key
+  // and envVar keep their "weekly" names so stored overrides and configured
+  // secrets keep resolving; only the cadence and the default changed.
+  //
+  // Every other value below is still the 2026-09-07 pin. Moving one of these
+  // should always mean a deliberate, attributed decision like that one — if a
+  // value here starts disagreeing with the registry for any other reason, the
+  // registry is what changed by accident, not this list.
   const prod = {
     HEALTH_PULSE_SLACK_ALERTS: undefined,
     FRAUD_REMINDERS_ENABLED: undefined,
@@ -157,7 +169,7 @@ await suite.test("today's production behaviour is preserved exactly", async () =
     platform_slack_announcements: true,
     health_pulse_slack: false,
     fraud_reminders: false,
-    sales_weekly_reports: false,
+    sales_weekly_reports: true,
     direct_audit_slack: true,
     missing_docs_report: false,
     cs_overlap_alert: true,
