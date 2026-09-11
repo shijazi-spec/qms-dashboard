@@ -168,6 +168,14 @@ export const kpiRoutes = [
           const curQ = Math.floor(nowD.getUTCMonth() / 3) + 1;
           const curY = nowD.getUTCFullYear();
           const currentView = !q || (q.quarter === curQ && q.year === curY);
+          // How many BU-coverage tracker rows each KPI holds, so the card can
+          // offer "Manage BU Coverage" when there is something to manage rather
+          // than only when calc_mode says 'bu_coverage'. One grouped query for
+          // the whole list — deliberately outside the per-KPI Promise.all below.
+          const { buCoverageRowCounts } = await import(
+            "../../utils/kpiBuCoverageDatabase"
+          );
+          const buCoverageCounts = await buCoverageRowCounts();
           kpis = await Promise.all(
             (kpis as any[]).map(async (k) => {
               const lv = k?.id
@@ -193,6 +201,7 @@ export const kpiRoutes = [
                 status: lv ? lv.status : "no_data",
                 trend: lv ? lv.trend : null,
                 lastUpdated: lv ? lv.period_end : null,
+                bu_coverage_rows: k?.id ? buCoverageCounts.get(k.id) || 0 : 0,
               };
             }),
           );

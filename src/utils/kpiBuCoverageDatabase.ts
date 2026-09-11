@@ -107,6 +107,39 @@ export async function seedBuCoverage(): Promise<void> {
   }
 }
 
+/**
+ * How many tracker rows each KPI holds, keyed by kpi_id.
+ *
+ * The "Manage BU Coverage" button used to render only when
+ * calc_mode === 'bu_coverage'. When QM-KPI-008 went back to being a checklist
+ * KPI (2026-09-11) no KPI carried that mode any more, so the button vanished
+ * from every card while the rows stayed in the database — a tracker with data
+ * and no way in. The mode says how a KPI is CALCULATED; it should never be what
+ * decides whether existing data is reachable.
+ *
+ * One grouped query for the whole list, not one per KPI: /api/kpis already runs
+ * a per-KPI Promise.all and does not need another N+1 inside it.
+ *
+ * Best-effort — a missing table returns an empty map, so the button simply does
+ * not appear rather than the KPI list failing.
+ */
+export async function buCoverageRowCounts(): Promise<Map<number, number>> {
+  const out = new Map<number, number>();
+  try {
+    const res = await pool.query<{ kpi_id: number; n: string }>(
+      `SELECT kpi_id, COUNT(*)::int AS n FROM kpi_bu_coverage GROUP BY kpi_id`,
+    );
+    for (const r of res.rows as any[]) {
+      out.set(Number(r.kpi_id), Number(r.n) || 0);
+    }
+  } catch (err) {
+    logger.warn(
+      `[KPIBuCoverage] row-count lookup failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  return out;
+}
+
 export async function getBuCoverage(kpiId: number): Promise<BuCoverageRow[]> {
   const res = await pool.query(
     `SELECT * FROM kpi_bu_coverage WHERE kpi_id = $1 ORDER BY id ASC`,
