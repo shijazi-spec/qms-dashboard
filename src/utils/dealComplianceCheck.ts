@@ -149,6 +149,54 @@ export function requiredDocsForStage(stage: string): RequiredDoc[] {
  *
  * Do not reintroduce it without evidence that Accounts actually carry files.
  */
+/**
+ * Registration identifiers recorded on the DEAL itself, not as files.
+ *
+ * Sarah, 2026-09-11: "since you have the document of the CR or VAT it's ok,
+ * since it's added as data real it's ok, that's compliant, but if there is
+ * both not here so it's non-compliant, and the dummy data is a part of the
+ * non-compliant too."
+ *
+ * So CR and VAT are each satisfied by EITHER the certificate OR a genuine
+ * number. Nothing else in the required set works this way — a proposal or a
+ * contract cannot be "recorded as data".
+ *
+ * These come off the deal (`CR_Number1`, `VAT_Number1`). They are NOT an
+ * account lookup; see the note above evaluateDocCompliance.
+ */
+export interface DealRegistrationFields {
+  crNumber?: string | null;
+  vatNumber?: string | null;
+}
+
+/**
+ * Is this a real registration number, or someone getting past a required field?
+ *
+ * Measured on the WalaPlus signed book, 2026-09-11: of 271 deals carrying CR
+ * text only 134 held a real number, and of 271 carrying VAT text only 99. The
+ * rest were `00`, `0000000000`, `....`, two Saudi MOBILE numbers (`0507327065`
+ * — exactly ten digits, so a naive length check would have passed them), and a
+ * few values far too short.
+ *
+ * Digits are extracted first, so `CR 1010954387` and `3119 2262 7400 003`
+ * count while `0000-0000-00` still does not.
+ *
+ *   CR  — 10 digits, never leading zero (a leading 0 is a phone number).
+ *   VAT — 15 digits, never leading zero.
+ *   Neither may be the same digit repeated.
+ */
+export function isRealRegistrationNumber(
+  raw: unknown,
+  kind: "cr" | "vat",
+): boolean {
+  if (raw === null || raw === undefined) return false;
+  const digits = String(raw).replace(/\D/g, "");
+  if (!digits) return false;
+  if (/^(\d)\1+$/.test(digits)) return false; // 000…, 777…
+  if (digits.startsWith("0")) return false;
+  return digits.length === (kind === "cr" ? 10 : 15);
+}
+
 export interface DocComplianceResult {
   stage: string;
   required: number;
@@ -156,6 +204,8 @@ export interface DocComplianceResult {
     key: string;
     label: string;
     fileName: string;
+    /** How the requirement was met — an attached file, or a recorded number. */
+    via: "attachment" | "field";
   }>;
   missingDocs: Array<{ key: string; label: string }>;
   attachmentCount: number;
@@ -188,6 +238,12 @@ export interface DocComplianceResult {
 export function evaluateDocCompliance(
   stage: string,
   attachments: ZohoAttachmentLike[],
+  /**
+   * The DEAL's own recorded CR / VAT numbers. Not an account lookup — the rule
+   * that only the deal's own evidence counts is unchanged; this is a second
+   * place ON THE DEAL where two of the five requirements can be satisfied.
+   */
+  fields: DealRegistrationFields = {},
 ): DocComplianceResult {
   const required = requiredDocsForStage(stage);
   const names = (attachments || [])
@@ -199,11 +255,26 @@ export function evaluateDocCompliance(
   for (const doc of required) {
     const hit = names.find((n) => doc.match.test(n));
     if (hit) {
-      present.push({ key: doc.key, label: doc.label, fileName: hit });
+      present.push({ key: doc.key, label: doc.label, fileName: hit, via: "attachment" });
       matched.add(hit);
-    } else {
-      missing.push({ key: doc.key, label: doc.label });
+      continue;
     }
+    // No file — but CR and VAT also count when the number itself is recorded
+    // on the deal and is real. Only these two: a proposal cannot be data.
+    const byField =
+      (doc.key === "commercial_registration" &&
+        isRealRegistrationNumber(fields.crNumber, "cr")) ||
+      (doc.key === "vat" && isRealRegistrationNumber(fields.vatNumber, "vat"));
+    if (byField) {
+      present.push({
+        key: doc.key,
+        label: doc.label,
+        fileName: "[recorded as data]",
+        via: "field",
+      });
+      continue;
+    }
+    missing.push({ key: doc.key, label: doc.label });
   }
   // Every attachment that satisfied no requirement. A file that matched one
   // document is counted as matched even if another requirement also wanted it —

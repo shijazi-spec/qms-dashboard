@@ -4027,7 +4027,15 @@ export const duplicateRadarRoutes = [
           } catch (e: any) {
             return c.json({ error: `Zoho attachments fetch failed: ${e?.message || e}` }, 502);
           }
-          const result = evaluateDocCompliance(stage, atts);
+          const { getDealRegistrationFields } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          const regs = await getDealRegistrationFields([String(id)]);
+          const result = evaluateDocCompliance(
+            stage,
+            atts,
+            regs.get(String(id)) || {},
+          );
           // The file NAMES of what is actually attached.
           //
           // Without these, "missing 5 documents" is unfalsifiable: the operator
@@ -4593,6 +4601,14 @@ export const duplicateRadarRoutes = [
             .filter((d: any) => d.id)
             .slice(0, 50); // hard cap per request
           if (!deals.length) return c.json({ success: true, results: [] });
+          // One lookup for the whole batch — CR/VAT numbers satisfy their
+          // requirements as well as the certificates do.
+          const { getDealRegistrationFields } = await import(
+            "../../utils/duplicateRadarDatabase"
+          );
+          const regs = await getDealRegistrationFields(
+            deals.map((d: any) => d.id),
+          );
           const checkedBy =
             user.email || user.userId ? String(user.email || user.userId) : null;
           const nowIso = new Date().toISOString();
@@ -4607,7 +4623,11 @@ export const duplicateRadarRoutes = [
               const d = deals[my];
               try {
                 const atts = await fetchRecordAttachments("Deals", d.id);
-                const r = evaluateDocCompliance(d.stage, atts);
+                const r = evaluateDocCompliance(
+                  d.stage,
+                  atts,
+                  regs.get(d.id) || {},
+                );
                 try {
                   await upsertDealDocCompliance({
                     zohoDealId: d.id,

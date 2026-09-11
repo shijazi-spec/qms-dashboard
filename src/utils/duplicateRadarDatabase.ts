@@ -763,6 +763,36 @@ export async function upsertDealDocCompliance(rec: {
   );
 }
 
+/**
+ * The CR / VAT numbers recorded on these deals, for the document check.
+ *
+ * CR and VAT are satisfied by a genuine recorded number as well as by the
+ * certificate (Sarah, 2026-09-11). The sweep gets these in its own query; the
+ * interactive routes take the stage from the request and so need them looked
+ * up. Read from the mirror — no extra Zoho call.
+ */
+export async function getDealRegistrationFields(
+  ids: string[],
+): Promise<Map<string, { crNumber: string | null; vatNumber: string | null }>> {
+  const out = new Map<string, { crNumber: string | null; vatNumber: string | null }>();
+  if (!ids || !ids.length) return out;
+  const res = await pool.query(
+    `SELECT zoho_record_id AS id,
+            raw_data->>'CR_Number1'  AS cr_number,
+            raw_data->>'VAT_Number1' AS vat_number
+       FROM duplicate_records
+      WHERE record_type = 'deal' AND zoho_record_id = ANY($1::text[])`,
+    [ids],
+  );
+  for (const r of res.rows as any[]) {
+    out.set(String(r.id), {
+      crNumber: r.cr_number ?? null,
+      vatNumber: r.vat_number ?? null,
+    });
+  }
+  return out;
+}
+
 /** Fetch stored doc-compliance results. Optionally filtered to specific deal
  *  ids (the visible page); capped to keep payloads sane. */
 export async function getDealDocCompliance(

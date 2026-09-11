@@ -15,6 +15,8 @@
  * been silently failing to recognise.
  */
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "fs";
+import { join } from "path";
 import {
   evaluateDocCompliance,
   requiredDocsForStage,
@@ -31,9 +33,25 @@ const FULL = [
 ];
 
 describe("only the deal's own attachments count", () => {
-  it("takes exactly two arguments — no account list", () => {
-    // A third argument would be silently ignored, so the arity IS the contract.
-    expect(evaluateDocCompliance.length).toBe(2);
+  it("never reads an account — only the deal's own evidence", () => {
+    // This used to assert arity 2, on the reasoning that "a third argument
+    // would be silently ignored, so the arity IS the contract". A third
+    // argument arrived on 2026-09-11 — the DEAL's own CR/VAT numbers, since
+    // Sarah ruled those satisfy the requirement as well as the certificate.
+    // Giving it a default would have kept .length at 2 and left this test
+    // passing while quietly meaning nothing, so it now asserts the rule
+    // itself: nothing in this module reaches for an account.
+    //
+    // Scanned with comments STRIPPED: this file's header explains at length
+    // why the Account lookup was removed and must not be reintroduced, so a
+    // raw scan matches its own documentation and fails. Same trap as
+    // check-i18n.cjs reading t('key') out of a comment.
+    const SRC = readFileSync(
+      join(__dirname, "../../src/utils/dealComplianceCheck.ts"),
+      "utf8",
+    );
+    const CODE = SRC.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(CODE).not.toMatch(/account/i);
   });
 
   it("passes when the full set is on the deal", () => {

@@ -72,7 +72,12 @@ export function dueDealsSql(): string {
   const stages = DEAL_COMPLIANCE_STAGES.map((s) => `'${s.toLowerCase()}'`).join(", ");
   return `
     SELECT r.zoho_record_id AS id,
-           COALESCE(NULLIF(BTRIM(r.stage), ''), r.raw_data->>'Stage', '') AS stage
+           COALESCE(NULLIF(BTRIM(r.stage), ''), r.raw_data->>'Stage', '') AS stage,
+           -- CR and VAT are satisfied by a genuine recorded number as well as
+           -- by the certificate (Sarah, 2026-09-11), so the check needs them.
+           -- Already in the mirror; no extra Zoho call.
+           r.raw_data->>'CR_Number1'  AS cr_number,
+           r.raw_data->>'VAT_Number1' AS vat_number
       FROM duplicate_records r
       LEFT JOIN deal_doc_compliance d ON d.zoho_deal_id = r.zoho_record_id
      WHERE r.record_type = 'deal'
@@ -104,6 +109,8 @@ export async function runDealDocComplianceSweep(
   const deals = (due.rows as any[]).map((r) => ({
     id: String(r.id),
     stage: String(r.stage || ""),
+    crNumber: r.cr_number ?? null,
+    vatNumber: r.vat_number ?? null,
   }));
 
   const out: DealDocSweepResult = {
@@ -124,7 +131,10 @@ export async function runDealDocComplianceSweep(
       const d = deals[cursor++];
       try {
         const atts = await fetchRecordAttachments("Deals", d.id);
-        const r = evaluateDocCompliance(d.stage, atts);
+        const r = evaluateDocCompliance(d.stage, atts, {
+          crNumber: d.crNumber,
+          vatNumber: d.vatNumber,
+        });
         await upsertDealDocCompliance({
           zohoDealId: d.id,
           stage: d.stage,
