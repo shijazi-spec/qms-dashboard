@@ -519,6 +519,164 @@ const CERTIFICATION_ACTIONS_SELECT = `
     FROM certification_actions
 `;
 
+// ───────────────────────── Milestone authoring helpers ─────────────────────
+//
+// The GRC manager owns the certification plan; before this the rows came only
+// from a code seeder and the single write a person could reach was marking an
+// action done. The page therefore reported gaps (NCA-DCC / NCA-ECC with no
+// delivering milestone, SOC 2 with no target date) that nobody could close
+// without a deployment.
+
+/** Governance write roles. `executive` may toggle actions but not author the plan. */
+const MILESTONE_WRITE_ROLES = [
+  "admin",
+  "head_of_operations_quality",
+  "grc_manager",
+  "quality_manager",
+];
+
+async function milestoneWriteGate(c: any) {
+  const { requireRole, getSessionUser, unauthorizedResponse, forbiddenResponse } =
+    await import("../../utils/rbacMiddleware");
+  const user = await requireRole(c, MILESTONE_WRITE_ROLES as any);
+  if (!user) {
+    if (!getSessionUser(c)) return { error: unauthorizedResponse(c), user: null };
+    return {
+      error: forbiddenResponse(c, "Permission denied for certification milestones"),
+      user: null,
+    };
+  }
+  return { error: null, user };
+}
+
+const MILESTONE_TYPES = new Set(["plan", "dependency", "support"]);
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+interface MilestoneFields {
+  certification: string | null;
+  milestone_name: string | null;
+  planned_date: string | null;
+  owner: string | null;
+  notes: string | null;
+  milestone_type: string | null;
+  regulation_code: string | null;
+  clear_planned_date: boolean;
+  clear_owner: boolean;
+  clear_notes: boolean;
+}
+
+/**
+ * Normalise and validate the editable fields.
+ *
+ * Absent means "leave unchanged"; an empty string means "clear this". Those are
+ * different intentions and collapsing them would let a form that posts only the
+ * target date silently blank the owner, so they travel as separate flags.
+ *
+ * delivered_date and status are absent by design: delivered_date is derived
+ * from the milestone's actions and "never written directly by any endpoint"
+ * (see the action toggle), and status is moved only by the retire endpoint.
+ */
+function parseMilestoneInput(
+  body: any,
+  opts: { requireName: boolean },
+): { value: MilestoneFields } | { error: string } {
+  const str = (v: any, max: number): string | null => {
+    if (v === undefined || v === null) return null;
+    const t = String(v).trim();
+    return t ? t.slice(0, max) : null;
+  };
+  const cleared = (v: any) =>
+    v !== undefined && v !== null && String(v).trim() === "";
+
+  const milestone_name = str(body?.milestone_name, 255);
+  if (opts.requireName && !milestone_name)
+    return { error: "milestone_name is required" };
+
+  const certification = str(body?.certification, 100);
+  if (opts.requireName && !certification)
+    return { error: "certification is required" };
+
+  const planned_date = str(body?.planned_date, 10);
+  if (planned_date && !ISO_DATE.test(planned_date))
+    return { error: "planned_date must be YYYY-MM-DD" };
+
+  const milestone_type = str(body?.milestone_type, 20);
+  if (milestone_type && !MILESTONE_TYPES.has(milestone_type))
+    return {
+      error: `milestone_type must be one of ${[...MILESTONE_TYPES].join(", ")}`,
+    };
+
+  return {
+    value: {
+      certification,
+      milestone_name,
+      planned_date,
+      owner: str(body?.owner, 255),
+      notes: str(body?.notes, 4000),
+      // A created milestone defaults to 'plan' — the section that scores
+      // GRC-KPI-002 — because that is what someone adding a certification
+      // milestone means. An edit sends null here and keeps what is stored.
+      milestone_type: milestone_type ?? (opts.requireName ? "plan" : null),
+      regulation_code: str(body?.regulation_code, 50),
+      clear_planned_date: cleared(body?.planned_date),
+      clear_owner: cleared(body?.owner),
+      clear_notes: cleared(body?.notes),
+    },
+  };
+}
+
+/** regulation_code → regulations.id. Returns null when unset or unknown. */
+async function resolveRegulationId(code: string | null): Promise<number | null> {
+  if (!code) return null;
+  const r = await pool.query(
+    `SELECT id FROM regulations WHERE regulation_code = $1`,
+    [code],
+  );
+  return r.rows.length ? Number(r.rows[0].id) : null;
+}
+
+/**
+ * Generate the milestone_key.
+ *
+ * MANDATORY, not cosmetic: the roadmap query filters
+ * `WHERE cm.milestone_key IS NOT NULL`, so a row created without one inserts
+ * happily and is then invisible on the page. The USR- prefix keeps authored
+ * rows distinguishable from seeded ones for good, and `attempt` walks a suffix
+ * when the unique index rejects a collision.
+ */
+function milestoneKeyFor(name: string | null, attempt: number): string {
+  const slug = String(name || "milestone")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60) || "MILESTONE";
+  return attempt === 0 ? `USR-${slug}` : `USR-${slug}-${attempt + 1}`;
+}
+
+async function auditMilestone(
+  c: any,
+  user: any,
+  actionType: "CREATE" | "UPDATE",
+  key: string,
+  description: string,
+): Promise<void> {
+  try {
+    const { logEvent } = await import("../../utils/eventLogsDatabase");
+    await logEvent({
+      actionType: actionType as any,
+      entityType: "SYSTEM" as any,
+      entityName: "certification_milestones",
+      entityId: key as any,
+      description,
+      module: "compliance" as any,
+      severity: "INFO" as any,
+      userEmail: user?.email,
+    });
+  } catch {
+    /* never block the write on the audit log */
+  }
+}
+
 export const certificationMilestoneRoutes = [
   {
     path: "/api/certification-milestones",
@@ -551,7 +709,12 @@ export const certificationMilestoneRoutes = [
              FROM certification_milestones cm
              LEFT JOIN regulations reg ON reg.id = cm.regulation_id
             WHERE cm.milestone_key IS NOT NULL
+              -- Retired milestones are hidden from the plan but still
+              -- retrievable, so the UI can offer "restore" rather than the row
+              -- simply vanishing with no way back.
+              AND ($1::boolean OR COALESCE(cm.status, '') <> 'retired')
             ORDER BY cm.planned_date NULLS LAST, cm.milestone_key`,
+          [String(c.req.query("include_retired") || "") === "1"],
         );
 
         const all = r.rows as unknown as RoadmapRow[];
@@ -727,6 +890,189 @@ export const certificationMilestoneRoutes = [
           error,
         );
         return c.json({ error: "Failed to toggle certification action" }, 500);
+      }
+    },
+  },
+  // ── Milestone authoring ────────────────────────────────────────────────
+  // Three invariants, each learned from the surrounding code:
+  //   1. milestone_key is mandatory or the row is invisible (roadmap filter).
+  //   2. delivered_date is derived from actions — not editable here.
+  //   3. Retiring must leave GRC-KPI-002's scope, or a retired milestone keeps
+  //      counting as due forever.
+  // The seeder cannot undo any of this: it inserts ON CONFLICT DO NOTHING and
+  // backfills only NULL columns.
+  {
+    path: "/api/certification-milestones",
+    method: "POST" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const g = await milestoneWriteGate(c);
+        if (g.error) return g.error;
+
+        const body = await c.req.json().catch(() => ({}));
+        const parsed = parseMilestoneInput(body, { requireName: true });
+        if ("error" in parsed) return c.json({ error: parsed.error }, 400);
+        const f = parsed.value;
+
+        const regulationId = await resolveRegulationId(f.regulation_code);
+        if (f.regulation_code && regulationId === null)
+          return c.json(
+            { error: `Unknown regulation_code: ${f.regulation_code}` },
+            400,
+          );
+
+        // Retry against the unique index rather than pre-checking: a
+        // SELECT-then-INSERT races another author, and the index is the only
+        // real authority on whether a key is free.
+        let created: any = null;
+        for (let attempt = 0; attempt < 6 && !created; attempt++) {
+          const key = milestoneKeyFor(f.milestone_name, attempt);
+          try {
+            const r = await pool.query(
+              `INSERT INTO certification_milestones
+                 (milestone_key, milestone_type, certification, regulation_id,
+                  milestone_name, planned_date, status, owner, notes,
+                  plan_version, source_doc)
+               VALUES ($1,$2,$3,$4,$5,$6,'planned',$7,$8,$9,$10)
+               RETURNING milestone_key`,
+              [
+                key,
+                f.milestone_type,
+                f.certification,
+                regulationId,
+                f.milestone_name,
+                f.planned_date,
+                f.owner,
+                f.notes,
+                PLAN_VERSION,
+                SOURCE_DOC,
+              ],
+            );
+            created = r.rows[0];
+          } catch (err: any) {
+            if (err?.code === "23505") continue;
+            throw err;
+          }
+        }
+        if (!created)
+          return c.json(
+            { error: "Could not allocate a unique milestone key — rename it" },
+            409,
+          );
+
+        await auditMilestone(
+          c, g.user, "CREATE", created.milestone_key,
+          `Milestone created: ${f.milestone_name} (${f.certification})`,
+        );
+        return c.json({ success: true, milestone_key: created.milestone_key });
+      } catch (error) {
+        safeLogger.error("❌ [CertificationMilestones] create failed:", error);
+        return c.json({ error: "Failed to create milestone" }, 500);
+      }
+    },
+  },
+
+  {
+    path: "/api/certification-milestones/:milestone_key",
+    method: "PUT" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const g = await milestoneWriteGate(c);
+        if (g.error) return g.error;
+
+        const key = String(c.req.param("milestone_key") || "").trim();
+        if (!key) return c.json({ error: "milestone_key is required" }, 400);
+
+        const body = await c.req.json().catch(() => ({}));
+        const parsed = parseMilestoneInput(body, { requireName: false });
+        if ("error" in parsed) return c.json({ error: parsed.error }, 400);
+        const f = parsed.value;
+
+        const regulationId = await resolveRegulationId(f.regulation_code);
+        if (f.regulation_code && regulationId === null)
+          return c.json(
+            { error: `Unknown regulation_code: ${f.regulation_code}` },
+            400,
+          );
+
+        // COALESCE keeps an omitted field as it was; the *_clear flags are the
+        // only way to blank one. Omission and clearing are different
+        // intentions and must not collapse into each other.
+        const r = await pool.query(
+          `UPDATE certification_milestones
+              SET certification  = COALESCE($2, certification),
+                  milestone_name = COALESCE($3, milestone_name),
+                  planned_date   = CASE WHEN $9  THEN NULL
+                                        ELSE COALESCE($4::date, planned_date) END,
+                  owner          = CASE WHEN $10 THEN NULL
+                                        ELSE COALESCE($5, owner) END,
+                  notes          = CASE WHEN $11 THEN NULL
+                                        ELSE COALESCE($6, notes) END,
+                  milestone_type = COALESCE($7, milestone_type),
+                  regulation_id  = COALESCE($8, regulation_id),
+                  updated_at     = NOW()
+            WHERE milestone_key = $1
+        RETURNING milestone_key`,
+          [
+            key,
+            f.certification,
+            f.milestone_name,
+            f.planned_date,
+            f.owner,
+            f.notes,
+            f.milestone_type,
+            regulationId,
+            f.clear_planned_date,
+            f.clear_owner,
+            f.clear_notes,
+          ],
+        );
+        if (r.rowCount === 0)
+          return c.json({ error: "Unknown milestone_key" }, 404);
+
+        await auditMilestone(c, g.user, "UPDATE", key, `Milestone edited: ${key}`);
+        return c.json({ success: true, milestone_key: key });
+      } catch (error) {
+        safeLogger.error("❌ [CertificationMilestones] update failed:", error);
+        return c.json({ error: "Failed to update milestone" }, 500);
+      }
+    },
+  },
+
+  {
+    path: "/api/certification-milestones/:milestone_key/retire",
+    method: "POST" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const g = await milestoneWriteGate(c);
+        if (g.error) return g.error;
+
+        const key = String(c.req.param("milestone_key") || "").trim();
+        if (!key) return c.json({ error: "milestone_key is required" }, 400);
+        const body = await c.req.json().catch(() => ({}));
+        const retire = body?.retired !== false;
+
+        // Hide, never delete. A milestone that was once in the plan is part of
+        // its history; an auditor asking "what changed and when" is better
+        // served by a retired row than by a missing one.
+        const r = await pool.query(
+          `UPDATE certification_milestones
+              SET status = $2, updated_at = NOW()
+            WHERE milestone_key = $1
+        RETURNING milestone_key, status`,
+          [key, retire ? "retired" : "planned"],
+        );
+        if (r.rowCount === 0)
+          return c.json({ error: "Unknown milestone_key" }, 404);
+
+        await auditMilestone(
+          c, g.user, "UPDATE", key,
+          `Milestone ${retire ? "retired" : "restored"}: ${key}`,
+        );
+        return c.json({ success: true, ...r.rows[0] });
+      } catch (error) {
+        safeLogger.error("❌ [CertificationMilestones] retire failed:", error);
+        return c.json({ error: "Failed to retire milestone" }, 500);
       }
     },
   },

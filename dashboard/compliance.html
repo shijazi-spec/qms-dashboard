@@ -178,10 +178,16 @@
                         <p class="text-xs text-gray-500 mt-0.5" id="certProvenance">—</p>
                         <p class="text-xs text-gray-400 mt-0.5" id="certPreparer"></p>
                     </div>
+                    <div class="flex items-center gap-2">
+                    <button type="button" data-on-click="openMilestoneModal" class="px-3 py-1.5 bg-green-700 text-white rounded-lg hover:bg-green-800 text-xs font-medium flex items-center gap-1.5" data-testid="button-add-milestone" title="Add a milestone to the certification plan - e.g. a delivering milestone for NCA-DCC, or a target date for SOC 2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        <span data-i18n="compliance.ms_add">Add milestone</span>
+                    </button>
                     <button type="button" data-on-click="printCertPlan" class="px-3 py-1.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-xs font-medium flex items-center gap-1.5" data-testid="button-print-roadmap">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m10-10V5a2 2 0 00-2-2H9a2 2 0 00-2 2v2m10 0H7m10 0h2M7 17h10v4H7v-4z"/></svg>
                         <span data-i18n="compliance.roadmap_print">Print / PDF</span>
                     </button>
+                    </div>
                 </div>
 
                 <!-- Print-only header — hidden on screen, shown in @media print so the
@@ -487,6 +493,58 @@
                     <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700" data-i18n="compliance.ingest_start">Start Extraction</button>
                 </div>
                 <p id="ingestStandardMsg" class="text-sm"></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- ─── Certification milestone editor ───────────────────────────────────
+         The plan used to come only from a code seeder, so gaps the page itself
+         reported (a certificate with no delivering milestone, or no target
+         date) could not be closed without a deployment. delivered_date is
+         deliberately absent: it is derived from the milestone's actions. -->
+    <div id="milestoneModal" class="modal">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="text-lg font-semibold text-gray-900" id="milestoneModalTitle" data-i18n="compliance.ms_add">Add milestone</h3>
+                <button data-on-click="closeModal" data-args="[&quot;milestoneModal&quot;]" class="text-gray-400 hover:text-gray-600" aria-label="Close">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <form id="milestoneForm" data-on-submit="submitMilestone" data-pass-event="true" class="p-6 space-y-4">
+                <input type="hidden" name="milestone_key" id="msKey" value="">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.ms_f_certification">Certificate *</label>
+                        <input type="text" name="certification" id="msCertification" required class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., NCA-DCC">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.ms_f_target">Target date</label>
+                        <input type="date" name="planned_date" id="msPlannedDate" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.ms_f_name">Milestone *</label>
+                    <input type="text" name="milestone_name" id="msName" required maxlength="255" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., NCA-DCC gap assessment complete">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.ms_f_owner">Owner</label>
+                        <input type="text" name="owner" id="msOwner" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., Maram">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.ms_f_framework">Framework code</label>
+                        <input type="text" name="regulation_code" id="msRegCode" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="e.g., NCA-DCC">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="compliance.ms_f_notes">Notes</label>
+                    <textarea name="notes" id="msNotes" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2"></textarea>
+                </div>
+                <p class="text-xs text-gray-500" data-i18n="compliance.ms_delivered_note">Delivery date is not set here - a milestone is marked delivered automatically when all of its actions are ticked.</p>
+                <div class="flex justify-end gap-3 pt-4 border-t">
+                    <button type="button" data-on-click="closeModal" data-args="[&quot;milestoneModal&quot;]" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50" data-i18n="common.cancel">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800" data-i18n="common.save">Save</button>
+                </div>
             </form>
         </div>
     </div>
@@ -904,8 +962,97 @@
             return { cls: 'bg-gray-100 text-gray-600', label: _ct('compliance.cert_state_not_started', 'Not started') };
         }
 
+        // ── Certification milestone authoring ────────────────────────────────
+        // Maram owns the plan: before this the rows came from a code seeder and
+        // the only reachable write was ticking an action, so the gaps the page
+        // reported could not be closed without a deployment.
+        var _msCache = {};
+
+        function openMilestoneModal(key) {
+            var editing = typeof key === 'string' && key;
+            var m = editing ? (_msCache[key] || {}) : {};
+            var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = v || ''; };
+            set('msKey', editing ? key : '');
+            set('msCertification', m.certification);
+            set('msPlannedDate', m.planned_date);
+            set('msName', m.milestone_name);
+            set('msOwner', m.owner);
+            set('msRegCode', m.regulation_code);
+            set('msNotes', m.notes);
+            var t = document.getElementById('milestoneModalTitle');
+            if (t) t.textContent = _ct(editing ? 'compliance.ms_edit' : 'compliance.ms_add',
+                                       editing ? 'Edit milestone' : 'Add milestone');
+            var modal = document.getElementById('milestoneModal');
+            if (modal) modal.classList.add('active');
+        }
+
+        async function submitMilestone(ev) {
+            if (ev && ev.preventDefault) ev.preventDefault();
+            var form = document.getElementById('milestoneForm');
+            if (!form) return;
+            var fd = new FormData(form);
+            var key = String(fd.get('milestone_key') || '').trim();
+            // Send every field on an edit, including the empty ones: the API
+            // reads "" as "clear this" and absent as "leave unchanged", so
+            // omitting a blanked field would silently keep the old value.
+            var payload = {
+                certification: String(fd.get('certification') || '').trim(),
+                milestone_name: String(fd.get('milestone_name') || '').trim(),
+                planned_date: String(fd.get('planned_date') || '').trim(),
+                owner: String(fd.get('owner') || '').trim(),
+                regulation_code: String(fd.get('regulation_code') || '').trim(),
+                notes: String(fd.get('notes') || '').trim()
+            };
+            try {
+                var url = key
+                    ? '/api/certification-milestones/' + encodeURIComponent(key)
+                    : '/api/certification-milestones';
+                var res = await fetch(url, {
+                    method: key ? 'PUT' : 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                var d = await res.json().catch(function () { return {}; });
+                if (!res.ok) {
+                    alert(_ct('compliance.ms_save_error', 'Could not save the milestone') + (d.error ? ': ' + d.error : ''));
+                    return;
+                }
+                var modal = document.getElementById('milestoneModal');
+                if (modal) modal.classList.remove('active');
+                await loadMilestones();
+            } catch (e) {
+                alert(_ct('compliance.ms_save_error', 'Could not save the milestone') + ': ' + e.message);
+            }
+        }
+
+        async function retireMilestone(key) {
+            if (!key) return;
+            if (!confirm(_ct('compliance.ms_retire_confirm',
+                'Retire this milestone? It is hidden from the plan and stops counting towards the delivery KPI, but is kept for the audit trail.'))) return;
+            try {
+                var res = await fetch('/api/certification-milestones/' + encodeURIComponent(key) + '/retire', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ retired: true })
+                });
+                var d = await res.json().catch(function () { return {}; });
+                if (!res.ok) {
+                    alert(_ct('compliance.ms_retire_error', 'Could not retire the milestone') + (d.error ? ': ' + d.error : ''));
+                    return;
+                }
+                await loadMilestones();
+            } catch (e) {
+                alert(_ct('compliance.ms_retire_error', 'Could not retire the milestone') + ': ' + e.message);
+            }
+        }
+
         function _certGroupHtml(m, actionsByMilestone, progressByMilestone, todayStr) {
             const mk = m.milestone_key;
+            // Cache the row so the editor opens pre-filled without a second
+            // fetch - the roadmap payload already carries every editable field.
+            _msCache[mk] = m;
             const actions = actionsByMilestone[mk] || [];
             const progress = progressByMilestone[mk] || { done: 0, total: actions.length, complete: false };
             const state = _certGroupState(progress, m.planned_date, todayStr);
@@ -931,7 +1078,14 @@
                 + '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium ' + state.cls + '">' + escAttr(state.label) + '</span>'
                 + '<span class="text-xs text-gray-500 font-medium shrink-0">' + escAttr(progress.done) + ' / ' + escAttr(progress.total) + '</span>'
                 + '</button>'
-                + '<div class="px-3 pb-2" id="' + bodyId + '">' + rowsHtml + '</div>'
+                + '<div class="px-3 pb-2" id="' + bodyId + '">'
+                + '<div class="flex items-center gap-3 pb-2 mb-2 border-b border-gray-100">'
+                + '<button type="button" data-on-click="openMilestoneModal" data-args="[&quot;' + safeMk + '&quot;]" class="text-xs text-emerald-700 hover:underline font-medium" data-testid="button-edit-ms-' + safeMk + '">'
+                + escAttr(_ct('compliance.ms_edit', 'Edit milestone')) + '</button>'
+                + '<button type="button" data-on-click="retireMilestone" data-args="[&quot;' + safeMk + '&quot;]" class="text-xs text-red-600 hover:underline font-medium" data-testid="button-retire-ms-' + safeMk + '">'
+                + escAttr(_ct('compliance.ms_retire', 'Retire')) + '</button>'
+                + '</div>'
+                + rowsHtml + '</div>'
                 + '</div>';
         }
 

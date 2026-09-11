@@ -593,7 +593,11 @@ export async function calcCertMilestoneDelivery() {
             status
        FROM certification_milestones
       WHERE milestone_type = 'plan'
-        AND planned_date IS NOT NULL`,
+        AND planned_date IS NOT NULL
+        -- A retired milestone is out of the plan, so it is not "due". Without
+        -- this it keeps counting in the denominator and can never be
+        -- delivered, quietly depressing GRC-KPI-002 forever.
+        AND COALESCE(status, '') <> 'retired'`,
   );
   const now = new Date();
   const qStart = new Date(Date.UTC(now.getUTCFullYear(), Math.floor(now.getUTCMonth() / 3) * 3, 1));

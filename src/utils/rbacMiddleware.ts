@@ -741,6 +741,20 @@ const ROUTE_PERMISSION_MAP: RoutePermissionRule[] = [
     methods: ["GET"],
     roles: ["admin", "head_of_operations_quality", "grc_manager", "quality_manager", "executive"],
   },
+  // Milestone authoring — create / edit / retire. The comment above is no
+  // longer true: the endpoint DOES have sub-resources now, so these patterns
+  // match the subtree. `executive` is deliberately absent — they may read the
+  // plan and toggle an action, but not rewrite what the plan is.
+  {
+    pattern: /^\/api\/certification-milestones$/,
+    methods: ["POST"],
+    roles: ["admin", "head_of_operations_quality", "grc_manager", "quality_manager"],
+  },
+  {
+    pattern: /^\/api\/certification-milestones\/[^/]+(\/retire)?$/,
+    methods: ["PUT", "POST"],
+    roles: ["admin", "head_of_operations_quality", "grc_manager", "quality_manager"],
+  },
   // The one write path on the certification action plan — toggles a single
   // MANUAL action's done_at/done_by (the route itself refuses to toggle an
   // `auto` action with a 409). `:action_key` is a path segment, so the

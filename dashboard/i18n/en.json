@@ -2259,7 +2259,20 @@
     "import_apply": "Apply to Obligations",
     "select_regulation": "Select regulation",
     "total_obligations": "Total Obligations",
-    "roadmap_readiness_subtitle": "Milestones delivered against the target dates in this plan. Progress here is delivery against the plan, not a compliance score."
+    "roadmap_readiness_subtitle": "Milestones delivered against the target dates in this plan. Progress here is delivery against the plan, not a compliance score.",
+    "ms_add": "Add milestone",
+    "ms_edit": "Edit milestone",
+    "ms_retire": "Retire",
+    "ms_retire_confirm": "Retire this milestone? It is hidden from the plan and stops counting towards the delivery KPI, but is kept for the audit trail.",
+    "ms_retire_error": "Could not retire the milestone",
+    "ms_save_error": "Could not save the milestone",
+    "ms_f_certification": "Certificate *",
+    "ms_f_target": "Target date",
+    "ms_f_name": "Milestone *",
+    "ms_f_owner": "Owner",
+    "ms_f_framework": "Framework code",
+    "ms_f_notes": "Notes",
+    "ms_delivered_note": "Delivery date is not set here — a milestone is marked delivered automatically when all of its actions are ticked."
   },
   "audit_readiness": {
     "title": "Audit Readiness",
