@@ -160,7 +160,7 @@ await suite.test("slack block payload renders 4 digest sections", async () => {
   suite.expect(textBlob.includes("All Finding Types"), "contains all finding types section");
 });
 
-await suite.test("fanout isolates channel failures (email fail, slack skipped)", async () => {
+await suite.test("fanout reports each channel independently (both skipped, neither failed)", async () => {
   const oldDigestEmail = process.env.QUALITY_DIGEST_EMAIL;
   const oldAdminEmail = process.env.ADMIN_EMAIL;
   const oldSlackToken = process.env.SLACK_BOT_TOKEN;
@@ -178,7 +178,20 @@ await suite.test("fanout isolates channel failures (email fail, slack skipped)",
       now: new Date("2026-05-07T14:00:00.000Z"),
       enforceIdempotency: false,
     });
-    suite.expectEqual(result.email.success, false, "email fails without recipient");
+    // Email with no recipient is a SKIP, not a failure. Slack is the push
+    // channel; the email is a template a person sends by hand, so an unset
+    // QUALITY_DIGEST_EMAIL / ADMIN_EMAIL is the normal state and must not
+    // record a failed run — it did, on every run from 2026-05-08 onward, and
+    // kept getDigestDeliveryHealth permanently red for a channel nobody
+    // automated. The method string is asserted too, so a future change cannot
+    // turn this into a silent success for some other reason.
+    suite.expectEqual(result.email.success, true, "email skips cleanly without a recipient");
+    suite.expectEqual(result.email.skipped, true, "email reports skipped, not failed");
+    suite.expectEqual(
+      result.email.method,
+      "email-no-recipient",
+      "email skip names its reason",
+    );
     suite.expectEqual(result.slack.success, true, "slack branch returns success when skipped");
     suite.expectEqual(result.slack.skipped, true, "slack skipped without creds");
   } finally {
