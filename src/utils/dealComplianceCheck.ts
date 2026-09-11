@@ -87,7 +87,20 @@ const DOC_QUOTATION_AGREEMENT: RequiredDoc = {
   // agreement, under the abbreviation the business uses. "inv" likewise:
   // invoices arrive as "INV-26124340.pdf", which "invoice" does not match.
   // Word-bounded so they cannot fire inside a longer word.
-  match: /quotation|quote|\bp\.?o\.?\b|purchase\s*order|invoice|\binv[\s._-]?\d|\bmsa\b|\bsow\b|service\s*agreement|agreement|contract|اتفاقية|عقد|اتفاق|فاتورة|عرض\s*سعر|أمر\s*شراء/i,
+  // 2026-09-12 — the first run of the unmatched-filename capture named what we
+  // had been failing to read on Ziad's signed deals. Every addition below is a
+  // real document seen in that list, not a speculative pattern:
+  //
+  //   agreemnt / aggrement — "Agreemnt - ACE Gallagher Arabia Insurance
+  //     Brokers.pdf", "WalaPlus Aggrement- Signed.pdf". The same word the rule
+  //     already names, spelled as the business spells it under time pressure.
+  //   \bqt\b — "QT - Drsulaimanalhabib.pdf", "Qt suشركة المنطقة الخاصة.pdf".
+  //     Word-bounded so it cannot fire inside "quantity" or a random token.
+  //   \bagr\b|agr\d — "PA_KFUPM-2025-AGR98_0.pdf".
+  //   a?po[-_\s]?\d — "3-APO-2500241.pdf". The existing \bp\.?o\.?\b cannot
+  //     fire inside "APO", and requiring a following number keeps it from
+  //     matching ordinary words.
+  match: /quotation|quote|\bqt\b|\bp\.?o\.?\b|a?po[-_\s]?\d|purchase\s*order|invoice|\binv[\s._-]?\d|\bmsa\b|\bsow\b|\bagr\b|agr\d|service\s*agreement|agreement|agreemnt|aggrement|contract|اتفاقية|عقد|اتفاق|فاتورة|عرض\s*سعر|أمر\s*شراء/i,
 };
 const DOC_VAT: RequiredDoc = {
   key: "vat",
@@ -276,15 +289,21 @@ export function evaluateDocCompliance(
     }
     missing.push({ key: doc.key, label: doc.label });
   }
-  // Every attachment that satisfied no requirement. A file that matched one
-  // document is counted as matched even if another requirement also wanted it —
-  // the question here is "did we understand this file at all", not "how many
-  // boxes did it tick".
+  // Every attachment that satisfied no requirement — meaning NO required
+  // document's pattern recognises it.
+  //
+  // This asked `!matched.has(n)` until 2026-09-12, where `matched` held only
+  // the FIRST file chosen to satisfy each requirement. A deal with two
+  // contracts, or a PO beside an invoice, reported the second one as
+  // unreadable — and the first live run duly listed "Service Agreement -
+  // WalaPlus.pdf", "PO - ولاء بلس 2025.pdf" and "INV-006953.pdf" as files we
+  // could not classify, all of which match perfectly. Evidence gathered to
+  // settle an argument has to be right, or it just starts a new one.
   //
   // Deliberately NOT filtered to required.length > 0: a stage with no
   // requirements still tells us what the team attaches, which is exactly the
   // evidence needed to decide whether a requirement is realistic.
-  const unmatched = names.filter((n) => !matched.has(n));
+  const unmatched = names.filter((n) => !required.some((d) => d.match.test(n)));
   return {
     stage,
     required: required.length,

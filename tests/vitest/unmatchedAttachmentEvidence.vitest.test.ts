@@ -56,6 +56,20 @@ describe("unmatched attachment names", () => {
     expect(r.unmatchedFiles).toEqual(["random.txt"]);
   });
 
+  it("does not report a SECOND recognisable file as unreadable", () => {
+    // The bug the first live run exposed (2026-09-12). Only one file can be
+    // the representative hit for a requirement; the rest were being reported
+    // as files we could not classify. Two contracts on one deal is normal —
+    // a draft and a signed copy — and neither is a mystery.
+    const r = evaluateDocCompliance("Agreement Signed", [
+      att("Service Agreement.pdf"),
+      att("Service Agreement - countersigned.pdf"),
+      att("PO - 2025.pdf"),
+      att("holiday photo.jpg"),
+    ]);
+    expect(r.unmatchedFiles).toEqual(["holiday photo.jpg"]);
+  });
+
   it("returns an empty list rather than undefined when nothing is attached", () => {
     const r = evaluateDocCompliance("Agreement Signed", []);
     expect(r.unmatchedFiles).toEqual([]);
