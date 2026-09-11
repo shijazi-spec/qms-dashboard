@@ -2312,11 +2312,30 @@ export async function sendDigestEmail(
   const data = await generateDigestData({ cadence, window, now: options.now });
   const html = buildDigestHTML(data);
 
+  // No recipient configured is a SKIP, not a failure (Sarah, 2026-09-12).
+  //
+  // Slack is the push channel for this digest; the email exists as a TEMPLATE
+  // that a person sends by hand once they have looked at the report — the same
+  // preview-first shape the Quality Reports hub uses. Nobody has ever set
+  // QUALITY_DIGEST_EMAIL or ADMIN_EMAIL, so treating the absence as an error
+  // wrote a `status: failed` row on every single run since 2026-05-08 and
+  // dragged getDigestDeliveryHealth down with it — a red mark for a channel
+  // that is deliberately not automated.
+  //
+  // The HTML is still built above and returned, so the template stays usable:
+  // an operator supplying a recipient still sends normally through this same
+  // function, and `preview` still renders it.
   const recipientEmail = process.env.QUALITY_DIGEST_EMAIL || process.env.ADMIN_EMAIL;
   if (!recipientEmail) {
-    const error = "No recipient email configured (QUALITY_DIGEST_EMAIL or ADMIN_EMAIL)";
-    await recordDigestRun({ runKey, cadence, channel: "email", window, status: "failed", error });
-    return { success: false, error, runKey, cadence };
+    return {
+      success: true,
+      skipped: true,
+      method: "email-no-recipient",
+      runKey,
+      cadence,
+      windowStart: window.start.toISOString(),
+      windowEnd: window.end.toISOString(),
+    };
   }
 
   try {
