@@ -340,6 +340,200 @@ export function groupSplitAccountConflicts(
   );
 }
 
+/* ── The whole-book sweep ─────────────────────────────────────────────────── */
+
+export type SplitCompanyClass = "active_conflict" | "merge_needed";
+
+export interface SplitCompany {
+  company: string;
+  signal: SplitAccountSignal;
+  /** active_conflict — two or more of these accounts carry an OPEN deal right
+   *  now, so two sellers are working one client and no tab shows it.
+   *  merge_needed — the split exists but has not produced a conflict yet. */
+  classification: SplitCompanyClass;
+  accounts: Array<{
+    account_id: string;
+    account_name: string;
+    domain: string | null;
+    open_deals: SplitAccountDeal[];
+    total_deals: number;
+  }>;
+  account_count: number;
+  open_deals: number;
+  distinct_owners: number;
+  owners: string[];
+  total_open_value: number;
+}
+
+/**
+ * EVERY company in the sales book that is split across two or more Account
+ * records — whether or not it has already caused a deal conflict.
+ *
+ * Sarah 2026-09-11, after finding الفران: two open Proposals, two owners, two
+ * Account records, and NOTHING flagged it. Active Deal Conflicts asks "which
+ * ACCOUNT has more than one open deal" and each had exactly one. Account
+ * Duplicates never clustered them either — neither record carries a domain and
+ * the names differ ("الفران" vs "شركة الفران العربية"). The company was
+ * invisible to both tabs at once.
+ *
+ * So this sweeps the whole book rather than only the accounts already in
+ * conflict, and splits the result in two:
+ *
+ *   active_conflict — fix NOW. Two sellers on one client today.
+ *   merge_needed    — fix BEFORE it bites. One account is dormant, but the
+ *                     next deal logged against the wrong record recreates the
+ *                     same invisible conflict.
+ *
+ * SCOPE: accounts that carry at least one deal on this layout. A company with
+ * no deal at all is an Account Duplicates question, not a sales one, and
+ * including them would bury the rows that matter under dormant records.
+ */
+export async function getSplitAccountCompanies(
+  segment: DuplicateFilters["segment"],
+): Promise<{
+  segment: string;
+  companies: SplitCompany[];
+  accounts_scanned: number;
+  active_conflicts: number;
+  merge_needed: number;
+}> {
+  const seg = !segment || segment === "corporate" ? "walaplus" : segment;
+  const p1 = buildSegmentPredicate(seg, 1);
+  const segCond1 = p1.condition ? " AND " + p1.condition : "";
+
+  // Every account this layout's deals point at, with its name and domain, and
+  // how many deals it holds in total — one row per account, bounded by the
+  // sales book rather than the whole Accounts module.
+  const res = await pool.query(
+    `WITH deal_accounts AS (
+       SELECT NULLIF(BTRIM(r.raw_data->'Account_Name'->>'id'), '') AS account_id,
+              COUNT(*)::int AS total_deals
+         FROM duplicate_records r
+        WHERE r.record_type = 'deal'${segCond1}
+          AND NULLIF(BTRIM(r.raw_data->'Account_Name'->>'id'), '') IS NOT NULL
+        GROUP BY 1
+     )
+     SELECT da.account_id,
+            da.total_deals,
+            COALESCE(NULLIF(BTRIM(a.record_name), ''), da.account_id) AS account_name,
+            COALESCE(NULLIF(BTRIM(a.domain), ''), NULLIF(BTRIM(a.website), '')) AS domain
+       FROM deal_accounts da
+       LEFT JOIN duplicate_records a
+              ON a.record_type = 'account' AND a.zoho_record_id = da.account_id`,
+    [...p1.params],
+  );
+
+  // The OPEN deals, keyed by account — same predicate as every other tab.
+  const p2 = buildSegmentPredicate(seg, 1);
+  const segCond2 = p2.condition ? " AND " + p2.condition : "";
+  const dres = await pool.query(
+    `SELECT NULLIF(BTRIM(r.raw_data->'Account_Name'->>'id'), '') AS account_id,
+            r.zoho_record_id AS id,
+            COALESCE(NULLIF(BTRIM(r.record_name),''), r.zoho_record_id) AS name,
+            COALESCE(NULLIF(BTRIM(r.stage),''), r.raw_data->>'Stage', '') AS stage,
+            COALESCE(NULLIF(BTRIM(r.owner_name),''), NULLIF(BTRIM(r.owner_email),''), 'Unassigned') AS owner,
+            COALESCE(r.deal_value, 0)::float AS amount,
+            COALESCE(NULLIF(BTRIM(r.layout_name), ''), '') AS layout,
+            r.created_date AS created
+       FROM duplicate_records r
+      WHERE r.record_type = 'deal'
+        AND (${openStagePredicate("r")})${segCond2}
+        AND NULLIF(BTRIM(r.raw_data->'Account_Name'->>'id'), '') IS NOT NULL`,
+    [...p2.params],
+  );
+
+  const openByAccount = new Map<string, SplitAccountDeal[]>();
+  for (const d of dres.rows as any[]) {
+    const k = String(d.account_id);
+    const list = openByAccount.get(k) || [];
+    list.push({
+      id: String(d.id),
+      name: String(d.name || ""),
+      stage: String(d.stage || ""),
+      owner: String(d.owner || ""),
+      amount: Number(d.amount) || 0,
+      layout: String(d.layout || ""),
+      created: d.created ? String(d.created) : null,
+    });
+    openByAccount.set(k, list);
+  }
+
+  // Reuse the grouping by handing every account a deal list. The pure function
+  // drops deal-less accounts and groups holding fewer than two deals, so a
+  // dormant half of a split gets one PLACEHOLDER to keep it in the running.
+  // The id must be unique per account: the grouper de-duplicates deals by id,
+  // and a shared placeholder id would collapse two dormant accounts into one
+  // and silently drop the group. Placeholders never reach the output — every
+  // deal below is read from openByAccount, not from the group.
+  const placeholder = (accountId: string): SplitAccountDeal => ({
+    id: `__no_open_deal__:${accountId}`,
+    name: "", stage: "", owner: "", amount: 0, layout: "", created: null,
+  });
+  const meta = new Map<string, { total_deals: number; domain: string | null }>();
+  const sides: SplitAccountSide[] = (res.rows as any[]).map((r) => {
+    const id = String(r.account_id);
+    const domain = normalizeAccountDomain(r.domain);
+    meta.set(id, { total_deals: Number(r.total_deals) || 0, domain });
+    return {
+      account_id: id,
+      account_name: String(r.account_name || "").trim(),
+      domain,
+      deals: openByAccount.get(id) || [placeholder(id)],
+    };
+  });
+
+  // Pairs an operator dismissed as "not the same company" stay dismissed here
+  // too — sister companies should not come back through a second door.
+  const separatedPairs = await getSeparationPairKeySet();
+  const grouped = groupSplitAccountConflicts(sides, separatedPairs);
+
+  const companies: SplitCompany[] = [];
+  for (const g of grouped) {
+    const accounts = g.accounts.map((a) => {
+      const open = (openByAccount.get(a.account_id) || []).slice();
+      return {
+        account_id: a.account_id,
+        account_name: a.account_name,
+        domain: a.domain,
+        open_deals: open,
+        total_deals: meta.get(a.account_id)?.total_deals ?? 0,
+      };
+    });
+    const withOpen = accounts.filter((a) => a.open_deals.length > 0);
+    const allOpen = accounts.flatMap((a) => a.open_deals);
+    const owners = Array.from(new Set(allOpen.map((d) => d.owner).filter(Boolean)));
+    companies.push({
+      company: g.company,
+      signal: g.signal,
+      classification: withOpen.length >= 2 ? "active_conflict" : "merge_needed",
+      accounts,
+      account_count: accounts.length,
+      open_deals: allOpen.length,
+      distinct_owners: owners.length,
+      owners,
+      total_open_value: allOpen.reduce((n, d) => n + (Number(d.amount) || 0), 0),
+    });
+  }
+
+  // Conflicts first, then the biggest future problems.
+  const rank = { active_conflict: 1, merge_needed: 0 } as const;
+  companies.sort(
+    (a, b) =>
+      rank[b.classification] - rank[a.classification] ||
+      b.distinct_owners - a.distinct_owners ||
+      b.total_open_value - a.total_open_value ||
+      b.account_count - a.account_count,
+  );
+
+  return {
+    segment: seg,
+    companies,
+    accounts_scanned: sides.length,
+    active_conflicts: companies.filter((c) => c.classification === "active_conflict").length,
+    merge_needed: companies.filter((c) => c.classification === "merge_needed").length,
+  };
+}
+
 /**
  * Run the reverse check for one layout. Same layout scoping as the main tab —
  * an explicit segment is honoured, and the default is WalaPlus rather than

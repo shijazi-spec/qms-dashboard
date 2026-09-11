@@ -13929,6 +13929,83 @@ export const duplicateRadarRoutes = [
   },
 
   {
+    // WHOLE-BOOK SPLIT-COMPANY SWEEP (Sarah 2026-09-11, after الفران): every
+    // company split across two or more Account records in the sales book,
+    // whether or not it has already produced a deal conflict. الفران had two
+    // open Proposals under two owners and was invisible to BOTH tabs — Active
+    // Deal Conflicts because each account held exactly one deal, and Account
+    // Duplicates because neither record carries a domain and the names differ.
+    // GET /api/duplicates/accounts/split-companies?segment=&format=csv
+    path: "/api/duplicates/accounts/split-companies",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const url = new URL(c.req.url);
+        const segment = (url.searchParams.get("segment") || "walaplus") as any;
+        const { getSplitAccountCompanies } = await import(
+          "../../utils/splitAccountDealConflicts"
+        );
+        const r = await getSplitAccountCompanies(segment);
+
+        if ((url.searchParams.get("format") || "").toLowerCase() === "csv") {
+          const esc = (v: any) => {
+            const s = v == null ? "" : String(v);
+            return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+          };
+          const header = [
+            "Priority", "Company", "Joined by", "Account", "Domain",
+            "Open deals on this account", "Total deals", "Owners", "Open value (SAR)",
+            "Zoho account ID", "Open account in Zoho",
+          ];
+          const body: string[] = [];
+          for (const co of r.companies) {
+            for (const a of co.accounts) {
+              body.push(
+                [
+                  co.classification === "active_conflict"
+                    ? "1 — ACTIVE CONFLICT (two sellers now)"
+                    : "2 — merge before it bites",
+                  co.company, co.signal, a.account_name, a.domain || "",
+                  a.open_deals.map((d) => `${d.stage} / ${d.owner}`).join(" ; "),
+                  a.total_deals, co.owners.join(" ; "),
+                  Math.round(co.total_open_value),
+                  a.account_id,
+                  `https://crm.zoho.com/crm/org766568398/tab/Accounts/${a.account_id}`,
+                ].map(esc).join(","),
+              );
+            }
+            body.push("");
+          }
+          const csv = "﻿" + [header.join(","), ...body].join("\r\n");
+          return new Response(csv, {
+            headers: {
+              "Content-Type": "text/csv; charset=utf-8",
+              "Content-Disposition": `attachment; filename="split-companies-${r.companies.length}.csv"`,
+            },
+          });
+        }
+
+        return c.json({
+          success: true,
+          segment: r.segment,
+          accounts_scanned: r.accounts_scanned,
+          companies_split: r.companies.length,
+          // Two different jobs: one is a live collision, the other is a trap
+          // waiting for the next deal to be logged against the wrong record.
+          active_conflicts: r.active_conflicts,
+          merge_needed: r.merge_needed,
+          companies: r.companies,
+        });
+      } catch (e: any) {
+        logger.error("accounts/split-companies failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+
+  {
     // CONTACT CLEANUP REPORT for the Zoho admin (Sarah 2026-09-11). Five
     // sheets, one per action, because mixing them is how activity history gets
     // deleted: a sheet headed "duplicate contacts" invites deleting all of
