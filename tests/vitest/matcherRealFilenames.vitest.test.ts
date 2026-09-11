@@ -39,6 +39,18 @@ describe("real filenames we were failing to read", () => {
     });
   }
 
+  it("reads an invoice whose name is prefixed with an underscore", () => {
+    // `_` is a word character, so `\binv` has NO boundary after it. Zoho's own
+    // invoice exports are named exactly this way and three were hidden by that
+    // single subtlety. Found in the full re-check, 2026-09-12.
+    expect(readsAsContract("310218493500003_20251202T134436_INV25-370163.pdf")).toBe(true);
+    expect(readsAsContract("310218493500003_20251224T124140_INV25-379995.pdf")).toBe(true);
+  });
+
+  it("reads an agreement named in Arabic for the act of signing", () => {
+    expect(readsAsContract("WalaPuls 2_0001(1)si (1) (1) بعد التوقيع.pdf")).toBe(true);
+  });
+
   it("still reads the spellings it always did", () => {
     for (const n of [
       "Service Agreement - WalaPlus.pdf",
@@ -49,6 +61,30 @@ describe("real filenames we were failing to read", () => {
     ]) {
       expect(readsAsContract(n), n).toBe(true);
     }
+  });
+});
+
+describe("proof-of-address is the National Address", () => {
+  const readsAsAddress = (name: string) =>
+    evaluateDocCompliance("Agreement Signed", [att(name)]).presentDocs.some(
+      (p) => p.key === "national_address",
+    );
+
+  it("reads the name the issuing service prints on it", () => {
+    // The worst-performing requirement in the set — 401 of 494 missing — so
+    // reading it correctly matters more here than anywhere else.
+    expect(readsAsAddress("proof-of-address (1).png")).toBe(true);
+    expect(readsAsAddress("14.08.2025 proof-of-address.pdf")).toBe(true);
+    expect(readsAsAddress("Proof Of Address.pdf")).toBe(true);
+  });
+
+  it("still reads the names it always did", () => {
+    expect(readsAsAddress("National Address.pdf")).toBe(true);
+    expect(readsAsAddress("العنوان الوطني.pdf")).toBe(true);
+  });
+
+  it("does not fire on an unrelated address", () => {
+    expect(readsAsAddress("email address list.xlsx")).toBe(false);
   });
 });
 

@@ -100,7 +100,16 @@ const DOC_QUOTATION_AGREEMENT: RequiredDoc = {
   //   a?po[-_\s]?\d — "3-APO-2500241.pdf". The existing \bp\.?o\.?\b cannot
   //     fire inside "APO", and requiring a following number keeps it from
   //     matching ordinary words.
-  match: /quotation|quote|\bqt\b|\bp\.?o\.?\b|a?po[-_\s]?\d|purchase\s*order|invoice|\binv[\s._-]?\d|\bmsa\b|\bsow\b|\bagr\b|agr\d|service\s*agreement|agreement|agreemnt|aggrement|contract|اتفاقية|عقد|اتفاق|فاتورة|عرض\s*سعر|أمر\s*شراء/i,
+  // 2026-09-12, full re-check: `\binv` cannot fire after an UNDERSCORE — `_` is
+  // a word character, so there is no boundary between it and "inv". Zoho's own
+  // invoice exports are named exactly that way
+  // ("310218493500003_20251202T134436_INV25-370163.pdf"), and three were hiding
+  // behind that single regex subtlety. `(?<![a-z])` keeps it out of real words
+  // while letting `_`, `-` and digits through.
+  //
+  // "بعد التوقيع" ("after signature") — "WalaPuls 2_0001 بعد التوقيع.pdf" is a
+  // countersigned agreement named in Arabic for the act rather than the object.
+  match: /quotation|quote|\bqt\b|\bp\.?o\.?\b|a?po[-_\s]?\d|purchase\s*order|invoice|(?<![a-z])inv[\s._-]?\d|\bmsa\b|\bsow\b|\bagr\b|agr\d|service\s*agreement|agreement|agreemnt|aggrement|contract|اتفاقية|عقد|اتفاق|فاتورة|بعد\s*التوقيع|عرض\s*سعر|أمر\s*شراء/i,
 };
 const DOC_VAT: RequiredDoc = {
   key: "vat",
@@ -115,7 +124,12 @@ const DOC_CR: RequiredDoc = {
 const DOC_NATIONAL_ADDRESS: RequiredDoc = {
   key: "national_address",
   label: "National Address",
-  match: /national\s*address|nat[\s_-]*address|عنوان\s*وطني|العنوان\s*الوطني/i,
+  // "proof-of-address" added 2026-09-12 from the full re-check of Ziad's book:
+  // "proof-of-address (1).png", "14.08.2025 proof-of-address.pdf". It is the
+  // same document under the name the issuing service prints on it, and this is
+  // the WORST-performing requirement (81% missing), so reading it correctly
+  // matters more here than anywhere else in the set.
+  match: /national\s*address|nat[\s_-]*address|proof[\s._-]*of[\s._-]*address|عنوان\s*وطني|العنوان\s*الوطني/i,
 };
 
 /** Required documents for a given deal stage. */
