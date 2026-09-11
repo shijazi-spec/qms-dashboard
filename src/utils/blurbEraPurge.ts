@@ -25,12 +25,24 @@
  * Clearing only the findings, or only the links, would leave one gate shut: the
  * re-map would appear to run and quietly map nothing. Both are cleared here.
  *
- * WHAT IS NEVER DELETED
- * ---------------------
- * Human links (link_method='manual', linked_by = a real email). A person's
- * deliberate mapping is not reproducible by re-running the AI, so it is counted
- * and reported instead — and the report says plainly that each survivor keeps
+ * WHAT IS NEVER DELETED — AND WHY THAT CURRENTLY MEANS THE LINKS
+ * --------------------------------------------------------------
+ * Links whose provenance is not demonstrably the AI. A person's deliberate
+ * mapping is not reproducible by re-running the AI, so it is counted and
+ * reported instead — and the report says plainly that each survivor keeps
  * gate 2 shut for its document × framework pair.
+ *
+ * The first live dry run (2026-09-11) showed what that means here: of 1044
+ * links, 1042 point at placeholder documents and NONE carry an AI marker —
+ * every one reads `linked_by = <a person's email>` with no link_method. The
+ * cause is /apply-mapping, which writes the acting user's email and lets
+ * link_method default to 'manual', so an AI suggestion accepted in bulk is
+ * indistinguishable in the row from one made by hand.
+ *
+ * So this module deliberately does NOT decide. `link_provenance` reports the
+ * distribution and a human chooses, because the two readings — months of real
+ * register mapping vs. a bulk AI apply under someone's identity — call for
+ * opposite actions and the database cannot tell them apart.
  *
  * SELF-HEALING AFTERWARDS — nothing else needs running
  * ----------------------------------------------------
@@ -140,6 +152,12 @@ export interface PurgeReport {
   labels: Record<string, string>;
   /** Human-made links inside the placeholder set — kept, never deleted. */
   preserved_manual_links: any[];
+  /**
+   * Every link to a placeholder document, grouped by how it was written.
+   * Read this before deciding whether the links are real human mapping intent
+   * or bulk AI application under a user's identity — the row cannot say which.
+   */
+  link_provenance: any[];
   /** Only populated when `includeRows` is set (the CLI's backup file). */
   rows?: Record<string, any[]>;
 }
@@ -192,6 +210,32 @@ export async function purgeBlurbEraMappings(
       ORDER BY od.id`,
   );
 
+  // Who actually made these links, aggregated — NOT a sample.
+  //
+  // The first live dry run returned links=0 / kept=1042: every link to a
+  // placeholder document carries a person's email and no link_method marker,
+  // so the AI_LINK predicate matched none of them. That is because
+  // /apply-mapping writes `linked_by = <the user's email>` and lets
+  // link_method default to 'manual' — an AI suggestion accepted in bulk is
+  // indistinguishable in the row from one made by hand.
+  //
+  // Deleting 1042 links attributed to a named colleague is not a decision to
+  // take on a guess about which of those two happened, so the preview reports
+  // the distribution and a human decides. `awaiting_review` is carried because
+  // a TRUE there is the one surviving fingerprint of an automated write.
+  const provenance = await pool.query(
+    `SELECT COALESCE(od.link_method, '(null)')      AS link_method,
+            COALESCE(od.linked_by, '(null)')        AS linked_by,
+            COALESCE(od.awaiting_review, FALSE)     AS awaiting_review,
+            COUNT(*)::int                           AS links,
+            MIN(od.linked_at)                       AS first_linked,
+            MAX(od.linked_at)                       AS last_linked
+       FROM obligation_documents od
+      WHERE od.document_id IN (${PLACEHOLDER_DOCS})
+      GROUP BY 1, 2, 3
+      ORDER BY links DESC`,
+  );
+
   const report: PurgeReport = {
     dry_run: dryRun,
     scope,
@@ -199,6 +243,7 @@ export async function purgeBlurbEraMappings(
     total: Object.values(counts).reduce((a, b) => a + b, 0),
     labels: PURGE_LABELS,
     preserved_manual_links: manual.rows,
+    link_provenance: provenance.rows,
   };
 
   if (opts.includeRows) {
