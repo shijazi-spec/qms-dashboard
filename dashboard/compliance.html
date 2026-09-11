@@ -980,8 +980,15 @@
             set('msRegCode', m.regulation_code);
             set('msNotes', m.notes);
             var t = document.getElementById('milestoneModalTitle');
-            if (t) t.textContent = _ct(editing ? 'compliance.ms_edit' : 'compliance.ms_add',
-                                       editing ? 'Edit milestone' : 'Add milestone');
+            // Two static calls rather than one call with a ternary key. The
+            // guardrail can only verify a key it can read literally, so the
+            // combined form left BOTH compliance.ms_edit and compliance.ms_add
+            // unchecked against en.json / ar.json — and would have needed a
+            // baseline entry asserting the key "cannot be made static", which
+            // is untrue here. Split, both keys are verified.
+            if (t) t.textContent = editing
+                ? _ct('compliance.ms_edit', 'Edit milestone')
+                : _ct('compliance.ms_add', 'Add milestone');
             var modal = document.getElementById('milestoneModal');
             if (modal) modal.classList.add('active');
         }
