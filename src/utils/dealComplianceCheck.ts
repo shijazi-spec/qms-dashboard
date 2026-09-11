@@ -29,7 +29,17 @@ export interface RequiredDoc {
  *  re-labelled for backdated/migrated deals that missed the data earlier, so
  *  it carries the SAME full-document requirement (see FULL_DOC_STAGES). The
  *  operator can widen/narrow this via the in-tab Stage filter. */
-export const DEAL_COMPLIANCE_STAGES = ["Proposal", "Agreement Signed", "Paid"] as const;
+export const DEAL_COMPLIANCE_STAGES = [
+  "Proposal",
+  // Added 2026-09-11 (Sarah): "agreement sent at least shall have the proposal
+  // that sent before, so it shall be checked too". 32 WalaPlus deals sit here
+  // — the agreement has gone out and is awaiting signature, which is the last
+  // cheap moment to get the paperwork straight. It requires ONE document, not
+  // the full five: see requiredDocsForStage.
+  "Agreement Sent",
+  "Agreement Signed",
+  "Paid",
+] as const;
 
 /** Closing/won stages that require the FULL document set (7.5.10). Covers the
  *  common Zoho variants so a selected closing stage still gets doc requirements.
@@ -38,7 +48,13 @@ const FULL_DOC_STAGES = [
   "paid",
   "agreement signed",
   "closed won",
-  "agreement sent",
+  // "agreement sent" REMOVED 2026-09-11. It was here, demanding all five —
+  // including a signed contract that cannot exist at a stage defined by the
+  // agreement being out for signature. Every one of the 32 deals there would
+  // have failed by definition. It was invisible only because the stage was
+  // missing from DEAL_COMPLIANCE_STAGES, so nothing was ever checked; adding
+  // the stage without this would have shipped the defect rather than the
+  // feature. See its own branch in requiredDocsForStage.
   "awaiting po",
   "client activated",
   "transferred to cs",
@@ -93,6 +109,16 @@ const DOC_NATIONAL_ADDRESS: RequiredDoc = {
 export function requiredDocsForStage(stage: string): RequiredDoc[] {
   const s = (stage || "").trim().toLowerCase();
   if (s === "proposal") return [DOC_FINANCIAL_OFFER];
+  // Agreement Sent — ONE document (Sarah, 2026-09-11): "agreement sent at
+  // least shall have the proposal that sent before". The agreement is out for
+  // signature, so the proposal that preceded it must exist; the signed
+  // contract and the client's statutory papers are not yet due under SOP
+  // 7.5.10, which requires the full set at Agreement Signed / Paid.
+  //
+  // Deliberately the SAME doc as the signed set's first requirement, so a deal
+  // moving Sent -> Signed keeps the document it already satisfied instead of
+  // appearing to lose it.
+  if (s === "agreement sent") return [DOC_PROPOSAL_SENT];
   if (FULL_DOC_STAGES.includes(s)) {
     // 5 required docs per Sales Governance v1.1 SOP 7.5.10.
     return [

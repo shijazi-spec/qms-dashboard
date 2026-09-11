@@ -168,10 +168,14 @@ describe("workbook shape", () => {
     // No "How to read this" sheet: it was deliberately removed (Sarah
     // 2026-09-03) and its text now lives in buildReportNotes() for the
     // covering email instead — see the notesOf() tests below.
+    // "Agreement Sent" joined the export on 2026-09-11 (Sarah): the agreement
+    // is out for signature and must already carry the proposal that preceded
+    // it. Sheets follow EXPORT_STAGES, so the order is pipeline order.
     expect(sheets.map((s) => s.name)).toEqual([
       "Summary",
       "By owner",
       "Proposal",
+      "Agreement Sent",
       "Agreement Signed",
       "Paid",
     ]);

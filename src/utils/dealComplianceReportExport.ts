@@ -40,7 +40,15 @@ import { DEAL_COMPLIANCE_STAGES } from "./dealComplianceCheck";
  * Paid back into the email; add a stage here only if the EMAIL's scope is
  * meant to change.
  */
-export const REPORT_STAGES = ["Proposal", "Agreement Signed"] as const;
+export const REPORT_STAGES = [
+  "Proposal",
+  // Agreement Sent joined 2026-09-11 (Sarah). It is Sales-owned, sits before
+  // signature, and carries ONE fair requirement — the proposal that was sent —
+  // so grading it is honest. That was the objection to including it: a stage
+  // graded against documents it is not yet subject to. It isn't.
+  "Agreement Sent",
+  "Agreement Signed",
+] as const;
 
 /**
  * The wider scope for the XLSX/CSV EXPORT and the in-app Deal Compliance tab:
