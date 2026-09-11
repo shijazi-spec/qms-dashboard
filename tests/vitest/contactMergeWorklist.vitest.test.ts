@@ -13,6 +13,9 @@ import {
   matchSignals,
   pickMaster,
   buildMergeGroup,
+  classifyPair,
+  isRoleMailbox,
+  isSwitchboardPhone,
   type MergeCandidateContact,
 } from "../../src/utils/contactMergeWorklist";
 
@@ -78,6 +81,67 @@ describe("the cluster-is-not-evidence regression (2026-09-11)", () => {
     const a = c({ name: "Soha -", email: "soha-sh@outlook.com", phone: "+966 56 673 0200" });
     const b = c({ name: "soha -", email: "different@x.com", phone: "0566730200" });
     expect(matchSignals(a, b).sort()).toEqual(["name", "phone"]);
+  });
+});
+
+describe("a shared mailbox is a company, not a person (2026-09-11)", () => {
+  // Every row here is real, read out of the live worklist. They all satisfied
+  // "email + phone" and were all queued for an automatic merge.
+  it("refuses a restaurant and its employee on info@ + a landline", () => {
+    const company = c({ name: "مطاعم توم توم", email: "info@tomtom.com.sa", phone: "0114632255" });
+    const person = c({ name: "احمد -", email: "info@tomtom.com.sa", phone: "0114632255" });
+    expect(matchSignals(company, person)).toEqual([]);
+    expect(classifyPair(company, person).verdict).toBe("review");
+    expect(buildMergeGroup(1, [company, person], new Set())).toBeNull();
+  });
+
+  it("refuses two different women sharing a shop's mailbox", () => {
+    const amal = c({ name: "امل القحطاني", email: "littleprincessriyadh@gmail.com", phone: "0550114044" });
+    const nouf = c({ name: "نوف المعيلي", email: "littleprincessriyadh@gmail.com", phone: "0550114044" });
+    // A gmail is not a role mailbox, so the email stays strong — the NAMES
+    // differ, which is what leaves this at one strong signal.
+    expect(matchSignals(amal, nouf)).toEqual(["email", "phone"]);
+  });
+
+  it("refuses a person and a company on support@ + a unified number", () => {
+    const danube = c({ name: "الدانوب -", email: "support@danube.sa", phone: "920004115" });
+    const sami = c({ name: "sami.sofyan@bindawood.com -", email: "support@danube.sa", phone: "920004115" });
+    expect(classifyPair(danube, sami).verdict).toBe("review");
+    expect(classifyPair(danube, sami).weak.sort()).toEqual(["email", "phone"]);
+  });
+
+  it("still merges the same person on a personal address and mobile", () => {
+    const a = c({ name: "ايمان البريدي", email: "e.abdullah@kuzama.co", phone: "0565947266" });
+    const b = c({ name: "ايمان البريدي", email: "e.abdullah@kuzama.co", phone: "0565947266" });
+    expect(classifyPair(a, b).verdict).toBe("merge");
+  });
+
+  it("keeps ceo@ personal — it addresses one identifiable person", () => {
+    // Marking ceo@ generic lost a genuine duplicate (ريان الدريس) in the live list.
+    expect(isRoleMailbox("ceo@alrosha.com")).toBe(false);
+    expect(isRoleMailbox("info@alshiaka.com")).toBe(true);
+    expect(isRoleMailbox("Marketing@munchbakery.com")).toBe(true);
+    expect(isRoleMailbox("e.abdullah@kuzama.co")).toBe(false);
+  });
+
+  it("knows a switchboard from a mobile", () => {
+    expect(isSwitchboardPhone("0114557508")).toBe(true);      // Riyadh landline
+    expect(isSwitchboardPhone("+966 13 841 5009")).toBe(true); // Eastern landline
+    expect(isSwitchboardPhone("9200 04793")).toBe(true);       // unified
+    expect(isSwitchboardPhone("+966 9200 15010")).toBe(true);
+    expect(isSwitchboardPhone("0550040014")).toBe(false);      // mobile
+    expect(isSwitchboardPhone("+966565947266")).toBe(false);
+  });
+
+  it("a name match plus a switchboard is REVIEW, not a silent drop", () => {
+    // "مركز حياة وامل" — identical clinic name, shared landline. Real
+    // duplicate, but the evidence is one strong signal; a person decides.
+    const a = c({ name: "مركز حياة وامل الصحي النسائي", email: null, phone: "+966 13 841 5009" });
+    const b = c({ name: "مركز حياة وامل الصحي النسائي", email: null, phone: "+966 13 841 5009" });
+    const v = classifyPair(a, b);
+    expect(v.verdict).toBe("review");
+    expect(v.strong).toEqual(["name"]);
+    expect(v.weak).toEqual(["phone"]);
   });
 });
 

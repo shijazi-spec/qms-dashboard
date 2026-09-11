@@ -47,6 +47,7 @@ export interface CleanupReport {
     merge_empty_with_twin: number;
     merge_both_active: number;
     orphans: number;
+    needs_review: number;
     coverage_pct: number;
   };
   filename: string;
@@ -102,6 +103,7 @@ export async function buildContactCleanupReport(): Promise<CleanupReport> {
       { item: "Sheet 3 — MERGE (empty, has a duplicate)", detail: `${emptyWithTwin.length} contacts. They hold no activity, but a duplicate of the same person exists. MERGE them in Zoho — the empty record often holds the only copy of an email or phone. Do not delete.` },
       { item: "Sheet 4 — MERGE (both hold activity)", detail: `${mergeWork.groups.length} merges. Both records carry history. Merge in Zoho: it moves every call, meeting and task onto the survivor and keeps the second email and phone. Nothing is lost.` },
       { item: "Sheet 5 — DELETE (orphans)", detail: `${orphans.contacts.length} contacts. No Account, no Deal, no activity, no email, no phone. Nothing attached and nothing to merge into. Safe to delete.` },
+      { item: "Sheet 6 — VERIFY FIRST", detail: `${mergeWork.needs_review.length} pairs. These match ONLY on a shared company mailbox (info@, support@) or a switchboard number, which two colleagues at one company also share. Some are real duplicates spelled differently; some are two different people. Decide each one by hand — do NOT bulk-merge this sheet.` },
       { item: "", detail: "" },
       { item: "How to merge in Zoho", detail: "Open the record marked KEEP, then use Zoho's Merge. Zoho re-points related records onto the survivor and keeps secondary emails/phones. The platform cannot do this — Zoho's API has no way to move an activity between records." },
       { item: "", detail: "" },
@@ -257,6 +259,43 @@ export async function buildContactCleanupReport(): Promise<CleanupReport> {
     freezeHeader: true,
   });
 
+  // ── Sheet 6: verify first ─────────────────────────────────────────────────
+  // The pairs the tightened rule will not auto-merge. They are listed rather
+  // than dropped: silently discarding a real duplicate is as much a data
+  // problem as merging two strangers, it is just a quieter one.
+  sheets.push({
+    name: "6. VERIFY FIRST",
+    columns: [
+      col("Action", "action", 20),
+      col("Contact A (would keep)", "a", 30),
+      col("A email", "a_email", 28),
+      col("A phone", "a_phone", 18),
+      col("Contact B", "b", 30),
+      col("B email", "b_email", 28),
+      col("B phone", "b_phone", 18),
+      col("Matches on (person-level)", "strong", 24),
+      col("Shared company info only", "weak", 24),
+      col("Why it needs a human", "note", 70),
+      col("Open A", "a_url", 60),
+      col("Open B", "b_url", 60),
+    ],
+    rows: mergeWork.needs_review.map((r) => ({
+      action: "VERIFY — do not bulk-merge",
+      a: r.master.name || "(no name)",
+      a_email: r.master.email || "",
+      a_phone: r.master.phone || "",
+      b: r.duplicate.name || "(no name)",
+      b_email: r.duplicate.email || "",
+      b_phone: r.duplicate.phone || "",
+      strong: r.strong.join(" + ") || "none",
+      weak: r.weak.join(" + "),
+      note: r.note,
+      a_url: ZOHO(r.master.zoho_contact_id),
+      b_url: ZOHO(r.duplicate.zoho_contact_id),
+    })),
+    freezeHeader: true,
+  });
+
   const stamp = new Date().toISOString().slice(0, 10);
   return {
     sheets,
@@ -265,6 +304,7 @@ export async function buildContactCleanupReport(): Promise<CleanupReport> {
       merge_empty_with_twin: emptyWithTwin.length,
       merge_both_active: mergeWork.groups.length,
       orphans: orphans.contacts.length,
+      needs_review: mergeWork.needs_review.length,
       coverage_pct: coveragePct,
     },
     filename: `contact-cleanup-${stamp}.xlsx`,

@@ -14129,6 +14129,11 @@ export const duplicateRadarRoutes = [
             (n, g) => n + g.duplicates.length,
             0,
           ),
+          // Pairs resting only on a shared company mailbox or switchboard.
+          // Reported, never dropped — about half are real duplicates spelled
+          // differently, and only a person can tell which.
+          needs_review: result.needs_review.length,
+          review_pairs: result.needs_review,
           items: result.groups,
         });
       } catch (e: any) {

@@ -88,6 +88,106 @@ const phoneKey = (v: string | null | undefined) => {
 };
 
 /**
+ * Mailbox names that belong to a COMPANY, not a person.
+ *
+ * Found by reading the live worklist (2026-09-11): "مطاعم توم توم" was paired
+ * with "احمد" on info@tomtom.com.sa + 0114632255, and "امل القحطاني" with
+ * "نوف المعيلي" on a shop's gmail. Two colleagues sharing a reception inbox
+ * satisfy "email + phone" perfectly while being two different people.
+ *
+ * This is the standing rule — "sharing an Account is NOT evidence" — arriving
+ * through a different door. A reception mailbox IS an account.
+ *
+ * Deliberately excludes ceo/gm/md/owner: those address one identifiable
+ * person, and treating ceo@ as generic lost a real duplicate in the same list.
+ */
+const ROLE_MAILBOXES = new Set<string>([
+  "info", "support", "contact", "contactus", "enquiries", "enquiry", "inquiry",
+  "sales", "marketing", "admin", "administration", "reception", "office",
+  "help", "helpdesk", "service", "services", "care", "customercare",
+  "hr", "jobs", "careers", "accounts", "accounting", "finance", "billing",
+  "mail", "noreply", "no-reply",
+]);
+
+/** True when this address names a function rather than a human. */
+export function isRoleMailbox(email: string | null | undefined): boolean {
+  const local = String(email || "").trim().toLowerCase().split("@")[0];
+  if (!local) return false;
+  return ROLE_MAILBOXES.has(local.replace(/[._-]/g, ""));
+}
+
+/**
+ * True for a switchboard rather than a personal line: a Saudi unified number
+ * (9200…), a toll-free (800…), or a landline (01x → 1… once the country code
+ * is off). Mobiles are 05x and stay strong.
+ */
+export function isSwitchboardPhone(phone: string | null | undefined): boolean {
+  let d = String(phone || "").replace(/\D/g, "");
+  if (!d) return false;
+  if (d.startsWith("00966")) d = d.slice(5);
+  else if (d.startsWith("966")) d = d.slice(3);
+  d = d.replace(/^0+/, "");
+  if (!d) return false;
+  return d.startsWith("9200") || d.startsWith("800") || d.startsWith("1");
+}
+
+export interface SignalStrength {
+  /** Evidence that identifies a PERSON. */
+  strong: string[];
+  /** Shared company infrastructure — real, but shared by colleagues. */
+  weak: string[];
+}
+
+/**
+ * PURE. Split the matching signals into person-level and company-level.
+ *
+ * A company mailbox or a switchboard number is genuinely shared, so it can
+ * corroborate an identity but can never establish one on its own.
+ */
+export function signalStrength(
+  a: Pick<MergeCandidateContact, "email" | "phone" | "name">,
+  b: Pick<MergeCandidateContact, "email" | "phone" | "name">,
+): SignalStrength {
+  const strong: string[] = [];
+  const weak: string[] = [];
+  const ea = normEmail(a.email);
+  const eb = normEmail(b.email);
+  if (ea && ea === eb) {
+    (isRoleMailbox(ea) ? weak : strong).push("email");
+  }
+  const pa = digits(a.phone);
+  const pb = digits(b.phone);
+  if (pa.length >= 7 && pb.length >= 7 && phoneKey(a.phone) === phoneKey(b.phone)) {
+    (isSwitchboardPhone(a.phone) ? weak : strong).push("phone");
+  }
+  const na = normName(a.name);
+  const nb = normName(b.name);
+  if (na && na === nb) strong.push("name");
+  return { strong, weak };
+}
+
+export type PairVerdict = "merge" | "review" | "reject";
+
+/**
+ * PURE. What should happen to this pair?
+ *
+ *   merge  — two STRONG signals. The same person, confidently.
+ *   review — the evidence exists but leans on shared company infrastructure.
+ *            A human decides. NOT dropped: half of these are real duplicates
+ *            whose names are simply spelled differently.
+ *   reject — not enough to suggest anything.
+ */
+export function classifyPair(
+  a: Pick<MergeCandidateContact, "email" | "phone" | "name">,
+  b: Pick<MergeCandidateContact, "email" | "phone" | "name">,
+): { verdict: PairVerdict } & SignalStrength {
+  const s = signalStrength(a, b);
+  if (s.strong.length >= 2) return { verdict: "merge", ...s };
+  if (s.strong.length + s.weak.length >= 2) return { verdict: "review", ...s };
+  return { verdict: "reject", ...s };
+}
+
+/**
  * PURE. Which of {email, phone, full name} two contacts share.
  *
  * The standing rule is TWO of the three (Sarah): one alone is not evidence —
@@ -102,20 +202,10 @@ export function matchSignals(
   a: Pick<MergeCandidateContact, "email" | "phone" | "name">,
   b: Pick<MergeCandidateContact, "email" | "phone" | "name">,
 ): string[] {
-  const out: string[] = [];
-  const ea = normEmail(a.email);
-  const eb = normEmail(b.email);
-  if (ea && ea === eb) out.push("email");
-  // Same key the merged preview de-duplicates on — see phoneKey.
-  const pa = digits(a.phone);
-  const pb = digits(b.phone);
-  if (pa.length >= 7 && pb.length >= 7 && phoneKey(a.phone) === phoneKey(b.phone)) {
-    out.push("phone");
-  }
-  const na = normName(a.name);
-  const nb = normName(b.name);
-  if (na && na === nb) out.push("name");
-  return out;
+  // STRONG signals only. Every caller treats "2 or more" as proof of identity,
+  // so a shared reception inbox must not be counted here — returning it would
+  // silently license merging two colleagues into one contact.
+  return signalStrength(a, b).strong;
 }
 
 /**
@@ -228,10 +318,26 @@ export function buildMergeGroup(
  * `limit` bounds CONTACT ROWS read, not groups — a cluster can hold several
  * records, so the group count comes out lower and is reported separately.
  */
+export interface ContactReviewPair {
+  master: MergeCandidateContact;
+  duplicate: MergeCandidateContact;
+  strong: string[];
+  /** Why this is not an automatic merge, in words. */
+  weak: string[];
+  note: string;
+}
+
 export async function getContactMergeWorklist(limit = 4000): Promise<{
   groups: ContactMergeGroup[];
   contacts_scanned: number;
   groups_with_full_counts: number;
+  /**
+   * Pairs whose only evidence is shared company infrastructure — a reception
+   * inbox, a switchboard. NOT merges and NOT discarded: roughly half are real
+   * duplicates whose names are spelled differently, and the other half are two
+   * colleagues at one company. Only a person can tell them apart.
+   */
+  needs_review: ContactReviewPair[];
 }> {
   const res = await pool.query(
     `WITH contact_dups AS (
@@ -296,10 +402,33 @@ export async function getContactMergeWorklist(limit = 4000): Promise<{
   }
 
   const groups: ContactMergeGroup[] = [];
+  const needsReview: ContactReviewPair[] = [];
+  const pairKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
   for (const [cid, members] of byCluster.entries()) {
     const g = buildMergeGroup(cid, members, separatedPairs);
     if (g) groups.push(g);
+    // Pairs the tightened rule no longer auto-merges. Collected against the
+    // same master the group would have used, so the two lists read alike.
+    const { master } = pickMaster(members);
+    for (const m of members) {
+      if (m.zoho_contact_id === master.zoho_contact_id) continue;
+      if (separatedPairs.has(pairKey(master.zoho_contact_id, m.zoho_contact_id))) continue;
+      const c = classifyPair(master, m);
+      if (c.verdict !== "review") continue;
+      needsReview.push({
+        master,
+        duplicate: m,
+        strong: c.strong,
+        weak: c.weak,
+        note: c.weak.includes("email") && c.weak.includes("phone")
+          ? "Only a shared company mailbox and switchboard match — two colleagues look identical this way."
+          : c.weak.includes("email")
+            ? "The matching email is a company mailbox, not a personal one."
+            : "The matching number is a switchboard, not a personal line.",
+      });
+    }
   }
+  needsReview.sort((a, b) => b.strong.length - a.strong.length);
 
   // Most activity at stake first — the merges worth doing today.
   groups.sort(
@@ -312,5 +441,6 @@ export async function getContactMergeWorklist(limit = 4000): Promise<{
     groups,
     contacts_scanned: res.rows.length,
     groups_with_full_counts: groups.filter((g) => g.activity_fully_counted).length,
+    needs_review: needsReview,
   };
 }

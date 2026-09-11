@@ -8151,6 +8151,14 @@
                       // real when every side has been counted; the rest are floors.
                       + '<strong>' + _fn(d.groups_with_full_counts || 0) + '</strong> with a complete activity count. '
                       + '<span class="text-gray-500">Merging in Zoho keeps every activity — the master only decides which name, email and phone stay primary.</span>'
+                      // Held-back pairs are STATED, not silently dropped: a
+                      // list that quietly shrinks is indistinguishable from one
+                      // that found nothing (Sarah 2026-09-11).
+                      + ((d.needs_review || 0) > 0
+                          ? '<br><span class="text-amber-700"><strong>' + _fn(d.needs_review) + '</strong> more pair(s) are held back for manual review —'
+                            + ' they match only on a shared company mailbox or switchboard, which two colleagues also share.'
+                            + ' See sheet 6 of the Zoho admin report.</span>'
+                          : '')
                     : '';
             }
             if (!items.length) {
