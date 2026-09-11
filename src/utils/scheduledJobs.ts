@@ -902,7 +902,13 @@ export async function runMonthlyMissingDocsReportIfDue(): Promise<{
 
     const { countNeverChecked } = await import("./dealDocComplianceSweep");
     const { REPORT_STAGES, sameStage } = await import("./dealComplianceReportExport");
-    const rows = await getDealComplianceReportRows("all");
+    // WalaPlus corporate only — that is the Head of Sales's book (Sarah,
+    // 2026-09-11). "all" pulled in Marketplace and WalaOne deals he does not
+    // own, and named their owners in his table. MISSING_DOCS_REPORT_SEGMENT
+    // overrides if the audience ever widens.
+    const reportSegment = (process.env.MISSING_DOCS_REPORT_SEGMENT ||
+      "walaplus") as any;
+    const rows = await getDealComplianceReportRows(reportSegment);
     // Paid deals are Customer Success's, not Sales's, and buildMonthlyMissingDocsEmail
     // already excludes them from every figure it reports (REPORT_STAGES). The
     // denominator here must be scoped the same way — Paid deals excluded from
@@ -910,11 +916,13 @@ export async function runMonthlyMissingDocsReportIfDue(): Promise<{
     // percentage of a smaller set against a total that includes deals it never
     // mentions.
     const inScopeRows = rows.filter((r) => REPORT_STAGES.some((s) => sameStage(s, r.stage)));
-    const neverChecked = await countNeverChecked(REPORT_STAGES);
+    const neverChecked = await countNeverChecked(REPORT_STAGES, reportSegment);
+    const { scopeLabelFor } = await import("./missingDocsMonthlyReport");
     const mail = buildMonthlyMissingDocsEmail(rows, {
       periodLabel: periodLabel(covered),
       inScope: inScopeRows.length + neverChecked,
       dashboardUrl: process.env.MISSING_DOCS_REPORT_LINK,
+      scopeLabel: scopeLabelFor(reportSegment),
     });
 
     const { sendResendEmail } = await import("./resendMail");

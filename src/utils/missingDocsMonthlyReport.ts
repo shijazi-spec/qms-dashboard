@@ -77,9 +77,39 @@ export interface MonthlyMissingDocsEmail {
   text: string;
 }
 
+/**
+ * What population these figures describe, in the recipient's own words.
+ *
+ * The Head of Sales owns WalaPlus corporate deals and nothing else (Sarah,
+ * 2026-09-11). Until then this email was built from
+ * `getDealComplianceReportRows("all")` while the workbook beside it honoured
+ * the segment chip — so the email counted Marketplace and WalaOne deals he is
+ * not responsible for, and its owner table could name people outside his team.
+ * 891 deals instead of his 795.
+ *
+ * The scope now travels IN the email, because a number whose population is
+ * implied is a number the reader cannot check.
+ */
+const SCOPE_LABELS: Record<string, string> = {
+  walaplus: "WalaPlus corporate deals",
+  marketplace: "Marketplace deals",
+  walaone: "WalaOne deals",
+  all: "all segments (WalaPlus, Marketplace and WalaOne)",
+};
+
+export function scopeLabelFor(segment: string | null | undefined): string {
+  return SCOPE_LABELS[String(segment || "all").toLowerCase()] || String(segment);
+}
+
 export function buildMonthlyMissingDocsEmail(
   allRows: DealComplianceReportRow[],
-  opts: { periodLabel: string; inScope: number; dashboardUrl?: string },
+  opts: {
+    periodLabel: string;
+    inScope: number;
+    dashboardUrl?: string;
+    /** Population the rows were drawn from — rendered in the body. */
+    scopeLabel?: string;
+  },
 ): MonthlyMissingDocsEmail {
   // Paid deals are owned by Customer Success, not Sales, once a deal is won
   // (Sarah, 2026-09-03 — see REPORT_STAGES in dealComplianceReportExport.ts).
@@ -102,10 +132,12 @@ export function buildMonthlyMissingDocsEmail(
       ? `Deal documents — ${opts.periodLabel}: no deals checked yet`
       : `Deal documents — ${opts.periodLabel}: ${missing.length} deals missing documents (${overallPct}%)`;
 
+  const scope = opts.scopeLabel ? `${opts.scopeLabel}. ` : "";
   const coverage =
-    opts.inScope > rows.length
+    scope +
+    (opts.inScope > rows.length
       ? `${rows.length} of ${opts.inScope} in-scope deals had been checked when this was produced.`
-      : `All ${rows.length} in-scope deals had been checked when this was produced.`;
+      : `All ${rows.length} in-scope deals had been checked when this was produced.`);
 
   if (rows.length === 0) {
     // Say nothing rather than report 0% — see the note at the top of the file.

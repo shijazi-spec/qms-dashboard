@@ -28,6 +28,10 @@
 import { logger } from "./logger";
 import { createRedactedPool } from "./redactedPool";
 import { DEAL_COMPLIANCE_STAGES } from "./dealComplianceCheck";
+import {
+  buildSegmentPredicate,
+  type DuplicateFilters,
+} from "./duplicateRadarDatabase";
 
 // Own pool, matching the convention in the rest of src/utils. Carries the
 // redaction wrapper (and, since 2026-08-25, the pool 'error' listener that
@@ -165,16 +169,27 @@ export async function runDealDocComplianceSweep(
  */
 export async function countNeverChecked(
   stages: readonly string[] = DEAL_COMPLIANCE_STAGES,
+  /**
+   * Segment to count within. MUST match the segment the caller drew its rows
+   * from: this number is the denominator of a coverage statement, and a
+   * denominator from a wider population than the numerator makes the coverage
+   * look worse than it is — or, worse, makes an all-segment count sit under a
+   * WalaPlus-only headline.
+   */
+  segment?: DuplicateFilters["segment"],
 ): Promise<number> {
   try {
     const stageList = stages.map((s) => `'${s.toLowerCase()}'`).join(", ");
+    const seg = buildSegmentPredicate(segment, 1);
+    const segmentCond = seg.condition ? ` AND ${seg.condition}` : "";
     const res = await pool.query(
       `SELECT COUNT(*)::text AS n
          FROM duplicate_records r
          LEFT JOIN deal_doc_compliance d ON d.zoho_deal_id = r.zoho_record_id
         WHERE r.record_type = 'deal'
           AND LOWER(BTRIM(COALESCE(NULLIF(BTRIM(r.stage), ''), r.raw_data->>'Stage', ''))) IN (${stageList})
-          AND d.zoho_deal_id IS NULL`,
+          AND d.zoho_deal_id IS NULL${segmentCond}`,
+      seg.params,
     );
     return Number(res.rows[0]?.n) || 0;
   } catch {

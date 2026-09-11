@@ -4166,8 +4166,15 @@ export const duplicateRadarRoutes = [
           monthlyMissingDocsRecipients,
           isMonthlyMissingDocsEnabled,
           periodLabel,
+          scopeLabelFor,
         } = await import("../../utils/missingDocsMonthlyReport");
-        const rows = await getDealComplianceReportRows("all");
+        // WalaPlus by default: the Head of Sales owns WalaPlus corporate deals
+        // and nothing else (Sarah, 2026-09-11). This was "all", so the email
+        // counted Marketplace and WalaOne deals he is not responsible for —
+        // 891 instead of his 795 — while the workbook beside it honoured the
+        // segment chip. ?segment= overrides for inspection.
+        const segment = (c.req.query("segment") || "walaplus") as any;
+        const rows = await getDealComplianceReportRows(segment);
         // Paid deals are Customer Success's, not Sales's, and
         // buildMonthlyMissingDocsEmail already excludes them from every figure
         // the email reports (REPORT_STAGES). This endpoint previews that exact
@@ -4175,7 +4182,9 @@ export const duplicateRadarRoutes = [
         // same way — Paid excluded from BOTH numerator and denominator — or
         // this JSON would disagree with the email body it is previewing.
         const inScopeRows = rows.filter((r) => REPORT_STAGES.some((s) => sameStage(s, r.stage)));
-        const neverChecked = await countNeverChecked(REPORT_STAGES);
+        // Same segment as the rows above — a denominator drawn from a wider
+        // population than its numerator misstates the coverage.
+        const neverChecked = await countNeverChecked(REPORT_STAGES, segment);
         // Preview the month that just ended, matching what the job would send.
         const nowKsa = new Date(Date.now() + 3 * 3600_000);
         const covered = new Date(
@@ -4185,6 +4194,7 @@ export const duplicateRadarRoutes = [
           periodLabel: periodLabel(covered),
           inScope: inScopeRows.length + neverChecked,
           dashboardUrl: process.env.MISSING_DOCS_REPORT_LINK,
+          scopeLabel: scopeLabelFor(segment),
         });
         // EFFECTIVE state, not just the secret: the notifications screen can
         // enable this without any env var, and a preview that reported
@@ -4201,6 +4211,8 @@ export const duplicateRadarRoutes = [
           enabled: effectivelyEnabled,
           recipient_count: monthlyMissingDocsRecipients().length,
           period: periodLabel(covered),
+          segment,
+          scope: scopeLabelFor(segment),
           checked: inScopeRows.length,
           in_scope: inScopeRows.length + neverChecked,
           subject: mail.subject,
