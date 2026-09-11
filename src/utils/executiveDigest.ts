@@ -11,6 +11,9 @@ import { getGovernanceDocumentByModule } from "./database";
 // because matchesRule() is synchronous; duplicateRadarCsOverlap does not import
 // this module, so there is no cycle.
 import { extractCsFieldsFromRawData } from "./duplicateRadarCsOverlap";
+// Type-only, so it is erased at compile time and cannot create a runtime cycle
+// with slackChannelRouting (which this module also imports dynamically, below).
+import type { SlackAudience } from "./slackChannelRouting";
 import {
   getWeeklyFeedbackDigest,
   summarizeFeedbackTrend,
@@ -49,17 +52,20 @@ export interface DigestSectionRule {
   includeKeywords?: string[];
   excludeKeywords?: string[];
   /**
-   * Name of the env var holding the Slack channel this section ALSO goes to,
-   * as its own message, so each audience sees only its own numbers. The full
-   * digest still posts to the platform channel unchanged — this is an extra
-   * delivery, never a replacement.
+   * Which audience this section ALSO goes to, as its own message, so each team
+   * sees only its own numbers. The full digest still posts to the platform
+   * channel unchanged — this is an extra delivery, never a replacement.
    *
-   * An env var rather than a literal channel, for two reasons: Slack channel
-   * IDs do not belong in source, and an UNSET var means the section simply is
-   * not routed anywhere. Failing to post is the right default; posting a
-   * team's audit to a guessed channel is not.
+   * A SlackAudience from slackChannelRouting, NOT a channel id and not a
+   * bespoke env var name. That module already owns the audience → channel map
+   * (SLACK_CHANNEL_SDR_SALES, SLACK_CHANNEL_CS, SLACK_CHANNEL_MARKETPLACE,
+   * plus the SLACK_CHANNEL_SALES_SDR legacy alias), and the rest of the
+   * platform already routes through it. An earlier version of this field
+   * invented a parallel DIGEST_CHANNEL_* convention, which meant the feature
+   * read variables nobody had set while the correctly-named ones sat there
+   * unused.
    */
-  channelEnv?: string;
+  audience?: SlackAudience;
   /**
    * Match Customer Success deals. NOT a keyword rule: the platform's gate for
    * "this is a CS deal" is the presence of a Phase field in the deal's Customer
@@ -415,7 +421,7 @@ export function resolveDigestSectionRules(): DigestSectionRule[] {
       title: "SDR Leads only",
       module: "Leads",
       excludeKeywords: ["marketplace", "market place", "mp"],
-      channelEnv: "DIGEST_CHANNEL_SDR_SALES",
+      audience: "sales_sdr",
     },
     {
       id: "deals_corporates_only",
@@ -423,17 +429,17 @@ export function resolveDigestSectionRules(): DigestSectionRule[] {
       module: "Deals",
       includeKeywords: ["walaplus layout", "walaplus", "wala plus"],
       excludeKeywords: ["marketplace", "market place", "mp"],
-      // Same channel as SDR Leads on purpose: one audience (#wp-sdr-sales-
-      // audits) owns both, so they arrive as one message with both sections
-      // rather than two posts a reader has to stitch together.
-      channelEnv: "DIGEST_CHANNEL_SDR_SALES",
+      // Same audience as SDR Leads on purpose: one team (#wp-sdr-sales-audits)
+      // owns both, so they arrive as one message with both sections rather than
+      // two posts a reader has to stitch together.
+      audience: "sales_sdr",
     },
     {
       id: "marketplace_all",
       title: "MarketPlace Leads & Deals",
       module: "Both",
       includeKeywords: ["marketplace", "market place", "mp"],
-      channelEnv: "DIGEST_CHANNEL_MARKETPLACE",
+      audience: "marketplace",
     },
     {
       // Customer Success. Gated on the CS Phase field rather than keywords —
@@ -443,7 +449,7 @@ export function resolveDigestSectionRules(): DigestSectionRule[] {
       title: "Customer Success deals",
       module: "Deals",
       requireCsPhase: true,
-      channelEnv: "DIGEST_CHANNEL_CS",
+      audience: "cs",
     },
   ];
 
@@ -463,11 +469,15 @@ export function resolveDigestSectionRules(): DigestSectionRule[] {
         excludeKeywords: Array.isArray(r.excludeKeywords)
           ? r.excludeKeywords.map((x: any) => String(x)).filter(Boolean)
           : [],
-        // Carried through so a section added via env can route itself to a
-        // channel without a code change — the "and so on" case. Still an env
-        // NAME, not a channel: the override says which var to read, and an
-        // unset var means the section is simply not routed.
-        channelEnv: r.channelEnv ? String(r.channelEnv).trim() : undefined,
+        // Carried through so a section added via env can route itself without
+        // a code change — the "and so on" case. Validated against the known
+        // audiences: an unrecognised value becomes undefined (section not
+        // routed) rather than silently resolving to some default channel.
+        audience: (["platform", "sales_sdr", "cs", "marketplace"] as const).includes(
+          r.audience,
+        )
+          ? (r.audience as SlackAudience)
+          : undefined,
         requireCsPhase: r.requireCsPhase === true,
       }))
       .filter((r) => r.id && r.title);
@@ -2486,7 +2496,7 @@ export async function sendDigestSlack(
 }
 
 export interface DigestAudienceResult extends DigestSendResult {
-  channelEnv?: string;
+  audience?: SlackAudience;
   sectionIds?: string[];
 }
 
@@ -2531,13 +2541,18 @@ export function buildAudienceSlackBlocks(
  * gets MarketPlace, #wp-cs-audits gets Customer Success, and none of them has
  * to read the other two.
  *
- * Grouping is by channelEnv, so two sections naming the same var arrive as ONE
- * message with both — which is why SDR Leads and Deals WalaPlus do not post
+ * Grouping is by AUDIENCE, so two sections naming the same audience arrive as
+ * ONE message with both — which is why SDR Leads and Deals WalaPlus do not post
  * twice to the same channel.
  *
- * A section whose channelEnv is unset is simply not routed. That is the safe
- * direction: it stays in the full digest and reaches nobody new, whereas a
- * guessed channel would publish one team's audit numbers to another team.
+ * Channels come from slackChannelRouting's AUDIENCE_ENV_VARS — the same
+ * SLACK_CHANNEL_* variables the rest of the platform routes on — not from a
+ * convention private to the digest.
+ *
+ * A section with no audience, or an audience whose env var is unset, is simply
+ * not routed. That is the safe direction: it stays in the full digest and
+ * reaches nobody new, whereas a guessed channel would publish one team's audit
+ * numbers to another team.
  *
  * Each channel carries its OWN run key, so an idempotency hit on one cannot
  * silently swallow the others — the single `slack` key would have let the first
@@ -2557,29 +2572,40 @@ export async function sendDigestSlackAudiences(
   // effect of that would post real audit numbers to real audiences.
   if (options.channelOverride || options.preview) return [];
 
-  const groups = new Map<string, DigestSectionRule[]>();
+  const groups = new Map<SlackAudience, DigestSectionRule[]>();
   for (const rule of resolveDigestSectionRules()) {
-    if (!rule.channelEnv) continue;
-    const list = groups.get(rule.channelEnv) || [];
+    if (!rule.audience) continue;
+    const list = groups.get(rule.audience) || [];
     list.push(rule);
-    groups.set(rule.channelEnv, list);
+    groups.set(rule.audience, list);
   }
   if (groups.size === 0) return [];
+
+  // The platform's own audience -> env-var map, so the digest reads the SAME
+  // SLACK_CHANNEL_* variables everything else does instead of a private set.
+  const { AUDIENCE_ENV_VARS } = await import("./slackChannelRouting");
 
   let data: DigestData | null = null;
   const results: DigestAudienceResult[] = [];
 
-  for (const [channelEnv, groupRules] of groups) {
+  for (const [audience, groupRules] of groups) {
     const sectionIds = groupRules.map((r) => r.id);
     try {
-      const channel = (process.env[channelEnv] || "").trim();
+      // Deliberately NOT resolveSlackChannel(): that falls back to
+      // SLACK_CHANNEL_ID when an audience var is unset, which here would post a
+      // team's slice into the shared platform channel that already receives the
+      // full digest. Reading the audience's own vars means an unconfigured
+      // audience is skipped instead of duplicated.
+      const channel = (AUDIENCE_ENV_VARS[audience] || [])
+        .map((name) => (process.env[name] || "").trim())
+        .find((v) => v.length > 0);
       if (!channel) {
         results.push({
           success: true,
           skipped: true,
           method: "audience-no-channel",
           cadence,
-          channelEnv,
+          audience,
           sectionIds,
         });
         continue;
@@ -2587,7 +2613,7 @@ export async function sendDigestSlackAudiences(
 
       const runKey = `${cadence}:${toIsoDateOnly(window.start)}:${toIsoDateOnly(
         window.end,
-      )}:slack-audience:${channelEnv}`;
+      )}:slack-audience:${audience}`;
       if (
         options.enforceIdempotency !== false &&
         (await hasSuccessfulDigestRun(runKey))
@@ -2598,7 +2624,7 @@ export async function sendDigestSlackAudiences(
           method: "audience-idempotent",
           runKey,
           cadence,
-          channelEnv,
+          audience,
           sectionIds,
         });
         continue;
@@ -2619,7 +2645,7 @@ export async function sendDigestSlackAudiences(
           method: "audience-no-sections",
           runKey,
           cadence,
-          channelEnv,
+          audience,
           sectionIds,
         });
         continue;
@@ -2639,7 +2665,7 @@ export async function sendDigestSlackAudiences(
         metadata: {
           cadence,
           runKey,
-          channelEnv,
+          audience,
           sectionIds,
           windowStart: window.start.toISOString(),
           windowEnd: window.end.toISOString(),
@@ -2663,7 +2689,7 @@ export async function sendDigestSlackAudiences(
           method: "audience-outbox",
           runKey,
           cadence,
-          channelEnv,
+          audience,
           sectionIds,
         });
       } else {
@@ -2683,7 +2709,7 @@ export async function sendDigestSlackAudiences(
           error,
           runKey,
           cadence,
-          channelEnv,
+          audience,
           sectionIds,
         });
       }
@@ -2692,8 +2718,8 @@ export async function sendDigestSlackAudiences(
       // missing its digest is bad; three teams missing theirs because a fourth
       // channel was archived is worse.
       const error = err instanceof Error ? err.message : String(err);
-      logger.error(`[Digest] audience send failed for ${channelEnv}`, err);
-      results.push({ success: false, error, cadence, channelEnv, sectionIds });
+      logger.error(`[Digest] audience send failed for ${audience}`, err);
+      results.push({ success: false, error, cadence, audience, sectionIds });
     }
   }
 
