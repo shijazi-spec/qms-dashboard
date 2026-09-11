@@ -7,6 +7,10 @@ import {
   type ZohoCRMRecord,
 } from "./zohoCRM";
 import { getGovernanceDocumentByModule } from "./database";
+// The platform's single definition of "this is a CS deal". Imported statically
+// because matchesRule() is synchronous; duplicateRadarCsOverlap does not import
+// this module, so there is no cycle.
+import { extractCsFieldsFromRawData } from "./duplicateRadarCsOverlap";
 import {
   getWeeklyFeedbackDigest,
   summarizeFeedbackTrend,
@@ -44,6 +48,30 @@ export interface DigestSectionRule {
   module: "Leads" | "Deals" | "Both";
   includeKeywords?: string[];
   excludeKeywords?: string[];
+  /**
+   * Name of the env var holding the Slack channel this section ALSO goes to,
+   * as its own message, so each audience sees only its own numbers. The full
+   * digest still posts to the platform channel unchanged — this is an extra
+   * delivery, never a replacement.
+   *
+   * An env var rather than a literal channel, for two reasons: Slack channel
+   * IDs do not belong in source, and an UNSET var means the section simply is
+   * not routed anywhere. Failing to post is the right default; posting a
+   * team's audit to a guessed channel is not.
+   */
+  channelEnv?: string;
+  /**
+   * Match Customer Success deals. NOT a keyword rule: the platform's gate for
+   * "this is a CS deal" is the presence of a Phase field in the deal's Customer
+   * Success section — evaluateCsLifecycle() returns is_cs_deal=false without
+   * one, and that is the ONLY gate the CS Lifecycle tab uses.
+   *
+   * recordSignalText() does not carry that field, so no include/exclude
+   * keyword can express this. Approximating it with stage names would let the
+   * digest and the CS Lifecycle tab disagree about who is a CS customer, which
+   * is precisely the kind of drift the two would never be reconciled over.
+   */
+  requireCsPhase?: boolean;
 }
 
 export interface DigestBusinessSection {
@@ -188,6 +216,11 @@ export interface DigestFanoutResult {
   window: DigestWindow;
   email: DigestSendResult;
   slack: DigestSendResult;
+  /**
+   * One entry per routed audience channel. Optional so existing callers that
+   * destructure { email, slack } keep compiling; empty when nothing is routed.
+   */
+  audiences?: DigestAudienceResult[];
 }
 
 export interface DigestRunRecord {
@@ -331,6 +364,26 @@ function recordSignalText(record: ZohoCRMRecord): string {
   return normalize(parts.filter(Boolean).join(" "));
 }
 
+/**
+ * Is this record a Customer Success deal?
+ *
+ * Delegates to the platform's single definition — a Phase in the deal's
+ * Customer Success section — instead of re-deriving one. evaluateCsLifecycle()
+ * returns is_cs_deal=false without a Phase, and that is the only gate the CS
+ * Lifecycle tab applies, so running the digest's CS section through the same
+ * extractor keeps the two from ever disagreeing about who is a CS customer.
+ *
+ * Never throws: one malformed record must not take down the whole digest.
+ */
+function recordHasCsPhase(record: ZohoCRMRecord): boolean {
+  try {
+    const fields = extractCsFieldsFromRawData(record.data, {});
+    return String(fields?.phase ?? "").trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
 function recordProgressSignal(record: ZohoCRMRecord): string {
   const status = [
     record.data?.Stage?.name || record.data?.Stage,
@@ -349,6 +402,7 @@ export function resolveDigestSectionRules(): DigestSectionRule[] {
       title: "SDR Leads only",
       module: "Leads",
       excludeKeywords: ["marketplace", "market place", "mp"],
+      channelEnv: "DIGEST_CHANNEL_SDR_SALES",
     },
     {
       id: "deals_corporates_only",
@@ -356,12 +410,27 @@ export function resolveDigestSectionRules(): DigestSectionRule[] {
       module: "Deals",
       includeKeywords: ["walaplus layout", "walaplus", "wala plus"],
       excludeKeywords: ["marketplace", "market place", "mp"],
+      // Same channel as SDR Leads on purpose: one audience (#wp-sdr-sales-
+      // audits) owns both, so they arrive as one message with both sections
+      // rather than two posts a reader has to stitch together.
+      channelEnv: "DIGEST_CHANNEL_SDR_SALES",
     },
     {
       id: "marketplace_all",
       title: "MarketPlace Leads & Deals",
       module: "Both",
       includeKeywords: ["marketplace", "market place", "mp"],
+      channelEnv: "DIGEST_CHANNEL_MARKETPLACE",
+    },
+    {
+      // Customer Success. Gated on the CS Phase field rather than keywords —
+      // see requireCsPhase on DigestSectionRule for why that distinction
+      // matters. Deals only: a Lead has no Customer Success section.
+      id: "cs_lifecycle",
+      title: "Customer Success deals",
+      module: "Deals",
+      requireCsPhase: true,
+      channelEnv: "DIGEST_CHANNEL_CS",
     },
   ];
 
@@ -381,6 +450,12 @@ export function resolveDigestSectionRules(): DigestSectionRule[] {
         excludeKeywords: Array.isArray(r.excludeKeywords)
           ? r.excludeKeywords.map((x: any) => String(x)).filter(Boolean)
           : [],
+        // Carried through so a section added via env can route itself to a
+        // channel without a code change — the "and so on" case. Still an env
+        // NAME, not a channel: the override says which var to read, and an
+        // unset var means the section is simply not routed.
+        channelEnv: r.channelEnv ? String(r.channelEnv).trim() : undefined,
+        requireCsPhase: r.requireCsPhase === true,
       }))
       .filter((r) => r.id && r.title);
     return mapped.length > 0 ? mapped : defaults;
@@ -392,6 +467,12 @@ export function resolveDigestSectionRules(): DigestSectionRule[] {
 
 function matchesRule(record: ZohoCRMRecord, rule: DigestSectionRule): boolean {
   if (rule.module !== "Both" && record.module !== rule.module) return false;
+  // CS gate first, and it is a gate rather than a keyword: a deal counts as
+  // Customer Success when its Customer Success section exposes a Phase. This
+  // reuses extractCsFieldsFromRawData — the same extractor evaluateCsLifecycle
+  // and the CS Lifecycle tab use — so the digest and that tab cannot end up
+  // disagreeing about who is a CS customer.
+  if (rule.requireCsPhase && !recordHasCsPhase(record)) return false;
   const signal = recordSignalText(record);
   if (rule.excludeKeywords && rule.excludeKeywords.length > 0) {
     const hasExcludedKeyword = rule.excludeKeywords.some((k) =>
@@ -1999,9 +2080,37 @@ ${buildSopGapHtml(data.sop_gap_summary)}
 </body></html>`;
 }
 
+/**
+ * Health band label. Module-level so the full digest and the per-audience
+ * messages below cannot drift into describing the same score differently.
+ */
+export function digestHealthLabel(score: number): string {
+  return score >= 90
+    ? "Excellent"
+    : score >= 75
+      ? "Good"
+      : score >= 60
+        ? "Needs Attention"
+        : "At Risk";
+}
+
+/**
+ * One section's Slack block, in the exact wording the full digest uses.
+ * Shared by buildDigestSlackBlocks and buildAudienceSlackBlocks so an audience
+ * never sees different text for the same numbers.
+ */
+function buildSectionSlackBlock(section: DigestBusinessSection): any {
+  return {
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: `*--- ${section.title} ---*\n- Total: *${section.total}* (Leads *${section.leads}* / Deals *${section.deals}*)\n- New: *${section.new_in_window}*\n- Progressed: *${section.progressed}*\n- Stalled: *${section.stalled}*\n- Severity: 🔴 Critical *${section.severity_counts.critical}* | 🟠 High *${section.severity_counts.high}* | 🟡 Medium *${section.severity_counts.medium}* | 🟢 Low *${section.severity_counts.low}*\n- Health: ${digestHealthLabel(section.health_score)} *${section.health_score}%*`,
+    },
+  };
+}
+
 export function buildDigestSlackBlocks(data: DigestData): any[] {
-  const healthEmoji = (score: number): string =>
-    score >= 90 ? "Excellent" : score >= 75 ? "Good" : score >= 60 ? "Needs Attention" : "At Risk";
+  const healthEmoji = digestHealthLabel;
   const hasAbsoluteDashboardUrl = /^https?:\/\//i.test(DIGEST_DASHBOARD_LINK);
   const generatedTimeKsa = new Date(data.generated_at).toLocaleTimeString("en-US", {
     timeZone: "Asia/Riyadh",
@@ -2010,13 +2119,7 @@ export function buildDigestSlackBlocks(data: DigestData): any[] {
     hour12: true,
   });
 
-  const sections = data.business_sections.map((section) => ({
-    type: "section",
-    text: {
-      type: "mrkdwn",
-      text: `*--- ${section.title} ---*\n- Total: *${section.total}* (Leads *${section.leads}* / Deals *${section.deals}*)\n- New: *${section.new_in_window}*\n- Progressed: *${section.progressed}*\n- Stalled: *${section.stalled}*\n- Severity: 🔴 Critical *${section.severity_counts.critical}* | 🟠 High *${section.severity_counts.high}* | 🟡 Medium *${section.severity_counts.medium}* | 🟢 Low *${section.severity_counts.low}*\n- Health: ${healthEmoji(section.health_score)} *${section.health_score}%*`,
-    },
-  }));
+  const sections = data.business_sections.map(buildSectionSlackBlock);
   const findingTypeLines = data.finding_types.map(
     (f) =>
       `- *${f.module}* / ${f.issue_type}: ${f.count} _(${f.severity})_`,
@@ -2360,16 +2463,236 @@ export async function sendDigestSlack(
   return { success: false, error, runKey, cadence };
 }
 
+export interface DigestAudienceResult extends DigestSendResult {
+  channelEnv?: string;
+  sectionIds?: string[];
+}
+
+/**
+ * Slack blocks for ONE audience: the period line and that audience's sections,
+ * nothing else.
+ *
+ * Deliberately WITHOUT the company-wide totals, the quality snapshot and the
+ * full finding-type list. Those stay in the platform channel, because the
+ * entire point of these messages is that a team sees its own numbers instead of
+ * scrolling past three other teams' to find them.
+ */
+export function buildAudienceSlackBlocks(
+  data: DigestData,
+  sections: DigestBusinessSection[],
+  cadence: DigestCadence,
+): any[] {
+  const blocks: any[] = [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: `${cadenceLabel(cadence)} Audit Digest`,
+        emoji: true,
+      },
+    },
+    {
+      type: "context",
+      elements: [{ type: "mrkdwn", text: `Period Covered: *${data.period}*` }],
+    },
+  ];
+  for (const section of sections) blocks.push(buildSectionSlackBlock(section));
+  return blocks;
+}
+
+/**
+ * Post each audience its own sections, in its own channel.
+ *
+ * ADDITIVE. The full digest still goes to the platform channel exactly as
+ * before — sendDigestSlack is untouched. This is a second delivery so that
+ * #wp-sdr-sales-audits gets SDR Leads + Deals WalaPlus, #marketplace-audits
+ * gets MarketPlace, #wp-cs-audits gets Customer Success, and none of them has
+ * to read the other two.
+ *
+ * Grouping is by channelEnv, so two sections naming the same var arrive as ONE
+ * message with both — which is why SDR Leads and Deals WalaPlus do not post
+ * twice to the same channel.
+ *
+ * A section whose channelEnv is unset is simply not routed. That is the safe
+ * direction: it stays in the full digest and reaches nobody new, whereas a
+ * guessed channel would publish one team's audit numbers to another team.
+ *
+ * Each channel carries its OWN run key, so an idempotency hit on one cannot
+ * silently swallow the others — the single `slack` key would have let the first
+ * successful send mark the whole fan-out done.
+ */
+export async function sendDigestSlackAudiences(
+  options: DigestSendOptions = {},
+): Promise<DigestAudienceResult[]> {
+  const cadence = options.cadence || "weekly";
+  const window =
+    options.window || computeDigestWindow(cadence, options.now || new Date());
+
+  if (!envBool("DIGEST_SLACK_NOTIFY", true)) return [];
+  if (!(process.env.SLACK_BOT_TOKEN || process.env.SLACK_API_TOKEN)) return [];
+  // A channelOverride or a preview means somebody aimed the digest somewhere on
+  // purpose, usually to test it. Fanning out to real team channels as a side
+  // effect of that would post real audit numbers to real audiences.
+  if (options.channelOverride || options.preview) return [];
+
+  const groups = new Map<string, DigestSectionRule[]>();
+  for (const rule of resolveDigestSectionRules()) {
+    if (!rule.channelEnv) continue;
+    const list = groups.get(rule.channelEnv) || [];
+    list.push(rule);
+    groups.set(rule.channelEnv, list);
+  }
+  if (groups.size === 0) return [];
+
+  let data: DigestData | null = null;
+  const results: DigestAudienceResult[] = [];
+
+  for (const [channelEnv, groupRules] of groups) {
+    const sectionIds = groupRules.map((r) => r.id);
+    try {
+      const channel = (process.env[channelEnv] || "").trim();
+      if (!channel) {
+        results.push({
+          success: true,
+          skipped: true,
+          method: "audience-no-channel",
+          cadence,
+          channelEnv,
+          sectionIds,
+        });
+        continue;
+      }
+
+      const runKey = `${cadence}:${toIsoDateOnly(window.start)}:${toIsoDateOnly(
+        window.end,
+      )}:slack-audience:${channelEnv}`;
+      if (
+        options.enforceIdempotency !== false &&
+        (await hasSuccessfulDigestRun(runKey))
+      ) {
+        results.push({
+          success: true,
+          skipped: true,
+          method: "audience-idempotent",
+          runKey,
+          cadence,
+          channelEnv,
+          sectionIds,
+        });
+        continue;
+      }
+
+      // Generated once and reused across channels: the data is identical, and
+      // generateDigestData is the expensive part of the whole digest.
+      if (!data)
+        data = await generateDigestData({ cadence, window, now: options.now });
+
+      const sections = data.business_sections.filter((s) =>
+        sectionIds.includes(s.id),
+      );
+      if (sections.length === 0) {
+        results.push({
+          success: true,
+          skipped: true,
+          method: "audience-no-sections",
+          runKey,
+          cadence,
+          channelEnv,
+          sectionIds,
+        });
+        continue;
+      }
+
+      const blocks = buildAudienceSlackBlocks(data, sections, cadence);
+      const fallback = `${cadenceLabel(cadence)} audit digest (${data.period})`;
+      const { enqueueSlackOutboxMessage, processOutboxMessageById } =
+        await import("./notificationOutbox");
+      const outbox = await enqueueSlackOutboxMessage({
+        source: `executive_digest_${cadence}_audience`,
+        destination: channel,
+        text: fallback,
+        blocks,
+        dedupeKey:
+          options.enforceIdempotency === false ? undefined : runKey,
+        metadata: {
+          cadence,
+          runKey,
+          channelEnv,
+          sectionIds,
+          windowStart: window.start.toISOString(),
+          windowEnd: window.end.toISOString(),
+        },
+        maxAttempts: Number.parseInt(
+          process.env.DIGEST_OUTBOX_MAX_ATTEMPTS || "4",
+          10,
+        ),
+      });
+      const delivered = await processOutboxMessageById(outbox.id);
+      if (delivered && delivered.status === "sent") {
+        await recordDigestRun({
+          runKey,
+          cadence,
+          channel: "slack",
+          window,
+          status: "success",
+        });
+        results.push({
+          success: true,
+          method: "audience-outbox",
+          runKey,
+          cadence,
+          channelEnv,
+          sectionIds,
+        });
+      } else {
+        const error = delivered
+          ? `outbox status ${delivered.status}`
+          : "outbox enqueue succeeded but delivery record unavailable";
+        await recordDigestRun({
+          runKey,
+          cadence,
+          channel: "slack",
+          window,
+          status: "failed",
+          error,
+        });
+        results.push({
+          success: false,
+          error,
+          runKey,
+          cadence,
+          channelEnv,
+          sectionIds,
+        });
+      }
+    } catch (err) {
+      // Per-channel, so one bad destination cannot stop the others. A team
+      // missing its digest is bad; three teams missing theirs because a fourth
+      // channel was archived is worse.
+      const error = err instanceof Error ? err.message : String(err);
+      logger.error(`[Digest] audience send failed for ${channelEnv}`, err);
+      results.push({ success: false, error, cadence, channelEnv, sectionIds });
+    }
+  }
+
+  return results;
+}
+
 export async function runDigestFanout(
   cadence: DigestCadence,
   options: DigestSendOptions = {},
 ): Promise<DigestFanoutResult> {
   const now = options.now || new Date();
   const window = options.window || computeDigestWindow(cadence, now);
-  const [emailResult, slackResult] = await Promise.allSettled([
+  const [emailResult, slackResult, audienceResult] = await Promise.allSettled([
     sendDigestEmail({ ...options, cadence, now, window }),
     sendDigestSlack({ ...options, cadence, now, window }),
+    // Additive third delivery — the per-audience messages. Settled alongside
+    // the others so a failure here can never take down the platform digest.
+    sendDigestSlackAudiences({ ...options, cadence, now, window }),
   ]);
+  const audiences =
+    audienceResult.status === "fulfilled" ? audienceResult.value : [];
   const email =
     emailResult.status === "fulfilled"
       ? emailResult.value
@@ -2378,7 +2701,7 @@ export async function runDigestFanout(
     slackResult.status === "fulfilled"
       ? slackResult.value
       : ({ success: false, error: slackResult.reason ? String(slackResult.reason) : "slack fanout failed" } as DigestSendResult);
-  return { cadence, window, email, slack };
+  return { cadence, window, email, slack, audiences };
 }
 
 export async function getDigestDeliveryHealth(
