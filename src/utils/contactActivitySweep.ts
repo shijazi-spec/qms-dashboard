@@ -35,6 +35,11 @@
 import { createRedactedPool } from "./redactedPool";
 import { fetchZohoRecords, fetchZohoRelatedRecords } from "./zohoCRM";
 import { logger } from "./logger";
+// The 2-of-3 duplicate rule has exactly ONE definition. Importing it — rather
+// than restating it in SQL — is the fix for 2026-09-11, where this module
+// treated "shares a cluster" as "is the same person" and proposed merging
+// three unrelated contacts into one.
+import { matchSignals } from "./contactMergeWorklist";
 
 const pool = createRedactedPool({ connectionString: process.env.DATABASE_URL });
 
@@ -524,10 +529,7 @@ export async function getContactsWithNoActivity(
             ) AS account,
             r.created_date,
             a.verified_at,
-            tw.twin_id,
-            tw.twin_name,
-            tw.twin_email,
-            tw.twin_activity
+            tw.cands
        FROM contact_activity_counts a
        JOIN duplicate_records r ON r.zoho_record_id = a.zoho_contact_id
        -- The duplicate this record should be merged INTO, if it has one. The
@@ -535,39 +537,83 @@ export async function getContactsWithNoActivity(
        -- whole corpus) and probes duplicate_records on the indexed cluster_id,
        -- so it stays cheap — unlike the per-open-deal lateral that took the
        -- multi-active-deals query from ~1s to 13s.
+       -- CANDIDATES, not a verdict. Sharing a cluster is not evidence that two
+       -- records are the same person — the cluster is a net, deliberately cast
+       -- wide. Picking the cluster-mate with the most activity produced merge
+       -- instructions pairing "Soha" and "mansour meshal Alghamdi" with a third
+       -- unrelated contact (found in the admin workbook, 2026-09-11). The
+       -- 2-of-3 rule is applied in TypeScript below, by the SAME matchSignals
+       -- the merge worklist uses — re-implementing it here would let the two
+       -- drift, which is exactly how this happened.
        LEFT JOIN LATERAL (
-         SELECT t.zoho_record_id AS twin_id,
-                NULLIF(BTRIM(t.record_name), '') AS twin_name,
-                NULLIF(BTRIM(t.email), '') AS twin_email,
-                tc.total AS twin_activity
-           FROM duplicate_records t
-           LEFT JOIN contact_activity_counts tc
-                  ON tc.zoho_contact_id = t.zoho_record_id
-          WHERE t.record_type = 'contact'
-            AND t.cluster_id = r.cluster_id
-            AND t.zoho_record_id IS NOT NULL
-            AND t.zoho_record_id <> r.zoho_record_id
-            -- A pair the operator has already pulled apart stays apart:
-            -- re-proposing a merge they rejected is how a cleaned cluster
-            -- comes back to life.
-            AND NOT EXISTS (
-              SELECT 1 FROM duplicate_separation_ledger s
-               WHERE s.zoho_id_low = LEAST(r.zoho_record_id, t.zoho_record_id)
-                 AND s.zoho_id_high = GREATEST(r.zoho_record_id, t.zoho_record_id)
-            )
-          -- Prefer the twin with the most activity: that is the survivor.
-          ORDER BY COALESCE(tc.total, -1) DESC, t.created_date ASC NULLS LAST
-          LIMIT 1
+         SELECT json_agg(x) AS cands
+           FROM (
+             SELECT t.zoho_record_id AS id,
+                    NULLIF(BTRIM(t.record_name), '') AS name,
+                    NULLIF(BTRIM(t.email), '') AS email,
+                    NULLIF(BTRIM(t.phone), '') AS phone,
+                    tc.total AS acts
+               FROM duplicate_records t
+               LEFT JOIN contact_activity_counts tc
+                      ON tc.zoho_contact_id = t.zoho_record_id
+              WHERE t.record_type = 'contact'
+                AND t.cluster_id = r.cluster_id
+                AND t.zoho_record_id IS NOT NULL
+                AND t.zoho_record_id <> r.zoho_record_id
+                -- A pair the operator has already pulled apart stays apart:
+                -- re-proposing a merge they rejected is how a cleaned cluster
+                -- comes back to life.
+                AND NOT EXISTS (
+                  SELECT 1 FROM duplicate_separation_ledger s
+                   WHERE s.zoho_id_low = LEAST(r.zoho_record_id, t.zoho_record_id)
+                     AND s.zoho_id_high = GREATEST(r.zoho_record_id, t.zoho_record_id)
+                )
+              -- Most activity first: among genuine matches, that is the survivor.
+              ORDER BY COALESCE(tc.total, -1) DESC, t.created_date ASC NULLS LAST
+              LIMIT 10
+           ) x
        ) tw ON r.cluster_id IS NOT NULL
       WHERE r.record_type = 'contact'
         AND a.total = 0
         AND a.verified_at IS NOT NULL
-      -- Merge candidates first: they are the rows that must NOT be deleted.
-      ORDER BY (tw.twin_id IS NOT NULL) DESC, r.created_date ASC NULLS LAST
+      -- Ordering cannot know the verdict any more: whether a row is a merge
+      -- candidate is decided in TypeScript below. Sorted after that instead.
+      ORDER BY r.created_date ASC NULLS LAST
       LIMIT $1`,
     [limit],
   );
-  return res.rows as NoActivityContact[];
+
+  const out: NoActivityContact[] = (res.rows as any[]).map((r) => {
+    const cands: any[] = Array.isArray(r.cands) ? r.cands : [];
+    // THE 2-OF-3 RULE, from the one place it is defined. A cluster-mate is
+    // only this person if it matches on two of {email, phone, full name};
+    // sharing a cluster is not evidence, and treating it as evidence produced
+    // merge instructions between three unrelated people.
+    const twin = cands.find(
+      (cnd) =>
+        matchSignals(
+          { email: r.email, phone: r.phone, name: r.name },
+          { email: cnd.email, phone: cnd.phone, name: cnd.name },
+        ).length >= 2,
+    );
+    return {
+      zoho_contact_id: r.zoho_contact_id,
+      name: r.name,
+      email: r.email,
+      phone: r.phone,
+      owner: r.owner,
+      account: r.account,
+      created_date: r.created_date,
+      verified_at: r.verified_at,
+      twin_id: twin ? String(twin.id) : null,
+      twin_name: twin ? twin.name ?? null : null,
+      twin_email: twin ? twin.email ?? null : null,
+      twin_activity: twin && twin.acts != null ? Number(twin.acts) : null,
+    };
+  });
+  // Merge candidates first: they are the rows that must NOT be deleted.
+  out.sort((a, b) => (b.twin_id ? 1 : 0) - (a.twin_id ? 1 : 0));
+  return out;
 }
 
 /** Coverage, so the UI can say how much of the corpus has actually been checked. */
@@ -623,8 +669,19 @@ export async function contactsWithDuplicateTwin(
 ): Promise<Set<string>> {
   const ids = Array.from(new Set((zohoIds || []).map(String).filter(Boolean)));
   if (!ids.length) return new Set();
+  // Return the PAIRS with their attributes, then apply the 2-of-3 rule in
+  // TypeScript — the same rule, from the same place, as the merge worklist and
+  // the no-activity list. This gate and that report must agree: if the gate
+  // refuses a contact the report calls deletable, the operator is stuck with a
+  // row nothing will act on and no explanation why.
   const res = await pool.query(
-    `SELECT DISTINCT r.zoho_record_id AS id
+    `SELECT r.zoho_record_id AS id,
+            NULLIF(BTRIM(r.record_name), '') AS name,
+            NULLIF(BTRIM(r.email), '') AS email,
+            NULLIF(BTRIM(r.phone), '') AS phone,
+            NULLIF(BTRIM(t.record_name), '') AS t_name,
+            NULLIF(BTRIM(t.email), '') AS t_email,
+            NULLIF(BTRIM(t.phone), '') AS t_phone
        FROM duplicate_records r
        JOIN duplicate_records t
          ON t.record_type = 'contact'
@@ -641,5 +698,15 @@ export async function contactsWithDuplicateTwin(
         )`,
     [ids],
   );
-  return new Set((res.rows as any[]).map((r) => String(r.id)));
+  const out = new Set<string>();
+  for (const row of res.rows as any[]) {
+    const id = String(row.id);
+    if (out.has(id)) continue;
+    const sig = matchSignals(
+      { email: row.email, phone: row.phone, name: row.name },
+      { email: row.t_email, phone: row.t_phone, name: row.t_name },
+    );
+    if (sig.length >= 2) out.add(id);
+  }
+  return out;
 }

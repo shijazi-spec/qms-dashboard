@@ -58,6 +58,29 @@ describe("matchSignals", () => {
   });
 });
 
+describe("the cluster-is-not-evidence regression (2026-09-11)", () => {
+  // The admin workbook shipped a sheet telling Zoho to merge "Soha" and
+  // "mansour meshal Alghamdi" into "سعود" — three unrelated people who shared
+  // a duplicate cluster. The cause: that code path picked the cluster-mate
+  // with the most activity and never checked whether it was the same person.
+  // These are the real values from that sheet.
+  const soha = c({ name: "Soha -", email: "soha-sh@outlook.com", phone: "+966 56 673 0200" });
+  const mansour = c({ name: "mansour meshal Alghamdi", email: "mansour6665@hotmail.com", phone: "559667600" });
+  const saud = c({ name: "سعود -", email: "sauddalsahli@gmail.com", phone: "0501234567" });
+
+  it("refuses to pair two strangers who merely share a cluster", () => {
+    expect(matchSignals(soha, saud).length).toBeLessThan(2);
+    expect(matchSignals(mansour, saud).length).toBeLessThan(2);
+    expect(matchSignals(soha, mansour).length).toBeLessThan(2);
+  });
+
+  it("still pairs the same person written two ways", () => {
+    const a = c({ name: "Soha -", email: "soha-sh@outlook.com", phone: "+966 56 673 0200" });
+    const b = c({ name: "soha -", email: "different@x.com", phone: "0566730200" });
+    expect(matchSignals(a, b).sort()).toEqual(["name", "phone"]);
+  });
+});
+
 describe("pickMaster", () => {
   it("keeps the record with the most activity", () => {
     const busy = c({ zoho_contact_id: "busy", activity_total: 12, activity_verified: true });
