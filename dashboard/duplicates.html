@@ -2180,7 +2180,8 @@
                 <span class="text-xs font-normal text-gray-500">— attached to nothing, holding nothing: no Account, no Deal, no activity, no email, no phone. Nothing to preserve and nothing to merge into.</span>
               </h3>
               <span id="orphCount" class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-xs font-bold">—</span>
-              <button data-on-click="loadOrphanContacts" class="ms-auto rr-btn rr-btn-ghost">↻ Refresh</button>
+              <button data-on-click="downloadContactCleanupReport" title="The full contact clean-up workbook for the Zoho admin: five sheets, one per action — delete, merge, merge, delete — so the two can never be confused. Read-only." class="ms-auto rr-btn rr-btn-primary">📋 Zoho admin report (XLSX)</button>
+              <button data-on-click="loadOrphanContacts" class="rr-btn rr-btn-ghost">↻ Refresh</button>
               <button data-on-click="downloadOrphanCsv" title="Download the orphan contacts as CSV for the Zoho admin." class="rr-btn rr-btn-ghost">⬇ Export CSV</button>
             </div>
             <div id="orphSummary" class="text-xs text-gray-600 mb-2">—</div>
@@ -2665,7 +2666,7 @@
          the browser caches it across loads + tab navigation, shrinking this page
          from 916KB to ~197KB). MAINTENANCE: bump ?v= whenever you edit
          js/duplicates-app.js, or browsers serve a stale cached copy. -->
-    <script src="/js/duplicates-app.js?v=199"></script>
+    <script src="/js/duplicates-app.js?v=200"></script>
     <script src="/js/ai-consultant-widget.js?v=4.5.2"></script>
     <script>
         if (window.WalaPlusI18n) {

@@ -13842,6 +13842,67 @@ export const duplicateRadarRoutes = [
   },
 
   {
+    // CONTACT CLEANUP REPORT for the Zoho admin (Sarah 2026-09-11). Five
+    // sheets, one per action, because mixing them is how activity history gets
+    // deleted: a sheet headed "duplicate contacts" invites deleting all of
+    // them when a third must be merged instead. Read-only.
+    // GET /api/duplicates/contacts/cleanup-report.xlsx  (?format=json for counts)
+    path: "/api/duplicates/contacts/cleanup-report.xlsx",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const url = new URL(c.req.url);
+        const { buildContactCleanupReport } = await import(
+          "../../utils/contactCleanupReport"
+        );
+        const report = await buildContactCleanupReport();
+
+        if ((url.searchParams.get("format") || "").toLowerCase() === "json") {
+          return c.json({ success: true, ...report.counts, filename: report.filename });
+        }
+
+        // Built in memory rather than streamed, same reasoning as the
+        // multi-active-deals workbook: this is bounded by the clean-up
+        // backlog (thousands of rows, not unbounded), and on this deployment
+        // every staged/streamed export took the whole instance down.
+        const { buildWorkbook } = await import("../../utils/excelExport");
+        const buf = await buildWorkbook(report.sheets, {
+          title: "Zoho contact clean-up",
+        });
+        try {
+          await createExportLog({
+            export_type: "contact_cleanup_report" as any,
+            filter_criteria: report.counts as any,
+            total_records_exported:
+              report.counts.delete_no_duplicate +
+              report.counts.merge_empty_with_twin +
+              report.counts.orphans,
+            file_format: "xlsx",
+            exported_by:
+              (user as any).email ||
+              (user as any).name ||
+              `user:${(user as any).userId ?? "unknown"}`,
+          });
+        } catch (logErr) {
+          logger.warn("[DuplicateRadar] cleanup-report export log failed (non-blocking):", logErr);
+        }
+        return new Response(buf as any, {
+          headers: {
+            "Content-Type":
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "Content-Disposition": `attachment; filename="${report.filename}"`,
+          },
+        });
+      } catch (e: any) {
+        logger.error("contacts/cleanup-report failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+
+  {
     // ORPHAN CONTACTS (Sarah 2026-09-10). Attached to nothing, holding
     // nothing: no Account, no Deal, no activity, no email, no phone. Distinct
     // from "Contacts with no activity" — a quiet contact can still hold the

@@ -9121,6 +9121,15 @@
             window.location.href = '/api/duplicates/contacts/orphans?format=csv';
         };
 
+        // The whole contact clean-up as one workbook for the Zoho admin: five
+        // sheets, one per action. Separate sheets on purpose — a single list
+        // headed "duplicate contacts" invites deleting all of them, when a
+        // third of them must be merged instead (Sarah 2026-09-11).
+        window.downloadContactCleanupReport = function () {
+            rrToast('Building the clean-up workbook — this reads the whole backlog, give it a moment…');
+            window.location.href = '/api/duplicates/contacts/cleanup-report.xlsx';
+        };
+
         // ── Contacts with no activity (Sarah 2026-09-06) ─────────────────────
         //
         // Deleting a contact in Zoho deletes its calls, meetings and emails with
