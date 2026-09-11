@@ -10,7 +10,7 @@
  *
  * Scope = the 4 KPIs leadership tracks today:
  *   - QM-KPI-002  Audit Execution Rate                    (Quality Manager)
- *   - QM-KPI-008  BU Coverage Rate                        (Quality Manager)
+ *   - QM-KPI-008  BU Pilot Validation Completion Rate     (Quality Manager)
  *   - QM-KPI-015  BU Framework Readiness Rate             (Quality Manager)
  *   - GRC-KPI-008 Compliance Coverage Index               (GRC Manager)
  *
@@ -412,29 +412,27 @@ async function calcBuCoverageRate() {
     );
   }
 
-  // QM-KPI-008 = BU Coverage Rate.
+  // QM-KPI-008 = BU Pilot Validation Completion Rate: BUs that completed the
+  // full 5-stage Pilot Validation plan ÷ the planned BUs. Binary per BU.
   //
-  // This called actionPlanCompleteRate("QM-KPI-008") — binary pilot-validation
-  // completion over 8 planned BUs — and its comment claimed that was the "same
-  // value /kpis records". It was not. /kpis records
-  // PROCESS_CALCULATORS["QM-KPI-008"], which is average governance coverage
-  // WITH PARTIAL CREDIT, so leadership and the dashboard were sending two
-  // different numbers for one KPI code and nothing compared them.
-  //
-  // Both now end at buGovernedRate(): the process calculator reaches it via
-  // buCoverageRateForFeed(), and this reads it directly for the covered/total
-  // detail. One computation, so they cannot drift apart again — see
-  // tests/vitest/kpiBuCoverageSingleSource.vitest.test.ts.
+  // ONE COMPUTATION. This is the same actionPlanCompleteRate("QM-KPI-008") that
+  // /kpis shows through checklistValueFor, and QM-KPI-008 is deliberately NOT in
+  // PROCESS_CALCULATORS, so nothing else writes this code. Between 2026-09-10
+  // and 2026-09-11 that was not true: calcBuCoverageTracked wrote BU coverage
+  // into /kpis while this function sent pilot completion outward, under a
+  // comment claiming they were the same value. They were two different numbers
+  // for one KPI and nothing compared them — see
+  // tests/vitest/qmKpi008SingleSource.vitest.test.ts, which now pins it.
   //
   // (business_units seeding above is kept — calcRiskAssessmentCoverage relies
   // on it.)
-  const { buGovernedRate } = await import("./kpiChecklistDatabase");
-  const r = await buGovernedRate();
-  if (!r) return { value: 0, dataAvailable: false, reason: "no_bu_coverage_yet" };
+  const { actionPlanCompleteRate } = await import("./kpiChecklistDatabase");
+  const rate = await actionPlanCompleteRate("QM-KPI-008");
+  if (!rate) return { value: 0, dataAvailable: false, reason: "no_pilot_checklist_yet" };
   return {
-    value: r.value,
+    value: rate.value,
     dataAvailable: true,
-    details: { bus_covered: r.covered, bus_total: r.total },
+    details: { bus_pilot_validated: rate.complete, bus_planned: rate.total },
   };
 }
 
@@ -749,10 +747,10 @@ const FEED_KPIS: FeedKpiConfig[] = [
   },
   {
     code: "QM-KPI-008",
-    // This is the label leadership actually sees. It said "BU Pilot Validation
-    // Completion Rate" while the value was governance coverage with partial
-    // credit — the name is the half that has to match the number.
-    name: "BU Coverage Rate",
+    // The label leadership sees. It must match the live kpi_definitions row,
+    // which reads "BU Pilot Validation Completion Rate" — for a while this said
+    // "BU Coverage Rate" and the two surfaces disagreed on the name.
+    name: "BU Pilot Validation Completion Rate",
     unit: "%",
     target: 100,
     green: 95,
@@ -1424,12 +1422,12 @@ const NORTH_STAR_DEFS: Array<{
  * The reason for excluding 008 from the mirror is unchanged — it computes live
  * rather than reading a stored value.
  *
- * NOTE (2026-09-11): the live QM-KPI-008 row still reads "BU Pilot Validation
- * Completion Rate" on /kpis, because it carries is_customized = true and
- * finalGrqKpiSeed's upsert ends `WHERE is_customized IS NOT TRUE` — so the seed
- * rename never applied. The payload `name` below therefore does NOT match what
- * the dashboard shows. Sarah 2026-09-11 asked for QM-KPI-008 to be left as it
- * is; clearing that flag is the open decision, not a code change.
+ * WORTH KNOWING for any future rename here: the live QM-KPI-008 row carries
+ * `is_customized = true`, and finalGrqKpiSeed's upsert ends
+ * `WHERE is_customized IS NOT TRUE`. A seed-only rename of that row therefore
+ * changes NOTHING in the database while changing everything in code — which is
+ * how the payload came to say "BU Coverage Rate" while /kpis still said "BU
+ * Pilot Validation Completion Rate". Nothing in the codebase clears that flag.
  */
 const MIRROR_DASHBOARD_CODES = new Set<string>([
   "QM-KPI-002", // Audit Execution Rate (auto)

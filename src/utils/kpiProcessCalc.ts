@@ -1615,7 +1615,19 @@ export const PROCESS_CALCULATORS: Record<
   // Quality — % of handoffs processed within the SLA window
   "QM-KPI-006": calcHandoffSlaCompliance,
   // Quality — BU Coverage Rate from the per-BU coverage tracker
-  "QM-KPI-008": calcBuCoverageTracked,
+  // QM-KPI-008 is NOT here, deliberately (Sarah 2026-09-11).
+  //
+  // a16abe7e registered calcBuCoverageTracked under this code, but QM-KPI-008
+  // is "BU Pilot Validation Completion Rate" — a different metric. runKPIAutoCalc
+  // records a calculator's result by code whatever calc_mode says, so that
+  // registration quietly overwrote the pilot-validation figure with BU coverage
+  // on every recalc, and the card showed a green number for something the name
+  // did not describe. Its value now comes from the 5-stage pilot checklist via
+  // actionPlanCompleteRate, the same source the leadership feed reads.
+  //
+  // calcBuCoverageTracked is kept — buGovernedRate still backs the BU Coverage
+  // tracker in kpiBuCoverageDatabase — but it must not be wired to a KPI code
+  // again unless that KPI is actually named for coverage.
   // GRC / Specialist "auto-ready" — fill once their registers carry data
   "GRC-KPI-017": calcRiskRegisterHygiene,
   "GRC-KPI-019": calcTpraSla,

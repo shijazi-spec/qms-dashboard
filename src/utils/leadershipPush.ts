@@ -34,7 +34,7 @@ const DEFAULT_MAP: Record<string, string> = {
   "QM-KPI-002": "c1ee6e62-ca61-4dc3-942d-4f83f208278e", // Audit Execution Rate
   "GRC-KPI-008": "73b2b61f-52e2-4bb4-88dc-15bfb3c406f1", // Compliance Coverage Index
   "QM-KPI-015": "d6fd13f5-93a7-4d6b-b50a-025b92a4d0fc", // BU Framework Readiness Rate
-  "QM-KPI-008": "d40dba10-d7d0-40ec-b6e1-dcc48c656a0a", // BU Coverage Rate
+  "QM-KPI-008": "d40dba10-d7d0-40ec-b6e1-dcc48c656a0a", // BU Pilot Validation Completion Rate
   // GRC-KPI-002 now emits a COUNT of on-time milestones (see
   // onTimeCountFromSummary), which matches leadership's unit. Re-enable by
   // uncommenting once the full strategyItem UUID is confirmed against the

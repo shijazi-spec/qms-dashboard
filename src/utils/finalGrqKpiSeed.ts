@@ -55,41 +55,27 @@ function bands(target: number, dir: "higher_is_better" | "lower_is_better") {
 // ★ AUTHORITATIVE from "New_GRQ Final KPIs.xlsx" (Sarah, 2026-06-30): 27 KPIs.
 // Leadership-tracked codes kept STABLE so the pull doesn't break:
 //   QM-KPI-002 = Audit Execution, QM-KPI-015 = BU Framework Readiness ("built"),
-//   QM-KPI-008 = BU Coverage Rate ("audited"), GRC-KPI-008 = Compliance Coverage.
+//   QM-KPI-008 = BU Pilot Validation ("audited"), GRC-KPI-008 = Compliance Coverage.
 export const FINAL_KPIS: FinalKpi[] = [
   // ───────────── Quality — Sarah Hijazi (6) ─────────────
   { code: "QM-KPI-002", name: "Audit Execution Rate", owner_type: "quality_manager", owner_name: "Sarah Hijazi", category: "audit", unit: "%", target: 90, weight: 30, direction: "higher_is_better", frequency: "quarterly", calc_mode: "auto", north_star: true, description: "Measures the percentage of planned internal audits completed within the defined period across in-scope business units", formula: "Completed Audits ÷ Planned Audits × 100", data_source: "QMS Platform" },
   { code: "QM-KPI-015", name: "BU Framework Readiness Rate", owner_type: "quality_manager", owner_name: "Sarah Hijazi", category: "governance", unit: "%", target: 100, weight: 30, direction: "higher_is_better", frequency: "quarterly", calc_mode: "checklist", north_star: true, description: "Measures the percentage of planned business units that completed all pre-pilot framework preparation steps and achieved Ready-for-Pilot status", formula: "Number of planned BUs reaching “Ready for Pilot” status ÷ total planned BUs × 100", data_source: "QMS Platform" },
-  // Renamed from "BU Pilot Validation Completion Rate" (Sarah 2026-09-10).
+  // QM-KPI-008 is BU Pilot Validation, and stays that way (Sarah 2026-09-11).
   //
-  // The definition and the number had come apart. a16abe7e registered
-  // calcBuCoverageTracked under this code, which computes AVERAGE governance
-  // coverage across the BUs with partial credit — a BU 35% through its
-  // checklist counts 0.35. The row still promised binary pilot-validation
-  // completion over 8 planned BUs, and runKPIAutoCalc records a calculator's
-  // result by code whatever calc_mode says, so the page showed a coverage
-  // figure under a pilot-validation name. That is the SPEC-KPI-02 failure
-  // exactly, on a north_star KPI pushed to leadership.
+  // fc72aaec renamed this row to "BU Coverage Rate" because a16abe7e had
+  // registered calcBuCoverageTracked under this code, so a coverage figure was
+  // being written into a pilot-validation KPI. The rename never reached the
+  // database — the live row carries is_customized = true and this seed's upsert
+  // ends `WHERE is_customized IS NOT TRUE` — so the seed and the screen
+  // disagreed, and QM-KPI-016 (a second home for the pilot plan) briefly made
+  // it two KPIs with one name.
   //
-  // The per-BU tracker, kpiBuCoverageDatabase and the calculator were all
-  // built for BU Coverage, so the definition is what was stale.
-  //
-  // On the number itself: buGovernedRate() is BINARY per BU — a BU counts only
-  // when BOTH "Process Releasing" and "Trial Audit Report" are ticked, over the
-  // commercial-8 list. It reads the QM-KPI-015 checklist, not this KPI's own.
-  // (kpiBuCoverageDatabase's header describes an AVERAGE with partial credit;
-  // that is the kpi_bu_coverage tracker table, which is an admin view and is
-  // NOT what buCoverageRateForFeed returns. Do not describe this KPI from that
-  // header — I did, and it put a partial-credit formula on a binary metric.)
-  //
-  // calc_mode is "bu_coverage", NOT "auto". Two reasons, and the first is a
-  // trap: kpis.html gates the "Manage BU Coverage" modal on
-  // calc_mode === 'bu_coverage', so "auto" would leave the per-BU tracker with
-  // no way in — the admin screen for the very data this KPI reads. Second, it
-  // is the honest label: the value is machine-computed FROM the tracker, which
-  // is neither a free-text manual entry nor the 5-stage pilot checklist.
-  // "checklist" was wrong because it pointed at the wrong editor.
-  { code: "QM-KPI-008", name: "BU Coverage Rate", owner_type: "quality_manager", owner_name: "Sarah Hijazi", category: "governance", unit: "%", target: 100, weight: 20, direction: "higher_is_better", frequency: "quarterly", calc_mode: "bu_coverage", north_star: true, description: "Measures the percentage of the commercial business units whose process framework is both released and trial-audited — the stricter half of BU Framework Readiness, counted per BU rather than per step", formula: "BUs with both “Process Releasing” and “Trial Audit Report” complete ÷ total commercial BUs × 100 (binary per BU; read from the QM-KPI-015 checklist)", data_source: "QMS Platform" },
+  // Resolved the other way instead: the NAME was right all along and the
+  // CALCULATOR was wrong. QM-KPI-008 is out of PROCESS_CALCULATORS now, so
+  // nothing overwrites it, and both /kpis and the leadership feed read the
+  // 5-stage pilot checklist through actionPlanCompleteRate. calc_mode
+  // "checklist" is what puts the "Manage Checklist" button on the card.
+  { code: "QM-KPI-008", name: "BU Pilot Validation Completion Rate", owner_type: "quality_manager", owner_name: "Sarah Hijazi", category: "governance", unit: "%", target: 100, weight: 20, direction: "higher_is_better", frequency: "quarterly", calc_mode: "checklist", north_star: true, description: "Measures the percentage of planned pilot-ready business units that completed pilot validation, including pilot execution, reporting, and action planning", formula: "Planned Pilot-Ready BUs Completing Pilot Validation ÷ Total Quarterly Pilot-Planned BUs × 100", data_source: "QMS Platform" },
   { code: "QM-KPI-009", name: "Repeat Findings Rate", owner_type: "quality_manager", owner_name: "Sarah Hijazi", category: "audit", unit: "%", target: 10, weight: 5, direction: "lower_is_better", frequency: "quarterly", calc_mode: "manual", description: "Measures the percentage of audit findings (2 times consecutively) that recur from previously identified issues within the defined review period", formula: "Repeat Findings (persisting NCs) ÷ Total Findings × 100", data_source: "Audit Report Dashboard" },
   { code: "QM-KPI-012", name: "CAPA Effectiveness Rate", owner_type: "quality_manager", owner_name: "Sarah Hijazi", category: "quality", unit: "%", target: 90, weight: 5, direction: "higher_is_better", frequency: "quarterly", calc_mode: "manual", description: "Measures the percentage of reviewed CAPAs that were verified effective against its deadline in preventing recurrence within the defined effectiveness review period", formula: "Effective CAPAs ÷ CAPAs reviewed for effectiveness × 100", data_source: "CAPA Register" },
   { code: "QM-KPI-004", name: "QMS Platform Adoption Rate", owner_type: "quality_manager", owner_name: "Sarah Hijazi", category: "quality", unit: "%", target: 70, weight: 5, direction: "higher_is_better", frequency: "quarterly", calc_mode: "checklist", description: "Measures the percentage of in-scope GRQ work activities that are created, tracked, updated, and closed within the platform established and governed by the Quality Manager", formula: "GRQ activities managed in platform ÷ total GRQ activities in scope × 100", data_source: "QMS Platform" },
