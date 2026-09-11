@@ -169,6 +169,34 @@ const ALLOWED_FIELDS: Record<string, Set<string>> = {
     // reached the handler: a dry-run request fell through to the live branch
     // and spent a real batch of LLM votes instead of counting them.
     'estimate', 'before', 'require_chunks',
+    // Same trap, same module: POST /api/compliance/document-mapping/
+    // purge-blurb-era needs both of these to reach the handler. Stripped, the
+    // request degrades to a dry run and reports success having deleted
+    // nothing. That direction is the safe one (the rejudge case above failed
+    // the other way, spending real LLM votes), but a delete that silently
+    // does not happen is still a lie to the operator.
+    'confirm', 'expect_total',
+    // ── The rest of what /api/compliance/* handlers actually read ──────────
+    // Derived by diffing every `body.<field>` in obligationDocumentsRoutes.ts
+    // and complianceRoutes.ts against this list, after the two above were
+    // found missing. 19 names were being stripped, and each one silently broke
+    // its endpoint with a "<field> is required" that named a field the caller
+    // had definitely sent.
+    //
+    // The worst of them: document_id and obligation_id. Those are the ONLY
+    // inputs to the two manual clause-linking endpoints, so linking a document
+    // to a clause by hand was impossible platform-wide - which is why every
+    // link in the database is AI-made. The automatic mappers write via direct
+    // SQL and never pass through this middleware, so they were unaffected, and
+    // the failure looked like "nobody maps by hand" rather than "nobody can".
+    'document_id', 'obligation_id', 'regulation_id',
+    // External audit create/update
+    'name', 'lead_auditor', 'auditor_notes', 'scope_summary', 'jurisdiction',
+    'planned_start_date', 'planned_end_date', 'scheduled_date', 'outcome',
+    'event_type',
+    // Assessment evidence + AI clause drafting + citation review
+    'evidence_document_ids', 'evidence_notes', 'draft_clauses', 'top_n',
+    'action', 'force',
   ]),
   users: new Set([
     'email', 'full_name', 'role', 'team', 'department', 'status',

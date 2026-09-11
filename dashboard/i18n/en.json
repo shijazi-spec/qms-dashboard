@@ -2066,7 +2066,8 @@
     "purge_confirm_tail": "This cannot be undone from the page. Re-mapping needs the real documents to be attached first.",
     "purge_none": "Nothing to clear — no mappings were made against placeholder documents.",
     "purge_done": "Cleared {n} row(s).",
-    "purge_error": "Purge failed"
+    "purge_error": "Purge failed",
+    "purge_not_applied": "Nothing was deleted — the server answered with a preview instead of applying. Tell the developer: the confirm flag is not reaching the handler."
   },
   "compliance": {
     "subtitle": "Milestone-by-milestone certification action plan with live evidence, plus framework and obligation tracking below",

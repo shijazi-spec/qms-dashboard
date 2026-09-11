@@ -740,6 +740,14 @@
                 var res = await fetch('/api/compliance/document-mapping/purge-blurb-era', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: true, expect_total: p.total }) });
                 var d = await res.json().catch(function () { return {}; });
                 if (!res.ok) { alert(pt('docmap.purge_error', 'Purge failed') + (d.error ? ': ' + d.error : '')); return; }
+                // A 200 is not proof the delete happened. If anything strips
+                // `confirm` from the body on the way in - the sanitizer
+                // allow-list did exactly that - the server answers a dry run,
+                // and reporting "Cleared 4300 rows" over it would be a lie.
+                if (d.dry_run !== false) {
+                    alert(pt('docmap.purge_not_applied', 'Nothing was deleted - the server answered with a preview instead of applying. Tell the developer: the confirm flag is not reaching the handler.'));
+                    return;
+                }
                 alert(pt('docmap.purge_done', 'Cleared {n} row(s).').replace('{n}', d.total || 0));
                 await reloadAll();
             } catch (e) {
