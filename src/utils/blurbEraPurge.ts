@@ -25,24 +25,34 @@
  * Clearing only the findings, or only the links, would leave one gate shut: the
  * re-map would appear to run and quietly map nothing. Both are cleared here.
  *
- * WHAT IS NEVER DELETED — AND WHY THAT CURRENTLY MEANS THE LINKS
- * --------------------------------------------------------------
+ * WHAT IS NEVER DELETED
+ * ---------------------
  * Links whose provenance is not demonstrably the AI. A person's deliberate
  * mapping is not reproducible by re-running the AI, so it is counted and
  * reported instead — and the report says plainly that each survivor keeps
  * gate 2 shut for its document × framework pair.
  *
- * The first live dry run (2026-09-11) showed what that means here: of 1044
- * links, 1042 point at placeholder documents and NONE carry an AI marker —
- * every one reads `linked_by = <a person's email>` with no link_method. The
- * cause is /apply-mapping, which writes the acting user's email and lets
- * link_method default to 'manual', so an AI suggestion accepted in bulk is
- * indistinguishable in the row from one made by hand.
+ * WHAT THE LIVE DATA TURNED OUT TO BE (2026-09-11 → 09-12)
+ * -------------------------------------------------------
+ * The first dry run reported links=0, kept=1042, which read as "all of it is
+ * human work". It was not. `link_provenance` showed the real distribution:
  *
- * So this module deliberately does NOT decide. `link_provenance` reports the
- * distribution and a human chooses, because the two readings — months of real
- * register mapping vs. a bulk AI apply under someone's identity — call for
- * opposite actions and the database cannot tell them apart.
+ *     bulk_confirmed      1010    s.hijazi@walaplus.com
+ *     citation_confirmed    32    s.hijazi@walaplus.com
+ *
+ * Both are post-review states, and confirming does not change who MADE a link.
+ * Only the two automatic mappers ever set awaiting_review = TRUE, so every one
+ * of those 1042 was machine-generated; 'bulk_confirmed' then came from the
+ * confirm-all override that the code itself describes as bypassing the
+ * audit-grade filter. Worse, that UPDATE overwrites `linked_by` with the
+ * confirmer's email — destroying the 'ai-semantic' marker that was the only
+ * remaining evidence of machine origin. Hence AI_LINK matches the confirmed
+ * variants too: the human email in the row is an artefact of the confirm, not
+ * a record of authorship.
+ *
+ * `link_provenance` stays in the report regardless. A count alone could not
+ * have distinguished these two cases, and the difference decided whether to
+ * delete 1042 rows or protect them.
  *
  * SELF-HEALING AFTERWARDS — nothing else needs running
  * ----------------------------------------------------
@@ -69,7 +79,19 @@ const PLACEHOLDER_DOCS = `
  * column existed is mislabelled — `linked_by` is the older, reliable signal.
  */
 const AI_LINK = `(
-     COALESCE(od.link_method, '') IN ('citation_auto', 'llm_semantic')
+     COALESCE(od.link_method, '') IN (
+       -- written by the two automatic mappers
+       'citation_auto', 'llm_semantic',
+       -- ...and the same links after review. Confirming does not change who
+       -- MADE the link, only that someone waved it through: 'bulk_confirmed'
+       -- comes from the confirm-all override, which the code itself describes
+       -- as bypassing the audit-grade filter, and its UPDATE overwrites
+       -- linked_by with the confirmer's email - erasing the 'ai-semantic'
+       -- marker that was the only remaining evidence of machine origin.
+       'bulk_confirmed', 'citation_confirmed', 'ai_confirmed',
+       -- AI proposed, a person accepted it one at a time (see apply-mapping)
+       'ai_suggested'
+     )
   OR COALESCE(od.linked_by, '')   IN ('ai-citation', 'ai-semantic')
 )`;
 
@@ -154,8 +176,8 @@ export interface PurgeReport {
   preserved_manual_links: any[];
   /**
    * Every link to a placeholder document, grouped by how it was written.
-   * Read this before deciding whether the links are real human mapping intent
-   * or bulk AI application under a user's identity — the row cannot say which.
+   * Read this before any delete: `linked_by` alone is not authorship, because
+   * confirming a link overwrites it with the confirmer's email.
    */
   link_provenance: any[];
   /** Only populated when `includeRows` is set (the CLI's backup file). */
