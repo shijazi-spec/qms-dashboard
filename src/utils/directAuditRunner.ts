@@ -1133,7 +1133,12 @@ export async function runDirectAudit(
           );
           const sectionLines = digestData.business_sections.map(
             (section) =>
-              `• *--- ${section.title} ---*\n  - Total ${section.total} (Leads ${section.leads} / Deals ${section.deals})\n  - New ${section.new_in_window}\n  - Progressed ${section.progressed}\n  - Stalled ${section.stalled}\n  - Severity: 🔴 Critical ${section.severity_counts.critical} | 🟠 High ${section.severity_counts.high} | 🟡 Medium ${section.severity_counts.medium} | 🟢 Low ${section.severity_counts.low}`,
+              // "Created this period", matching the digest's own renderers.
+              // Total and New were the same number — the record set is already
+              // filtered to the window by created time — so the two lines said
+              // one thing twice and "Total" implied a population that does not
+              // exist here. See buildSectionSlackBlock in executiveDigest.ts.
+              `• *--- ${section.title} ---*\n  - Created this period ${section.total} (Leads ${section.leads} / Deals ${section.deals})\n  - Progressed ${section.progressed}\n  - Stalled ${section.stalled}\n  - Severity: 🔴 Critical ${section.severity_counts.critical} | 🟠 High ${section.severity_counts.high} | 🟡 Medium ${section.severity_counts.medium} | 🟢 Low ${section.severity_counts.low}`,
           );
           // The segment health percentages describe ONLY records CREATED inside
           // the window above — getRecordTimestamp filters on Created_Time. On

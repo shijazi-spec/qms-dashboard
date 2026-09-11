@@ -77,9 +77,22 @@ export interface DigestSectionRule {
 export interface DigestBusinessSection {
   id: string;
   title: string;
+  /**
+   * Records matching this section that were CREATED inside the digest window.
+   * Not an all-time total: generateDigestData filters the fetched records by
+   * created time before sections are built, so this is period-scoped. Rendered
+   * as "created this period" for exactly that reason.
+   */
   total: number;
   leads: number;
   deals: number;
+  /**
+   * @deprecated Identical to `total` by construction — both are `items.length`
+   * over an already window-filtered set, so they can never differ. Kept only so
+   * existing consumers of this shape keep compiling; no renderer prints it any
+   * more. Do not reintroduce it as a second line: showing "Total 172 / New 172"
+   * is what made the digest look like it was reporting two figures.
+   */
   new_in_window: number;
   progressed: number;
   stalled: number;
@@ -1971,7 +1984,11 @@ export function buildDigestHTML(data: DigestData): string {
           : "#6B7280";
   const businessSectionsHtml = data.business_sections
     .map(
-      (section) => `<div class="metric-row"><span>${section.title}</span><span class="metric-value">${section.total} (L:${section.leads} / D:${section.deals})</span></div>
+      // Same wording as the Slack renderer. The bare number next to a section
+      // title reads as a grand total to anyone who has not been told the digest
+      // is period-scoped, which is the same misreading the Slack "Total" label
+      // invited.
+      (section) => `<div class="metric-row"><span>${section.title}</span><span class="metric-value">${section.total} created this period (L:${section.leads} / D:${section.deals})</span></div>
   <div class="metric-row"><span>Progressed / Stalled</span><span class="metric-value">${section.progressed} / ${section.stalled}</span></div>
   <div class="metric-row"><span>Severity (C/H/M/L)</span><span class="metric-value">${section.severity_counts.critical}/${section.severity_counts.high}/${section.severity_counts.medium}/${section.severity_counts.low}</span></div>
   <div class="metric-row"><span>Section Health</span><span class="metric-value">${section.health_score}%</span></div>`,
@@ -2104,7 +2121,12 @@ function buildSectionSlackBlock(section: DigestBusinessSection): any {
     type: "section",
     text: {
       type: "mrkdwn",
-      text: `*--- ${section.title} ---*\n- Total: *${section.total}* (Leads *${section.leads}* / Deals *${section.deals}*)\n- New: *${section.new_in_window}*\n- Progressed: *${section.progressed}*\n- Stalled: *${section.stalled}*\n- Severity: 🔴 Critical *${section.severity_counts.critical}* | 🟠 High *${section.severity_counts.high}* | 🟡 Medium *${section.severity_counts.medium}* | 🟢 Low *${section.severity_counts.low}*\n- Health: ${digestHealthLabel(section.health_score)} *${section.health_score}%*`,
+      // "Created this period", not "Total" + "New". Those were two labels for
+      // one number: the record set is already filtered to the window by created
+      // time, so total and new_in_window are the same expression and every
+      // section rendered them as identical lines ("Total: 172 / New: 172").
+      // "Total" implied a broader population that the digest never had.
+      text: `*--- ${section.title} ---*\n- Created this period: *${section.total}* (Leads *${section.leads}* / Deals *${section.deals}*)\n- Progressed: *${section.progressed}*\n- Stalled: *${section.stalled}*\n- Severity: 🔴 Critical *${section.severity_counts.critical}* | 🟠 High *${section.severity_counts.high}* | 🟡 Medium *${section.severity_counts.medium}* | 🟢 Low *${section.severity_counts.low}*\n- Health: ${digestHealthLabel(section.health_score)} *${section.health_score}%*`,
     },
   };
 }

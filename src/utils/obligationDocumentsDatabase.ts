@@ -3,12 +3,32 @@ import { logger } from "./logger";
 
 const pool = createRedactedPool({ connectionString: process.env.DATABASE_URL });
 
+/**
+ * How a clause-document link came to exist.
+ *
+ * This is the AUDIT answer to "did a person decide this, or did a machine?" and
+ * it must be recorded explicitly on every insert. It is not inferable later:
+ * `linked_by` holds the acting user's email even when the AI proposed the link,
+ * so a row without a link_method is indistinguishable from hand-made work.
+ *
+ *   manual        a person chose this document for this clause
+ *   ai_suggested  the AI proposed it and a person accepted it (linked_by = who)
+ *   llm_semantic  written by the semantic auto-mapper, no human in the loop
+ *   citation_auto written by the citation extractor, no human in the loop
+ */
+export type LinkMethod =
+  | "manual"
+  | "ai_suggested"
+  | "llm_semantic"
+  | "citation_auto";
+
 export interface ObligationDocumentLink {
   id: number;
   obligation_id: number;
   document_id: number;
   linked_by: string;
   linked_at: string;
+  link_method: LinkMethod;
 }
 
 export interface ObligationDocumentRow {
@@ -17,6 +37,7 @@ export interface ObligationDocumentRow {
   document_id: number;
   linked_by: string;
   linked_at: string;
+  link_method: LinkMethod | null;
   title: string;
   file_name: string;
   file_size: number;
@@ -73,6 +94,7 @@ export async function listDocumentsForObligation(
   await initObligationDocumentsTable();
   const result = await pool.query(
     `SELECT od.id, od.obligation_id, od.document_id, od.linked_by, od.linked_at,
+            od.link_method,
             d.title, d.file_name, d.file_size, d.mime_type, d.category, d.notes
        FROM obligation_documents od
        JOIN qms_uploaded_documents d ON d.id = od.document_id
@@ -108,18 +130,29 @@ export async function countDocumentsByObligation(
   return out;
 }
 
+/**
+ * Create a clause-document link.
+ *
+ * `link_method` is REQUIRED, and deliberately has no default here even though
+ * the column has one. The column DEFAULT is 'manual', which means any caller
+ * that forgets to say how the link was made silently asserts a human made it —
+ * that is how 1042 AI-applied links ended up indistinguishable from hand-made
+ * ones, with no way to tell them apart after the fact. Making it a required
+ * argument moves the check to compile time, so a new call site cannot repeat it.
+ */
 export async function linkDocumentToObligation(input: {
   obligation_id: number;
   document_id: number;
   linked_by: string;
+  link_method: LinkMethod;
 }): Promise<ObligationDocumentLink | null> {
   await initObligationDocumentsTable();
   const result = await pool.query(
-    `INSERT INTO obligation_documents (obligation_id, document_id, linked_by)
-     VALUES ($1, $2, $3)
+    `INSERT INTO obligation_documents (obligation_id, document_id, linked_by, link_method)
+     VALUES ($1, $2, $3, $4)
      ON CONFLICT (obligation_id, document_id) DO NOTHING
      RETURNING *`,
-    [input.obligation_id, input.document_id, input.linked_by],
+    [input.obligation_id, input.document_id, input.linked_by, input.link_method],
   );
   return (result.rows[0] as ObligationDocumentLink) || null;
 }

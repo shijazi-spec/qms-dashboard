@@ -112,6 +112,8 @@ export const obligationDocumentsRoutes = [
               obligation_id: id,
               document_id: documentId,
               linked_by: g.user!.email || String(g.user!.id ?? "") || "unknown",
+              // A person chose this document for this clause.
+              link_method: "manual",
             });
             try {
               const { logEvent } = await import(
@@ -340,6 +342,8 @@ export const obligationDocumentsRoutes = [
                 obligation_id: obligationId,
                 document_id: doc.id,
                 linked_by: g.user!.email || String(g.user!.id ?? "") || "unknown",
+                // A person uploaded this file against this clause.
+                link_method: "manual",
               });
               uploaded.push(doc);
             } catch (err: any) {
@@ -441,6 +445,12 @@ export const obligationDocumentsRoutes = [
               obligation_id: obligationId,
               document_id: documentId,
               linked_by: g.user!.email || String(g.user!.id ?? "") || "ai-suggest",
+              // The AI proposed this mapping and a person accepted it. Both
+              // facts are recorded: linked_by says WHO accepted, link_method
+              // says the suggestion did not originate with them. Writing
+              // 'manual' here (which the column DEFAULT did) erased the second
+              // fact and made bulk AI application look like hand-made work.
+              link_method: "ai_suggested",
             });
           } catch (err: any) {
             if (err && err.code === "23503")

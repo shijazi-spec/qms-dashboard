@@ -111,6 +111,7 @@ for (const key of REQUIRED_DENY_KEYS) {
     obligation_id: 42,
     document_id: 7,
     linked_by: `agent ${key}=${rawSecret}`,
+    link_method: "manual",
   });
 
   const params = lastInsertParams();
@@ -118,7 +119,7 @@ for (const key of REQUIRED_DENY_KEYS) {
   if (!params) continue;
 
   // Param layout matches the linkDocumentToObligation INSERT:
-  // [obligation_id, document_id, linked_by]
+  // [obligation_id, document_id, linked_by, link_method]
   const linkedByParam = String(params[2] ?? "");
 
   assert(
@@ -168,6 +169,7 @@ for (const { label, value } of SECRET_LIKE_STRINGS) {
     obligation_id: 1,
     document_id: 2,
     linked_by: `automation token ${label}: ${value}`,
+    link_method: "manual",
   });
 
   const params = lastInsertParams();
@@ -197,6 +199,7 @@ console.log("\n=== linkDocumentToObligation — innocuous payload passes through
     obligation_id: 100,
     document_id: 200,
     linked_by: "alice@example.com",
+    link_method: "manual",
   });
 
   const params = lastInsertParams();
