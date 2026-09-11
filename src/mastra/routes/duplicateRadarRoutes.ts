@@ -4053,6 +4053,7 @@ export const duplicateRadarRoutes = [
               presentDocs: (result.presentDocs || []).map((p: any) => p.label),
               missingDocs: (result.missingDocs || []).map((m: any) => m.label),
               attachmentCount: result.attachmentCount || 0,
+              unmatchedFiles: result.unmatchedFiles || [],
               checkedBy: user.email || user.userId ? String(user.email || user.userId) : null,
             });
           } catch (persistErr: any) {
@@ -4091,6 +4092,59 @@ export const duplicateRadarRoutes = [
     // recipients is accepted from the request: the list is resolved
     // server-side and only its COUNT is returned, so this endpoint cannot be
     // used to discover or redirect who gets the report.
+    // GET /api/duplicates/deals/unmatched-files
+    //
+    // The evidence behind a "missing document" verdict: every attachment name
+    // that matched no requirement, grouped and counted.
+    //
+    // Ziad said the files were attached and we were not reading them. We could
+    // count the misses (671 of 1,469 files on the WalaPlus signed book) but not
+    // name them, so the claim could not be tested. This endpoint is the test.
+    //
+    // Covered by the /^\/api\/duplicates/ GET rule in ROUTE_PERMISSION_MAP.
+    path: "/api/duplicates/deals/unmatched-files",
+    method: "GET" as const,
+    createHandler: async () => async (c: any) => {
+      try {
+        const user = await requireDuplicateRadarAccess(c);
+        if (!user) return unauthorizedResponse(c);
+        const stage = c.req.query("stage") || null;
+        const limit = Math.min(
+          Math.max(parseInt(c.req.query("limit") || "200", 10) || 200, 1),
+          1000,
+        );
+        const { pool } = await import("../../utils/duplicateRadarDatabase");
+        const res = await pool.query(
+          `SELECT f #>> '{}' AS file_name,
+                  COUNT(*)::int AS occurrences,
+                  COUNT(DISTINCT d.zoho_deal_id)::int AS deals
+             FROM deal_doc_compliance d
+             CROSS JOIN LATERAL jsonb_array_elements(d.unmatched_files) AS f
+            WHERE ($1::text IS NULL OR LOWER(d.stage) = LOWER($1::text))
+            GROUP BY 1 ORDER BY 2 DESC LIMIT $2`,
+          [stage, limit],
+        );
+        const totals = await pool.query(
+          `SELECT COUNT(*)::int AS deals_checked,
+                  COALESCE(SUM(jsonb_array_length(unmatched_files)),0)::int AS unmatched_files,
+                  COALESCE(SUM(attachment_count),0)::int AS files_attached
+             FROM deal_doc_compliance
+            WHERE ($1::text IS NULL OR LOWER(stage) = LOWER($1::text))`,
+          [stage],
+        );
+        return c.json({
+          success: true,
+          stage: stage || "all",
+          ...totals.rows[0],
+          names: res.rows,
+        });
+      } catch (e: any) {
+        logger.error("deals/unmatched-files failed", e);
+        return c.json({ error: "An internal error occurred" }, 500);
+      }
+    },
+  },
+  {
     // GET /api/duplicates/missing-docs-report/preview
     path: "/api/duplicates/missing-docs-report/preview",
     method: "GET" as const,
@@ -4550,6 +4604,7 @@ export const duplicateRadarRoutes = [
                     presentDocs: (r.presentDocs || []).map((p: any) => p.label),
                     missingDocs: (r.missingDocs || []).map((m: any) => m.label),
                     attachmentCount: r.attachmentCount || 0,
+                    unmatchedFiles: r.unmatchedFiles || [],
                     checkedBy,
                   });
                 } catch {

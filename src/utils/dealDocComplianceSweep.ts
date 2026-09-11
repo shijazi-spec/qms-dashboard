@@ -128,6 +128,7 @@ export async function runDealDocComplianceSweep(
           presentDocs: (r.presentDocs || []).map((p: any) => p.label),
           missingDocs: (r.missingDocs || []).map((m: any) => m.label),
           attachmentCount: r.attachmentCount || 0,
+          unmatchedFiles: r.unmatchedFiles || [],
           checkedBy: "system:sweep",
         });
         out.scanned++;

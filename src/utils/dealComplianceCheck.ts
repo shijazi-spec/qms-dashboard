@@ -134,6 +134,23 @@ export interface DocComplianceResult {
   missingDocs: Array<{ key: string; label: string }>;
   attachmentCount: number;
   compliant: boolean;
+  /**
+   * Names of files attached to the deal that matched NO required document.
+   *
+   * Added 2026-09-11, because Ziad said files were attached and we were not
+   * reading them, and we had no way to check. We stored the names of documents
+   * we matched and a count of everything else — so a miss was a number with no
+   * evidence attached to it, and the argument could not be settled either way.
+   *
+   * Measured on the WalaPlus signed book: 671 of 1,469 attached files (46%)
+   * matched nothing, across 355 of 494 deals. Those 671 names are the only
+   * thing that can say whether the matcher is under-reading or the documents
+   * genuinely are not there.
+   *
+   * NAMES ONLY — never content, never URLs. A filename is enough to tune a
+   * keyword matcher and is already visible to anyone who can open the deal.
+   */
+  unmatchedFiles: string[];
 }
 
 /**
@@ -152,11 +169,25 @@ export function evaluateDocCompliance(
     .filter(Boolean);
   const present: DocComplianceResult["presentDocs"] = [];
   const missing: DocComplianceResult["missingDocs"] = [];
+  const matched = new Set<string>();
   for (const doc of required) {
     const hit = names.find((n) => doc.match.test(n));
-    if (hit) present.push({ key: doc.key, label: doc.label, fileName: hit });
-    else missing.push({ key: doc.key, label: doc.label });
+    if (hit) {
+      present.push({ key: doc.key, label: doc.label, fileName: hit });
+      matched.add(hit);
+    } else {
+      missing.push({ key: doc.key, label: doc.label });
+    }
   }
+  // Every attachment that satisfied no requirement. A file that matched one
+  // document is counted as matched even if another requirement also wanted it —
+  // the question here is "did we understand this file at all", not "how many
+  // boxes did it tick".
+  //
+  // Deliberately NOT filtered to required.length > 0: a stage with no
+  // requirements still tells us what the team attaches, which is exactly the
+  // evidence needed to decide whether a requirement is realistic.
+  const unmatched = names.filter((n) => !matched.has(n));
   return {
     stage,
     required: required.length,
@@ -164,5 +195,6 @@ export function evaluateDocCompliance(
     missingDocs: missing,
     attachmentCount: names.length,
     compliant: required.length > 0 && missing.length === 0,
+    unmatchedFiles: unmatched,
   };
 }

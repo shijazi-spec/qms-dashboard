@@ -731,18 +731,23 @@ export async function upsertDealDocCompliance(rec: {
   presentDocs: string[];
   missingDocs: string[];
   attachmentCount: number;
+  /** Names of attachments that matched no requirement — evidence for a
+   *  "missing" verdict. Optional so older callers still compile; they simply
+   *  record an empty list. */
+  unmatchedFiles?: string[];
   checkedBy?: string | null;
 }): Promise<void> {
   await pool.query(
     `INSERT INTO deal_doc_compliance
-       (zoho_deal_id, stage, compliant, present_docs, missing_docs, attachment_count, checked_at, checked_by)
-     VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, NOW(), $7)
+       (zoho_deal_id, stage, compliant, present_docs, missing_docs, attachment_count, unmatched_files, checked_at, checked_by)
+     VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7::jsonb, NOW(), $8)
      ON CONFLICT (zoho_deal_id) DO UPDATE SET
        stage = EXCLUDED.stage,
        compliant = EXCLUDED.compliant,
        present_docs = EXCLUDED.present_docs,
        missing_docs = EXCLUDED.missing_docs,
        attachment_count = EXCLUDED.attachment_count,
+       unmatched_files = EXCLUDED.unmatched_files,
        checked_at = NOW(),
        checked_by = EXCLUDED.checked_by`,
     [
@@ -752,6 +757,7 @@ export async function upsertDealDocCompliance(rec: {
       JSON.stringify(rec.presentDocs || []),
       JSON.stringify(rec.missingDocs || []),
       Number(rec.attachmentCount) || 0,
+      JSON.stringify(rec.unmatchedFiles || []),
       rec.checkedBy || null,
     ],
   );
@@ -1247,10 +1253,20 @@ async function _doInitDuplicateRadarTables(): Promise<void> {
       present_docs JSONB NOT NULL DEFAULT '[]'::jsonb,
       missing_docs JSONB NOT NULL DEFAULT '[]'::jsonb,
       attachment_count INTEGER NOT NULL DEFAULT 0,
+      -- File names attached to the deal that matched no required document.
+      -- Names only, never content or URLs. Without this a "missing" verdict
+      -- carries no evidence, and "the files are there, you are not reading
+      -- them" cannot be settled either way. See DocComplianceResult.
+      unmatched_files JSONB NOT NULL DEFAULT '[]'::jsonb,
       checked_at TIMESTAMP DEFAULT NOW(),
       checked_by VARCHAR(255)
     );
   `);
+  // Existing databases predate the column; schema-parity requires it in BOTH
+  // the canonical CREATE above and as an ALTER here.
+  await pool.query(
+    `ALTER TABLE deal_doc_compliance ADD COLUMN IF NOT EXISTS unmatched_files JSONB NOT NULL DEFAULT '[]'::jsonb`,
+  );
 
   // Per-contact ACTIVITY census (Sarah 2026-09-06). Deleting a contact in Zoho
   // takes its activities with it, and a previous clean-up wiped call history
