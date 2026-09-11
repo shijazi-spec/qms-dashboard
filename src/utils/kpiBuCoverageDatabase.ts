@@ -129,7 +129,11 @@ export async function buCoverageRowCounts(): Promise<Map<number, number>> {
     const res = await pool.query<{ kpi_id: number; n: string }>(
       `SELECT kpi_id, COUNT(*)::int AS n FROM kpi_bu_coverage GROUP BY kpi_id`,
     );
-    for (const r of res.rows as any[]) {
+    // `res?.rows ?? []` rather than res.rows: a driver (or a test double) that
+    // returns nothing should yield an empty map, not an exception caught below.
+    // The catch is for a real failure, and it should not double as control flow
+    // for the ordinary "no rows" case.
+    for (const r of (res?.rows ?? []) as any[]) {
       out.set(Number(r.kpi_id), Number(r.n) || 0);
     }
   } catch (err) {

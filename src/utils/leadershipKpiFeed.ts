@@ -1097,20 +1097,26 @@ const KPI_DETAILS: Record<string, KpiDetail> = {
     plan_ref:
       "North Star 'Year-End Compliance Closure' (≥ 95% by Dec 31, 2026).",
   },
+  // Rewritten 2026-09-12. Every field below described a DOCUMENT-derived
+  // metric — "business units with ≥1 published governance policy ÷ 13" — which
+  // this KPI has never computed and must not. Sarah: not all controlled
+  // documents belong to a BU; the BUs that count are the ones she fills in on
+  // the checklists. The value has always come from the Pilot Validation
+  // checklist, so leadership was reading a methodology for a different metric.
   "QM-KPI-008": {
     description:
-      "Percentage of the 13 business units with full governance coverage.",
+      "Percentage of the planned business units that completed the full 5-stage Pilot Validation plan.",
     methodology:
-      "Business units with ≥ 1 published governance policy ÷ 13 business units (source: business_units + policies). Canonical BU list seeded from the Quality Plan.",
+      "BUs whose every Pilot Validation sub-step is ticked ÷ the BUs present in that checklist (source: kpi_checklist_items for QM-KPI-008). Binary per BU — a BU counts only when the whole plan is done. Same value as the internal /kpis page. NOT derived from documents or policies.",
     rationale:
-      "Measures how broadly governance has rolled out across the org (Discovery → Partial → Full).",
+      "Shows how many BUs have been through pilot execution, reporting and action planning — the audit half of the rollout, after the framework is built.",
     plan_ref: "Quality Plan → BU Coverage Plan (D / P / F per quarter).",
     numerator:
-      "PREFERRED: mean per-BU completion % from the BU coverage tracker (partial credit; details.source='bu_coverage_tracker'). FALLBACK (tracker empty): COUNT(DISTINCT business_units with ≥1 published policy matched by owner_department) — see details.covered_business_units.",
+      "BUs with every QM-KPI-008 checklist item is_done = true — see details.bus_pilot_validated.",
     denominator:
-      "the 13 canonical active business_units (Quality Plan 2026 BU Coverage Plan) — see details.total_business_units.",
+      "the BUs present in the QM-KPI-008 Pilot Validation checklist — see details.bus_planned.",
     scope:
-      "All 13 canonical BUs. NOTE: when the tracker has data the value is a mean of per-BU completion percentages (NOT a simple covered÷total), so it will not reconcile against a plain count — reconcile against the tracker instead. Cumulative point-in-time snapshot.",
+      "The BUs maintained in the Pilot Validation checklist, not the full document library: a controlled document existing for a department does not put that department in this denominator. Cumulative point-in-time snapshot.",
     rounding: DEFAULT_ROUNDING,
   },
 };

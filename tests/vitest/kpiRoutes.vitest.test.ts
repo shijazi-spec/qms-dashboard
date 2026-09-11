@@ -112,12 +112,23 @@ describe("GET /api/kpis — real data path", () => {
   // lastUpdated via getLatestKPIValue(). With no recorded value (mock → null)
   // the enrichment defaults are latestValue:null, status:"no_data",
   // trend:null, lastUpdated:null.
+  //
+  // bu_coverage_rows is how many BU-coverage tracker rows the KPI holds; the
+  // card shows "Manage BU Coverage" when it is > 0, so the tracker stays
+  // reachable whatever calc_mode says. buCoverageRowCounts() is best-effort and
+  // returns an empty map when the table is absent — which is the case here, so
+  // every KPI enriches to 0.
+  //
+  // Keep this in step with the handler: these assertions deep-equal the whole
+  // response, so a field added there and not here fails as a key-count mismatch
+  // ("…(17) to deeply equal …(16)") that names no field at all.
   const enrich = (k: any) => ({
     ...k,
     latestValue: null,
     status: "no_data",
     trend: null,
     lastUpdated: null,
+    bu_coverage_rows: 0,
   });
 
   test("200 returns getAllKPIDefinitions() when no owner query param", async () => {
