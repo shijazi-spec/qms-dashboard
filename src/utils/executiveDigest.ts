@@ -441,16 +441,20 @@ export function resolveDigestSectionRules(): DigestSectionRule[] {
       includeKeywords: ["marketplace", "market place", "mp"],
       audience: "marketplace",
     },
-    {
-      // Customer Success. Gated on the CS Phase field rather than keywords —
-      // see requireCsPhase on DigestSectionRule for why that distinction
-      // matters. Deals only: a Lead has no Customer Success section.
-      id: "cs_lifecycle",
-      title: "Customer Success deals",
-      module: "Deals",
-      requireCsPhase: true,
-      audience: "cs",
-    },
+    // NO Customer Success section, deliberately (removed 2026-09-12, Sarah).
+    //
+    // One was added and shipped to #wp-cs-audits, and it was worse than what
+    // that channel already had. The CS Lifecycle compliance post there carries
+    // critical/warning counts, a breakdown by rule, by CS owner, the accounts
+    // to start with, and deals by phase. Beside it, a digest slice reading
+    // "Customer Success deals — 0" added nothing and actively misled: the
+    // digest counts records CREATED in the window, and a deal only gets a CS
+    // Phase once it is handed over after being won, so the honest value there
+    // is almost always 0 while the platform in fact tracks 937 CS deals.
+    //
+    // The `requireCsPhase` rule option is kept, not deleted — it is reachable
+    // from DIGEST_SECTION_RULES_JSON if a CS section is ever wanted somewhere
+    // this trade-off does not apply.
   ];
 
   const raw = process.env.DIGEST_SECTION_RULES_JSON;
