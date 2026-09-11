@@ -931,19 +931,27 @@ const DEFAULT_ROUNDING =
 
 const KPI_DETAILS: Record<string, KpiDetail> = {
   "QM-KPI-015": {
+    // Text only, corrected 2026-09-12. The calculation is untouched; these
+    // fields described a different one. scopedActionPlanRate counts BUs whose
+    // WHOLE checklist is ticked (binary per BU), not phases; it scopes by the
+    // per-BU deadlines in kpi_bu_schedule, not by BU Coverage tracker statuses;
+    // the plan is 7 stages / 19 sub-steps, not 9 phases; and the details keys
+    // it named (completed_phases / in_scope_phases) are not the ones the feed
+    // returns.
     description:
-      "Quarterly framework-build progress for the BUs in scope THIS quarter (e.g. Q2 = Marketplace + Customer Success), measured by the BU Framework checklist (9-phase build plan per BU).",
+      "Quarterly framework-build progress: the business units that have completed the whole BU Framework Readiness checklist, among the BUs due this quarter.",
     methodology:
-      "Framework checklist phases done ÷ total phases, counted ONLY for BUs in scope this quarter (status in_progress/postponed in the BU Coverage tracker) — NOT all 13 BUs (source: kpi_checklist_items for QM-KPI-015 joined to kpi_bu_coverage). Same value as the internal /kpis page.",
+      "BUs whose every Framework Readiness sub-step is ticked ÷ the BUs due by the end of this quarter (source: kpi_checklist_items for QM-KPI-015, scoped by the per-BU deadlines in kpi_bu_schedule). BINARY per BU — a BU counts only when the whole 7-stage / 19-sub-step plan is done, not step by step. Same value as the internal /kpis page.",
     rationale:
       "Shows how far this quarter's targeted BUs' governance frameworks are built (process drafting → review → release → training → trial audit), without being diluted by BUs not yet started.",
     plan_ref:
       "Quality Plan → Governance Framework build (9-phase methodology); North Star 'Framework Completion' (Q1 40% → Q4 100%).",
     numerator:
-      "in-scope kpi_checklist_items WHERE is_done = true (for QM-KPI-015) — see details.completed_phases.",
-    denominator: "in-scope kpi_checklist_items for QM-KPI-015 (this quarter's BUs × 9 phases) — see details.in_scope_phases.",
+      "BUs with every QM-KPI-015 checklist item is_done = true — see details.bus_ready_for_pilot.",
+    denominator:
+      "the BUs due by the end of this quarter; when no BU carries a deadline, every BU on the checklist — see details.bus_planned.",
     scope:
-      "Only BUs in this quarter's plan (BU Coverage status in_progress/postponed). If no BU is in scope the KPI is reported in unavailable[] (reason no_bu_in_scope_this_quarter), not value:0. Scope is controlled via the Manage BU Coverage statuses.",
+      "Only BUs whose kpi_bu_schedule deadline falls on or before the quarter end. If deadlines exist but none is due yet, the KPI is reported unavailable rather than value:0. Scope is set by the per-BU start/deadline dates on the checklist itself.",
     rounding: DEFAULT_ROUNDING,
   },
   "QM-KPI-002": {
