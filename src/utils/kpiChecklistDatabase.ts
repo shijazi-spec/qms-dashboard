@@ -69,73 +69,79 @@ export async function initKPIChecklistTables(): Promise<void> {
 
   // Commercial-8 BU naming migration (Sales B2B/B2C, Contact Center).
   await migrateToCommercialBUs();
-  // Move the pilot plan off QM-KPI-008 BEFORE seeding. seedActionPlan is
-  // seed-once and returns early when the KPI already has BUs, so migrating
-  // first means the moved rows are found and a fresh empty plan is never
-  // written over them.
-  await migratePilotPlanToOwnKpi();
+  // Undo the QM-KPI-016 split before seeding, so anything that moved comes
+  // back to QM-KPI-008 and the seed-once guard sees a populated plan.
+  await retirePilotPlanOwnKpi();
   // Seed the two per-BU action-plan checklists (New_GRQ Final KPIs, 2026-06-30):
   //   QM-KPI-015 BU Framework Readiness = 7-stage readiness plan
-  //   QM-KPI-016 BU Pilot Validation    = 5-stage pilot plan (was QM-KPI-008)
+  //   QM-KPI-008 BU Pilot Validation    = 5-stage pilot plan
   await seedActionPlan("QM-KPI-015", READINESS_PLAN);
-  await seedActionPlan("QM-KPI-016", PILOT_PLAN);
+  await seedActionPlan("QM-KPI-008", PILOT_PLAN);
 }
 
 /**
- * One-time: move the 5-stage Pilot Validation plan from QM-KPI-008 to
- * QM-KPI-016.
+ * Retire QM-KPI-016 and put the Pilot Validation plan back on QM-KPI-008.
  *
- * QM-KPI-008 became BU Coverage Rate on 2026-09-10, computed from the
- * QM-KPI-015 checklist. The pilot plan was left attached to it — and because
- * calc_mode stopped being "checklist", kpis.html no longer rendered the
- * "Manage Checklist" button, so real per-BU tick progress was still in the
- * database with no way to reach it. This repoints the rows rather than
- * re-seeding, because those ticks are somebody's completed work.
+ * QM-KPI-016 was created on 2026-09-10 to give the 5-stage pilot plan its own
+ * code, on the assumption that QM-KPI-008 would be renamed to BU Coverage Rate
+ * by the seed. It was not: the live QM-KPI-008 row carries
+ * `is_customized = true`, and finalGrqKpiSeed's upsert ends
+ * `WHERE kpi_definitions.is_customized IS NOT TRUE`, so it silently skipped
+ * every field. The result on screen was two KPIs with the same name — one real
+ * and one empty. Sarah 2026-09-11: delete 016, leave 008 alone.
  *
- * Idempotent and self-skipping:
- *   · no-op once QM-KPI-016 has rows (already migrated, or seeded fresh)
- *   · no-op if either KPI is missing — the seed runs before this, so a missing
- *     QM-KPI-016 means something is wrong and inventing rows would hide it
+ * ORDER MATTERS. Rows move back FIRST, then the row is deactivated:
+ *   · kpi_checklist_items.kpi_id is `REFERENCES kpi_definitions(id) ON DELETE
+ *     CASCADE`, so anything still parked on 016 would be destroyed by a delete
+ *   · if the migration never ran (008 kept its ticks, 016 seeded empty) both
+ *     UPDATEs simply match nothing
  *
- * kpi_bu_schedule moves too. Leaving the per-BU start/deadline dates behind
- * would strand them on a KPI that no longer shows a checklist, and the BU
- * rollout dates are the half a manager actually plans against.
+ * Deactivation is explicit rather than left to the seed's sweep. That sweep
+ * exempts any row whose owner_name is a department KPI owner, so "Sarah Hijazi"
+ * could keep 016 alive indefinitely — visible, empty, and confusing.
+ *
+ * The row is deactivated, not deleted: every read path filters
+ * `is_active = true`, so it leaves the catalog either way, and a DELETE would
+ * cascade into kpi_values as well.
  */
-async function migratePilotPlanToOwnKpi(): Promise<void> {
+async function retirePilotPlanOwnKpi(): Promise<void> {
   try {
-    const [oldKpi, newKpi] = await Promise.all([
+    const [pilot, retired] = await Promise.all([
       getKPIByCode("QM-KPI-008"),
       getKPIByCode("QM-KPI-016"),
     ]);
-    if (!oldKpi?.id || !newKpi?.id) return;
+    if (!retired?.id) return; // never created, or already gone
 
-    const already = await pool.query(
-      `SELECT 1 FROM kpi_checklist_items WHERE kpi_id = $1 LIMIT 1`,
-      [newKpi.id],
-    );
-    if (already.rows.length > 0) return;
-
-    const moved = await pool.query(
-      `UPDATE kpi_checklist_items SET kpi_id = $1 WHERE kpi_id = $2`,
-      [newKpi.id, oldKpi.id],
-    );
-    // Schedule rows are UNIQUE (kpi_id, bu_name); the guard above proves the
-    // target is empty, so this cannot collide.
-    await pool.query(
-      `UPDATE kpi_bu_schedule SET kpi_id = $1 WHERE kpi_id = $2`,
-      [newKpi.id, oldKpi.id],
-    );
-
-    if ((moved.rowCount ?? 0) > 0) {
-      logger.info(
-        `🔀 [KPIChecklist] Moved ${moved.rowCount} Pilot Validation checklist item(s) from QM-KPI-008 to QM-KPI-016.`,
+    if (pilot?.id) {
+      // Only rows that actually moved come back. `WHERE kpi_id = 016` matches
+      // nothing when the migration never ran, which is the expected case.
+      const back = await pool.query(
+        `UPDATE kpi_checklist_items SET kpi_id = $1 WHERE kpi_id = $2`,
+        [pilot.id, retired.id],
       );
+      await pool.query(
+        `UPDATE kpi_bu_schedule SET kpi_id = $1 WHERE kpi_id = $2`,
+        [pilot.id, retired.id],
+      );
+      if ((back.rowCount ?? 0) > 0) {
+        logger.info(
+          `🔙 [KPIChecklist] Returned ${back.rowCount} Pilot Validation checklist item(s) from QM-KPI-016 to QM-KPI-008.`,
+        );
+      }
+    }
+
+    const off = await pool.query(
+      `UPDATE kpi_definitions SET is_active = false, updated_at = NOW()
+        WHERE kpi_code = 'QM-KPI-016' AND is_active = true`,
+    );
+    if ((off.rowCount ?? 0) > 0) {
+      logger.info("🗑️ [KPIChecklist] Retired QM-KPI-016 (superseded — the pilot plan stays on QM-KPI-008).");
     }
   } catch (err) {
-    // Never fatal: the checklist tables are already created above, and a failed
-    // move must not stop the platform booting. It retries on the next start.
+    // Never fatal: a failed retirement must not stop the platform booting, and
+    // it retries on the next start.
     logger.warn(
-      `[KPIChecklist] Pilot plan migration skipped: ${err instanceof Error ? err.message : String(err)}`,
+      `[KPIChecklist] QM-KPI-016 retirement skipped: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }
@@ -155,8 +161,7 @@ export const READINESS_PLAN: ActionPlan = [
   ["Training and pilot readiness", ["Training material prepared", "Pilot team trained", "Pilot scope and readiness confirmed"]],
 ];
 
-/** BU Pilot Validation (QM-KPI-016, formerly QM-KPI-008) — 5 stages, 13
- *  sub-steps. A BU is "Pilot
+/** BU Pilot Validation (QM-KPI-008) — 5 stages, 13 sub-steps. A BU is "Pilot
  *  validated" when every sub-step is done. */
 export const PILOT_PLAN: ActionPlan = [
   ["Pilot authorization", ["Pilot window agreed", "BU confirms readiness to start pilot"]],
@@ -169,9 +174,7 @@ export const PILOT_PLAN: ActionPlan = [
 /** Which action plan a per-BU KPI uses when a new BU is added. */
 const PLAN_BY_CODE: Record<string, ActionPlan> = {
   "QM-KPI-015": READINESS_PLAN,
-  // Was QM-KPI-008 until 2026-09-10; that code is now BU Coverage Rate, which
-  // has no checklist of its own.
-  "QM-KPI-016": PILOT_PLAN,
+  "QM-KPI-008": PILOT_PLAN,
 };
 
 /** Add a Business Unit to a KPI's checklist, pre-filled with that KPI's action
@@ -300,7 +303,7 @@ export async function seedActionPlan(kpiCode: string, plan: ActionPlan): Promise
 /**
  * Binary rate for a per-BU action-plan KPI = # BUs whose checklist is 100% done ÷
  * total planned BUs (the commercial 8). Matches the Excel formula. Returns null if
- * no BUs configured. Used by both QM-KPI-015 (Readiness) and QM-KPI-016 (Pilot).
+ * no BUs configured. Used by both QM-KPI-015 (Readiness) and QM-KPI-008 (Pilot).
  */
 export interface ActionPlanRate {
   value: number;
@@ -796,14 +799,9 @@ export async function recordChecklistKPIValue(
   const kpi = await getKPIById(kpiId);
   if (!kpi) return null;
   let pct: number | null;
-  if (kpi.kpi_code === "QM-KPI-015" || kpi.kpi_code === "QM-KPI-016") {
+  if (kpi.kpi_code === "QM-KPI-015" || kpi.kpi_code === "QM-KPI-008") {
     // Binary action-plan KPIs: # BUs whose full checklist is done ÷ the commercial 8
-    // (QM-KPI-015 = Readiness plan, QM-KPI-016 = Pilot Validation plan).
-    //
-    // QM-KPI-016 replaced QM-KPI-008 here on 2026-09-10. Leaving 008 would have
-    // run actionPlanCompleteRate against a checklist that had moved away — and
-    // dropped QM-KPI-016 into the else branch, which returns raw item progress
-    // instead of the binary per-BU rate this plan is scored on.
+    // (QM-KPI-015 = Readiness plan, QM-KPI-008 = Pilot Validation plan).
     const r = await actionPlanCompleteRate(kpi.kpi_code);
     pct = r ? r.value : null;
   } else {

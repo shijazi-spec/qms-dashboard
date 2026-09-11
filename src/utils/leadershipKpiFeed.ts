@@ -1421,10 +1421,15 @@ const NORTH_STAR_DEFS: Array<{
  * calcBuCoverageRate → buGovernedRate for QM-KPI-008 — which is the same value
  * the /kpis header and card show.
  *
- * QM-KPI-008 is no longer a checklist KPI (2026-09-10): the 5-stage Pilot
- * Validation plan moved to QM-KPI-016, which leadership does not track. The
- * reason for excluding 008 from the mirror is unchanged — it still computes
- * live rather than reading a stored value.
+ * The reason for excluding 008 from the mirror is unchanged — it computes live
+ * rather than reading a stored value.
+ *
+ * NOTE (2026-09-11): the live QM-KPI-008 row still reads "BU Pilot Validation
+ * Completion Rate" on /kpis, because it carries is_customized = true and
+ * finalGrqKpiSeed's upsert ends `WHERE is_customized IS NOT TRUE` — so the seed
+ * rename never applied. The payload `name` below therefore does NOT match what
+ * the dashboard shows. Sarah 2026-09-11 asked for QM-KPI-008 to be left as it
+ * is; clearing that flag is the open decision, not a code change.
  */
 const MIRROR_DASHBOARD_CODES = new Set<string>([
   "QM-KPI-002", // Audit Execution Rate (auto)
