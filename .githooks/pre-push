@@ -39,9 +39,40 @@ if ! bash scripts/check-no-inline-handlers.sh; then
   failed=1
 fi
 
+# The guardrails that actually reddened CI over and over on 2026-09-11/12 were
+# the NODE-based ones, not the two CSP scripts above: i18n three separate times
+# in one evening (a missing common.save key, a ternary key, then two new dynamic
+# call sites), plus <th scope> and the RTL physical-direction check. Each runs in
+# under two seconds, so catching them here costs a push almost nothing and saves
+# a four-minute CI round trip on a branch everyone else is pushing to.
+#
+# Guarded on node being present. Kaspersky quarantines node.exe on at least one
+# machine that pushes to this repo, and a hook that cannot run must never block
+# that person's pushes — it would just get bypassed with --no-verify, which is
+# worse than not running. CI enforces all three regardless.
+if command -v node >/dev/null 2>&1; then
+  for entry in \
+    "i18n guardrail:scripts/check-i18n.cjs" \
+    "th-scope accessibility guardrail:scripts/check-th-scope.cjs" \
+    "RTL physical-direction guardrail:scripts/check-rtl-classes.cjs"
+  do
+    label="${entry%%:*}"
+    script="${entry#*:}"
+    if [ -f "$script" ]; then
+      echo "→ pre-push: running ${label} (full tree)…"
+      if ! node "$script"; then
+        failed=1
+      fi
+    fi
+  done
+else
+  echo "→ pre-push: node not found — i18n / th-scope / RTL guardrails SKIPPED." >&2
+  echo "   CI still enforces them; expect a red run if one is violated." >&2
+fi
+
 if [ "$failed" -ne 0 ]; then
   echo "" >&2
-  echo "✗ pre-push: CSP guardrail(s) failed — push aborted." >&2
+  echo "✗ pre-push: guardrail(s) failed — push aborted." >&2
   echo "   Fix the violations above, or (rare) bypass with: git push --no-verify" >&2
   exit 1
 fi
