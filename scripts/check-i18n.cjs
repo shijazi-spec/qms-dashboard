@@ -957,8 +957,27 @@ function checkJsKeyCoverage(pages, publicPages, en, ar) {
   }
 
   if (dynamicResult.added.length) {
+    // Name the offending call sites in the HEADLINE, not only in the detail
+    // lines below. CI turns a failure into a GitHub annotation by grepping the
+    // job log for highlight lines — and the highlight pattern keys on the `✗`
+    // that only fail()'s label carries, so the indented detail lines are
+    // dropped. That is precisely backwards: on 2026-09-12 the annotation said
+    // "2 NEW call site(s)" and nothing else, and finding them took a diff of
+    // the last green commit against HEAD. A count is not actionable; a path
+    // and a snippet are. Capped at three so the annotation stays readable —
+    // the full list is still printed underneath for anyone reading the log.
+    const SITES_IN_HEADLINE = 3;
+    const shown = dynamicResult.added
+      .slice(0, SITES_IN_HEADLINE)
+      .map(({ source, snippet }) => {
+        const trimmed = snippet.length > 48 ? `${snippet.slice(0, 48)}…` : snippet;
+        return `${source} → ${trimmed}`;
+      })
+      .join('  |  ');
+    const more = dynamicResult.added.length - SITES_IN_HEADLINE;
+    const where = more > 0 ? `${shown}  (+${more} more below)` : shown;
     fail(
-      `JS t() dynamic keys: ${dynamicResult.added.length} NEW WalaPlusI18n.t(variable) call site(s) not in scripts/i18n-dynamic-baseline.json`,
+      `JS t() dynamic keys: ${dynamicResult.added.length} NEW WalaPlusI18n.t(variable) call site(s) not in scripts/i18n-dynamic-baseline.json — ${where}`,
       [
         ...dynamicResult.added.map(({ source, snippet }) => `${source}  →  ${snippet}`),
         '',
