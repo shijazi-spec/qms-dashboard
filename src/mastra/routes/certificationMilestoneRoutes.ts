@@ -552,7 +552,7 @@ async function milestoneWriteGate(c: any) {
 const MILESTONE_TYPES = new Set(["plan", "dependency", "support"]);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-interface MilestoneFields {
+export interface MilestoneFields {
   certification: string | null;
   milestone_name: string | null;
   planned_date: string | null;
@@ -576,7 +576,7 @@ interface MilestoneFields {
  * from the milestone's actions and "never written directly by any endpoint"
  * (see the action toggle), and status is moved only by the retire endpoint.
  */
-function parseMilestoneInput(
+export function parseMilestoneInput(
   body: any,
   opts: { requireName: boolean },
 ): { value: MilestoneFields } | { error: string } {
@@ -596,9 +596,19 @@ function parseMilestoneInput(
   if (opts.requireName && !certification)
     return { error: "certification is required" };
 
-  const planned_date = str(body?.planned_date, 10);
-  if (planned_date && !ISO_DATE.test(planned_date))
-    return { error: "planned_date must be YYYY-MM-DD" };
+  // Not str(..., 10): truncating to the column width turns "2026-13-01x" into
+  // "2026-13-01", which passes a shape check and then reaches Postgres as month
+  // 13. Validate the whole trimmed value, and prove it is a real calendar day -
+  // "2026-02-31" is correctly shaped and does not exist.
+  const planned_raw = str(body?.planned_date, 64);
+  const planned_date = planned_raw;
+  if (planned_date) {
+    if (!ISO_DATE.test(planned_date))
+      return { error: "planned_date must be YYYY-MM-DD" };
+    const d = new Date(`${planned_date}T00:00:00Z`);
+    if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== planned_date)
+      return { error: `planned_date is not a real date: ${planned_date}` };
+  }
 
   const milestone_type = str(body?.milestone_type, 20);
   if (milestone_type && !MILESTONE_TYPES.has(milestone_type))
@@ -644,7 +654,7 @@ async function resolveRegulationId(code: string | null): Promise<number | null> 
  * rows distinguishable from seeded ones for good, and `attempt` walks a suffix
  * when the unique index rejects a collision.
  */
-function milestoneKeyFor(name: string | null, attempt: number): string {
+export function milestoneKeyFor(name: string | null, attempt: number): string {
   const slug = String(name || "milestone")
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, "-")

@@ -183,6 +183,9 @@
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                         <span data-i18n="compliance.ms_add">Add milestone</span>
                     </button>
+                    <button type="button" data-on-click="toggleRetiredMilestones" id="msRetiredToggle" class="px-3 py-1.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-xs font-medium" data-testid="button-toggle-retired" aria-pressed="false">
+                        <span id="msRetiredToggleLabel" data-i18n="compliance.ms_show_retired">Show retired</span>
+                    </button>
                     <button type="button" data-on-click="printCertPlan" class="px-3 py-1.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-xs font-medium flex items-center gap-1.5" data-testid="button-print-roadmap">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m10-10V5a2 2 0 00-2-2H9a2 2 0 00-2 2v2m10 0H7m10 0h2M7 17h10v4H7v-4z"/></svg>
                         <span data-i18n="compliance.roadmap_print">Print / PDF</span>
@@ -1033,26 +1036,55 @@
             }
         }
 
-        async function retireMilestone(key) {
+        var _msShowRetired = false;
+
+        function toggleRetiredMilestones() {
+            _msShowRetired = !_msShowRetired;
+            var btn = document.getElementById('msRetiredToggle');
+            var lbl = document.getElementById('msRetiredToggleLabel');
+            if (lbl) lbl.textContent = _msShowRetired
+                ? _ct('compliance.ms_hide_retired', 'Hide retired')
+                : _ct('compliance.ms_show_retired', 'Show retired');
+            // aria-pressed, not just a colour change: this is a state toggle and
+            // a screen reader has no other way to know which state it is in.
+            if (btn) btn.setAttribute('aria-pressed', _msShowRetired ? 'true' : 'false');
+            loadMilestones();
+        }
+
+        async function _setMilestoneRetired(key, retired) {
             if (!key) return;
-            if (!confirm(_ct('compliance.ms_retire_confirm',
-                'Retire this milestone? It is hidden from the plan and stops counting towards the delivery KPI, but is kept for the audit trail.'))) return;
+            var errKey = retired ? 'compliance.ms_retire_error' : 'compliance.ms_restore_error';
+            var errFb = retired ? 'Could not retire the milestone' : 'Could not restore the milestone';
             try {
                 var res = await fetch('/api/certification-milestones/' + encodeURIComponent(key) + '/retire', {
                     method: 'POST',
                     credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ retired: true })
+                    body: JSON.stringify({ retired: retired })
                 });
                 var d = await res.json().catch(function () { return {}; });
                 if (!res.ok) {
-                    alert(_ct('compliance.ms_retire_error', 'Could not retire the milestone') + (d.error ? ': ' + d.error : ''));
+                    alert(_ct(errKey, errFb) + (d.error ? ': ' + d.error : ''));
                     return;
                 }
                 await loadMilestones();
             } catch (e) {
-                alert(_ct('compliance.ms_retire_error', 'Could not retire the milestone') + ': ' + e.message);
+                alert(_ct(errKey, errFb) + ': ' + e.message);
             }
+        }
+
+        async function retireMilestone(key) {
+            if (!key) return;
+            if (!confirm(_ct('compliance.ms_retire_confirm',
+                'Retire this milestone? It is hidden from the plan and stops counting towards the delivery KPI, but is kept for the audit trail. Use "Show retired" to bring it back.'))) return;
+            await _setMilestoneRetired(key, true);
+        }
+
+        async function restoreMilestone(key) {
+            if (!key) return;
+            if (!confirm(_ct('compliance.ms_restore_confirm',
+                'Restore this milestone to the plan? It counts towards the delivery KPI again.'))) return;
+            await _setMilestoneRetired(key, false);
         }
 
         function _certGroupHtml(m, actionsByMilestone, progressByMilestone, todayStr) {
@@ -1066,6 +1098,13 @@
             const safeMk = escAttr(mk);
             const bodyId = 'cert-group-body-' + safeMk;
             const isDependency = m.milestone_type === 'dependency';
+            // Only ever visible while "Show retired" is on, so it needs to be
+            // unmistakable - otherwise a retired milestone reads as a live one
+            // that is simply overdue.
+            const isRetired = String(m.status || '') === 'retired';
+            const retiredBadge = isRetired
+                ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-200 text-gray-600">' + escAttr(_ct('compliance.ms_retired_badge', 'Retired')) + '</span>'
+                : '';
             const depBadge = isDependency
                 ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">' + escAttr(_ct('compliance.cert_dependency_badge', 'Dependency')) + '</span>'
                 : '';
@@ -1081,6 +1120,7 @@
                 + '<span class="text-xs text-gray-400 shrink-0">' + escAttr(_certFullDate(m.planned_date)) + '</span>'
                 + '<span class="text-[10px] uppercase tracking-wide text-gray-400 font-medium">' + escAttr(m.certification || '') + '</span>'
                 + depBadge
+                + retiredBadge
                 + '<span class="font-bold text-gray-900 text-sm flex-1">' + escAttr(m.milestone_name || '') + '</span>'
                 + '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium ' + state.cls + '">' + escAttr(state.label) + '</span>'
                 + '<span class="text-xs text-gray-500 font-medium shrink-0">' + escAttr(progress.done) + ' / ' + escAttr(progress.total) + '</span>'
@@ -1089,8 +1129,11 @@
                 + '<div class="flex items-center gap-3 pb-2 mb-2 border-b border-gray-100">'
                 + '<button type="button" data-on-click="openMilestoneModal" data-args="[&quot;' + safeMk + '&quot;]" class="text-xs text-emerald-700 hover:underline font-medium" data-testid="button-edit-ms-' + safeMk + '">'
                 + escAttr(_ct('compliance.ms_edit', 'Edit milestone')) + '</button>'
-                + '<button type="button" data-on-click="retireMilestone" data-args="[&quot;' + safeMk + '&quot;]" class="text-xs text-red-600 hover:underline font-medium" data-testid="button-retire-ms-' + safeMk + '">'
-                + escAttr(_ct('compliance.ms_retire', 'Retire')) + '</button>'
+                + (isRetired
+                    ? '<button type="button" data-on-click="restoreMilestone" data-args="[&quot;' + safeMk + '&quot;]" class="text-xs text-emerald-700 hover:underline font-medium" data-testid="button-restore-ms-' + safeMk + '">'
+                      + escAttr(_ct('compliance.ms_restore', 'Restore to plan')) + '</button>'
+                    : '<button type="button" data-on-click="retireMilestone" data-args="[&quot;' + safeMk + '&quot;]" class="text-xs text-red-600 hover:underline font-medium" data-testid="button-retire-ms-' + safeMk + '">'
+                      + escAttr(_ct('compliance.ms_retire', 'Retire')) + '</button>')
                 + '</div>'
                 + rowsHtml + '</div>'
                 + '</div>';
@@ -1208,7 +1251,11 @@
         }
         async function loadMilestones() {
             try {
-                const res = await fetch('/api/certification-milestones');
+                // The API hides retired milestones by default. Asking for them is
+                // what makes retiring reversible from the UI - without this the
+                // confirm dialog promises a restore that has no button.
+                const res = await fetch('/api/certification-milestones'
+                    + (_msShowRetired ? '?include_retired=1' : ''));
                 if (!res.ok) { _mLoadError(); return; }
                 const d = await res.json();
                 // .textContent is inherently HTML-safe (no markup parsing), so no

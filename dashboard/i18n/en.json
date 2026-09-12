@@ -2274,7 +2274,13 @@
     "ms_f_owner": "Owner",
     "ms_f_framework": "Framework code",
     "ms_f_notes": "Notes",
-    "ms_delivered_note": "Delivery date is not set here — a milestone is marked delivered automatically when all of its actions are ticked."
+    "ms_delivered_note": "Delivery date is not set here — a milestone is marked delivered automatically when all of its actions are ticked.",
+    "ms_show_retired": "Show retired",
+    "ms_hide_retired": "Hide retired",
+    "ms_restore": "Restore to plan",
+    "ms_retired_badge": "Retired",
+    "ms_restore_confirm": "Restore this milestone to the plan? It counts towards the delivery KPI again.",
+    "ms_restore_error": "Could not restore the milestone"
   },
   "audit_readiness": {
     "title": "Audit Readiness",
