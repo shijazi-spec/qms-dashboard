@@ -37,6 +37,42 @@ Allowlisted without prompting:
 Deliberately **not** allowlisted (these still prompt): `npm install`, `npm ci`,
 `npm run format` (rewrites sources), `npm run ship`, `npm run new-feature`, `git rm`, `git reset`.
 
+## This working tree is often SHARED by two agent sessions at once
+
+Assume another session is editing these same files right now. On 2026-09-11/12
+two sessions ran here together and each of the following actually happened.
+
+**Never `git commit` bare. Commit your own paths only:**
+
+```
+git commit -o <path> [<path> …] -F -
+```
+
+A bare `git commit` commits the whole INDEX, and the index is shared. The other
+session's staged work — including a staged file DELETION — sat there twice while
+a bare commit was one keystroke away from swallowing it into an unrelated change.
+Run `git status --short` first and confirm every staged entry is yours.
+
+**Your edits may be committed by someone else.** Uncommitted changes in this tree
+were twice swept into the other session's commit, landing under a message about
+something unrelated. If `git commit` reports "nothing to commit" and your change
+is present in the file, check `git log -S'<a string you added>'` before redoing
+the work.
+
+**Expect your CI run to be cancelled.** Pushes land every few minutes and the
+suite takes ~4, so runs are superseded constantly — four in a row on that night.
+Never report a branch as green from a run that was `cancelled`, and never from
+the commit *before* yours. Verify on a run that COMPLETED on a commit that
+contains your change.
+
+**Before saying "ready to publish", prove the workspace sha.** See
+`git fetch` then `git log --oneline -1`; "Already up to date" is measured against
+a local remote-tracking ref that goes stale on its own and once failed to update
+at all (`cannot lock ref 'refs/remotes/origin/QMS'`).
+
+Better than all of the above: give each session its own `git worktree` so the
+index is not shared.
+
 ## Writing permission rules for this repo
 
 `Bash(foo:*)` is exactly equivalent to `Bash(foo *)` — it requires a **space** after
