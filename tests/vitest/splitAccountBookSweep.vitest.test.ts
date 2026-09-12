@@ -14,6 +14,8 @@ import { describe, it, expect } from "vitest";
 import {
   groupByProof,
   containmentPairs,
+  distinctiveNames,
+  accountAliases,
   type SplitAccountSide,
 } from "../../src/utils/splitAccountDealConflicts";
 
@@ -57,6 +59,72 @@ describe("groupByProof", () => {
       acct("Riyadh Air"), acct("Riyadh Cables"), acct("Riyadh Marriott Hotel"),
     ]);
     expect(out).toEqual([]);
+  });
+});
+
+describe("the deal name is evidence too (Sarah 2026-09-11)", () => {
+  // "you can check the deal name, company name, or domain, so you always have
+  // a way to catch these". The account record is often the worst-named thing
+  // in the cluster; the deal is sometimes the only place the real company name
+  // was ever typed.
+  const withDeal = (accName: string, dealName: string): SplitAccountSide => ({
+    account_id: `a${++seq}`,
+    account_name: accName,
+    domain: null,
+    deals: [deal({ name: dealName })],
+    aliases: [dealName],
+  });
+
+  it("joins two accounts whose DEALS name the same company", () => {
+    // Neither account name matches, but both deals say "Alfran Arabia".
+    const out = groupByProof([
+      withDeal("Account 11223", "Alfran Arabia"),
+      withDeal("New Client - Jeddah", "Alfran Arabia"),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].signal).toBe("exact_name");
+  });
+
+  it("matches one account's NAME against the other's DEAL name", () => {
+    const pairs = containmentPairs([
+      { account_id: "x1", account_name: "الفران", domain: null, deals: [deal()] },
+      { account_id: "x2", account_name: "Account 5567", domain: null,
+        deals: [deal()], aliases: ["شركة الفران العربية"] },
+    ]);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].shared).toBe("الفران");
+  });
+
+  it("will not let a generic DEAL name become a hub", () => {
+    // Half the book has a deal called "New Deal". Joining on it would merge
+    // the entire pipeline into one company.
+    const out = groupByProof([
+      withDeal("Alpha Trading", "New Deal"),
+      withDeal("Beta Industries", "New Deal"),
+      withDeal("Gamma Foods", "New Deal"),
+      withDeal("Delta Logistics", "New Deal"),
+      withDeal("Epsilon Media", "New Deal"),
+    ]);
+    expect(out).toEqual([]);
+  });
+
+  it("drops a withheld-name alias but keeps the real ones", () => {
+    const s: SplitAccountSide = {
+      account_id: "z1", account_name: "Confidential", domain: null,
+      deals: [deal()], aliases: ["Confidential", "Alfran Arabia"],
+    };
+    expect(accountAliases(s)).toEqual(["alfran arabia"]);
+  });
+
+  it("distinctiveNames keeps a company and drops a category", () => {
+    const sides = [
+      withDeal("Alfran Arabia", "الفران"),
+      withDeal("A", "New Deal"), withDeal("B", "New Deal"),
+      withDeal("C", "New Deal"), withDeal("D", "New Deal"),
+    ];
+    const d = distinctiveNames(sides);
+    expect(d.has("الفران")).toBe(true);
+    expect(d.has("new deal")).toBe(false);
   });
 });
 

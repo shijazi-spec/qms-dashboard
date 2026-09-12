@@ -108,6 +108,13 @@ export interface SplitAccountSide {
   account_name: string;
   domain: string | null;
   deals: SplitAccountDeal[];
+  /**
+   * Other names this account is known by — deal names and deal company names.
+   * The account record is often the worst-named thing in the cluster, so
+   * matching on its name alone loses the split whenever that is the sloppy
+   * field. See accountAliases. Optional: the narrow check does not use them.
+   */
+  aliases?: string[];
 }
 
 export interface SplitAccountConflict {
@@ -369,6 +376,33 @@ export function groupSplitAccountConflicts(
  * costs the credibility of the whole list.
  */
 
+/**
+ * EVERY NAME AN ACCOUNT IS KNOWN BY — the account's own name, and the name and
+ * company_name of every deal booked against it (Sarah 2026-09-11: "you can
+ * check the deal name, company name, or domain, so you always have a way to
+ * catch these").
+ *
+ * The account record is often the WORST-named thing in the cluster. الفران's
+ * two accounts were "الفران" and "شركة الفران العربية", but the deals under
+ * them carried the same names again — and elsewhere the deal is the only place
+ * the real company name was ever typed. Matching on one field means losing the
+ * split whenever that field is the sloppy one.
+ *
+ * Every alias goes through the same fan-out guard as the account name: a name
+ * shared by more accounts than the cap is a category ("New Deal", "الهيئة"),
+ * whatever field it came from.
+ */
+export function accountAliases(side: SplitAccountSide): string[] {
+  const raw = [side.account_name, ...(side.aliases || [])];
+  const out = new Set<string>();
+  for (const r of raw) {
+    if (isNonIdentifyingCompanyName(r)) continue;
+    const n = normalizeCompanyName(String(r || "")).trim();
+    if (n && n.length >= MIN_JOIN_LEN) out.add(n);
+  }
+  return Array.from(out);
+}
+
 /** A containment match, reported one edge at a time. Never chained. */
 export interface SplitAccountPair {
   a: { account_id: string; account_name: string; domain: string | null };
@@ -395,15 +429,105 @@ export interface SplitAccountPair {
 const MAX_CONTAINMENT_FANOUT = 3;
 
 /**
- * PURE. Group ONLY on proof — identical domain, or identical normalized name.
- * No containment, therefore no chaining.
+ * PURE. Which normalized names are DISTINCTIVE across this book — i.e. not
+ * shared by more accounts than the fan-out cap.
+ *
+ * Computed once over every alias of every account, because a name is only
+ * knowable as a category by looking at the whole field. "New Deal" as a deal
+ * name and "الهيئة" as an account name fail here for the same reason.
+ */
+export function distinctiveNames(sides: SplitAccountSide[]): Set<string> {
+  const count = new Map<string, Set<string>>();
+  for (const s of sides) {
+    for (const n of accountAliases(s)) {
+      (count.get(n) || count.set(n, new Set()).get(n)!).add(s.account_id);
+    }
+  }
+  const out = new Set<string>();
+  for (const [name, accounts] of count) {
+    if (accounts.size <= MAX_CONTAINMENT_FANOUT) out.add(name);
+  }
+  return out;
+}
+
+/**
+ * PURE. Group ONLY on proof — an identical domain, or a DISTINCTIVE name that
+ * two accounts share, from any field. No containment, therefore no chaining.
  */
 export function groupByProof(
   sides: SplitAccountSide[],
   separatedPairs?: Set<string>,
 ): SplitAccountConflict[] {
-  return groupSplitAccountConflicts(sides, separatedPairs).filter(
-    (g) => g.signal === "domain" || g.signal === "exact_name",
+  const distinctive = distinctiveNames(sides);
+  // Re-key each account on its aliases so a shared DEAL name joins two
+  // accounts the account names alone would have missed. The deals stay as
+  // they are; only the matching surface widens.
+  const rekeyed: SplitAccountSide[] = sides.map((s) => {
+    const names = accountAliases(s).filter((n) => distinctive.has(n));
+    return { ...s, aliases: names };
+  });
+  const byId = new Map(rekeyed.map((s) => [s.account_id, s]));
+  const uf = new UnionFind();
+  const key = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+  const signalFor = new Map<string, SplitAccountSignal>();
+
+  const join = (a: string, b: string, sig: SplitAccountSignal) => {
+    if (separatedPairs?.has(key(a, b))) return;
+    uf.union(a, b);
+    const root = uf.find(a);
+    const held = signalFor.get(root);
+    if (!held || (sig === "domain" && held !== "domain")) signalFor.set(root, sig);
+    else if (!held) signalFor.set(root, sig);
+  };
+
+  const byDomain = new Map<string, string[]>();
+  const byName = new Map<string, string[]>();
+  for (const s of rekeyed) {
+    if (!s.deals?.length) continue;
+    const d = normalizeAccountDomain(s.domain);
+    if (d) (byDomain.get(d) || byDomain.set(d, []).get(d)!).push(s.account_id);
+    for (const n of s.aliases || []) {
+      (byName.get(n) || byName.set(n, []).get(n)!).push(s.account_id);
+    }
+  }
+  for (const ids of byDomain.values())
+    for (let i = 1; i < ids.length; i++) join(ids[0], ids[i], "domain");
+  for (const ids of byName.values())
+    for (let i = 1; i < ids.length; i++) join(ids[0], ids[i], "exact_name");
+
+  const groups = new Map<string, string[]>();
+  for (const s of rekeyed) {
+    if (!s.deals?.length) continue;
+    const root = uf.find(s.account_id);
+    (groups.get(root) || groups.set(root, []).get(root)!).push(s.account_id);
+  }
+
+  const out: SplitAccountConflict[] = [];
+  for (const [root, ids] of groups) {
+    if (ids.length < 2) continue;
+    const accounts = ids.map((i) => byId.get(i)!);
+    const byDealId = new Map<string, SplitAccountDeal>();
+    for (const a of accounts) for (const d of a.deals) byDealId.set(String(d.id), d);
+    const deals = [...byDealId.values()];
+    if (deals.length < 2) continue;
+    const owners = Array.from(new Set(deals.map((d) => d.owner).filter(Boolean)));
+    out.push({
+      company: accounts.map((a) => a.account_name || "").sort((x, y) => y.length - x.length)[0],
+      signal: signalFor.get(root) || "exact_name",
+      accounts,
+      account_count: accounts.length,
+      open_deals: deals.length,
+      distinct_owners: owners.length,
+      owners,
+      total_open_value: deals.reduce((n, d) => n + (Number(d.amount) || 0), 0),
+      overlaps_main_tab: accounts.some((a) => a.deals.length > 1),
+    });
+  }
+  return out.sort(
+    (a, b) =>
+      b.distinct_owners - a.distinct_owners ||
+      b.open_deals - a.open_deals ||
+      b.total_open_value - a.total_open_value,
   );
 }
 
@@ -418,20 +542,24 @@ export function containmentPairs(
   sides: SplitAccountSide[],
   separatedPairs?: Set<string>,
 ): SplitAccountPair[] {
-  const usable = sides.filter(
-    (s) => s.account_id && !isNonIdentifyingCompanyName(s.account_name),
-  );
-  const norms = new Map<string, string>();
+  // Every name each account is known by — account name AND deal names — so a
+  // split survives one badly-named account record.
+  const distinctive = distinctiveNames(sides);
+  const namesOf = new Map<string, string[]>();
   const byFirstToken = new Map<string, string[]>();
   const byId = new Map<string, SplitAccountSide>();
-  for (const s of usable) {
-    const n = normalizeCompanyName(s.account_name || "").trim();
-    if (!n || n.length < MIN_JOIN_LEN) continue;
-    norms.set(s.account_id, n);
+  for (const s of sides) {
+    if (!s.account_id) continue;
+    const names = accountAliases(s).filter((n) => distinctive.has(n));
+    if (!names.length) continue;
+    namesOf.set(s.account_id, names);
     byId.set(s.account_id, s);
-    const first = n.split(" ")[0];
-    if (first && first.length >= MIN_JOIN_LEN) {
-      (byFirstToken.get(first) || byFirstToken.set(first, []).get(first)!).push(s.account_id);
+    for (const n of names) {
+      const first = n.split(" ")[0];
+      if (first && first.length >= MIN_JOIN_LEN) {
+        const b = byFirstToken.get(first) || byFirstToken.set(first, []).get(first)!;
+        if (!b.includes(s.account_id)) b.push(s.account_id);
+      }
     }
   }
   const key = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
@@ -452,15 +580,23 @@ export function containmentPairs(
         const k = key(ida, idb);
         if (seen.has(k)) continue;
         if (separatedPairs?.has(k)) continue;
-        const a = norms.get(ida)!;
-        const b = norms.get(idb)!;
-        if (a === b) continue; // identical names are proof, already grouped
-        const shorter = a.length <= b.length ? a : b;
-        const longer = shorter === a ? b : a;
-        if (!containsToken(longer, shorter)) continue;
+        // Best containment across ANY pair of their names — the match may sit
+        // between one account's DEAL name and the other's account name.
+        let best: string | null = null;
+        for (const a of namesOf.get(ida)!) {
+          for (const b of namesOf.get(idb)!) {
+            if (a === b) { best = null; break; } // identical is proof, already grouped
+            const shorter = a.length <= b.length ? a : b;
+            const longer = shorter === a ? b : a;
+            if (!containsToken(longer, shorter)) continue;
+            if (!best || shorter.length > best.length) best = shorter;
+          }
+          if (best === null && namesOf.get(ida)!.some((x) => namesOf.get(idb)!.includes(x))) break;
+        }
+        if (!best) continue;
         seen.add(k);
-        edges.push({ a: side(ida), b: side(idb), shared: shorter });
-        fanOut.set(shorter, (fanOut.get(shorter) || 0) + 1);
+        edges.push({ a: side(ida), b: side(idb), shared: best });
+        fanOut.set(best, (fanOut.get(best) || 0) + 1);
       }
     }
   }
@@ -541,9 +677,17 @@ export async function getSplitAccountCompanies(
   // how many deals it holds in total — one row per account, bounded by the
   // sales book rather than the whole Accounts module.
   const res = await pool.query(
+    // Deal names and company names come back as ALIASES. The account record is
+    // often the worst-named thing in the cluster — الفران's accounts were
+    // "الفران" and "شركة الفران العربية" — and elsewhere the deal is the only
+    // place the real company name was ever typed.
     `WITH deal_accounts AS (
        SELECT NULLIF(BTRIM(r.raw_data->'Account_Name'->>'id'), '') AS account_id,
-              COUNT(*)::int AS total_deals
+              COUNT(*)::int AS total_deals,
+              json_agg(DISTINCT NULLIF(BTRIM(r.record_name), ''))
+                FILTER (WHERE NULLIF(BTRIM(r.record_name), '') IS NOT NULL) AS deal_names,
+              json_agg(DISTINCT NULLIF(BTRIM(r.company_name), ''))
+                FILTER (WHERE NULLIF(BTRIM(r.company_name), '') IS NOT NULL) AS deal_companies
          FROM duplicate_records r
         WHERE r.record_type = 'deal'${segCond1}
           AND NULLIF(BTRIM(r.raw_data->'Account_Name'->>'id'), '') IS NOT NULL
@@ -551,6 +695,8 @@ export async function getSplitAccountCompanies(
      )
      SELECT da.account_id,
             da.total_deals,
+            da.deal_names,
+            da.deal_companies,
             COALESCE(NULLIF(BTRIM(a.record_name), ''), da.account_id) AS account_name,
             COALESCE(NULLIF(BTRIM(a.domain), ''), NULLIF(BTRIM(a.website), '')) AS domain
        FROM deal_accounts da
@@ -610,11 +756,18 @@ export async function getSplitAccountCompanies(
     const id = String(r.account_id);
     const domain = normalizeAccountDomain(r.domain);
     meta.set(id, { total_deals: Number(r.total_deals) || 0, domain });
+    const aliases = [
+      ...(Array.isArray(r.deal_names) ? r.deal_names : []),
+      ...(Array.isArray(r.deal_companies) ? r.deal_companies : []),
+    ]
+      .map((x: any) => String(x || "").trim())
+      .filter(Boolean);
     return {
       account_id: id,
       account_name: String(r.account_name || "").trim(),
       domain,
       deals: openByAccount.get(id) || [placeholder(id)],
+      aliases,
     };
   });
 
