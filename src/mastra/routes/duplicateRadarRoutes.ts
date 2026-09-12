@@ -14301,6 +14301,41 @@ export const duplicateRadarRoutes = [
         );
         const result = await getSplitAccountDealConflicts(segment);
         const companies = result.companies;
+
+        if ((url.searchParams.get("format") || "").toLowerCase() === "csv") {
+          const esc = (v: any) => {
+            const s = v == null ? "" : String(v);
+            return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+          };
+          const header = [
+            "Company", "Joined by", "Account", "Domain", "Open deal", "Stage",
+            "Owner", "Amount (SAR)", "Zoho account ID", "Open account in Zoho",
+          ];
+          const body: string[] = [];
+          for (const co of companies) {
+            for (const a of co.accounts) {
+              for (const d of a.deals) {
+                body.push(
+                  [
+                    co.company, co.signal, a.account_name, a.domain || "",
+                    d.name, d.stage, d.owner, Math.round(d.amount || 0),
+                    a.account_id,
+                    `https://crm.zoho.com/crm/org766568398/tab/Accounts/${a.account_id}`,
+                  ].map(esc).join(","),
+                );
+              }
+            }
+            body.push("");
+          }
+          const csv = "﻿" + [header.join(","), ...body].join("\r\n");
+          return new Response(csv, {
+            headers: {
+              "Content-Type": "text/csv; charset=utf-8",
+              "Content-Disposition": `attachment; filename="split-account-conflicts-${companies.length}.csv"`,
+            },
+          });
+        }
+
         return c.json({
           success: true,
           segment: result.segment,

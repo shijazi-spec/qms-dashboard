@@ -7642,6 +7642,9 @@
             }
             // A load is the freshest moment to restate how old the mirror is.
             if (typeof _rrRenderFreshness === 'function') _rrRenderFreshness();
+            // The conflicts this table cannot see, loaded alongside it — the
+            // two lists only mean something together.
+            if (typeof loadSplitAccountConflicts === 'function') loadSplitAccountConflicts();
             if (!rows.length) {
                 body.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-gray-500">No conflicts found for this layout.</td></tr>';
                 return;
@@ -8202,6 +8205,84 @@
 
         window.downloadContactMergeCsv = function () {
             window.location.href = '/api/duplicates/contacts/merge-worklist?format=csv';
+        };
+
+        // ── Also in conflict: hidden by a split account ──────────────────────
+        //
+        // The main table answers "which ACCOUNT holds more than one open deal".
+        // A company whose two open deals sit on two Account records is
+        // invisible to it — each account looks clean on its own. That is how
+        // الفران carried two Proposals under two owners and was never
+        // reported (Sarah 2026-09-12, "just these 2 !!!").
+        //
+        // The check has existed since 09-09 with no UI, which is the same as
+        // not existing: a finding nobody can see is not a finding.
+        window.loadSplitAccountConflicts = async function () {
+            var body = document.getElementById('sacBody');
+            var cnt = document.getElementById('sacCount');
+            var sum = document.getElementById('sacSummary');
+            if (!body) return;
+            var seg = (document.getElementById('adcSegment') || {}).value || 'walaplus';
+            body.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-gray-400">Loading…</td></tr>';
+            var d;
+            try {
+                d = await fetch('/api/duplicates/split-account-conflicts?segment=' + encodeURIComponent(seg),
+                    { credentials: 'same-origin' }).then(function (r) { return r.json(); });
+            } catch (e) {
+                body.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-red-600">Could not load: ' + escapeHtml(String((e && e.message) || e)) + '</td></tr>';
+                return;
+            }
+            if (!d || d.error) {
+                body.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-red-600">' + escapeHtml((d && d.error) || 'Failed to load') + '</td></tr>';
+                return;
+            }
+            var rows = d.companies || [];
+            if (cnt) cnt.textContent = _fn(rows.length);
+            if (sum) {
+                var val = rows.reduce(function (n, c) { return n + (c.total_open_value || 0); }, 0);
+                sum.innerHTML = rows.length
+                    ? '<strong>' + _fn(rows.length) + '</strong> more compan' + (rows.length === 1 ? 'y' : 'ies') + ' in conflict right now · '
+                      + '<strong>' + _fn(rows.reduce(function (n, c) { return n + (c.open_deals || 0); }, 0)) + '</strong> open deals · '
+                      + '<strong>SAR ' + Number(Math.round(val)).toLocaleString() + '</strong> at stake. '
+                      + '<span class="text-gray-500">Fix = merge the two Account records in Zoho; the deals then sit together and the row moves to the table above.</span>'
+                    : '';
+            }
+            if (!rows.length) {
+                body.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-gray-500">No split-account conflicts on this layout.</td></tr>';
+                return;
+            }
+            var aurl = function (id) { return 'https://crm.zoho.com/crm/org766568398/tab/Accounts/' + encodeURIComponent(String(id || '')); };
+            body.innerHTML = rows.map(function (c) {
+                var accts = (c.accounts || []).map(function (a) {
+                    return '<div><a href="' + aurl(a.account_id) + '" target="_blank" rel="noopener" class="text-blue-600 hover:underline">'
+                        + escapeHtml(a.account_name || '(unnamed)') + ' ↗</a>'
+                        + '<span class="text-xs text-gray-500"> · ' + escapeHtml(a.domain || 'no domain') + '</span></div>';
+                }).join('');
+                var deals = (c.accounts || []).flatMap(function (a) { return a.deals || []; })
+                    .map(function (x) {
+                        return '<div class="text-xs">' + escapeHtml(x.stage || '?') + ' — ' + escapeHtml(x.owner || '?')
+                            + (x.amount ? ' <span class="text-gray-500">SAR ' + Number(Math.round(x.amount)).toLocaleString() + '</span>' : '') + '</div>';
+                    }).join('');
+                // Two owners is the case to action first — two sellers on one
+                // client — exactly as the main table ranks it.
+                var ownerBadge = (c.distinct_owners > 1)
+                    ? '<span class="rr-badge rr-warn rr-dot">' + c.distinct_owners + ' owners</span>'
+                    : '<span class="rr-badge rr-neutral">1 owner</span>';
+                return '<tr>'
+                    + '<td><strong>' + escapeHtml(c.company || '?') + '</strong></td>'
+                    + '<td>' + accts + '</td>'
+                    + '<td>' + deals + '</td>'
+                    + '<td class="rr-num">' + ownerBadge + '</td>'
+                    + '<td class="rr-num">' + Number(Math.round(c.total_open_value || 0)).toLocaleString() + '</td>'
+                    + '<td><span class="rr-badge rr-info">' + escapeHtml(c.signal === 'domain' ? 'same domain'
+                        : (c.signal === 'exact_name' ? 'same name' : 'name match — verify')) + '</span></td>'
+                    + '</tr>';
+            }).join('');
+        };
+
+        window.downloadSplitAccountCsv = function () {
+            var seg = (document.getElementById('adcSegment') || {}).value || 'walaplus';
+            window.location.href = '/api/duplicates/split-account-conflicts?segment=' + encodeURIComponent(seg) + '&format=csv';
         };
 
         // ── Mirror freshness, shared by EVERY tab ────────────────────────────
