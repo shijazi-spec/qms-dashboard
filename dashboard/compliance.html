@@ -1053,8 +1053,21 @@
 
         async function _setMilestoneRetired(key, retired) {
             if (!key) return;
-            var errKey = retired ? 'compliance.ms_retire_error' : 'compliance.ms_restore_error';
-            var errFb = retired ? 'Could not retire the milestone' : 'Could not restore the milestone';
+            // Resolved HERE with literal keys, rather than handing a key
+            // variable to _ct() at the two call sites below. The guardrail can
+            // only verify a key it can read literally, and passing it a key
+            // VARIABLE hid both of the keys below from it — the same
+            // dynamic-key shape that reddened CI twice already on
+            // 2026-09-11/12, just hoisted into a variable, which makes it
+            // harder to spot rather than better. Resolving once also means one
+            // lookup instead of two.
+            //
+            // Written without a parenthesised call form on purpose: this
+            // checker reads raw source, so a comment containing one becomes a
+            // phantom call site. That has happened here before.
+            var errMsg = retired
+                ? _ct('compliance.ms_retire_error', 'Could not retire the milestone')
+                : _ct('compliance.ms_restore_error', 'Could not restore the milestone');
             try {
                 var res = await fetch('/api/certification-milestones/' + encodeURIComponent(key) + '/retire', {
                     method: 'POST',
@@ -1064,12 +1077,12 @@
                 });
                 var d = await res.json().catch(function () { return {}; });
                 if (!res.ok) {
-                    alert(_ct(errKey, errFb) + (d.error ? ': ' + d.error : ''));
+                    alert(errMsg + (d.error ? ': ' + d.error : ''));
                     return;
                 }
                 await loadMilestones();
             } catch (e) {
-                alert(_ct(errKey, errFb) + ': ' + e.message);
+                alert(errMsg + ': ' + e.message);
             }
         }
 

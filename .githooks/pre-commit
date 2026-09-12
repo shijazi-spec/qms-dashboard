@@ -34,6 +34,23 @@ fi
 
 failed=0
 
+# Kaspersky quarantines node.exe on at least one machine that commits to this
+# repo (the npm/npx shims survive, so `node` is simply missing from PATH). An
+# unguarded `node` call here does not degrade — it aborts EVERY commit from
+# that machine with "node: command not found", which reads like a guardrail
+# violation and teaches people to reach for --no-verify. That is strictly
+# worse than not running: --no-verify skips the CSP scans above too.
+#
+# So: skip the node-based checks when node is absent, say so loudly, and let
+# CI enforce them. Same reasoning as the matching block in .githooks/pre-push.
+if command -v node >/dev/null 2>&1; then
+  HAS_NODE=1
+else
+  HAS_NODE=0
+  echo "→ pre-commit: node not found — HTML-JS syntax and schema-parity guardrails SKIPPED." >&2
+  echo "   CI still enforces them; expect a red run if one is violated." >&2
+fi
+
 echo "→ pre-commit: running CSP inline-style guardrail…"
 if ! bash scripts/check-no-inline-styles.sh; then
   failed=1
@@ -49,9 +66,22 @@ fi
 # nested inside a JS template literal closed the outer literal early,
 # leaving the page with a fatal SyntaxError that no other check caught).
 # Hard gate: a broken <script> in any dashboard/*.html aborts the commit.
-if printf '%s\n' "$staged_paths" | grep -Eq '^dashboard/.*\.html$'; then
+if [ "$HAS_NODE" -eq 1 ] && printf '%s\n' "$staged_paths" | grep -Eq '^dashboard/.*\.html$'; then
   echo "→ pre-commit: running dashboard HTML JS syntax guardrail…"
   if ! node scripts/check-dashboard-html-js.mjs; then
+    failed=1
+  fi
+fi
+
+# i18n guardrail — the single most frequent CI breaker in this repo: three
+# separate reds in one evening on 2026-09-11/12 (a missing common.save key, a
+# ternary key, then two new dynamic call sites). It runs in about a second, so
+# catching it here saves a four-minute round trip on a branch several people
+# push to. Scoped to commits that touch the files it reads.
+if [ "$HAS_NODE" -eq 1 ] \
+   && printf '%s\n' "$staged_paths" | grep -Eq '^(dashboard/|public/).*\.(html|js)$|^dashboard/i18n/'; then
+  echo "→ pre-commit: running i18n guardrail…"
+  if ! node scripts/check-i18n.cjs; then
     failed=1
   fi
 fi
@@ -59,10 +89,14 @@ fi
 # Schema canonical-source parity guardrail — warns when a runtime ALTER
 # TABLE ADD COLUMN adds a column that's missing from the canonical
 # CREATE TABLE, which is the drift Replit's deploy-time schema-diff
-# proposes to "fix" by dropping data from production. Warning-only
-# right now (75 historical instances of drift in the codebase); flip
-# STRICT=1 in this script after the historical debt is paid down.
-if printf '%s\n' "$staged_paths" | grep -Eq '^src/'; then
+# proposes to "fix" by dropping data from production.
+#
+# Warning-only HERE, on purpose — but do not read that as "CI will let it
+# through". `npm run check:schema-parity` passes --strict and check:all gates
+# on it, so drift that only warns at commit time is a hard red on push. The
+# `|| true` exists so a pre-existing warning elsewhere in the tree cannot
+# block an unrelated commit, not because the rule is optional.
+if [ "$HAS_NODE" -eq 1 ] && printf '%s\n' "$staged_paths" | grep -Eq '^src/'; then
   echo "→ pre-commit: running schema-parity guardrail (warning mode)…"
   node scripts/check-schema-parity.mjs || true
 fi
