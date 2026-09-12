@@ -891,7 +891,17 @@ export async function getDealComplianceReportRows(
   const res = await pool.query(
     `SELECT d.zoho_deal_id AS id,
             COALESCE(NULLIF(BTRIM(r.record_name), ''), d.zoho_deal_id) AS name,
-            COALESCE(NULLIF(BTRIM(d.stage), ''), NULLIF(BTRIM(r.stage), ''), '') AS stage,
+            -- LIVE stage first (2026-09-12). This preferred d.stage — the
+            -- snapshot taken when the deal was last checked — so a deal checked
+            -- at Proposal and since moved to Closed Lost, On Hold or Agreement
+            -- Signed still counted as Proposal. The report said Proposal 453
+            -- where the live mirror and Zoho's own Kanban both said ~300: 152
+            -- deals reported to the Head of Sales under a stage they had left.
+            -- The compliance VERDICT is rightly the stored one; the stage a
+            -- deal is IN is a fact about the deal now, not about when we
+            -- happened to look at it. d.stage remains the fallback for a
+            -- mirror row with no stage at all.
+            COALESCE(NULLIF(BTRIM(r.stage), ''), NULLIF(BTRIM(r.raw_data->>'Stage'), ''), NULLIF(BTRIM(d.stage), ''), '') AS stage,
             COALESCE(NULLIF(BTRIM(r.owner_name), ''), NULLIF(BTRIM(r.owner_email), ''), 'Unassigned') AS owner,
             COALESCE(
               NULLIF(BTRIM(r.raw_data->'Account_Name'->>'name'), ''),
