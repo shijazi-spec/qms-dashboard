@@ -13997,6 +13997,13 @@ export const duplicateRadarRoutes = [
           active_conflicts: r.active_conflicts,
           merge_needed: r.merge_needed,
           companies: r.companies,
+          // Name-containment matches, one edge each, never chained. Both-sides-
+          // open first: that is the الفران shape.
+          possible_pairs: r.possible_pairs.length,
+          possible_pairs_both_open: r.possible_pairs.filter(
+            (p) => p.a_open_deals > 0 && p.b_open_deals > 0,
+          ).length,
+          pairs: r.possible_pairs,
         });
       } catch (e: any) {
         logger.error("accounts/split-companies failed", e);

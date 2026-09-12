@@ -342,6 +342,115 @@ export function groupSplitAccountConflicts(
 
 /* ── The whole-book sweep ─────────────────────────────────────────────────── */
 
+/**
+ * WHY THE WHOLE-BOOK SWEEP GROUPS DIFFERENTLY FROM THE NARROW CHECK ABOVE.
+ *
+ * Run over the 1,361 accounts that already hold open deals, token containment
+ * behaves: it found Yanbu Aramco and الفران and fifteen others, all real.
+ * Run over all 8,985 accounts in the sales book, it collapses (measured
+ * 2026-09-11):
+ *
+ *   42 different government authorities became ONE company, because they all
+ *      begin الهيئة — "the Authority".
+ *   21 companies became "Riyadh Second Health Cluster": Riyadh Air, Riyadh
+ *      Cables, Riyadh Marriott, Riyadh Municipality — they share a CITY.
+ *   18 became one "National" company, 14 one "تطوير" (development) company.
+ *
+ * Two causes. Generic leading words are categories, not names — the same
+ * mistake as "Confidential", which was fixed for withheld names and never
+ * generalised. And union-find is TRANSITIVE: one account named "الهيئة العامة"
+ * is contained in forty others, so a single generic hub chains them all
+ * together even though no two of them match each other.
+ *
+ * So at book scale only PROOF may group: an identical domain or an identical
+ * normalized name. Containment still carries signal — it is how الفران was
+ * found — but it is emitted as individual PAIRS that a person reads, never as
+ * a transitive group. A wrong pair costs one dismissal; a wrong group of 42
+ * costs the credibility of the whole list.
+ */
+
+/** A containment match, reported one edge at a time. Never chained. */
+export interface SplitAccountPair {
+  a: { account_id: string; account_name: string; domain: string | null };
+  b: { account_id: string; account_name: string; domain: string | null };
+  /** The shorter normalized name that sits inside the longer one. */
+  shared: string;
+}
+
+/** Shortest normalized name allowed to pull another account in by containment.
+ *  One token is a category ("الهيئة", "Riyadh"); two is a name. */
+const MIN_CONTAINMENT_TOKENS = 2;
+
+/**
+ * PURE. Group ONLY on proof — identical domain, or identical normalized name.
+ * No containment, therefore no chaining.
+ */
+export function groupByProof(
+  sides: SplitAccountSide[],
+  separatedPairs?: Set<string>,
+): SplitAccountConflict[] {
+  return groupSplitAccountConflicts(sides, separatedPairs).filter(
+    (g) => g.signal === "domain" || g.signal === "exact_name",
+  );
+}
+
+/**
+ * PURE. Containment matches as individual pairs.
+ *
+ * Requires the CONTAINED name to carry at least two tokens, so a lone category
+ * word cannot act as a hub. Pairs already joined by proof are skipped — they
+ * are in a group already and do not need reading twice.
+ */
+export function containmentPairs(
+  sides: SplitAccountSide[],
+  separatedPairs?: Set<string>,
+): SplitAccountPair[] {
+  const usable = sides.filter(
+    (s) => s.account_id && !isNonIdentifyingCompanyName(s.account_name),
+  );
+  const norms = new Map<string, string>();
+  const byFirstToken = new Map<string, string[]>();
+  const byId = new Map<string, SplitAccountSide>();
+  for (const s of usable) {
+    const n = normalizeCompanyName(s.account_name || "").trim();
+    if (!n || n.length < MIN_JOIN_LEN) continue;
+    norms.set(s.account_id, n);
+    byId.set(s.account_id, s);
+    const first = n.split(" ")[0];
+    if (first && first.length >= MIN_JOIN_LEN) {
+      (byFirstToken.get(first) || byFirstToken.set(first, []).get(first)!).push(s.account_id);
+    }
+  }
+  const key = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+  const seen = new Set<string>();
+  const out: SplitAccountPair[] = [];
+  const side = (id: string) => {
+    const s = byId.get(id)!;
+    return { account_id: s.account_id, account_name: s.account_name, domain: s.domain };
+  };
+  for (const bucket of byFirstToken.values()) {
+    for (let i = 0; i < bucket.length; i++) {
+      for (let j = i + 1; j < bucket.length; j++) {
+        const ida = bucket[i];
+        const idb = bucket[j];
+        const k = key(ida, idb);
+        if (seen.has(k)) continue;
+        if (separatedPairs?.has(k)) continue;
+        const a = norms.get(ida)!;
+        const b = norms.get(idb)!;
+        if (a === b) continue; // identical names are proof, already grouped
+        const shorter = a.length <= b.length ? a : b;
+        const longer = shorter === a ? b : a;
+        if (shorter.split(" ").length < MIN_CONTAINMENT_TOKENS) continue;
+        if (!containsToken(longer, shorter)) continue;
+        seen.add(k);
+        out.push({ a: side(ida), b: side(idb), shared: shorter });
+      }
+    }
+  }
+  return out;
+}
+
 export type SplitCompanyClass = "active_conflict" | "merge_needed";
 
 export interface SplitCompany {
@@ -396,6 +505,14 @@ export async function getSplitAccountCompanies(
   accounts_scanned: number;
   active_conflicts: number;
   merge_needed: number;
+  /**
+   * Name-containment matches, one edge each, for a person to read. NOT grouped
+   * and NOT chained. Each carries whether both sides currently hold open deals,
+   * so a reviewer can start with the ones that are already a live collision.
+   */
+  possible_pairs: Array<
+    SplitAccountPair & { a_open_deals: number; b_open_deals: number }
+  >;
 }> {
   const seg = !segment || segment === "corporate" ? "walaplus" : segment;
   const p1 = buildSegmentPredicate(seg, 1);
@@ -485,7 +602,11 @@ export async function getSplitAccountCompanies(
   // Pairs an operator dismissed as "not the same company" stay dismissed here
   // too — sister companies should not come back through a second door.
   const separatedPairs = await getSeparationPairKeySet();
-  const grouped = groupSplitAccountConflicts(sides, separatedPairs);
+  // PROOF ONLY at this scale — see the note above groupByProof. Containment is
+  // reported separately, as pairs, because chaining it across 8,985 accounts
+  // merged 42 unrelated government authorities into one row.
+  const grouped = groupByProof(sides, separatedPairs);
+  const pairs = containmentPairs(sides, separatedPairs);
 
   const companies: SplitCompany[] = [];
   for (const g of grouped) {
@@ -525,12 +646,29 @@ export async function getSplitAccountCompanies(
       b.account_count - a.account_count,
   );
 
+  // Live collisions first: a pair where BOTH sides carry an open deal is the
+  // الفران case, and it should never sit below a dormant one.
+  const openCount = (id: string) => (openByAccount.get(id) || []).length;
+  const possiblePairs = pairs
+    .map((p) => ({
+      ...p,
+      a_open_deals: openCount(p.a.account_id),
+      b_open_deals: openCount(p.b.account_id),
+    }))
+    .sort(
+      (x, y) =>
+        Number(y.a_open_deals > 0 && y.b_open_deals > 0) -
+          Number(x.a_open_deals > 0 && x.b_open_deals > 0) ||
+        y.a_open_deals + y.b_open_deals - (x.a_open_deals + x.b_open_deals),
+    );
+
   return {
     segment: seg,
     companies,
     accounts_scanned: sides.length,
     active_conflicts: companies.filter((c) => c.classification === "active_conflict").length,
     merge_needed: companies.filter((c) => c.classification === "merge_needed").length,
+    possible_pairs: possiblePairs,
   };
 }
 
