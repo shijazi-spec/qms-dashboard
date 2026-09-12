@@ -29,7 +29,20 @@ const SRC = readFileSync(
 function stageExpr(): string {
   const fn = /export async function getDealComplianceReportRows[\s\S]*?\n\}/.exec(SRC);
   expect(fn, "getDealComplianceReportRows not found — did it move?").toBeTruthy();
-  const m = /COALESCE\([^)]*?AS stage/s.exec(fn![0]);
+  // `[^)]*?` could never match this: the expression is
+  //   COALESCE(NULLIF(BTRIM(r.stage), ''), NULLIF(BTRIM(r.raw_data->>'Stage'), ''), …)
+  // so the character class hits the `)` of the first NULLIF(BTRIM(…)) and stops
+  // long before `AS stage`. Both assertions below failed against correct SQL.
+  //
+  // Plain `[\s\S]*?` is not the fix either: this function contains an EARLIER
+  // COALESCE, and a non-greedy scan from there runs on to the first `AS stage`,
+  // capturing ~2200 characters with an unrelated `d.stage` near the front — the
+  // ordering assertions then fail for a second, different reason.
+  //
+  // So: any characters except the start of another COALESCE, which forces the
+  // match to begin at the nearest one. Not line-anchored, so reformatting the
+  // SQL across lines cannot break it.
+  const m = /COALESCE\((?:(?!COALESCE\()[\s\S])*?\)\s*AS stage/.exec(fn![0]);
   expect(m, "no stage expression found in the row query").toBeTruthy();
   return m![0];
 }
