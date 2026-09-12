@@ -72,21 +72,37 @@ describe("containmentPairs", () => {
   });
 
   it("reports ONE EDGE per match, never a chain", () => {
-    // A generic hub contained in three others yields three pairs to read —
-    // not one company of four. Each is independently judgeable.
+    // Two edges, not three: "Yanbu Aramco" sits inside both of the others, but
+    // "…Sinopec" and "…Refining Company" do not contain each other. Under the
+    // old grouping all three collapsed into one company.
     const pairs = containmentPairs([
       acct("Yanbu Aramco"),
       acct("Yanbu Aramco Sinopec"),
       acct("Yanbu Aramco Refining Company"),
     ]);
-    expect(pairs).toHaveLength(3);
+    expect(pairs).toHaveLength(2);
     for (const p of pairs) expect(p.a.account_id).not.toBe(p.b.account_id);
   });
 
-  it("refuses a one-token hub — a category is not a name", () => {
-    // "الهيئة" alone was the hub that chained the 42.
-    expect(containmentPairs([acct("الهيئة"), acct("الهيئة العامة للنقل")])).toEqual([]);
-    expect(containmentPairs([acct("Riyadh"), acct("Riyadh Cables")])).toEqual([]);
+  it("drops a hub by FAN-OUT, not by token count", () => {
+    // "الهيئة" is the hub that chained 42 authorities. It is ONE token — and so
+    // is "الفران", a real company. Length cannot separate them; how many
+    // accounts the name sits inside can.
+    const authorities = containmentPairs([
+      acct("الهيئة"),
+      acct("الهيئة العامة للنقل"),
+      acct("الهيئة العامة للطيران المدني"),
+      acct("الهيئة العامة للأمن الغذائي"),
+      acct("الهيئة الملكية للجبيل وينبع"),
+      acct("الهيئة السعودية للمواصفات"),
+    ]);
+    expect(authorities).toEqual([]);
+
+    const city = containmentPairs([
+      acct("Riyadh"), acct("Riyadh Cables"), acct("Riyadh Marriott Hotel"),
+      acct("Riyadh Air"), acct("Riyadh Municipality"), acct("Riyadh Schools"),
+    ]);
+    expect(city).toEqual([]);
   });
 
   it("skips identical names — those are proof and already grouped", () => {

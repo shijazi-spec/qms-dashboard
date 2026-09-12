@@ -377,9 +377,22 @@ export interface SplitAccountPair {
   shared: string;
 }
 
-/** Shortest normalized name allowed to pull another account in by containment.
- *  One token is a category ("الهيئة", "Riyadh"); two is a name. */
-const MIN_CONTAINMENT_TOKENS = 2;
+/**
+ * How many other accounts one name may sit inside before it is treated as a
+ * category rather than a name.
+ *
+ * Token count cannot make this call, and trying cost a real case: "الفران" is
+ * ONE token and a genuine company name, while "الهيئة" is one token and means
+ * "the Authority". A ≥2-token rule threw away الفران — the very split this
+ * sweep was built to find.
+ *
+ * FAN-OUT separates them cleanly. "الهيئة" is contained in forty accounts;
+ * "الفران" in one. A name that matches half the book is describing a category,
+ * whatever its length. Three is deliberately generous — a company with four
+ * genuine name variants is rare, and the cost of being wrong is one pair to
+ * dismiss rather than a group of forty.
+ */
+const MAX_CONTAINMENT_FANOUT = 3;
 
 /**
  * PURE. Group ONLY on proof — identical domain, or identical normalized name.
@@ -397,9 +410,9 @@ export function groupByProof(
 /**
  * PURE. Containment matches as individual pairs.
  *
- * Requires the CONTAINED name to carry at least two tokens, so a lone category
- * word cannot act as a hub. Pairs already joined by proof are skipped — they
- * are in a group already and do not need reading twice.
+ * Collected in two passes: every candidate edge first, then every edge dropped
+ * whose contained name proved to be a hub. The count only means something once
+ * the whole book has been walked, so the filter cannot run inline.
  */
 export function containmentPairs(
   sides: SplitAccountSide[],
@@ -423,11 +436,14 @@ export function containmentPairs(
   }
   const key = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
   const seen = new Set<string>();
-  const out: SplitAccountPair[] = [];
   const side = (id: string) => {
     const s = byId.get(id)!;
     return { account_id: s.account_id, account_name: s.account_name, domain: s.domain };
   };
+
+  // PASS 1 — every candidate edge, and how often each contained name is used.
+  const edges: SplitAccountPair[] = [];
+  const fanOut = new Map<string, number>();
   for (const bucket of byFirstToken.values()) {
     for (let i = 0; i < bucket.length; i++) {
       for (let j = i + 1; j < bucket.length; j++) {
@@ -441,14 +457,17 @@ export function containmentPairs(
         if (a === b) continue; // identical names are proof, already grouped
         const shorter = a.length <= b.length ? a : b;
         const longer = shorter === a ? b : a;
-        if (shorter.split(" ").length < MIN_CONTAINMENT_TOKENS) continue;
         if (!containsToken(longer, shorter)) continue;
         seen.add(k);
-        out.push({ a: side(ida), b: side(idb), shared: shorter });
+        edges.push({ a: side(ida), b: side(idb), shared: shorter });
+        fanOut.set(shorter, (fanOut.get(shorter) || 0) + 1);
       }
     }
   }
-  return out;
+
+  // PASS 2 — drop the hubs. A name inside more accounts than the cap is
+  // describing a category, and every edge it produced is noise.
+  return edges.filter((e) => (fanOut.get(e.shared) || 0) <= MAX_CONTAINMENT_FANOUT);
 }
 
 export type SplitCompanyClass = "active_conflict" | "merge_needed";
