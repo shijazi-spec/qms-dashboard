@@ -402,7 +402,7 @@ jobs:
               inblk && index($0, "──── ") == 1 { inblk = 0 }
               inblk && $0 ~ /^[[:space:]]*\[(PASS\]|FAIL \(exit)/ { inblk = 0 }
               inblk { print }
-            ' /tmp/test-clean.log | tail -25)
+            ' /tmp/test-clean.log | tail -60)
 
             {
               echo "──────── ${f}"
@@ -423,7 +423,24 @@ jobs:
             # and must not look identical.
             if [ "${NTAIL}" -lt 8 ]; then
               NTAIL=$((NTAIL + 1))
-              TAILMSG=$(printf '%s\n' "${BLOCK:-<no block matched this label>}" | tail -10 | tr '\n' '|' | tr -d '\r' | cut -c1-1600)
+              SRC="${BLOCK:-<no block matched this label>}"
+              # PREFER error-shaped lines over a blind tail.
+              #
+              # `tail -10` was wrong, and not because 10 was too small. vitest
+              # prints the assertion FIRST, then the stack, then a source
+              # snippet, then its own summary — so the last N lines are the
+              # snippet and summary, and the actual reason scrolls off the top
+              # however far N is raised. On 2026-09-12 that cost a wrong
+              # diagnosis: the annotation showed two source lines and
+              # "Test Files 1 failed", the error itself was invisible, and I
+              # guessed at a cause that was not the real one.
+              #
+              # So: pull the lines that state a reason, wherever they sit in the
+              # block, and fall back to the tail only when none match — which is
+              # the case a plain tail was always right for.
+              HILITE=$(printf '%s\n' "$SRC" | grep -aE '(✗|AssertionError|[A-Za-z]*Error:|expected .+ (to|but)|relation "[a-z_]+" does not exist|^[[:space:]]*FAIL )' | head -14 || true)
+              if [ -n "$HILITE" ]; then PICK="$HILITE"; else PICK=$(printf '%s\n' "$SRC" | tail -14); fi
+              TAILMSG=$(printf '%s\n' "$PICK" | tr '\n' '|' | tr -d '\r' | cut -c1-2400)
               echo "::notice title=test-7-tail-${NTAIL} ${f}::${TAILMSG}"
             fi
           done < /tmp/failing-files.txt
