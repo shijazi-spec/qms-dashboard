@@ -9242,6 +9242,41 @@ export const duplicateRadarRoutes = [
     },
   },
   {
+    // CS PHASE RECONCILE (2026-09-13). Zeina Al Soudi (CS) counted "termination
+    // 582 · new deal 18" in Zoho while the morning post, the dashboard and a
+    // full-book scan all said 573 / 17. The scan cap and layout scope were
+    // measured and cleared first. This lays Zoho's live deal IDs for a phase
+    // against the mirror so every difference lands in a named bucket — never
+    // synced, wrong zoho_module, other layout, stale phase, or counted by us
+    // but moved on in Zoho. READ-ONLY: Zoho is only read, nothing is written.
+    //   GET /api/duplicates/cs-lifecycle/phase-reconcile?phases=Termination,New Deal&segment=walaplus
+    path: "/api/duplicates/cs-lifecycle/phase-reconcile",
+    method: "GET" as const,
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          const user = await requireDuplicateRadarAccess(c);
+          if (!user) return unauthorizedResponse(c);
+          const url = new URL(c.req.url);
+          const phases = (url.searchParams.get("phases") || "Termination,New Deal")
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .slice(0, 6);
+          const segment = url.searchParams.get("segment") || "walaplus";
+          const { reconcileCsPhases } = await import(
+            "../../utils/csPhaseReconcile"
+          );
+          const results = await reconcileCsPhases(phases, segment);
+          return c.json({ success: true, results });
+        } catch (error: any) {
+          logger.error("Error reconciling CS phases:", error);
+          return c.json({ error: error?.message || "An internal error occurred" }, 500);
+        }
+      };
+    },
+  },
+  {
     // CS OWNER ROSTER (Sarah 2026-07-20) — the distinct "CS Owner Name" values
     // across Deal records, with per-owner deal/account counts, plus how many CS
     // deals have no owner. Nothing in the platform listed the CS team before
