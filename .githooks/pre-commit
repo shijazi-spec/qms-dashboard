@@ -91,11 +91,16 @@ fi
 # CREATE TABLE, which is the drift Replit's deploy-time schema-diff
 # proposes to "fix" by dropping data from production.
 #
-# Warning-only HERE, on purpose — but do not read that as "CI will let it
-# through". `npm run check:schema-parity` passes --strict and check:all gates
-# on it, so drift that only warns at commit time is a hard red on push. The
-# `|| true` exists so a pre-existing warning elsewhere in the tree cannot
-# block an unrelated commit, not because the rule is optional.
+# Warning-only HERE — and, as of 2026-09-13, warning-only in CI too.
+# .github/workflows/typecheck.yml runs this script without --strict and with
+# continue-on-error, so a green CI run does NOT mean there is no drift. The
+# only things that fail on it are `npm run check:schema-parity` and
+# `npm run check:all` (both pass --strict), and neither tests.yml nor
+# typecheck.yml runs them. So if you add an ALTER ... ADD COLUMN, put the
+# column in the canonical CREATE TABLE yourself: no automatic gate will stop
+# you forgetting. The `|| true` below exists so a pre-existing warning
+# elsewhere in the tree cannot block an unrelated commit, not because the
+# rule is optional.
 if [ "$HAS_NODE" -eq 1 ] && printf '%s\n' "$staged_paths" | grep -Eq '^src/'; then
   echo "→ pre-commit: running schema-parity guardrail (warning mode)…"
   node scripts/check-schema-parity.mjs || true
