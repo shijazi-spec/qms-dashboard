@@ -57,9 +57,24 @@ import {
   resetComplianceTablesInit,
 } from "../../src/utils/complianceDatabase";
 
+/**
+ * The init path reads two result shapes: `rows[0].count` from its
+ * "is this framework already seeded?" probes, and `rows[0].id` / `rows.length`
+ * from the regulation lookups. Answering 0 for the counts and no rows for
+ * everything else keeps each seed on its early-return path — the queries under
+ * test are the ones the init itself issues, not the catalogue inserts.
+ */
+function dbAnswer(sql: any) {
+  const text = typeof sql === "string" ? sql : (sql?.text ?? "");
+  if (/count\s*\(/i.test(text)) {
+    return { rows: [{ count: "0" }], rowCount: 1 };
+  }
+  return { rows: [], rowCount: 0 };
+}
+
 beforeEach(() => {
   query.mockReset();
-  query.mockResolvedValue({ rows: [], rowCount: 0 });
+  query.mockImplementation(async (sql: any) => dbAnswer(sql));
   resetComplianceTablesInit();
 });
 
@@ -97,7 +112,7 @@ describe("initComplianceTables", () => {
       "connection terminated",
     );
 
-    query.mockResolvedValue({ rows: [], rowCount: 0 });
+    query.mockImplementation(async (sql: any) => dbAnswer(sql));
     await expect(initComplianceTables()).resolves.toBeUndefined();
     expect(query.mock.calls.length).toBeGreaterThan(1);
   });
