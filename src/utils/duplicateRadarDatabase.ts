@@ -880,43 +880,70 @@ export interface DealComplianceReportRow {
  * sweep has not reached yet is not evidence of anything, and padding the
  * report with unknowns would understate compliance.
  */
-export async function getDealComplianceReportRows(
-  segment: DuplicateFilters["segment"],
-  opts?: { pipeline?: string; periodYear?: number; periodQuarter?: number },
-): Promise<DealComplianceReportRow[]> {
-  const seg = segment && segment !== "all" ? (segment === "corporate" ? "walaplus" : segment) : "all";
-  const p = buildSegmentPredicate(seg, 1);
-  const segCond = p.condition ? " AND " + p.condition : "";
-  // Optional pipeline narrowing (Sarah 2026-09-03: "WalaPlus Layout, Standard
-  // corporate pipeline"). Matched case-insensitively on a CONTAINS, because
-  // Zoho spells this pipeline several ways across records ("Standard",
-  // "Standard (Corporate)", "Corporate Standard") and an exact match on one
-  // spelling would silently drop the others.
+export interface DealReportFilters {
+  pipeline?: string;
+  periodYear?: number;
+  periodQuarter?: number;
+}
+
+/**
+ * Pipeline + period narrowing for the deal-compliance report, as SQL.
+ *
+ * Extracted 2026-09-13 so the ROWS and the NOT-YET-CHECKED COUNT are narrowed
+ * by the same predicate. They were not: the rows honoured pipeline and period,
+ * countNeverChecked knew only segment and stage, so a coverage line under a
+ * single quarter was padded with unchecked deals from every quarter. The
+ * routes papered over the pipeline half by dropping the unchecked count
+ * entirely whenever a pipeline was set — which hid those deals rather than
+ * counting them, and left the period half broken anyway.
+ *
+ * `paramOffset` is how many bind params the caller has already used, so the
+ * same fragment can sit after a segment predicate of any width.
+ *
+ * PIPELINE is a case-insensitive CONTAINS: Zoho spells it several ways across
+ * records ("Standard", "Standard (Corporate)", "Corporate Standard") and an
+ * exact match on one spelling would silently drop the others.
+ *
+ * PERIOD is a year, optionally narrowed to a quarter, on the deal's CREATED
+ * date. A quarter without a year is meaningless and is ignored. Bound as a
+ * half-open range rather than EXTRACT(YEAR ...) so any index on created_date
+ * stays usable.
+ */
+export function buildDealReportFilterSql(
+  opts: DealReportFilters | undefined,
+  paramOffset: number,
+): { condition: string; params: string[] } {
+  const params: string[] = [];
+  let condition = "";
   const pipeParam = opts?.pipeline?.trim();
-  const pipeCond = pipeParam
-    ? ` AND LOWER(COALESCE(r.pipeline, '')) LIKE '%' || LOWER($${p.params.length + 1}) || '%'`
-    : "";
-  // PERIOD (Sarah 2026-09-03) — year, optionally narrowed to a quarter, on the
-  // deal's CREATED date. Same basis and same rules as the tab endpoint, so the
-  // workbook always covers exactly the rows the table showed. A quarter without
-  // a year is meaningless and is ignored. Bound as a half-open range rather
-  // than EXTRACT(YEAR ...) so any index on created_date stays usable.
+  if (pipeParam) {
+    params.push(pipeParam);
+    condition += ` AND LOWER(COALESCE(r.pipeline, '')) LIKE '%' || LOWER($${paramOffset + params.length}) || '%'`;
+  }
   const py = Number(opts?.periodYear);
   const pq = Number(opts?.periodQuarter);
   const periodOn = Number.isFinite(py) && py >= 2000 && py <= 2100;
   const qOk = periodOn && Number.isFinite(pq) && pq >= 1 && pq <= 4;
-  const periodParams: string[] = [];
-  let periodCond = "";
   if (periodOn) {
     const startMonth = qOk ? (pq - 1) * 3 : 0;
     const endMonth = qOk ? pq * 3 : 12;
-    periodParams.push(
+    params.push(
       new Date(Date.UTC(py, startMonth, 1)).toISOString(),
       new Date(Date.UTC(py, endMonth, 1)).toISOString(),
     );
-    const base = p.params.length + (pipeParam ? 1 : 0);
-    periodCond = ` AND r.created_date >= $${base + 1} AND r.created_date < $${base + 2}`;
+    condition += ` AND r.created_date >= $${paramOffset + params.length - 1} AND r.created_date < $${paramOffset + params.length}`;
   }
+  return { condition, params };
+}
+
+export async function getDealComplianceReportRows(
+  segment: DuplicateFilters["segment"],
+  opts?: DealReportFilters,
+): Promise<DealComplianceReportRow[]> {
+  const seg = segment && segment !== "all" ? (segment === "corporate" ? "walaplus" : segment) : "all";
+  const p = buildSegmentPredicate(seg, 1);
+  const segCond = p.condition ? " AND " + p.condition : "";
+  const filt = buildDealReportFilterSql(opts, p.params.length);
   const res = await pool.query(
     `SELECT d.zoho_deal_id AS id,
             COALESCE(NULLIF(BTRIM(r.record_name), ''), d.zoho_deal_id) AS name,
@@ -947,18 +974,14 @@ export async function getDealComplianceReportRows(
             COALESCE(NULLIF(BTRIM(r.products), ''), '') AS product
        FROM deal_doc_compliance d
        JOIN duplicate_records r ON r.zoho_record_id = d.zoho_deal_id
-      WHERE r.record_type = 'deal'${segCond}${pipeCond}${periodCond}
+      WHERE r.record_type = 'deal'${segCond}${filt.condition}
         -- Only verdicts computed for the stage the deal is in NOW. The stage
         -- above is live; a verdict from the stage it has since left would be
         -- graded against the wrong requirements. Excluded here, counted as
         -- unchecked by countNeverChecked, re-checked first by the sweep.
         AND ${VERDICT_CURRENT_SQL}
       ORDER BY d.compliant ASC, COALESCE(r.deal_value, 0) DESC`,
-    [
-      ...p.params,
-      ...(pipeParam ? [pipeParam] : []),
-      ...periodParams,
-    ],
+    [...p.params, ...filt.params],
   );
   return (res.rows as any[]).map((x) => ({
     id: String(x.id),

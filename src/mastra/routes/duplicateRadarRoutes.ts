@@ -4464,7 +4464,14 @@ export const duplicateRadarRoutes = [
         // denominator counted every layout's unchecked deals under a WalaPlus
         // headline — the defect a3ed0209 fixed in two other callers and
         // missed here.
-        const neverChecked = await countNeverChecked(REPORT_STAGES, segment as any);
+        // …and the same pipeline and period as `all` above (2026-09-13), or a
+        // coverage line under one quarter counts unchecked deals from every
+        // quarter.
+        const neverChecked = await countNeverChecked(REPORT_STAGES, segment as any, {
+          pipeline: pipeline || undefined,
+          periodYear: Number.isFinite(eYear) ? eYear : undefined,
+          periodQuarter: Number.isFinite(eQuarter) ? eQuarter : undefined,
+        });
         const missing = rows.filter((r: any) => !r.compliant);
         // Deals carrying NO Amount (Sarah 2026-09-03: "it doesn't make any
         // sense that I have been in the agreement signed or proposal without
@@ -4482,7 +4489,10 @@ export const duplicateRadarRoutes = [
           segment: String(segment),
           stages: REPORT_STAGES,
           checked: rows.length,
-          in_scope: pipeline ? rows.length : rows.length + neverChecked,
+          // No ternary any more (2026-09-13) — see the note on countNeverChecked
+          // above. It read `pipeline ? rows.length : …`, which hid unchecked
+          // deals whenever a pipeline was set instead of counting them.
+          in_scope: rows.length + neverChecked,
           missing: missing.length,
           complete: rows.length - missing.length,
           no_amount: noAmount.length,
@@ -4495,7 +4505,7 @@ export const duplicateRadarRoutes = [
           notes: buildReportNotes({
             segment: String(segment),
             checked: rows.length,
-            inScope: pipeline ? rows.length : rows.length + neverChecked,
+            inScope: rows.length + neverChecked,
             pipeline: pipeline || undefined,
             periodYear: Number.isFinite(eYear) ? eYear : undefined,
             periodQuarter: Number.isFinite(eQuarter) ? eQuarter : undefined,
@@ -4549,10 +4559,21 @@ export const duplicateRadarRoutes = [
         // Same segment as `rows` above (2026-09-13) — this passed none, so the
         // workbook's coverage line padded a segment-scoped sheet with every
         // layout's unchecked deals.
-        const neverChecked = await countNeverChecked(undefined, segment as any);
+        // Same pipeline and period as `rows` too (2026-09-13), so the coverage
+        // line counts unchecked deals from the population the sheet describes.
+        const neverChecked = await countNeverChecked(undefined, segment as any, {
+          pipeline: pipeline || undefined,
+          periodYear: Number.isFinite(xYear) ? xYear : undefined,
+          periodQuarter: Number.isFinite(xQuarter) ? xQuarter : undefined,
+        });
         const sheets = buildDealComplianceReportSheets(rows, {
           segment: String(segment),
-          inScope: pipeline ? rows.length : rows.length + neverChecked,
+          // No ternary any more (2026-09-13): this read
+          // `pipeline ? rows.length : rows.length + neverChecked`, which HID
+          // unchecked deals whenever a pipeline was set rather than counting
+          // them. countNeverChecked now takes the same pipeline and period, so
+          // the two sides describe one population.
+          inScope: rows.length + neverChecked,
           pipeline: pipeline || undefined,
         });
         try {

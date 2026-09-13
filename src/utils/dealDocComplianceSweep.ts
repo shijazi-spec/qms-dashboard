@@ -29,9 +29,11 @@ import { logger } from "./logger";
 import { createRedactedPool } from "./redactedPool";
 import { DEAL_COMPLIANCE_STAGES } from "./dealComplianceCheck";
 import {
+  buildDealReportFilterSql,
   buildSegmentPredicate,
   LIVE_DEAL_STAGE_SQL,
   VERDICT_CURRENT_SQL,
+  type DealReportFilters,
   type DuplicateFilters,
 } from "./duplicateRadarDatabase";
 
@@ -197,11 +199,20 @@ export async function countNeverChecked(
    * WalaPlus-only headline.
    */
   segment?: DuplicateFilters["segment"],
+  /**
+   * Pipeline / period narrowing, EXACTLY as passed to
+   * getDealComplianceReportRows for the same report (2026-09-13). Without it a
+   * coverage line under one quarter was padded with unchecked deals from every
+   * quarter — the denominator describing a wider population than the numerator
+   * it sits beside.
+   */
+  filters?: DealReportFilters,
 ): Promise<number> {
   try {
     const stageList = stages.map((s) => `'${s.toLowerCase()}'`).join(", ");
     const seg = buildSegmentPredicate(segment, 1);
     const segmentCond = seg.condition ? ` AND ${seg.condition}` : "";
+    const filt = buildDealReportFilterSql(filters, seg.params.length);
     const res = await pool.query(
       `SELECT COUNT(*)::text AS n
          FROM duplicate_records r
@@ -212,8 +223,8 @@ export async function countNeverChecked(
           -- (2026-09-13). getDealComplianceReportRows hides those stale
           -- verdicts, so they must be counted here instead, or the coverage
           -- line would claim more of the book was checked than was.
-          AND (d.zoho_deal_id IS NULL OR NOT ${VERDICT_CURRENT_SQL})${segmentCond}`,
-      seg.params,
+          AND (d.zoho_deal_id IS NULL OR NOT ${VERDICT_CURRENT_SQL})${segmentCond}${filt.condition}`,
+      [...seg.params, ...filt.params],
     );
     return Number(res.rows[0]?.n) || 0;
   } catch {
