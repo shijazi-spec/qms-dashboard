@@ -5127,28 +5127,63 @@ export async function applyAccountDomainNameMerge(opts: {
 // This bulk job does that link cascade for every cluster that has contacts and
 // exactly ONE account (an unambiguous link target) AND no genuine duplicates.
 
+export interface ContactLinkMismatch {
+  zohoId: string;
+  name: string;
+  /** The account this contact points at TODAY (name when Zoho gave one, else id). */
+  currentAccount: string;
+}
+
 export interface ContactLinkCandidate {
   clusterId: number;
   accountZohoId: string;
   accountName: string;
+  /** Every contact in the cluster. */
   contacts: number;
+  /** Contacts with NO account — the only records the apply writes. */
+  toLink: Array<{ zohoId: string; name: string }>;
+  /** Contacts already pointing at this account: writing would change nothing. */
+  alreadyLinked: number;
+  /** Contacts pointing at a DIFFERENT account: never written, reported instead. */
+  mismatched: ContactLinkMismatch[];
 }
 
-/** Active clusters with ≥1 contact and EXACTLY 1 account → unambiguous link. */
+/**
+ * Active clusters with ≥1 contact and EXACTLY 1 account → unambiguous link.
+ *
+ * Each contact is classified against the account it ALREADY points at (see
+ * contactAccountLinkGuard): a blind cascade would have re-parented contacts
+ * that are correctly linked elsewhere, which a live preview proved is most of
+ * what is left to do here.
+ */
 export async function getContactLinkCandidates(
   limit = 5000,
 ): Promise<ContactLinkCandidate[]> {
+  const { classifyContactAccountLink, readContactAccountLink } = await import(
+    "./contactAccountLinkGuard"
+  );
   const res = await pool.query<{
     cluster_id: number;
     contacts: string;
     account_zoho_id: string | null;
     account_name: string | null;
+    contact_rows: Array<{ zohoId: string | null; name: string | null; account: unknown }> | null;
   }>(
     `SELECT dr.cluster_id,
             COUNT(*) FILTER (WHERE dr.record_type = 'contact') AS contacts,
             (ARRAY_AGG(dr.zoho_record_id) FILTER (WHERE dr.record_type = 'account'))[1] AS account_zoho_id,
             (ARRAY_AGG(COALESCE(NULLIF(btrim(dr.record_name),''), dr.company_name))
-               FILTER (WHERE dr.record_type = 'account'))[1] AS account_name
+               FILTER (WHERE dr.record_type = 'account'))[1] AS account_name,
+            COALESCE(
+              JSON_AGG(JSON_BUILD_OBJECT(
+                'zohoId', dr.zoho_record_id,
+                'name', COALESCE(NULLIF(btrim(dr.record_name), ''), ''),
+                -- Only the lookup, never the whole raw_data blob: this runs over
+                -- every contact cluster in the book.
+                'account', dr.raw_data -> 'Account_Name'
+              )) FILTER (WHERE dr.record_type = 'contact'),
+              '[]'
+            ) AS contact_rows
        FROM duplicate_records dr
        JOIN duplicate_clusters dc ON dc.id = dr.cluster_id
       WHERE dc.status = 'active'
@@ -5161,42 +5196,95 @@ export async function getContactLinkCandidates(
     [limit],
   );
   return res.rows
-    .map((r) => ({
-      clusterId: Number(r.cluster_id),
-      accountZohoId: (r.account_zoho_id || "").trim(),
-      accountName: (r.account_name || "").trim(),
-      contacts: Number(r.contacts) || 0,
-    }))
+    .map((r) => {
+      const accountZohoId = (r.account_zoho_id || "").trim();
+      const accountName = (r.account_name || "").trim();
+      const target = { zohoId: accountZohoId, name: accountName };
+      const toLink: Array<{ zohoId: string; name: string }> = [];
+      const mismatched: ContactLinkMismatch[] = [];
+      let alreadyLinked = 0;
+      for (const row of r.contact_rows || []) {
+        const zohoId = String(row?.zohoId || "").trim();
+        if (!zohoId) continue;
+        const name = String(row?.name || "").trim();
+        const verdict = classifyContactAccountLink(row?.account, target);
+        if (verdict === "link") toLink.push({ zohoId, name });
+        else if (verdict === "already_linked") alreadyLinked++;
+        else {
+          const cur = readContactAccountLink(row?.account);
+          mismatched.push({ zohoId, name, currentAccount: cur.name || cur.id || "" });
+        }
+      }
+      return {
+        clusterId: Number(r.cluster_id),
+        accountZohoId,
+        accountName,
+        contacts: Number(r.contacts) || 0,
+        toLink,
+        alreadyLinked,
+        mismatched,
+      };
+    })
     .filter((c) => c.accountZohoId && Number.isFinite(c.clusterId));
 }
 
-/** Read-only preview: how many clusters / contacts the bulk link would touch. */
+/**
+ * Read-only preview. `clusters` / `contacts` count the WORK — clusters holding
+ * at least one unlinked contact, and those contacts — so the operator's
+ * confirmation reflects what is actually written. The other counters say why
+ * the rest is left alone: already under this account, or under a different one
+ * (never overwritten, listed in `mismatches` for a human to judge).
+ */
 export async function previewContactLinkToAccount(): Promise<{
   clusters: number;
   contacts: number;
+  clusters_examined: number;
+  already_linked: number;
+  mismatched_contacts: number;
+  mismatches: Array<ContactLinkMismatch & { clusterId: number; wouldBecome: string }>;
   sample: ContactLinkCandidate[];
 }> {
   try {
     const cands = await getContactLinkCandidates();
+    const actionable = cands.filter((c) => c.toLink.length > 0);
+    const mismatches = cands.flatMap((c) =>
+      c.mismatched.map((m) => ({ ...m, clusterId: c.clusterId, wouldBecome: c.accountName })),
+    );
     return {
-      clusters: cands.length,
-      contacts: cands.reduce((n, c) => n + c.contacts, 0),
-      sample: cands.slice(0, 200),
+      clusters: actionable.length,
+      contacts: actionable.reduce((n, c) => n + c.toLink.length, 0),
+      clusters_examined: cands.length,
+      already_linked: cands.reduce((n, c) => n + c.alreadyLinked, 0),
+      mismatched_contacts: mismatches.length,
+      mismatches: mismatches.slice(0, 200),
+      sample: actionable.slice(0, 200),
     };
   } catch (e) {
     logger.warn("[DuplicateRadar] previewContactLinkToAccount failed (non-fatal)", {
       error: e instanceof Error ? e.message : String(e),
     });
-    return { clusters: 0, contacts: 0, sample: [] };
+    return {
+      clusters: 0,
+      contacts: 0,
+      clusters_examined: 0,
+      already_linked: 0,
+      mismatched_contacts: 0,
+      mismatches: [],
+      sample: [],
+    };
   }
 }
 
 /**
- * Apply the bulk link: for each candidate cluster, set every contact's
- * Account_Name to the cluster's sole account (the Account_Name cascade). Skips
- * any cluster that actually has genuine contact duplicates (those belong in the
- * merge flow, not a blind link). Reuses buildMergePlan/executeMergePlan — no
- * tagging happens in link-only mode. Bounded by `limit`, re-runnable.
+ * Apply the bulk link: for each candidate cluster, set Account_Name on the
+ * contacts that have NO account, using the cluster's sole account. Contacts
+ * already pointing somewhere are left exactly as they are — the plan is built
+ * with `includeZohoIds` restricted to the unlinked ones, which bounds every
+ * write the executor makes (the survivor, the duplicates and the cascade-only
+ * set all come out of that selection). Skips any cluster that has genuine
+ * contact duplicates (those belong in the merge flow, not a blind link).
+ * Reuses buildMergePlan/executeMergePlan — no tagging happens in link-only
+ * mode. Bounded by `limit`, re-runnable.
  */
 export async function applyContactLinkToAccount(opts: {
   dryRun: boolean;
@@ -5207,11 +5295,16 @@ export async function applyContactLinkToAccount(opts: {
   linked: number;
   contactsLinked: number;
   skippedHadDuplicates: number;
+  /** Contacts in the linked clusters that point at another company — untouched. */
+  mismatchedLeft: number;
   remaining: number;
   errors: number;
   errorSample: string | null;
 }> {
-  const all = await getContactLinkCandidates();
+  // Only clusters that hold at least one UNLINKED contact are work; a cluster
+  // whose contacts are all correctly linked (or all point elsewhere) is left
+  // untouched rather than rewritten.
+  const all = (await getContactLinkCandidates()).filter((c) => c.toLink.length > 0);
   const limit = Math.max(1, Math.min(Math.floor(opts.limit || 50), 200));
   const batch = all.slice(0, limit);
   const { buildMergePlan } = await import("./duplicateMergePlanner");
@@ -5222,6 +5315,7 @@ export async function applyContactLinkToAccount(opts: {
   let linked = 0,
     contactsLinked = 0,
     skippedHadDuplicates = 0,
+    mismatchedLeft = 0,
     errors = 0;
   let errorSample: string | null = null;
   for (const cand of batch) {
@@ -5229,6 +5323,10 @@ export async function applyContactLinkToAccount(opts: {
       const recs = await getRecordsByClusterId(cand.clusterId);
       const plan = buildMergePlan("Contacts", cand.clusterId, recs, {
         linkAccountZohoId: cand.accountZohoId,
+        // THE GUARD: every record the executor writes comes from this
+        // selection, so contacts that already carry an Account_Name — whether
+        // this account or another company's — are never re-pointed.
+        includeZohoIds: cand.toLink.map((t) => t.zohoId),
       });
       // Only link clusters that are link-only — if there are genuine duplicates,
       // leave the cluster for the merge flow (don't blindly link + risk hiding a
@@ -5237,16 +5335,24 @@ export async function applyContactLinkToAccount(opts: {
         skippedHadDuplicates++;
         continue;
       }
-      const report = await executeMergePlan(plan, {
+      await executeMergePlan(plan, {
         performedBy: opts.performedBy,
         dryRun: opts.dryRun,
         // Contacts-only cluster (no leads/deals) — once the colleagues are
         // linked to their Account the cluster's job is done, so resolve it.
         // This also makes the batched apply CONVERGE: a resolved cluster drops
         // out of getContactLinkCandidates (active only), so the work set shrinks.
-        closeCluster: true,
+        // A cluster holding a mismatch stays ACTIVE: resolving it would hide
+        // that contact from the review list nobody has looked at yet. It does
+        // not re-enter the work set either, since its unlinked contacts are
+        // now linked.
+        closeCluster: cand.mismatched.length === 0,
       });
-      contactsLinked += report.reparented?.contacts ?? 0;
+      // Count the contacts this run actually linked — the selection above. The
+      // executor's `reparented` bucket tracks lookup children of a merge, which
+      // a link-only Contacts plan never has.
+      contactsLinked += cand.toLink.length;
+      mismatchedLeft += cand.mismatched.length;
       linked++;
     } catch (e) {
       errors++;
@@ -5264,6 +5370,7 @@ export async function applyContactLinkToAccount(opts: {
     linked,
     contactsLinked,
     skippedHadDuplicates,
+    mismatchedLeft,
     remaining: Math.max(0, all.length - batch.length),
     errors,
     errorSample,

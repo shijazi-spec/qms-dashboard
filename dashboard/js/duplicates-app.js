@@ -5342,14 +5342,33 @@
                 if (btn) btn.disabled = false;
                 return;
             }
+            // Contacts that already point at ANOTHER company are never rewritten
+            // — they are listed here instead, because a cluster that says one
+            // company while the record says another is worth a human look.
+            var mismatchHtml = '';
+            if (preview.mismatched_contacts) {
+                var rows = (preview.mismatches || []).slice(0, 10).map(function (m) {
+                    return '<li>' + escapeHtml(m.name || m.zohoId) + ' — now under <strong>' + escapeHtml(m.currentAccount || '(unnamed)') + '</strong>, cluster says ' + escapeHtml(m.wouldBecome || '') + '</li>';
+                }).join('');
+                mismatchHtml = '<div class="px-3 py-2 rounded bg-amber-50 border border-amber-200 text-amber-900 mt-1">'
+                    + '<strong>' + preview.mismatched_contacts.toLocaleString() + '</strong> contact(s) already sit under a <strong>different</strong> company. They are left untouched — review these by hand:'
+                    + '<ul class="list-disc ms-5 mt-1 text-sm">' + rows + '</ul>'
+                    + (preview.mismatched_contacts > 10 ? '<div class="text-xs mt-1">…and ' + (preview.mismatched_contacts - 10).toLocaleString() + ' more.</div>' : '')
+                    + '</div>';
+            }
             if (!preview.clusters) {
-                panel.innerHTML = '<div class="px-3 py-2 rounded bg-indigo-50 border border-indigo-200 text-indigo-800">No link candidates — no contacts-only clusters with a single clear Account.</div>';
+                panel.innerHTML = '<div class="px-3 py-2 rounded bg-indigo-50 border border-indigo-200 text-indigo-800">'
+                    + 'Nothing to link — every contact in the ' + (preview.clusters_examined || 0).toLocaleString() + ' eligible cluster(s) already has an Account'
+                    + (preview.already_linked ? ' (' + preview.already_linked.toLocaleString() + ' already under the right one)' : '')
+                    + '.</div>' + mismatchHtml;
                 if (btn) btn.disabled = false;
                 return;
             }
             panel.innerHTML = '<div class="px-3 py-2 rounded bg-indigo-50 border border-indigo-200 text-indigo-900">'
-                + '<strong>' + preview.clusters.toLocaleString() + '</strong> cluster(s) · <strong>' + preview.contacts.toLocaleString() + '</strong> contact(s) would be linked to their company Account (Account_Name set; no tagging, no deletion). Clusters with genuine duplicates are skipped — use the merge buttons for those.</div>';
-            if (!window.confirm('Bulk-link ' + preview.clusters + ' cluster(s) (' + preview.contacts + ' contact(s)) to their Account?\n\nSets Account_Name on each contact so colleagues roll up under one customer, then resolves the cluster. No tagging, no deletion.\n\nYou will be asked for the admin password next.')) {
+                + '<strong>' + preview.clusters.toLocaleString() + '</strong> cluster(s) · <strong>' + preview.contacts.toLocaleString() + '</strong> contact(s) with <strong>no Account</strong> would be linked to their company Account (Account_Name set; no tagging, no deletion).'
+                + ' Contacts that already have an Account are never rewritten — ' + (preview.already_linked || 0).toLocaleString() + ' already point at the right one.'
+                + ' Clusters with genuine duplicates are skipped — use the merge buttons for those.</div>' + mismatchHtml;
+            if (!window.confirm('Bulk-link ' + preview.clusters + ' cluster(s) (' + preview.contacts + ' contact(s) with no Account) to their Account?\n\nSets Account_Name ONLY on contacts that have no Account today, so colleagues roll up under one customer. Contacts already linked — including the ' + (preview.mismatched_contacts || 0) + ' under a different company — are left untouched. No tagging, no deletion.\n\nYou will be asked for the admin password next.')) {
                 if (btn) btn.disabled = false; return;
             }
             const key = window.prompt('Enter the admin password to apply the bulk link:');
@@ -5368,6 +5387,7 @@
             prog.outerHTML = '<div class="px-3 py-2 rounded bg-indigo-50 border border-indigo-200 text-indigo-800 mt-1">'
                 + '<strong>Done.</strong> Linked ' + (live.linked || 0).toLocaleString() + ' cluster(s), ' + (live.contactsLinked || 0).toLocaleString() + ' contact(s) to their Account'
                 + (live.skippedHadDuplicates ? '; skipped ' + (live.skippedHadDuplicates).toLocaleString() + ' with genuine duplicates' : '')
+                + (live.mismatchedLeft ? '; left ' + (live.mismatchedLeft).toLocaleString() + ' contact(s) under another company for review' : '')
                 + (live.errors > 0 ? ' (' + live.errors + ' error(s) — re-run to retry.)' : '.')
                 + (live.errors > 0 && live.errorSample ? '<div class="text-xs text-red-700 mt-1">First error: ' + escapeHtml(String(live.errorSample)) + '</div>' : '')
                 + '</div>';
