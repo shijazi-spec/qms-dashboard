@@ -372,6 +372,17 @@ export function classifyKeyAccess(
   };
 }
 
+/**
+ * Whether a signed-in user (no X-Admin-Key) may reach /api/admin/*. Only an
+ * ACTIVE platform user whose live role is exactly "admin" — a missing row, a
+ * disabled account, or any other role is refused.
+ */
+export function isSessionAdminAllowed(
+  platformUser: { status: string; role: string } | null,
+): boolean {
+  return !!platformUser && platformUser.status === 'active' && platformUser.role === 'admin';
+}
+
 async function checkApiAuth(c: any, urlPath: string, method: string): Promise<Response | null> {
   const session = getSessionFromCookie(c.req.header('Cookie'));
   const hasAdminKey = hasValidAdminApiKey(c);
@@ -425,11 +436,20 @@ async function checkApiAuth(c: any, urlPath: string, method: string): Promise<Re
   }
 
   if (isAdminRoute) {
-    if (!hasAdminKey) {
-      return c.json({ error: 'X-Admin-Key header required for admin endpoints' }, 403);
-    }
     // Valid admin key on an admin route: allow without further RBAC checks.
-    return null;
+    if (hasAdminKey) return null;
+    // A signed-in admin is also let through. Without this, every dashboard
+    // panel that reads /api/admin/* (admin.html scorecards + documents,
+    // logs.html redaction sweep, notification-settings.html) returned 403 for
+    // everyone — no page sends X-Admin-Key, and the handlers' own
+    // isAdminAuthorized() checks were never reached. The role is read LIVE
+    // from platform_users, never trusted from the cookie.
+    if (session) {
+      const { getPlatformUser } = await import('../../utils/rbacMiddleware');
+      if (isSessionAdminAllowed(await getPlatformUser(session.email))) return null;
+      return c.json({ error: 'Admin access required' }, 403);
+    }
+    return c.json({ error: 'X-Admin-Key header required for admin endpoints' }, 403);
   }
 
   if (isInngestRoute) {

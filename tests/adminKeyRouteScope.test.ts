@@ -13,7 +13,10 @@
  * Run:  npx tsx tests/adminKeyRouteScope.test.ts
  */
 
-import { classifyKeyAccess } from "../src/mastra/middleware/index";
+import {
+  classifyKeyAccess,
+  isSessionAdminAllowed,
+} from "../src/mastra/middleware/index";
 import { TestSuite } from "./_helpers/runner";
 
 const suite = new TestSuite("adminKeyRouteScope");
@@ -111,6 +114,32 @@ await suite.test("the individual flags agree with the verdict", async () => {
   const admin = classifyKeyAccess("/api/admin/slack-routing", "GET");
   suite.expectEqual(admin.isAdminRoute, true, "admin flag");
   suite.expectEqual(admin.isHealthPulseRead, false, "not pulse");
+});
+
+await suite.test("a signed-in session reaches /api/admin/* only as an active admin", async () => {
+  suite.expectEqual(
+    isSessionAdminAllowed({ status: "active", role: "admin" }),
+    true,
+    "active admin",
+  );
+  suite.expectEqual(isSessionAdminAllowed(null), false, "no platform_users row");
+  suite.expectEqual(
+    isSessionAdminAllowed({ status: "disabled", role: "admin" }),
+    false,
+    "disabled admin",
+  );
+  suite.expectEqual(
+    isSessionAdminAllowed({ status: "pending", role: "admin" }),
+    false,
+    "pending admin",
+  );
+  for (const role of ["quality_manager", "grc_manager", "viewer", "Admin", ""]) {
+    suite.expectEqual(
+      isSessionAdminAllowed({ status: "active", role }),
+      false,
+      `role "${role}" is not admin`,
+    );
+  }
 });
 
 suite.finishOrExit();

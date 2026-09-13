@@ -2809,7 +2809,7 @@ export async function generateMBRData(): Promise<any> {
 
   const auditResult = await pool.query(
     `
-    SELECT status, COUNT(*) as count FROM audits WHERE audit_date >= $1 GROUP BY status
+    SELECT status, COUNT(*) as count FROM audits WHERE scheduled_date >= $1 GROUP BY status
   `,
     [monthStart],
   );
