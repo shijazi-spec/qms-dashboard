@@ -6241,22 +6241,44 @@ export const duplicateRadarRoutes = [
             } catch (pe: any) {
               return c.json({ error: "Could not parse as .xlsx.", detail: pe?.message || String(pe) }, 400);
             }
-            const ws = wb.worksheets[0];
-            if (!ws) return c.json({ error: "No worksheet." }, 400);
-            const headerRow = ws.getRow(1);
+            if (!wb.worksheets.length) return c.json({ error: "No worksheet." }, 400);
             const norm = (s: any) => String(s ?? "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+            // Search EVERY sheet for the CRM ID column, not just the first one.
+            // CS's own export (2026-09-13) leads with a "Count per Stage" pivot
+            // and keeps the records on sheet 2 — reading sheet 1 blind rejected
+            // the real file with "No 'CRM ID' column found".
+            let ws: any = null;
             let crmCol = -1;
             let phaseCol = -1;
-            (headerRow.values as any[]).forEach((h, idx) => {
-              const n = norm(h);
-              if (crmCol < 0 && (n === "crmid" || n === "crmrecordid" || n === "zohoid" || n === "recordid")) crmCol = idx;
-              // The ClientHub export tags each row with its phase in a Stage /
-              // Phase column — use it to reconcile ALL phases, not just Termination.
-              if (phaseCol < 0 && (n === "stage" || n === "phase" || n === "csphase" || n === "lifecyclephase")) phaseCol = idx;
-            });
-            if (crmCol < 0) {
-              return c.json({ error: "No 'CRM ID' column found in the workbook header." }, 400);
+            for (const sheet of wb.worksheets) {
+              let cc = -1;
+              let pc = -1;
+              ((sheet.getRow(1).values as any[]) || []).forEach((h, idx) => {
+                const n = norm(h);
+                if (cc < 0 && (n === "crmid" || n === "crmrecordid" || n === "zohoid" || n === "recordid")) cc = idx;
+                if (pc < 0 && (n === "stage" || n === "phase" || n === "csphase" || n === "lifecyclephase")) pc = idx;
+              });
+              if (cc >= 0) {
+                ws = sheet;
+                crmCol = cc;
+                phaseCol = pc;
+                break;
+              }
             }
+            if (!ws) {
+              return c.json(
+                {
+                  error:
+                    "No 'CRM ID' column found in any sheet of the workbook (looked at: " +
+                    wb.worksheets.map((s: any) => s.name).join(", ") +
+                    ").",
+                },
+                400,
+              );
+            }
+            // phaseCol was located on the same sheet as the CRM ID column: the
+            // ClientHub export tags each row with its phase in a Stage / Phase
+            // column, which reconciles ALL phases, not just Termination.
             ws.eachRow((row: any, rowNum: number) => {
               if (rowNum === 1) return;
               const v = row.getCell(crmCol).value;
