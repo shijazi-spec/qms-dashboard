@@ -505,7 +505,15 @@ export async function runCsLifecycleScanIfStale(
       await import("./duplicateRadarDatabase");
     await initDuplicateRadarTables();
     const result = await scanCsLifecycleViolations({
-      limit: 5000,
+      // Same ceiling as every other reader of this scan — the dashboard, Adam
+      // and the KPI calculator all use 50,000. For CONSISTENCY, not as the fix
+      // for a known gap: when CS reported "termination 573 - 582" (2026-09-13)
+      // this cap was the first suspect and was measured and CLEARED — a
+      // 5,000-deal scan and the full 11,937-deal scan returned identical phase
+      // counts, because every CS deal is recent enough to fall inside it. The
+      // gap is elsewhere. Kept at 50,000 so a growing book cannot make the
+      // channel silently diverge from the tab later.
+      limit: 50000,
       // NOT summaryOnly. The first real alert read "13 critical and 46
       // warning" and nothing else — true, and useless: no rule, no account, no
       // owner, nowhere to start. The breakdown lives in the violation rows, and
@@ -624,7 +632,14 @@ async function notifyCsLifecycleViolations(
     const crit = rows.filter((r) => r?.violation?.severity === "critical");
 
     const byRule: Record<string, number> = {};
-    const byOwner: Record<string, number> = {};
+    // Owners are counted in DISTINCT ACCOUNTS, not in violation rows (Zeina Al
+    // Soudi, CS, 2026-09-13: "check accounts of Saleh — we don't have any
+    // accounts assigned to Saleh"). The post said "Saleh Alhamdi — 2" under a
+    // heading that reads as accounts, but the 2 was two critical FINDINGS on a
+    // single account (الطيران الملكي السعودي: phase_churn_desync +
+    // renewal_overdue). A count that means one thing under a heading that says
+    // another sends the CS team hunting for an account that does not exist.
+    const ownerAccounts: Record<string, Set<string>> = {};
     const byAccount: Record<string, number> = {};
     for (const r of crit) {
       const code = String(r?.violation?.code || "unknown");
@@ -632,10 +647,12 @@ async function notifyCsLifecycleViolations(
       // No CS owner is itself one of the 13 rules, so "(unassigned)" is a real
       // finding here rather than missing data — it names the gap.
       const owner = String(r?.cs_owner_name || "").trim() || "(unassigned)";
-      byOwner[owner] = (byOwner[owner] || 0) + 1;
       const acct = String(r?.account_name || "").trim() || "(no account name)";
+      (ownerAccounts[owner] = ownerAccounts[owner] || new Set()).add(acct);
       byAccount[acct] = (byAccount[acct] || 0) + 1;
     }
+    const byOwner: Record<string, number> = {};
+    for (const [o, set] of Object.entries(ownerAccounts)) byOwner[o] = set.size;
 
     const totalCsDeals = Number(result?.summary?.total_cs_deals || 0);
     const evaluated = Number(result?.summary?.total_evaluated || 0);
@@ -645,23 +662,37 @@ async function notifyCsLifecycleViolations(
       `Resolve critical findings within one working day per CS team SLA.`,
     ];
 
+    // FULL lists, not top-N (Zeina Al Soudi, CS, 2026-09-13: "show the whole
+    // list of account — 2 more account"). The CS team works this post as a
+    // queue, and "…and 2 more" hides exactly the rows they then have to go and
+    // find. Real volumes are small — 13 rules, ~13 owners, a dozen or so
+    // accounts — so the Slack-truncation risk the cap guarded against does not
+    // apply. The cap is kept only as a backstop for a pathological day, and
+    // topCounts still writes an honest "…and N more" if it is ever reached.
+    const FULL_LIST_BACKSTOP = 100;
     if (Object.keys(byRule).length > 0) {
-      parts.push(`\n*Critical by rule:*\n${topCounts(byRule, 8, csRuleLabel)}`);
+      parts.push(`\n*Critical findings by rule:*\n${topCounts(byRule, FULL_LIST_BACKSTOP, csRuleLabel)}`);
     }
     if (Object.keys(byOwner).length > 0) {
-      parts.push(`\n*Critical by CS owner:*\n${topCounts(byOwner, 6)}`);
+      parts.push(
+        `\n*Accounts with critical findings, by CS owner:*\n${topCounts(byOwner, FULL_LIST_BACKSTOP, (o) => o)}` +
+          `\n_Counted in accounts, not findings — one account can carry several._`,
+      );
     }
     if (Object.keys(byAccount).length > 0) {
-      parts.push(`\n*Accounts to start with:*\n${topCounts(byAccount, 8)}`);
+      parts.push(
+        `\n*Accounts to start with (critical findings on each):*\n${topCounts(byAccount, FULL_LIST_BACKSTOP)}`,
+      );
     }
 
     // Phase distribution is the denominator behind the rules — "8 of 40 renewal
-    // deals are overdue" reads very differently from "8 overdue".
+    // deals are overdue" reads very differently from "8 overdue". Every phase is
+    // shown: a hidden seventh phase would make these numbers stop adding up to
+    // the CS-tracked total quoted in the headline.
     const byPhase = result?.summary?.by_phase || {};
     const phaseLine = Object.entries(byPhase)
       .filter(([, n]) => Number(n) > 0)
       .sort((a, b) => Number(b[1]) - Number(a[1]))
-      .slice(0, 6)
       .map(([p, n]) => `${p} ${n}`)
       .join(" · ");
     if (phaseLine) {
