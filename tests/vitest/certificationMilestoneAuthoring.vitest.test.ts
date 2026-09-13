@@ -17,6 +17,9 @@ import { describe, it, expect } from "vitest";
 import {
   parseMilestoneInput,
   milestoneKeyFor,
+  groupMilestonesByType,
+  EDITABLE_MILESTONE_TYPES,
+  type MilestoneRow,
 } from "../../src/mastra/routes/certificationMilestoneRoutes";
 
 /** Narrow the union so a parse failure fails the test instead of the types. */
@@ -83,6 +86,22 @@ describe("parseMilestoneInput — validation", () => {
     expect(
       parseMilestoneInput({ planned_date: "2026-12-01" }, { requireName: false }),
     ).not.toHaveProperty("error");
+  });
+
+  it("accepts exactly the types the roadmap can render — no more, no fewer", () => {
+    // A type the editor accepts but groupMilestonesByType() has no bucket for
+    // inserts successfully and then vanishes from the page. Derive the buckets
+    // from the renderer itself rather than restating them here.
+    const renderable = Object.keys(groupMilestonesByType([] as MilestoneRow[])).sort();
+    expect([...EDITABLE_MILESTONE_TYPES].sort()).toEqual(renderable);
+    for (const t of renderable) {
+      expect(
+        parseMilestoneInput({ milestone_type: t }, { requireName: false }),
+      ).not.toHaveProperty("error");
+    }
+    expect(
+      parseMilestoneInput({ milestone_type: "support" }, { requireName: false }),
+    ).toHaveProperty("error");
   });
 
   it("rejects an unknown milestone_type rather than storing it", () => {

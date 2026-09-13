@@ -52,6 +52,7 @@ export async function initNorthStarSourceTables(): Promise<void> {
       gates_keys TEXT[],
       owner VARCHAR(255),
       notes TEXT,
+      retired_from_status VARCHAR(20),
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
@@ -84,6 +85,13 @@ export async function initNorthStarSourceTables(): Promise<void> {
   );
   await pool.query(
     `ALTER TABLE certification_milestones ADD COLUMN IF NOT EXISTS gates_keys TEXT[]`,
+  );
+  // What the milestone's status was before it was retired, so restoring it
+  // puts back the truth instead of a guess. status is writable through the
+  // NorthStar capture API as well as the seeder, so it is NOT always 'planned'
+  // - a restore that assumed so would silently erase a captured status.
+  await pool.query(
+    `ALTER TABLE certification_milestones ADD COLUMN IF NOT EXISTS retired_from_status VARCHAR(20)`,
   );
   // Idempotency key for the plan seed.
   await pool.query(

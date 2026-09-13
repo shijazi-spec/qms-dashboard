@@ -549,7 +549,16 @@ async function milestoneWriteGate(c: any) {
   return { error: null, user };
 }
 
-const MILESTONE_TYPES = new Set(["plan", "dependency", "support"]);
+// MUST equal MilestoneRow["milestone_type"] at the top of this file. The first
+// version listed "support" and omitted "framework_target": a framework_target
+// milestone could not be typed, and a "support" one would insert fine and then
+// vanish, because groupMilestonesByType() keeps only keys that exist in its
+// bucket object. Typed against the union so a drift fails to compile.
+const MILESTONE_TYPES: ReadonlySet<MilestoneRow["milestone_type"]> = new Set<
+  MilestoneRow["milestone_type"]
+>(["plan", "framework_target", "dependency"]);
+/** Exported for tests: the types the editor accepts. */
+export const EDITABLE_MILESTONE_TYPES = MILESTONE_TYPES;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export interface MilestoneFields {
@@ -611,7 +620,7 @@ export function parseMilestoneInput(
   }
 
   const milestone_type = str(body?.milestone_type, 20);
-  if (milestone_type && !MILESTONE_TYPES.has(milestone_type))
+  if (milestone_type && !MILESTONE_TYPES.has(milestone_type as MilestoneRow["milestone_type"]))
     return {
       error: `milestone_type must be one of ${[...MILESTONE_TYPES].join(", ")}`,
     };
@@ -1065,15 +1074,52 @@ export const certificationMilestoneRoutes = [
         // Hide, never delete. A milestone that was once in the plan is part of
         // its history; an auditor asking "what changed and when" is better
         // served by a retired row than by a missing one.
-        const r = await pool.query(
-          `UPDATE certification_milestones
-              SET status = $2, updated_at = NOW()
-            WHERE milestone_key = $1
-        RETURNING milestone_key, status`,
-          [key, retire ? "retired" : "planned"],
-        );
-        if (r.rowCount === 0)
-          return c.json({ error: "Unknown milestone_key" }, 404);
+        //
+        // Restore must put back what was THERE, not a guess. The first version
+        // wrote a hardcoded 'planned', but status is also writable through the
+        // NorthStar capture API (POST /api/northstar/certification_milestones),
+        // so a milestone captured as anything else would have been silently
+        // rewritten by a retire/restore round-trip. The prior status is stashed
+        // in retired_from_status on the way out and put back on the way in.
+        //
+        // Both directions are idempotent. Retiring an already-retired row must
+        // not overwrite the stash with 'retired' (the CASE), and restoring a
+        // row that is not retired must not touch it at all (the WHERE).
+        const r = retire
+          ? await pool.query(
+              `UPDATE certification_milestones
+                  SET retired_from_status = CASE
+                        WHEN COALESCE(status, '') <> 'retired' THEN status
+                        ELSE retired_from_status END,
+                      status = 'retired',
+                      updated_at = NOW()
+                WHERE milestone_key = $1
+            RETURNING milestone_key, status`,
+              [key],
+            )
+          : await pool.query(
+              `UPDATE certification_milestones
+                  SET status = COALESCE(retired_from_status, 'planned'),
+                      retired_from_status = NULL,
+                      updated_at = NOW()
+                WHERE milestone_key = $1
+                  AND COALESCE(status, '') = 'retired'
+            RETURNING milestone_key, status`,
+              [key],
+            );
+        if (r.rowCount === 0) {
+          const exists = await pool.query(
+            `SELECT status FROM certification_milestones WHERE milestone_key = $1`,
+            [key],
+          );
+          if (exists.rows.length === 0)
+            return c.json({ error: "Unknown milestone_key" }, 404);
+          // Only reachable on restore: the row exists but is not retired.
+          return c.json(
+            { error: "Milestone is not retired", status: exists.rows[0].status },
+            409,
+          );
+        }
 
         await auditMilestone(
           c, g.user, "UPDATE", key,
