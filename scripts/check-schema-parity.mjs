@@ -32,14 +32,16 @@
  *
  * Operating modes:
  *
- *   - Default (warning mode): prints the drift list, exits 0 so existing
- *     debt doesn't block every commit. Each line is still a real risk
- *     and should be cleaned up incrementally.
+ *   - Default (warning mode): prints the drift list, exits 0. Still used by
+ *     .githooks/pre-commit, so a pre-existing warning somewhere else in the
+ *     tree cannot block an unrelated commit.
  *
- *   - STRICT=1 env: hard gate. Exits 1 on any drift. Use this in CI's
- *     post-cleanup steady state — once the 75 historical instances of
- *     drift have been resolved, flip the workflow to STRICT=1 so no NEW
- *     drift can land.
+ *   - STRICT=1 env (or --strict): hard gate. Exits 1 on any drift. This is
+ *     how CI runs it as of 2026-09-13, and how `npm run check:schema-parity`
+ *     has always run it. The 75 historical instances were cleared on
+ *     2026-06-17 and the tree was verified clean again at the flip, so any
+ *     drift CI reports now is NEW. Fix it by adding the column to the
+ *     canonical CREATE TABLE — do not revert the workflow to warning mode.
  *
  *   - --check-table=<name> flag: scope to one table. Useful while
  *     incrementally cleaning up: a developer can run the script with
