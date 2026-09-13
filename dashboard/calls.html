@@ -8882,6 +8882,11 @@
 
         function renderScorecardsList() {
             const container = document.getElementById('scorecards-list');
+            // The list moved to /admin?tab=scorecard and its hidden stub was
+            // removed, so on this page there is nothing to render into.
+            // Without this guard every load threw "Cannot set properties of
+            // null (setting 'innerHTML')".
+            if (!container) return;
             // Hide inactive scorecards from this list — they're noise once
             // deactivated. The active toggle on each card still lets users
             // deactivate; restoring is handled via the admin path.

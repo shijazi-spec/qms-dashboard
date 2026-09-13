@@ -107,7 +107,43 @@ export interface ComplianceCalendar {
   created_at?: Date;
 }
 
-export async function initComplianceTables(): Promise<void> {
+/**
+ * Single-flight guard for initComplianceTables().
+ *
+ * ~30 compliance routes `await initComplianceTables()` on every request, and
+ * the work behind it is not cheap: ~56 DDL statements plus ten framework seed
+ * routines (PDPL, SAMA, ISO 27001/9001, NCA ECC/DCC, PCI DSS, SOC 2) plus a
+ * clause-sort backfill and a retired-framework sweep. Idempotent, but paid in
+ * full on EVERY call — /api/compliance/coverage/all took 20-30s to answer,
+ * and the Document Mapping page waited on it.
+ *
+ * The schema and the seeds are static within a process, so this runs once per
+ * boot. A rejected run clears the promise so the next caller retries rather
+ * than inheriting a permanently failed init.
+ *
+ * The one piece of per-call work that was NOT static is backfillClauseSortKeys()
+ * — obligations imported at runtime (applyImportRun) insert no clause_sort_key
+ * and used to get one from the next request's init. applyImportRun now calls
+ * the backfill itself.
+ */
+let initPromise: Promise<void> | null = null;
+
+export function initComplianceTables(): Promise<void> {
+  if (!initPromise) {
+    initPromise = runInitComplianceTables().catch((err) => {
+      initPromise = null;
+      throw err;
+    });
+  }
+  return initPromise;
+}
+
+/** Test seam: forget the memoized init so the next call runs it again. */
+export function resetComplianceTablesInit(): void {
+  initPromise = null;
+}
+
+async function runInitComplianceTables(): Promise<void> {
   logger.info("📋 [ComplianceDB] Initializing compliance tables...");
 
   await pool.query(`

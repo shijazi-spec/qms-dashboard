@@ -217,6 +217,20 @@ export async function applyImportRun(
       WHERE id = $1`,
     [options.regulationId, options.sourceDocumentId],
   );
+  // Imported obligations carry no clause_sort_key, so they sort wrong until
+  // one is derived. That used to happen on the next request, via the init
+  // that every compliance route ran; init is now memoized per process, so the
+  // backfill belongs here, where the rows are actually created.
+  if (inserted > 0) {
+    try {
+      const { backfillClauseSortKeys } = await import("./complianceDatabase");
+      await backfillClauseSortKeys();
+    } catch (err) {
+      logger.warn(
+        `[regulationImports] clause_sort_key backfill failed: ${(err as Error).message}`,
+      );
+    }
+  }
   await setImportStatus(id, "applied", inserted);
   return { inserted, skipped };
 }
