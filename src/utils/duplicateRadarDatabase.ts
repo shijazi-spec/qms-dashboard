@@ -274,6 +274,35 @@ function freshLayoutCache(): LayoutSegmentCache | null {
   return layoutCache;
 }
 
+/**
+ * A deal's LIVE stage, normalised, for SQL where `r` is duplicate_records.
+ * Same fallback chain the rest of the radar uses: the column, then the synced
+ * Zoho payload.
+ */
+export const LIVE_DEAL_STAGE_SQL = `LOWER(BTRIM(COALESCE(NULLIF(BTRIM(r.stage), ''), r.raw_data->>'Stage', '')))`;
+
+/**
+ * TRUE when compliance verdict `d` was computed for the stage deal `r` is in NOW.
+ *
+ * Added 2026-09-13. The day before, the report was switched to read each
+ * deal's LIVE stage — correctly, it had been charging 152 deals to a Proposal
+ * line they had left. But the VERDICT beside that stage was still the one
+ * computed at check time, against the requirements of the stage the deal was
+ * in THEN. A deal checked at Proposal (one document, present) that moved to
+ * Agreement Signed was shown as compliant at Signed — graded on one document
+ * where five are required. Fixing the stage without this made that possible.
+ *
+ * Shared by the report rows (stale verdicts are shown as neither pass nor
+ * fail), countNeverChecked (they count as unchecked, so coverage stays
+ * honest) and the sweep (they are re-checked first after never-checked
+ * deals). One predicate, so the three can never disagree about which deals
+ * are stale.
+ *
+ * A mirror row with no stage at all cannot be judged stale, so it passes.
+ * Parenthesised: callers write `NOT ${VERDICT_CURRENT_SQL}`.
+ */
+export const VERDICT_CURRENT_SQL = `(${LIVE_DEAL_STAGE_SQL} = '' OR LOWER(BTRIM(COALESCE(d.stage, ''))) = ${LIVE_DEAL_STAGE_SQL})`;
+
 export function buildSegmentPredicate(
   segment: DuplicateFilters["segment"],
   paramOffset: number,
@@ -919,6 +948,11 @@ export async function getDealComplianceReportRows(
        FROM deal_doc_compliance d
        JOIN duplicate_records r ON r.zoho_record_id = d.zoho_deal_id
       WHERE r.record_type = 'deal'${segCond}${pipeCond}${periodCond}
+        -- Only verdicts computed for the stage the deal is in NOW. The stage
+        -- above is live; a verdict from the stage it has since left would be
+        -- graded against the wrong requirements. Excluded here, counted as
+        -- unchecked by countNeverChecked, re-checked first by the sweep.
+        AND ${VERDICT_CURRENT_SQL}
       ORDER BY d.compliant ASC, COALESCE(r.deal_value, 0) DESC`,
     [
       ...p.params,

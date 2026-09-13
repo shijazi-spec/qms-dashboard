@@ -37,12 +37,29 @@ describe("which deals the sweep picks up", () => {
     expect(sql).toContain("r.record_type = 'deal'");
   });
 
-  it("takes never-checked deals BEFORE stale ones", () => {
-    // NULLS FIRST is the whole convergence argument: without it a deal nobody
+  it("takes never-checked deals first, then stale verdicts, then the oldest", () => {
+    // NULLS FIRST was the whole convergence argument: without it a deal nobody
     // has ever checked can be starved forever by deals checked an hour ago,
     // and "not yet checked" never reaches zero — which is exactly the state
     // the tab was stuck in.
-    expect(sql).toContain("ORDER BY d.checked_at ASC NULLS FIRST");
+    //
+    // This asserted the literal "ORDER BY d.checked_at ASC NULLS FIRST" until
+    // 2026-09-13, when a middle tier was added for verdicts computed against
+    // a stage the deal has since left. Those are hidden from the report until
+    // redone, so they must not queue behind merely-old ones. The intent —
+    // never-checked first — is unchanged and still asserted.
+    const order = sql.slice(sql.lastIndexOf("ORDER BY"));
+    expect(order).toContain("WHEN d.zoho_deal_id IS NULL THEN 0");
+    expect(order).toContain("THEN 1");
+    expect(order.indexOf("THEN 0")).toBeLessThan(order.indexOf("THEN 1"));
+    expect(order).toContain("d.checked_at ASC NULLS FIRST");
+  });
+
+  it("treats a verdict computed for a different stage as due now, whatever its age", () => {
+    // Otherwise a deal checked at Proposal an hour ago and moved to Agreement
+    // Signed since would wait out the full age threshold before being redone.
+    const where = sql.slice(sql.indexOf("WHERE"), sql.lastIndexOf("ORDER BY"));
+    expect(where).toContain("OR NOT (");
   });
 
   it("re-checks on an age threshold rather than checking everything every pass", () => {

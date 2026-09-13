@@ -30,6 +30,8 @@ import { createRedactedPool } from "./redactedPool";
 import { DEAL_COMPLIANCE_STAGES } from "./dealComplianceCheck";
 import {
   buildSegmentPredicate,
+  LIVE_DEAL_STAGE_SQL,
+  VERDICT_CURRENT_SQL,
   type DuplicateFilters,
 } from "./duplicateRadarDatabase";
 
@@ -81,11 +83,19 @@ export function dueDealsSql(): string {
       FROM duplicate_records r
       LEFT JOIN deal_doc_compliance d ON d.zoho_deal_id = r.zoho_record_id
      WHERE r.record_type = 'deal'
-       AND LOWER(BTRIM(COALESCE(NULLIF(BTRIM(r.stage), ''), r.raw_data->>'Stage', ''))) IN (${stages})
-       AND (d.checked_at IS NULL OR d.checked_at < NOW() - ($1 || ' hours')::interval)
-     -- Never-checked first: a deal nobody has ever looked at must not be
-     -- starved by one that was checked an hour ago.
-     ORDER BY d.checked_at ASC NULLS FIRST, r.zoho_record_id ASC
+       AND ${LIVE_DEAL_STAGE_SQL} IN (${stages})
+       AND (d.checked_at IS NULL
+            OR NOT ${VERDICT_CURRENT_SQL}
+            OR d.checked_at < NOW() - ($1 || ' hours')::interval)
+     -- Three tiers. Never-checked first: a deal nobody has ever looked at must
+     -- not be starved by one checked an hour ago. Then verdicts computed for a
+     -- stage the deal has since left: those are not merely old, they are
+     -- wrong, and the report hides them until they are redone, so every hour
+     -- they wait is an hour the deal is missing from the figures. Then age.
+     ORDER BY CASE WHEN d.zoho_deal_id IS NULL THEN 0
+                   WHEN NOT ${VERDICT_CURRENT_SQL} THEN 1
+                   ELSE 2 END,
+              d.checked_at ASC NULLS FIRST, r.zoho_record_id ASC
      LIMIT $2`;
 }
 
@@ -198,7 +208,11 @@ export async function countNeverChecked(
          LEFT JOIN deal_doc_compliance d ON d.zoho_deal_id = r.zoho_record_id
         WHERE r.record_type = 'deal'
           AND LOWER(BTRIM(COALESCE(NULLIF(BTRIM(r.stage), ''), r.raw_data->>'Stage', ''))) IN (${stageList})
-          AND d.zoho_deal_id IS NULL${segmentCond}`,
+          -- Never checked, OR checked for a stage the deal has since left
+          -- (2026-09-13). getDealComplianceReportRows hides those stale
+          -- verdicts, so they must be counted here instead, or the coverage
+          -- line would claim more of the book was checked than was.
+          AND (d.zoho_deal_id IS NULL OR NOT ${VERDICT_CURRENT_SQL})${segmentCond}`,
       seg.params,
     );
     return Number(res.rows[0]?.n) || 0;

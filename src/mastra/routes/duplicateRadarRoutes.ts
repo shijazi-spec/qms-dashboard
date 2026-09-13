@@ -4459,7 +4459,12 @@ export const duplicateRadarRoutes = [
         // already Sales-only, so the never-checked count that pads in_scope
         // must exclude never-checked Paid deals too, or in_scope would count
         // Paid deals this endpoint's own numerator never mentions.
-        const neverChecked = await countNeverChecked(REPORT_STAGES);
+        // Same segment as `all` above (2026-09-13). This passed no segment
+        // while the rows beside it were segment-scoped, so the coverage
+        // denominator counted every layout's unchecked deals under a WalaPlus
+        // headline — the defect a3ed0209 fixed in two other callers and
+        // missed here.
+        const neverChecked = await countNeverChecked(REPORT_STAGES, segment as any);
         const missing = rows.filter((r: any) => !r.compliant);
         // Deals carrying NO Amount (Sarah 2026-09-03: "it doesn't make any
         // sense that I have been in the agreement signed or proposal without
@@ -4541,7 +4546,10 @@ export const duplicateRadarRoutes = [
         // three stages including Paid), matching what buildDealComplianceReportSheets
         // itself now covers below — unlike /deal-compliance/email and the
         // monthly email, which are Sales-only and must pass REPORT_STAGES.
-        const neverChecked = await countNeverChecked();
+        // Same segment as `rows` above (2026-09-13) — this passed none, so the
+        // workbook's coverage line padded a segment-scoped sheet with every
+        // layout's unchecked deals.
+        const neverChecked = await countNeverChecked(undefined, segment as any);
         const sheets = buildDealComplianceReportSheets(rows, {
           segment: String(segment),
           inScope: pipeline ? rows.length : rows.length + neverChecked,
