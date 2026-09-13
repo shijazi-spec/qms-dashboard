@@ -7642,9 +7642,8 @@
             }
             // A load is the freshest moment to restate how old the mirror is.
             if (typeof _rrRenderFreshness === 'function') _rrRenderFreshness();
-            // The conflicts this table cannot see, loaded alongside it — the
-            // two lists only mean something together.
-            if (typeof loadSplitAccountConflicts === 'function') loadSplitAccountConflicts();
+            // Split-account conflicts arrive as rows of THIS list now (flagged
+            // split_account), so there is no second table to load.
             if (!rows.length) {
                 body.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-gray-500">No conflicts found for this layout.</td></tr>';
                 return;
@@ -7669,6 +7668,17 @@
                     '<td class="rr-lead rr-primary">' +
                         '<span id="dup-chev-' + gid + '" class="text-gray-500 font-mono me-1" aria-hidden="true">▶</span>' +
                         escapeHtml(String(a.account_name || '—')) +
+                        // Split-account conflicts are rows in THIS list, not a
+                        // second table (Sarah 2026-09-13) — so they count in the
+                        // cards — but they are named as what they are, because
+                        // the fix is different: merge the Account records first.
+                        (a.split_account
+                            ? ' <span class="rr-badge rr-amber" title="The deals sit on different Account records for the same company. Merge the accounts in Zoho, then keep one deal.">split account · ' +
+                              (a.split_accounts || []).length + ' records</span>' +
+                              '<div class="rr-sub text-amber-800">on ' +
+                              (a.split_accounts || []).map(function (s) { return escapeHtml(String(s.account_name || s.account_id || '')); }).join(' + ') +
+                              ' — merge these accounts in Zoho</div>'
+                            : '') +
                         // Domain under the company name — from the linked
                         // Account record, since deal rows carry none. Shown as
                         // the account id only when Zoho holds no domain at all,
@@ -7699,10 +7709,20 @@
                             // NAME, so an account called `Al "Fanar" Group`
                             // would close the attribute early. escAttr escapes
                             // the quote.
-                            'data-args="' + escAttr(JSON.stringify([
-                                (a.deals || []).map(function (d) { return String(d.id); }),
-                                String(a.account_name || '')
-                            ])) + '" ' +
+                            // A split row is dismissed by its ACCOUNT ids — the
+                            // split check reads account pairs, so deal ids
+                            // would record a separation nothing ever consults.
+                            'data-args="' + escAttr(JSON.stringify(a.split_account
+                                ? [
+                                    (a.split_accounts || []).map(function (s) { return String(s.account_id); }),
+                                    String(a.account_name || ''),
+                                    'accounts'
+                                  ]
+                                : [
+                                    (a.deals || []).map(function (d) { return String(d.id); }),
+                                    String(a.account_name || ''),
+                                    'deals'
+                                  ])) + '" ' +
                             'title="These deals are not in conflict — e.g. two sister companies. Records this pair as permanently separate; it will not come back on the next scan. A NEW deal on this account still surfaces.">' +
                             'Not a conflict' +
                         '</button>' +
@@ -7748,17 +7768,22 @@
         // Writes duplicate_separation_ledger — the same ledger Account
         // Duplicates' dismiss uses — so there is one permanent record of
         // "keep apart" rather than a second mechanism. No Zoho write.
-        window.dismissDealConflict = function (dealIds, accountName) {
+        // `scope` is 'accounts' for a split-account row (ids are Account ids,
+        // which is what the split check consults) and 'deals' otherwise.
+        window.dismissDealConflict = function (dealIds, accountName, scope) {
             var ids = (dealIds || []).map(String).filter(Boolean);
+            var byAccounts = scope === 'accounts';
             if (ids.length < 2) {
-                alert('Need at least 2 deals to dismiss a conflict.');
+                alert(byAccounts ? 'Need at least 2 accounts to dismiss a split.' : 'Need at least 2 deals to dismiss a conflict.');
                 return;
             }
             // Say it is permanent, and say what still comes back, so nobody
             // has to discover the second half by waiting a week for it.
             if (!confirm(
-                'Mark the ' + ids.length + ' open deals on "' + (accountName || 'this account') +
-                '" as NOT a conflict?\n\n' +
+                (byAccounts
+                    ? 'Mark the ' + ids.length + ' Account records behind "' + (accountName || 'this company') + '" as DIFFERENT companies'
+                    : 'Mark the ' + ids.length + ' open deals on "' + (accountName || 'this account') + '" as NOT a conflict') +
+                '?\n\n' +
                 'Use this when they are separate businesses — e.g. two sister companies.\n\n' +
                 'This is permanent: the pair stays out of this tab, the daily Sales report ' +
                 'and the split-account check. A NEW deal on this account will still be flagged. ' +
@@ -7768,7 +7793,7 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
-                body: JSON.stringify({ ids: ids, scope: 'deals' })
+                body: JSON.stringify({ ids: ids, scope: byAccounts ? 'accounts' : 'deals' })
             })
                 .then(function (r) { return r.json().catch(function () { return {}; }); })
                 .then(function (j) {

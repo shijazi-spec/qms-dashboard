@@ -3191,7 +3191,9 @@ function ownershipDemotion(d: { stage: string; owner?: string }): number {
   return stageRank(d.stage) >= PROTECTED_UNOWNED_RANK ? 0 : 1;
 }
 
-function annotateKeepClose<
+// Exported so split-account conflicts get the SAME keep/close ranking as
+// same-account ones — one list on the tab means one ranking behind it.
+export function annotateKeepClose<
   T extends {
     stage: string;
     owner?: string;
@@ -3262,6 +3264,13 @@ export interface MultiActiveDealAccount {
   distinct_owners: number;
   total_open_value: number;
   owners: string[];
+  /**
+   * The deals sit on MORE THAN ONE Account record for this company — a split
+   * account (Sarah 2026-09-13). Same conflict, different first fix: merge the
+   * accounts in Zoho, then keep one deal. Absent on same-account conflicts.
+   */
+  split_account?: boolean;
+  split_accounts?: Array<{ account_id: string; account_name: string; domain: string | null }>;
   deals: Array<{
     id: string;
     name: string;

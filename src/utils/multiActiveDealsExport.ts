@@ -64,8 +64,15 @@ export function buildMultiActiveDealSheets(
       owners: (a.owners || []).join(", "),
       open_value: Math.round(a.total_open_value),
       // What the recipient has to decide, spelled out per company rather than
-      // left for them to work out from the deal sheet.
-      action: `Keep 1 deal, close ${Math.max(0, a.open_deals - 1)}`,
+      // left for them to work out from the deal sheet. A split-account row has
+      // a second job first: the deals cannot sit together until the Account
+      // records are merged.
+      action: a.split_account
+        ? `Merge the ${(a.split_accounts || []).length} Account records, then keep 1 deal, close ${Math.max(0, a.open_deals - 1)}`
+        : `Keep 1 deal, close ${Math.max(0, a.open_deals - 1)}`,
+      split_account: a.split_account
+        ? `Yes — ${(a.split_accounts || []).map((s) => s.account_name || s.account_id).join(" + ")}`
+        : "",
     });
     for (const d of a.deals || []) {
       dealRows.push({
@@ -100,7 +107,8 @@ export function buildMultiActiveDealSheets(
         { header: "Owners", key: "owners_count", width: 9 },
         { header: "Owner names", key: "owners", width: 46 },
         { header: "Open value (SAR)", key: "open_value", width: 19, numFmt: FMT_SAR },
-        { header: "Action needed", key: "action", width: 24 },
+        { header: "Action needed", key: "action", width: 44 },
+        { header: "Split account", key: "split_account", width: 48 },
       ],
       rows: summaryRows,
     },

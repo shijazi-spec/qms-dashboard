@@ -137,12 +137,17 @@ export async function runActiveDealConflictsWeeklyReport(): Promise<{
   accounts: number;
   multiOwner: number;
 }> {
-  const { getMultiActiveDealAccounts } = await import(
-    "./duplicateRadarDatabase"
+  // Same list as the tab, split-account conflicts included (Sarah 2026-09-13).
+  // The 08:00 post on the 13th said "2 account(s)" while fourteen more
+  // companies had two sellers on them — each with its deals on two Account
+  // records, so no single account looked like a conflict. The channel is where
+  // Sales actually reads this, so it must count what the tab counts.
+  const { getActiveDealConflictsIncludingSplits } = await import(
+    "./splitAccountDealConflicts"
   );
-  const rows = await getMultiActiveDealAccounts(SEGMENT as any, {
-    multiOwnerOnly: false,
+  const rows = await getActiveDealConflictsIncludingSplits(SEGMENT as any, {
     limit: 2000,
+    bypassCache: true,
   });
 
   if (!rows || rows.length === 0) {
@@ -160,7 +165,10 @@ export async function runActiveDealConflictsWeeklyReport(): Promise<{
   );
 
   const lines: string[] = [
-    `*${rows.length}* account(s) with more than one OPEN deal · ${totalOpen} open deals total` +
+    `*${rows.length}* compan${rows.length === 1 ? "y" : "ies"} with more than one OPEN deal · ${totalOpen} open deals total` +
+      (rows.some((r) => r.split_account)
+        ? ` · ${rows.filter((r) => r.split_account).length} of them split across Account records`
+        : "") +
       (totalValue > 0 ? ` · SAR ${Math.round(totalValue).toLocaleString()}` : ""),
   ];
   if (multiOwner.length > 0) {
@@ -170,7 +178,10 @@ export async function runActiveDealConflictsWeeklyReport(): Promise<{
           .slice(0, 10)
           .map(
             (r) =>
-              `• ${r.account_name} — ${r.open_deals} deals, ${r.distinct_owners} owners (${(r.owners || []).slice(0, 3).join(", ")})`,
+              `• ${r.account_name} — ${r.open_deals} deals, ${r.distinct_owners} owners (${(r.owners || []).slice(0, 3).join(", ")})` +
+              (r.split_account
+                ? ` — _split across ${(r.split_accounts || []).length} Account records, merge them first_`
+                : ""),
           )
           .join("\n") +
         (multiOwner.length > 10
@@ -188,7 +199,7 @@ export async function runActiveDealConflictsWeeklyReport(): Promise<{
 
   await announceToSales({
     type: "active_deal_conflicts_weekly",
-    title: `⚔️ Active deal conflicts — ${rows.length} account(s), ${multiOwner.length} across different owners`,
+    title: `⚔️ Active deal conflicts — ${rows.length} compan${rows.length === 1 ? "y" : "ies"}, ${multiOwner.length} across different owners`,
     message: lines.join("\n"),
     actionUrl: "/duplicates",
     entityType: "active_deal_conflicts",

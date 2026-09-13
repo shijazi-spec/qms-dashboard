@@ -101,6 +101,8 @@ export interface SplitAccountDeal {
   amount: number;
   layout: string;
   created: string | null;
+  /** Needed for the keep/close ranking once these rows join the main tab. */
+  last_activity?: string | null;
 }
 
 export interface SplitAccountSide {
@@ -845,6 +847,120 @@ export async function getSplitAccountCompanies(
 }
 
 /**
+ * ONE conflict list: same-account conflicts plus split-account conflicts
+ * (Sarah 2026-09-13: "I need them to be counted in the deals count of the
+ * conflict deals already ... but mentioned that they are split accounted").
+ *
+ * Every reader of Active Deal Conflicts goes through this — the tab, its
+ * cards, the Excel for the Head of Sales, and the 08:00 post in the Sales
+ * channel — so they cannot disagree. On the 13th they did: the channel and
+ * the tab both said "2 accounts" while fourteen more companies had two sellers
+ * on them, because each company's deals sat on two Account records and no
+ * single account looked like a conflict.
+ *
+ * Split rows keep the same shape and the SAME keep/close ranking, flagged
+ * split_account with the records listed. When a split company shares an
+ * account with a row already in the list, its deals are folded INTO that row
+ * rather than appended — otherwise one company is counted twice.
+ */
+export async function getActiveDealConflictsIncludingSplits(
+  segment: DuplicateFilters["segment"],
+  opts?: { limit?: number; bypassCache?: boolean },
+): Promise<import("./duplicateRadarDatabase").MultiActiveDealAccount[]> {
+  const { getMultiActiveDealAccounts, annotateKeepClose } = await import(
+    "./duplicateRadarDatabase"
+  );
+  type Row = import("./duplicateRadarDatabase").MultiActiveDealAccount;
+  const [main, split] = await Promise.all([
+    getMultiActiveDealAccounts(segment, {
+      multiOwnerOnly: false,
+      limit: opts?.limit,
+      bypassCache: opts?.bypassCache,
+    }),
+    getSplitAccountDealConflicts(segment),
+  ]);
+
+  const rows: Row[] = main.map((r) => ({ ...r }));
+  const indexByAccount = new Map<string, number>();
+  rows.forEach((r, i) => {
+    if (r.account_id) indexByAccount.set(String(r.account_id), i);
+  });
+
+  const summarise = (deals: Row["deals"]) => {
+    const owners = Array.from(new Set(deals.map((d) => d.owner).filter(Boolean)));
+    return {
+      open_deals: deals.length,
+      distinct_owners: owners.length,
+      owners,
+      total_open_value: deals.reduce((n, d) => n + (Number(d.amount) || 0), 0),
+    };
+  };
+
+  for (const g of split.companies) {
+    const splitAccounts = g.accounts.map((a) => ({
+      account_id: a.account_id,
+      account_name: a.account_name,
+      domain: a.domain,
+    }));
+    const rawDeals = g.accounts
+      .flatMap((a) => a.deals)
+      .map((d) => ({
+        id: String(d.id),
+        name: d.name,
+        stage: d.stage,
+        owner: d.owner,
+        amount: Number(d.amount) || 0,
+        layout: d.layout,
+        created: d.created,
+        last_activity: d.last_activity ?? null,
+      }));
+
+    const hit = g.accounts
+      .map((a) => indexByAccount.get(String(a.account_id)))
+      .find((i): i is number => i !== undefined);
+
+    if (hit !== undefined) {
+      // Fold into the existing row: one company, counted once.
+      const base = rows[hit];
+      const byId = new Map<string, any>();
+      for (const d of base.deals) {
+        const { suggestion, suggestion_reason, ...plain } = d as any;
+        byId.set(String(d.id), plain);
+      }
+      for (const d of rawDeals) if (!byId.has(d.id)) byId.set(d.id, d);
+      const deals = annotateKeepClose([...byId.values()]) as Row["deals"];
+      rows[hit] = {
+        ...base,
+        ...summarise(deals),
+        deals,
+        split_account: true,
+        split_accounts: splitAccounts,
+      };
+      continue;
+    }
+
+    const deals = annotateKeepClose(rawDeals) as Row["deals"];
+    rows.push({
+      domain: splitAccounts.map((s) => s.domain).find(Boolean) || null,
+      account_id: splitAccounts[0]?.account_id || null,
+      account_name: g.company,
+      ...summarise(deals),
+      deals,
+      split_account: true,
+      split_accounts: splitAccounts,
+    });
+  }
+
+  // Same order the main list uses: the collisions Sales must arbitrate first.
+  return rows.sort(
+    (a, b) =>
+      b.distinct_owners - a.distinct_owners ||
+      b.open_deals - a.open_deals ||
+      b.total_open_value - a.total_open_value,
+  );
+}
+
+/**
  * Run the reverse check for one layout. Same layout scoping as the main tab —
  * an explicit segment is honoured, and the default is WalaPlus rather than
  * "all", because comparing a WalaPlus deal against a WalaOne deal would
@@ -875,6 +991,7 @@ export async function getSplitAccountDealConflicts(
             COALESCE(r.deal_value, 0)::float AS amount,
             COALESCE(NULLIF(BTRIM(r.layout_name), ''), '') AS layout,
             r.created_date AS created,
+            r.modified_date AS last_activity,
             NULLIF(BTRIM(r.raw_data->'Account_Name'->>'id'), '') AS account_id,
             COALESCE(
               NULLIF(BTRIM(r.raw_data->'Account_Name'->>'name'), ''),
@@ -908,6 +1025,7 @@ export async function getSplitAccountDealConflicts(
       amount: Number(row.amount) || 0,
       layout: String(row.layout || ""),
       created: row.created ? String(row.created) : null,
+      last_activity: row.last_activity ? String(row.last_activity) : null,
     });
   }
 

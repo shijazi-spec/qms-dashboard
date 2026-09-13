@@ -13886,8 +13886,11 @@ export const duplicateRadarRoutes = [
         // re-query, not re-render the 90s cache; otherwise the button appears
         // dead right after a Zoho sync, which is exactly when it is used.
         const fresh = url.searchParams.get("fresh") === "1";
-        const { getMultiActiveDealAccounts, getDealsLastSyncAt } = await import(
+        const { getDealsLastSyncAt } = await import(
           "../../utils/duplicateRadarDatabase"
+        );
+        const { getActiveDealConflictsIncludingSplits } = await import(
+          "../../utils/splitAccountDealConflicts"
         );
         // ALWAYS fetch unfiltered, then narrow. The headline counts describe the
         // whole problem — "companies with more than one open deal" and "…worked
@@ -13895,9 +13898,15 @@ export const duplicateRadarRoutes = [
         // ticks the filter. Computing them from the filtered set made both
         // cards show the same number whenever the box was ticked (found while
         // testing the tab, 2026-08-25).
+        //
+        // INCLUDES split-account conflicts (Sarah 2026-09-13). A company whose
+        // two open deals sit on two Account records is the same conflict — two
+        // sellers, one client — and was counted nowhere: the tab said 2 while
+        // 14 more were live. They are now rows in the same list, flagged
+        // split_account, so the cards, the table, the export and the morning
+        // channel post all count the same thing.
         const [all, dataAsOf] = await Promise.all([
-          getMultiActiveDealAccounts(segment, {
-            multiOwnerOnly: false,
+          getActiveDealConflictsIncludingSplits(segment, {
             limit: Number.isFinite(limitRaw) ? limitRaw : undefined,
             bypassCache: fresh,
           }),
@@ -13915,6 +13924,9 @@ export const duplicateRadarRoutes = [
           // Both counts, always — different problems with different owners.
           accounts_with_multiple_open_deals: all.length,
           accounts_with_multiple_owners: multiOwner.length,
+          // How many of the rows above are split across Account records —
+          // already counted in the totals, reported so the split is visible.
+          split_account_conflicts: all.filter((r) => r.split_account).length,
           // Deals and value describe the LISTED rows, so the cards and the
           // table always add up to each other.
           total_open_deals_in_violation: rows.reduce((a, r) => a + r.open_deals, 0),
@@ -14402,8 +14414,12 @@ export const duplicateRadarRoutes = [
         // file contradicting the decisions he had just made. The cache was
         // there so viewing the tab then exporting did not run the query twice;
         // one extra ~1.7s query is a fair price for a report that is right.
-        const everything = await getMultiActiveDealAccounts(segment, {
-          multiOwnerOnly: false,
+        // Split-account conflicts included, flagged — the file must count what
+        // the tab and the morning channel post count (Sarah 2026-09-13).
+        const { getActiveDealConflictsIncludingSplits } = await import(
+          "../../utils/splitAccountDealConflicts"
+        );
+        const everything = await getActiveDealConflictsIncludingSplits(segment, {
           limit: 2000,
           bypassCache: true,
         });
