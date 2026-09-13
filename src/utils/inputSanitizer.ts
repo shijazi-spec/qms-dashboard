@@ -101,6 +101,10 @@ const ALLOWED_FIELDS: Record<string, Set<string>> = {
     'contract_value', 'services', 'certifications', 'compliance_status',
     'last_assessment_date', 'next_assessment_date', 'notes', 'sla_details',
     'description', 'department', 'location', 'tags',
+    // Found by tests/vitest/sanitizerAllowListCoverage.vitest.test.ts:
+    // POST /api/vendors/assessments and /remediations require these; stripped,
+    // no vendor assessment or remediation could be created.
+    'vendor_id', 'assessment_type', 'title', 'priority',
   ]),
   // NOTE: this list is applied to EVERY JSON body on /api/policies/* by the
   // middleware, so a field missing here is silently deleted before the handler
@@ -144,6 +148,10 @@ const ALLOWED_FIELDS: Record<string, Set<string>> = {
     'recommendations', 'notes', 'description', 'checklist',
     'finding_code', 'finding_title', 'finding_description', 'severity', 'remediation',
     'pack_name', 'evidence_type', 'evidence_url', 'evidence_description',
+    // Found by tests/vitest/sanitizerAllowListCoverage.vitest.test.ts:
+    // POST /api/audits/findings and POST /api/audits/:id/checklist require these;
+    // stripped, a finding or a checklist could not be created at all.
+    'audit_id', 'category', 'items',
   ]),
   roi: new Set([
     'project_name', 'department', 'owner', 'description', 'status',
@@ -201,16 +209,30 @@ const ALLOWED_FIELDS: Record<string, Set<string>> = {
   users: new Set([
     'email', 'full_name', 'role', 'team', 'department', 'status',
     'password', 'access_reason', 'permission_overrides', 'reason',
+    // Found by tests/vitest/sanitizerAllowListCoverage.vitest.test.ts:
+    // PUT /api/users/:id/permissions requires it (admin-gated via verifyAdminKey).
+    // Safe on this module-wide list: PATCH /api/users/:id builds an explicit
+    // {full_name, team, role} patch and updateUserProfile writes only those
+    // columns, so a smuggled `permissions` is ignored everywhere else.
+    'permissions',
   ]),
   invitations: new Set([
     'email', 'role', 'department', 'team', 'invited_by', 'message',
     'token', 'password', 'full_name', 'access_reason',
+    // Found by tests/vitest/sanitizerAllowListCoverage.vitest.test.ts:
+    // POST /api/invitations. Stripped, `require_mfa` silently fell back to false,
+    // so an invitation could never require MFA - a failure that fails OPEN.
+    'expiry_days', 'require_mfa',
   ]),
   calls: new Set([
     'call_id', 'source', 'recording_url', 'lead_id', 'deal_id',
     'contact_name', 'agent_email', 'agent_name', 'direction',
     'duration_seconds', 'call_date', 'metadata', 'status',
     'domain', 'username', 'password',
+    // Found by tests/vitest/sanitizerAllowListCoverage.vitest.test.ts:
+    // POST /api/calls/evaluation/leads/match-phone requires `phone` (it always
+    // answered "phone is required"); auto-link-lead reads all three.
+    'phone', 'max_records', 'force',
   ]),
 };
 
