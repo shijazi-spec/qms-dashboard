@@ -58,6 +58,8 @@ export async function postSlackMessage(
   text: string,
   blocks?: any[],
   thread_ts?: string,
+  /** Thread replies only: also show the reply in the channel feed. */
+  reply_broadcast?: boolean,
 ): Promise<{ ok: boolean; ts: string | null }> {
   const client = getSlackClient();
   if (!client) return { ok: false, ts: null };
@@ -68,6 +70,7 @@ export async function postSlackMessage(
       text,
       blocks,
       ...(thread_ts ? { thread_ts } : {}),
+      ...(thread_ts && reply_broadcast ? { reply_broadcast: true } : {}),
     });
     logger.info(`[Slack Notifications] Message sent to ${channel}`);
     const ts = typeof res.ts === "string" ? res.ts : null;

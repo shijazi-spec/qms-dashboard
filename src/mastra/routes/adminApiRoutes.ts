@@ -240,6 +240,95 @@ export const adminApiRoutes = [
     },
   },
   {
+    /**
+     * Reply in a Slack channel AS ADAM (Sarah 2026-09-13).
+     *
+     * When someone answers one of Adam's posts — Zeina questioning the CS
+     * Lifecycle numbers, say — the answer belongs under the same bot that
+     * raised them, not under whichever human account happens to hold a Slack
+     * token. Until now the bot could only speak from scheduled jobs.
+     *
+     * Deliberately narrow, because "post anything anywhere as the company bot"
+     * is not a capability worth having:
+     *   - admin-gated, like the rest of /api/admin/*;
+     *   - the channel must be one the platform ALREADY posts to (resolved from
+     *     the audience env vars), so this cannot reach a channel Adam has no
+     *     business in;
+     *   - text only, 4,000 chars, no blocks — a reply, not a broadcast tool;
+     *   - `thread_ts` keeps the answer under the question it answers.
+     */
+    path: "/api/admin/slack-reply",
+    method: "POST",
+    createHandler: async () => {
+      return async (c: any) => {
+        try {
+          if (!hasValidAdminApiKey(c) && !isAdminAuthorized(c)) {
+            return c.json({ error: "Authentication required" }, 401);
+          }
+          const body = await c.req.json().catch(() => ({}));
+          const channel = String(body?.channel || "").trim();
+          const text = String(body?.text || "").trim();
+          const threadTs = String(body?.thread_ts || "").trim();
+          const replyBroadcast = body?.reply_broadcast === true;
+          if (!channel || !text) {
+            return c.json({ error: "channel and text are required." }, 400);
+          }
+          if (text.length > 4000) {
+            return c.json({ error: "text is over the 4,000 character cap." }, 400);
+          }
+
+          const { AUDIENCE_ENV_VARS } = await import("../../utils/slackChannelRouting");
+          // Every channel this deployment is wired to speak in — the per-audience
+          // vars plus the global fallback. Read straight from the env rather than
+          // through resolveSlackChannel, so a muted audience is still recognised
+          // as one of Adam's own channels.
+          const allowed = new Set<string>();
+          for (const names of Object.values(AUDIENCE_ENV_VARS)) {
+            for (const name of names as string[]) {
+              const v = (process.env[name] || "").trim();
+              if (v) allowed.add(v);
+            }
+          }
+          for (const name of ["SLACK_CHANNEL_ID", "SLACK_DEFAULT_CHANNEL"]) {
+            const v = (process.env[name] || "").trim();
+            if (v) allowed.add(v);
+          }
+          if (!allowed.has(channel)) {
+            return c.json(
+              {
+                error:
+                  "Adam does not post to that channel. Allowed: " +
+                  (Array.from(allowed).join(", ") || "(none configured)"),
+              },
+              403,
+            );
+          }
+
+          const { postSlackMessage } = await import("../../utils/slackNotifications");
+          const res = await postSlackMessage(
+            channel,
+            text,
+            undefined,
+            threadTs || undefined,
+            replyBroadcast,
+          );
+          if (!res.ok) {
+            return c.json({ error: "Slack rejected the message or no bot token is configured." }, 502);
+          }
+          logger.info("[Admin] Adam replied in Slack", {
+            channel,
+            thread_ts: threadTs || null,
+            chars: text.length,
+          });
+          return c.json({ success: true, ts: res.ts, channel });
+        } catch (error) {
+          logger.error("[Admin] slack-reply failed:", error);
+          return c.json({ error: "Failed to send the Slack reply" }, 500);
+        }
+      };
+    },
+  },
+  {
     // Security: this endpoint validates the raw ADMIN_API_KEY for server-to-server
     // tooling only. It no longer issues browser session cookies. Browser admin
     // access requires OIDC login with an admin platform role. Returning 200 on
